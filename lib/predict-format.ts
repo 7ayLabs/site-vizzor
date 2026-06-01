@@ -353,92 +353,208 @@ function formatFamilyShort(family: SignalFamily): string {
 }
 
 /* ------------------------------------------------------------------ *\
- * Formatting — Helios-style text receipt
+ * Formatting — Vizzor Telegram bot trade-plan format
+ *
+ * Single canonical receipt used across the bot, CLI, and on-site chat.
+ * Includes a calibrated entry zone, TP1, SL, R:R verdict, and (for
+ * RANGE markets) a Best-Play band fade. The R:R floor is what makes
+ * Vizzor "honest" — when reward doesn't justify risk, we render Skip
+ * instead of pretending to be useful.
  * ------------------------------------------------------------------ */
 
-const TIER_EMOJI: Record<Tier, string> = {
-  'high-conviction': '🌟',
-  'whale-confirmed': '🐋',
-  'tracked': '✅',
-  'advisory': '⚪',
+const DIR_LABEL: Record<Direction, string> = {
+  up: 'LONG',
+  down: 'SHORT',
+  sideways: 'RANGE',
 };
 
-const DIR_ARROW: Record<Direction, string> = {
-  up: '↑',
-  down: '↓',
-  sideways: '↔',
+const DIR_EMOJI: Record<Direction, string> = {
+  up: '📈',
+  down: '📉',
+  sideways: '➖',
 };
 
-const FAMILY_PAD_WIDTH = 18;
+// Per-symbol display glyph + uppercase long name. Defaults below if a
+// new symbol arrives that isn't in the map.
+const COIN_GLYPH: Record<string, { emoji: string; long: string }> = {
+  BTC: { emoji: '🟠', long: 'BITCOIN' },
+  ETH: { emoji: '🔷', long: 'ETHEREUM' },
+  SOL: { emoji: '🟣', long: 'SOLANA' },
+  XRP: { emoji: '◽', long: 'XRP' },
+  BNB: { emoji: '🟡', long: 'BNB' },
+  DOGE: { emoji: '🐕', long: 'DOGECOIN' },
+  ADA: { emoji: '🔵', long: 'CARDANO' },
+  TRX: { emoji: '🔴', long: 'TRON' },
+  AVAX: { emoji: '🔺', long: 'AVALANCHE' },
+  SHIB: { emoji: '🐶', long: 'SHIBA INU' },
+  LINK: { emoji: '🔗', long: 'CHAINLINK' },
+  DOT: { emoji: '🟤', long: 'POLKADOT' },
+  TON: { emoji: '💎', long: 'TONCOIN' },
+  POL: { emoji: '🟪', long: 'POLYGON' },
+  LTC: { emoji: '⚪', long: 'LITECOIN' },
+  BCH: { emoji: '🟢', long: 'BITCOIN CASH' },
+  NEAR: { emoji: '⬛', long: 'NEAR' },
+  APT: { emoji: '🟦', long: 'APTOS' },
+  UNI: { emoji: '🦄', long: 'UNISWAP' },
+  HYPE: { emoji: '🌐', long: 'HYPERLIQUID' },
+};
+
+// Trade-plan geometry. Numbers are tuned to match the bot's
+// observed output (e.g. BTC 1h SHORT: TP ~0.1%, SL ~0.9%, R:R ~1:0.10
+// — risk-asymmetric scalps the bot honestly flags as Skip).
+const ZONE_WIDTH_PCT: Record<string, number> = {
+  '5m': 0.0015,
+  '15m': 0.0022,
+  '30m': 0.0028,
+  '1h': 0.0040,
+  '2h': 0.0050,
+  '4h': 0.0070,
+  '6h': 0.0090,
+  '1d': 0.0120,
+  '7d': 0.0240,
+  '30d': 0.0450,
+};
+
+const TP_DISTANCE_PCT: Record<string, number> = {
+  '5m': 0.0006,
+  '15m': 0.0010,
+  '30m': 0.0014,
+  '1h': 0.0018,
+  '2h': 0.0028,
+  '4h': 0.0048,
+  '6h': 0.0065,
+  '1d': 0.0110,
+  '7d': 0.0280,
+  '30d': 0.0550,
+};
+
+const SL_DISTANCE_PCT: Record<string, number> = {
+  '5m': 0.0040,
+  '15m': 0.0060,
+  '30m': 0.0075,
+  '1h': 0.0090,
+  '2h': 0.0120,
+  '4h': 0.0200,
+  '6h': 0.0260,
+  '1d': 0.0420,
+  '7d': 0.0900,
+  '30d': 0.1700,
+};
+
+interface TradePlan {
+  zoneLow: number;
+  zoneHigh: number;
+  tp1: number;
+  tp1Pct: number; // percent move from entry, signed
+  sl: number;
+  slPct: number; // percent move from entry, signed
+  rr: number;    // reward / risk
+}
+
+function computeTradePlan(p: Prediction): TradePlan {
+  const zoneW = ZONE_WIDTH_PCT[p.horizon] ?? 0.004;
+  const tpD = TP_DISTANCE_PCT[p.horizon] ?? 0.0018;
+  const slD = SL_DISTANCE_PCT[p.horizon] ?? 0.009;
+  const e = p.entryPrice;
+
+  if (p.direction === 'up') {
+    // LONG: enter on small dip, target above, stop below.
+    const tp1 = e * (1 + tpD);
+    const sl = e * (1 - slD);
+    return {
+      zoneLow: e * (1 - zoneW),
+      zoneHigh: e,
+      tp1,
+      tp1Pct: +tpD * 100,
+      sl,
+      slPct: -slD * 100,
+      rr: tpD / slD,
+    };
+  }
+  if (p.direction === 'down') {
+    // SHORT: enter on small bounce, target below, stop above.
+    const tp1 = e * (1 - tpD);
+    const sl = e * (1 + slD);
+    return {
+      zoneLow: e,
+      zoneHigh: e * (1 + zoneW),
+      tp1,
+      tp1Pct: -tpD * 100,
+      sl,
+      slPct: +slD * 100,
+      rr: tpD / slD,
+    };
+  }
+  // RANGE — Best Play is a band fade. zone IS the band; no TP/SL.
+  const halfBand = (tpD + zoneW * 0.5) / 2;
+  return {
+    zoneLow: e * (1 - halfBand),
+    zoneHigh: e * (1 + halfBand),
+    tp1: 0,
+    tp1Pct: 0,
+    sl: 0,
+    slPct: 0,
+    rr: 0,
+  };
+}
+
+function tradeVerdict(rr: number): string {
+  if (rr <= 0) return '';
+  const rrStr = rr.toFixed(2);
+  if (rr < 0.5) {
+    return `⚠ Skip: R:R 1:${rrStr} — risk exceeds reward, no trade`;
+  }
+  if (rr < 1) {
+    return `⚠ Caution: R:R 1:${rrStr} — small edge, partial size only`;
+  }
+  return `✅ Take: R:R 1:${rrStr}`;
+}
+
+function fmtPctSigned(pct: number): string {
+  const sign = pct >= 0 ? '+' : '';
+  return `(${sign}${pct.toFixed(2)}%)`;
+}
+
+function glyph(symbol: string): { emoji: string; long: string } {
+  return (
+    COIN_GLYPH[symbol] ?? { emoji: '🪙', long: symbol.toUpperCase() }
+  );
+}
 
 export function formatPredictionText(p: Prediction): string {
-  const tierLabel = `${TIER_EMOJI[p.tier]} ${p.tier}`;
+  const g = glyph(p.symbol);
+  const plan = computeTradePlan(p);
+  const confPct = Math.round(p.confidence * 100);
   const lines: string[] = [];
 
-  lines.push(`${p.symbol} · ${p.horizon} · ${tierLabel}`);
+  lines.push(`${g.emoji} ${g.long} · ${p.horizon}`);
+  lines.push(`💰 ${p.symbol} Price: ${formatUsd(p.entryPrice)}`);
   lines.push(
-    `direction: ${DIR_ARROW[p.direction]} ${p.direction} · confidence ${p.confidence.toFixed(2)}`,
+    `💵 Direction: ${DIR_EMOJI[p.direction]} ${DIR_LABEL[p.direction]} (${confPct}%)`,
   );
-  lines.push(`entry:     ${formatUsd(p.entryPrice)}`);
-  if (p.targets) {
+
+  if (p.direction === 'sideways') {
     lines.push(
-      `targets:   bull ${formatUsd(p.targets.bull)} · base ${formatUsd(p.targets.base)} · bear ${formatUsd(p.targets.bear)}`,
+      `🪙 Band: ${formatUsd(plan.zoneLow)} — ${formatUsd(plan.zoneHigh)}`,
     );
+    lines.push(
+      `💹 Best Play: Range fade — long ${formatUsd(plan.zoneLow)}, short ${formatUsd(plan.zoneHigh)} (no leverage)`,
+    );
+  } else {
+    lines.push(
+      `🪙 Entry Zone: ${formatUsd(plan.zoneLow)} — ${formatUsd(plan.zoneHigh)}`,
+    );
+    lines.push(
+      `📈 TP1: ${formatUsd(plan.tp1)} ${fmtPctSigned(plan.tp1Pct)}`,
+    );
+    lines.push(
+      `📊 SL: ${formatUsd(plan.sl)} ${fmtPctSigned(plan.slPct)}`,
+    );
+    const verdict = tradeVerdict(plan.rr);
+    if (verdict) lines.push(verdict);
   }
-  lines.push('');
-  lines.push('trigger snapshot');
-  if (p.triggerSnapshot?.vizzorTa.signals) {
-    for (const sig of p.triggerSnapshot.vizzorTa.signals) {
-      const sign = sig.cf >= 0 ? '+' : '';
-      lines.push(
-        `  ▸ ${padRight(sig.family, FAMILY_PAD_WIDTH)} ${sign}${sig.cf.toFixed(2)}  ${formatMeta(sig)}`,
-      );
-    }
-  }
-  if (p.triggerSnapshot?.smc?.details) {
-    lines.push(`  · smc: ${p.triggerSnapshot.smc.details}`);
-  }
-  if (p.triggerSnapshot?.ict?.details) {
-    lines.push(`  · ict: ${p.triggerSnapshot.ict.details}`);
-  }
-  if (p.triggerSnapshot?.flattenedReason) {
-    lines.push('');
-    lines.push(`reason: ${p.triggerSnapshot.flattenedReason}`);
-  }
-  lines.push('');
-  lines.push('🔔 alerts armed at TP1 / TP2 / SL');
 
   return lines.join('\n');
-}
-
-function formatMeta(sig: SignalContribution): string {
-  const meta = sig.meta ?? {};
-  switch (sig.family) {
-    case 'onChain': {
-      const raw = Number(meta.whale_inflow_usd) || 0;
-      return `whale_inflow ${formatCompactUsd(raw)}`;
-    }
-    case 'mlEnsemble':
-      return `rsi ${meta.rsi14 ?? '–'} · ensemble ${meta.ensemble_prob ?? '–'}`;
-    case 'logicRules':
-      return String(meta.fired ?? 'no_rule_fired');
-    case 'patternMatch':
-      return String(meta.pattern ?? 'no_pattern');
-    case 'predictionMarkets':
-      return `implied ${meta.implied_prob ?? '–'}`;
-    case 'socialNarrative':
-      return `sentiment ${meta.sentiment ?? '–'}`;
-  }
-}
-
-function formatCompactUsd(value: number): string {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
-  return `$${value.toFixed(0)}`;
-}
-
-function padRight(s: string, width: number): string {
-  return s.length >= width ? s : s + ' '.repeat(width - s.length);
 }
 
 /* ------------------------------------------------------------------ *\

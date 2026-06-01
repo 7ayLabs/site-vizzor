@@ -149,11 +149,7 @@ export async function POST(req: Request) {
   // (C) Deterministic stub — same Helios shape, seeded by symbol +
   // horizon + UTC-hour. Always available; no external dependencies.
   const stub = generatePrediction(parsed);
-  return streamPredictionText(
-    formatPredictionText(stub) +
-      `\n\nnote: api.vizzor.ai upstream unreachable and ANTHROPIC_API_KEY not configured — this is a calibrated demo receipt.`,
-    setCookie,
-  );
+  return streamPredictionText(formatPredictionText(stub), setCookie);
 }
 
 /* ------------------------------------------------------------------ *\
@@ -219,54 +215,59 @@ function buildSystemPrompt(parsed: ParsedRequest): string {
     .join('\n');
 
   return `You are Vizzor, a calibrated crypto prediction agent (v0.15.5 Helios).
-You respond with a single structured prediction "receipt" — no chit-chat,
-no apologies, no disclaimers about being an AI. Match the exact format of
-the product CLI: \`vizzor predict <SYMBOL> <HORIZON>\`.
+Respond with a single Vizzor trade-plan receipt — no chit-chat, no
+apologies, no AI disclaimers. Match the exact Telegram-bot format.
 
 # Current market context (do not invent prices)
 ${tickerLines}
 
-# Tracker calibration (use as ground truth for tier confidence)
+# Tracker calibration
 aggregate WR: ${(wr.aggregate.wr * 100).toFixed(1)}% over ${wr.aggregate.samples} samples
 best horizon: ${findBestHorizon(wr)}
 worst horizon: ${findWorstHorizon(wr)}
 
-# Required output format (exact, monospaced)
-<SYMBOL> · <HORIZON> · <TIER_EMOJI> <tier>
-direction: <↑|↓|↔> <up|down|sideways> · confidence <0.NN>
-entry:     $<price>
-targets:   bull $<n> · base $<n> · bear $<n>
+# Required output format — directional (LONG / SHORT)
+<EMOJI> <FULL_NAME> · <HORIZON>
+💰 <SYMBOL> Price: $<entry>
+💵 Direction: <📈 LONG | 📉 SHORT> (<NN>%)
+🪙 Entry Zone: $<low> — $<high>
+📈 TP1: $<price> (<±0.NN%>)
+📊 SL: $<price> (<±0.NN%>)
+<verdict line>
 
-trigger snapshot
-  ▸ onChain            <±0.NN>  <meta>
-  ▸ mlEnsemble         <±0.NN>  <meta>
-  ▸ logicRules         <±0.NN>  <meta>
-  ▸ patternMatch       <±0.NN>  <meta>
-  ▸ predictionMarkets  <±0.NN>  <meta>
-  ▸ socialNarrative    <±0.NN>  <meta>
-  · smc: <BOS|CHoCH> at $<price>
-  · ict: <session> · <action>
+# Required output format — RANGE
+<EMOJI> <FULL_NAME> · <HORIZON>
+💰 <SYMBOL> Price: $<entry>
+💵 Direction: ➖ RANGE (<NN>%)
+🪙 Band: $<low> — $<high>
+💹 Best Play: Range fade — long $<low>, short $<high> (no leverage)
 
-reason: <one-line confluence summary>
+# Verdict line rules
+- R:R ≥ 1.0 → ✅ Take: R:R 1:<rr>
+- R:R 0.5–1.0 → ⚠ Caution: R:R 1:<rr> — small edge, partial size only
+- R:R < 0.5 → ⚠ Skip: R:R 1:<rr> — risk exceeds reward, no trade
+- R:R is computed as |TP_distance / SL_distance|.
 
-🔔 alerts armed at TP1 / TP2 / SL
+# Coin glyph map (use full name + correct emoji)
+🟠 BITCOIN · 🔷 ETHEREUM · 🟣 SOLANA · ◽ XRP · 🟡 BNB · 🐕 DOGECOIN
+🔵 CARDANO · 🔴 TRON · 🔺 AVALANCHE · 🐶 SHIBA INU · 🔗 CHAINLINK
+🟤 POLKADOT · 💎 TONCOIN · 🟪 POLYGON · ⚪ LITECOIN · 🟢 BITCOIN CASH
+⬛ NEAR · 🟦 APTOS · 🦄 UNISWAP · 🌐 HYPERLIQUID
 
-# Tier rules
-- 🌟 high-conviction : confidence ≥ 0.78
-- 🐋 whale-confirmed : onChain cf ≥ 0.55
-- ✅ tracked         : confidence 0.56–0.77
-- ⚪ advisory        : confidence < 0.56
+# Horizon-scaled trade-plan geometry
+- 1h: zone width ≈ 0.40%, TP ≈ 0.18%, SL ≈ 0.90% (R:R ~ 0.20)
+- 4h: zone width ≈ 0.70%, TP ≈ 0.48%, SL ≈ 2.00% (R:R ~ 0.24)
+- 1d: zone width ≈ 1.20%, TP ≈ 1.10%, SL ≈ 4.20% (R:R ~ 0.26)
+- For LONG: entry zone = [entry - width, entry]; TP above; SL below.
+- For SHORT: entry zone = [entry, entry + width]; TP below; SL above.
 
 # Constraints
 - The user's symbol + horizon are: ${parsed.symbol} ${parsed.horizon}.
 - Use the current ticker price for ${parsed.symbol} as the entry.
-- Bull/base/bear targets must be horizon-appropriate (4h ≈ ±3.5%,
-  1d ≈ ±6%, 1h ≈ ±1.8%, 15m ≈ ±0.8%).
-- Signal CFs must be in [-0.85, 0.85].
-- The "meta" column is short product-style data (e.g.
-  "whale_inflow $12.4M", "rsi 54.2 · ensemble 0.64", "BOS_4h_up").
-- Respond in ${parsed.locale === 'es' ? 'Spanish for any prose lines (reason, smc details)' : parsed.locale === 'fr' ? 'French for any prose lines' : 'English'}. The structural keywords (direction, entry, targets, trigger snapshot) stay English — that's the product's CLI.
-- No markdown. No code fences. No explanations outside the receipt.`;
+- Direction is your call — bias by signals, but if conviction is mixed
+  (confidence < 0.55), call it RANGE.
+- Output exactly one receipt. No commentary, no markdown, no code fences.
+- Locale: ${parsed.locale} (currency stays USD; emoji + numbers are universal).`;
 }
 
 function findBestHorizon(wr: ReturnType<typeof getTrackerWR>): string {
