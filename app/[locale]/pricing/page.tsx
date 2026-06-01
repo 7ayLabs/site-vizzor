@@ -23,18 +23,50 @@ import { CopyChip } from '@/components/ui/copy-chip';
 import { GsapHeadline } from '@/components/ui/gsap-headline';
 import { MotionReveal } from '@/components/ui/motion-reveal';
 
+type Cadence = 'monthly' | 'annual' | 'lifetime';
+
 interface Tier {
   key: 'free' | 'pro' | 'elite';
   highlighted?: boolean;
   ctaHref: string;
   ctaVariant: 'primary' | 'outline';
+  /** Alternative billing cycles, rendered as secondary links under the
+   *  primary CTA. Empty for Free. */
+  altCadences: ReadonlyArray<Cadence>;
 }
 
+const BOT = 'https://t.me/vizzorai_bot';
+
 const TIERS: ReadonlyArray<Tier> = [
-  { key: 'free', ctaHref: 'https://t.me/vizzorai_bot', ctaVariant: 'outline' },
-  { key: 'pro', highlighted: true, ctaHref: 'https://t.me/vizzorai_bot?start=pay_pro', ctaVariant: 'primary' },
-  { key: 'elite', ctaHref: 'https://t.me/vizzorai_bot?start=pay_elite', ctaVariant: 'primary' },
+  {
+    key: 'free',
+    ctaHref: BOT,
+    ctaVariant: 'outline',
+    altCadences: [],
+  },
+  {
+    key: 'pro',
+    highlighted: true,
+    ctaHref: `${BOT}?start=pay_pro_monthly`,
+    ctaVariant: 'primary',
+    altCadences: ['annual'],
+  },
+  {
+    key: 'elite',
+    ctaHref: `${BOT}?start=pay_elite_monthly`,
+    ctaVariant: 'primary',
+    altCadences: ['annual', 'lifetime'],
+  },
 ];
+
+/**
+ * Deep-link payloads for each cadence. The bot routes
+ * `?start=pay_<tier>_<cadence>` to the matching payment flow
+ * (TON Connect for Phase 1, EVM/SOL/TRON watchers for Phase 2).
+ */
+function cadenceHref(tier: Tier['key'], cadence: Cadence): string {
+  return `${BOT}?start=pay_${tier}_${cadence}`;
+}
 
 const FEATURE_KEYS: Record<Tier['key'], readonly string[]> = {
   free: ['predictions', 'tiers', 'commands', 'cliApi', 'community'],
@@ -197,7 +229,6 @@ function TierCard({
 }) {
   const highlighted = tier.highlighted;
   const tierT = (k: string) => t(`tiers.${tier.key}.${k}`);
-  const annualPrice = safe(t, `tiers.${tier.key}.annualPrice`);
   const annualSub = safe(t, `tiers.${tier.key}.annualSub`);
   const everythingIn = safe(t, `tiers.${tier.key}.everythingIn`);
 
@@ -248,16 +279,11 @@ function TierCard({
         {annualSub && (
           <p className="mono tabular text-[10.5px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
             {annualSub}
-            {annualPrice && (
-              <span className="ml-1 normal-case tracking-normal text-[var(--fg-2)]">
-                · {annualPrice}
-              </span>
-            )}
           </p>
         )}
       </div>
 
-      {/* CTA */}
+      {/* Primary CTA (monthly) */}
       <div className="mt-6">
         <a
           href={tier.ctaHref}
@@ -278,6 +304,40 @@ function TierCard({
           <span aria-hidden>→</span>
         </a>
       </div>
+
+      {/* Secondary cadence CTAs — annual + lifetime when applicable.
+          Each is a real deep-link to the bot with its own payment
+          payload, so the lifetime $2,499 is actually purchasable. */}
+      {tier.altCadences.length > 0 && (
+        <ul className="mt-3 flex flex-col gap-1.5">
+          {tier.altCadences.map((cadence) => (
+            <li key={cadence}>
+              <a
+                href={cadenceHref(tier.key, cadence)}
+                target="_blank"
+                rel="noopener"
+                className="
+                  group flex items-center justify-between gap-2
+                  border border-[var(--border)] bg-transparent
+                  px-3 py-2 text-[12px] text-[var(--fg-2)]
+                  hover:bg-[var(--surface-2)] hover:text-[var(--fg)]
+                  transition-colors
+                "
+              >
+                <span className="truncate">
+                  {t(`tiers.${tier.key}.cadences.${cadence}.label`)}
+                </span>
+                <span
+                  aria-hidden
+                  className="text-[var(--fg-3)] group-hover:text-[var(--fg)] transition-colors"
+                >
+                  →
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {/* Feature list */}
       <div className="mt-6 flex flex-col gap-3">

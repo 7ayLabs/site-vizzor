@@ -359,8 +359,13 @@
         "price": "$9.99",
         "priceUnit": "/ mo",
         "annualPrice": "$99",
-        "annualSub": "Save 17% billed annually · $99/yr",
-        "cta": "Get Pro",
+        "annualSub": "Save 17% billed annually",
+        "cta": "Get Pro · $9.99/mo",
+        "cadences": {
+          "annual": {
+            "label": "Pay annually · $99/yr (save $20)"
+          }
+        },
         "everythingIn": "Everything in Free, plus:",
         "features": {
           "predictions": "Unlimited predictions per month",
@@ -377,8 +382,16 @@
         "price": "$99",
         "priceUnit": "/ mo",
         "annualPrice": "$999",
-        "annualSub": "Save 16% annually · $999/yr · $2,499 lifetime (break-even year 3)",
-        "cta": "Get Elite",
+        "annualSub": "Save 16% billed annually",
+        "cta": "Get Elite · $99/mo",
+        "cadences": {
+          "annual": {
+            "label": "Pay annually · $999/yr (save $189)"
+          },
+          "lifetime": {
+            "label": "Pay once · $2,499 lifetime (break-even year 3)"
+          }
+        },
         "everythingIn": "Everything in Pro, plus:",
         "features": {
           "agents": "🤖 Autonomous trading agents — execute trades on-chain the moment a signal fires, no manual click",

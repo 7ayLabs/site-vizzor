@@ -359,8 +359,13 @@
         "price": "9,99 $",
         "priceUnit": "/ mois",
         "annualPrice": "99 $",
-        "annualSub": "Économisez 17% annuel · 99 $/an",
-        "cta": "Obtenir Pro",
+        "annualSub": "Économisez 17% en facturation annuelle",
+        "cta": "Obtenir Pro · 9,99 $/mois",
+        "cadences": {
+          "annual": {
+            "label": "Payer annuellement · 99 $/an (économisez 20 $)"
+          }
+        },
         "everythingIn": "Tout Free, plus :",
         "features": {
           "predictions": "Prédictions illimitées par mois",
@@ -377,8 +382,16 @@
         "price": "99 $",
         "priceUnit": "/ mois",
         "annualPrice": "999 $",
-        "annualSub": "Économisez 16% annuel · 999 $/an · 2 499 $ à vie (rentable en année 3)",
-        "cta": "Obtenir Elite",
+        "annualSub": "Économisez 16% en facturation annuelle",
+        "cta": "Obtenir Elite · 99 $/mois",
+        "cadences": {
+          "annual": {
+            "label": "Payer annuellement · 999 $/an (économisez 189 $)"
+          },
+          "lifetime": {
+            "label": "Paiement unique · 2 499 $ à vie (rentable en année 3)"
+          }
+        },
         "everythingIn": "Tout Pro, plus :",
         "features": {
           "agents": "🤖 Agents de trading autonomes — exécutent les trades on-chain dès qu'un signal s'émet, sans clic manuel",
