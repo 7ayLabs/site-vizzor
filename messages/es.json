@@ -50,7 +50,10 @@
   },
   "ticker": {
     "ariaLabel": "Ticker de mercado en vivo",
-    "live": "EN VIVO"
+    "live": "EN VIVO",
+    "predict": "Predecir {symbol}",
+    "autoTrade": "Operar {symbol} en automático",
+    "comingSoon": "Próximamente"
   },
   "hero": {
     "ribbon": "{version} · subiendo a {target}%+ tracked WR",

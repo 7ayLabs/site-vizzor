@@ -19,10 +19,18 @@
  *
  * prefers-reduced-motion freezes the marquee via .marquee-track's media rule
  * in globals.css.
+ *
+ * On hover, each pill surfaces a small action menu:
+ *   - "Predict {SYMBOL}" — deep-links the visitor into the Telegram bot
+ *     with a pre-filled /start payload so the conversation lands on the
+ *     prediction flow for that symbol.
+ *   - "Auto-trade {SYMBOL}" — disabled, badged "Coming soon". The
+ *     autonomous execution surface is on the roadmap; the visible
+ *     placeholder pre-signals it without making a clickable promise.
  */
 
 import { useTranslations } from 'next-intl';
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { CoinIcon } from '@/components/ui/coin-icon';
 import { AnimatedNumber } from '@/components/ui/animated-number';
 import { useTicker } from '@/lib/api';
@@ -36,33 +44,100 @@ interface TickerCarouselProps {
 const DIVIDER_STYLE: CSSProperties = { height: '14px' };
 
 function TickerPill({ entry }: { entry: TickerEntry }) {
+  const t = useTranslations('ticker');
+  const [open, setOpen] = useState(false);
   const positive = entry.changePct >= 0;
+
+  const predictHref = `https://t.me/vizzorai_bot?start=predict_${entry.symbol}`;
+
   return (
-    <span className="flex items-center gap-2 px-4 whitespace-nowrap">
-      <CoinIcon symbol={entry.symbol} size={16} />
-      <span className="mono tabular text-[11px] text-[var(--fg-3)]">
-        {entry.symbol}
-      </span>
-      <span className="mono tabular text-[12px] text-[var(--fg)]">
-        <AnimatedNumber value={entry.price} format="usd" duration={500} />
-      </span>
+    <span
+      className="relative inline-flex items-center"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
       <span
-        className="mono tabular text-[11px]"
-        style={{ color: positive ? 'var(--accent)' : 'var(--danger)' }}
+        className={`
+          flex items-center gap-2 px-4 whitespace-nowrap cursor-default
+          transition-colors duration-150
+          ${open ? 'text-[var(--fg)]' : ''}
+        `}
       >
-        <AnimatedNumber
-          value={entry.changePct * 100}
-          format="pct"
-          duration={500}
-          decimals={2}
-          prefix={positive ? '+' : ''}
+        <CoinIcon symbol={entry.symbol} size={16} />
+        <span className="mono tabular text-[11px] text-[var(--fg-3)]">
+          {entry.symbol}
+        </span>
+        <span className="mono tabular text-[12px] text-[var(--fg)]">
+          <AnimatedNumber value={entry.price} format="usd" duration={500} />
+        </span>
+        <span
+          className="mono tabular text-[11px]"
+          style={{ color: positive ? 'var(--accent)' : 'var(--danger)' }}
+        >
+          <AnimatedNumber
+            value={entry.changePct * 100}
+            format="pct"
+            duration={500}
+            decimals={2}
+            prefix={positive ? '+' : ''}
+          />
+        </span>
+        <span
+          aria-hidden
+          className="ml-2 inline-block w-px bg-[var(--border)] align-middle"
+          style={DIVIDER_STYLE}
         />
       </span>
-      <span
-        aria-hidden
-        className="ml-2 inline-block w-px bg-[var(--border)] align-middle"
-        style={DIVIDER_STYLE}
-      />
+
+      {open && (
+        <div
+          role="menu"
+          aria-label={`${entry.symbol} actions`}
+          className="
+            absolute left-1/2 top-full z-20 mt-1 -translate-x-1/2
+            min-w-[180px] rounded-lg border border-[var(--border)]
+            bg-[var(--surface)] p-1 shadow-lg
+          "
+        >
+          <a
+            role="menuitem"
+            href={predictHref}
+            target="_blank"
+            rel="noopener"
+            className="
+              flex items-center justify-between gap-3 rounded-md
+              px-3 py-2 text-[12px] font-medium text-[var(--fg)]
+              hover:bg-[var(--surface-2)] transition-colors duration-100
+            "
+          >
+            <span>{t('predict', { symbol: entry.symbol })}</span>
+            <span aria-hidden className="text-[var(--fg-3)]">
+              →
+            </span>
+          </a>
+
+          <div
+            role="menuitem"
+            aria-disabled="true"
+            className="
+              flex items-center justify-between gap-3 rounded-md
+              px-3 py-2 text-[12px] font-medium text-[var(--fg-3)]
+              cursor-not-allowed select-none
+            "
+          >
+            <span>{t('autoTrade', { symbol: entry.symbol })}</span>
+            <span
+              className="
+                mono tabular rounded-full bg-[var(--surface-2)]
+                px-2 py-[2px] text-[9px] uppercase tracking-[0.12em]
+                text-[var(--fg-2)] border border-[var(--border)]
+              "
+            >
+              {t('comingSoon')}
+            </span>
+          </div>
+        </div>
+      )}
     </span>
   );
 }
@@ -85,45 +160,49 @@ export function TickerCarousel({ entries }: TickerCarouselProps) {
       role="marquee"
       aria-label={t('ariaLabel')}
       className="
-        relative w-full overflow-hidden
+        relative w-full
         border-b border-[var(--border)]
         bg-[var(--surface)]
         h-8 sm:h-9
       "
     >
-      {/* Scrolling track — duplicated content for seamless wrap. */}
-      <div className="marquee-track flex h-full w-max items-center">
-        <div className="flex h-full items-center" aria-label="ticker entries">
-          {data.map((entry) => (
-            <TickerPill key={`a-${entry.symbol}`} entry={entry} />
-          ))}
+      {/* Inner clip + scroll container — overflow-hidden lives here so the
+          hover dropdowns on individual pills can escape vertically. */}
+      <div className="relative w-full h-full overflow-x-hidden overflow-y-visible">
+        {/* Scrolling track — duplicated content for seamless wrap. */}
+        <div className="marquee-track flex h-full w-max items-center">
+          <div className="flex h-full items-center" aria-label="ticker entries">
+            {data.map((entry) => (
+              <TickerPill key={`a-${entry.symbol}`} entry={entry} />
+            ))}
+          </div>
+          <div className="flex h-full items-center" aria-hidden="true">
+            {data.map((entry) => (
+              <TickerPill key={`b-${entry.symbol}`} entry={entry} />
+            ))}
+          </div>
         </div>
-        <div className="flex h-full items-center" aria-hidden="true">
-          {data.map((entry) => (
-            <TickerPill key={`b-${entry.symbol}`} entry={entry} />
-          ))}
-        </div>
+
+        {/* Left edge fade. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 left-0 w-6 z-[1]"
+          style={{
+            background:
+              'linear-gradient(to right, var(--surface), transparent)',
+          }}
+        />
+
+        {/* Right edge fade. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 right-0 w-6 z-[1]"
+          style={{
+            background:
+              'linear-gradient(to left, var(--surface), transparent)',
+          }}
+        />
       </div>
-
-      {/* Left edge fade. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-0 w-6 z-[1]"
-        style={{
-          background:
-            'linear-gradient(to right, var(--surface), transparent)',
-        }}
-      />
-
-      {/* Right edge fade. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-y-0 right-0 w-6 z-[1]"
-        style={{
-          background:
-            'linear-gradient(to left, var(--surface), transparent)',
-        }}
-      />
     </div>
   );
 }
