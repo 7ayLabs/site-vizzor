@@ -492,6 +492,111 @@
       "secondary": "Voir sur GitHub"
     }
   },
+  "pay": {
+    "meta": {
+      "title": "Paiement · {tier} {cadence} · Vizzor",
+      "description": "Payez on-chain. Connectez un portefeuille, signez une fois, recevez un code d'accès unique pour le bot Telegram.",
+      "successTitle": "Paiement confirmé · continuez dans Telegram"
+    },
+    "eyebrow": "checkout · ton",
+    "title": "Activer {tier}",
+    "sub": "Payez on-chain en TON. Aucune carte demandée. Une fois confirmé, votre code d'accès se redeem dans le bot Telegram.",
+    "legalFootnote": "Paiement on-chain · taux figé 5 min · annulez quand vous voulez",
+    "summary": {
+      "label": "Résumé de la commande",
+      "tier": {
+        "pro": "Pro",
+        "elite": "Elite"
+      },
+      "cadence": {
+        "monthly": "Abonnement mensuel",
+        "annual": "Abonnement annuel",
+        "lifetime": "Accès à vie"
+      },
+      "row": {
+        "subtotal": "Sous-total",
+        "tonQuote": "Cotation TON",
+        "tonUnavailable": "cotation indisponible",
+        "network": "Réseau",
+        "tonMainnet": "TON mainnet",
+        "total": "Total"
+      },
+      "footnote": "Cotation rafraîchie toutes les 60s · verrouillage final à la création de session"
+    },
+    "chain": {
+      "label": "Payer avec",
+      "phase1Label": "Disponible",
+      "phase2Label": "Phase 2"
+    },
+    "wallet": {
+      "connect": "Connecter portefeuille TON",
+      "signing": "Signature de la transaction…",
+      "payNow": "Payer {amount} TON",
+      "disconnect": "Déconnecter"
+    },
+    "status": {
+      "creating": {
+        "label": "Création de la session",
+        "body": "Verrouillage du taux USD-TON et dérivation de l'adresse de destination…"
+      },
+      "awaiting_wallet": {
+        "label": "En attente du portefeuille",
+        "body": "Ouvrez votre portefeuille, vérifiez le montant et signez la transaction."
+      },
+      "broadcasting": {
+        "label": "Diffusion",
+        "body": "Le portefeuille a renvoyé la transaction. Envoi sur le réseau TON…"
+      },
+      "pending": {
+        "label": "En attente on-chain",
+        "body": "En attendant que le watcher TON détecte votre paiement. Habituellement <30s."
+      },
+      "confirming": {
+        "label": "Confirmation",
+        "body": "Paiement détecté. Finalisation de l'abonnement et émission du code d'accès…"
+      },
+      "confirmed": {
+        "label": "Confirmé",
+        "body": "Paiement confirmé. Redirection vers votre code d'accès…"
+      },
+      "expired": {
+        "label": "Session expirée",
+        "body": "Le verrou de 5 minutes a expiré. Démarrez une nouvelle session pour réessayer. {reason}"
+      },
+      "error": {
+        "label": "Erreur",
+        "body": "Une erreur est survenue : {reason}. Vous pouvez réessayer."
+      },
+      "retry": "Réessayer"
+    },
+    "cta": {
+      "start": "Démarrer le paiement",
+      "creating": "Création…"
+    },
+    "pending": {
+      "label": "infrastructure de paiement en attente",
+      "title": "Le checkout crypto arrive bientôt",
+      "body": "Le flux on-site TON Connect est prêt mais en attente des endpoints de paiement du moteur. En attendant, vous pouvez payer directement via le bot Telegram — même tier, même prix, même accès.",
+      "telegramCta": "Payer dans Telegram"
+    },
+    "grant": {
+      "label": "abonnement débloqué",
+      "title": "Bienvenue chez Vizzor · redeem dans Telegram",
+      "body": "Cliquez sur le bouton ci-dessous pour ouvrir le bot Telegram. Le bot lit le code d'accès du lien et active votre abonnement instantanément.",
+      "continueCta": "Continuer dans Telegram",
+      "codeLabel": "Ou collez le lien manuellement",
+      "copyAria": "Copier le lien de redeem",
+      "codeTtl": "Usage unique · expire dans 24h"
+    },
+    "success": {
+      "pendingLabel": "presque fini",
+      "pendingTitle": "Paiement en cours de confirmation…",
+      "pendingBody": "Nous attendons toujours que le watcher émette votre code d'accès. Patientez — généralement quelques secondes.",
+      "missingTitle": "Session introuvable",
+      "missingBody": "L'identifiant de session est manquant ou inconnu. Démarrez un nouveau paiement depuis la page tarifs.",
+      "backToPricing": "Retour aux tarifs"
+    }
+  },
   "manifesto": {
     "manifestoEyebrow": "le manifeste · signé par 7ayLabs",
     "manifestoTitle": "Des chiffres, pas des opinions.",

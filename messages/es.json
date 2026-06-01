@@ -492,6 +492,111 @@
       "secondary": "Ver en GitHub"
     }
   },
+  "pay": {
+    "meta": {
+      "title": "Pago · {tier} {cadence} · Vizzor",
+      "description": "Paga on-chain. Conecta una wallet, firma una vez, recibe un código de acceso único para el bot de Telegram.",
+      "successTitle": "Pago confirmado · continúa en Telegram"
+    },
+    "eyebrow": "checkout · ton",
+    "title": "Activar {tier}",
+    "sub": "Paga on-chain con TON. Nunca pedimos tarjeta. Cuando se confirme, tu código de acceso se canjea en el bot de Telegram.",
+    "legalFootnote": "Pago on-chain · cotización fija 5 min · cancela cuando quieras",
+    "summary": {
+      "label": "Resumen de la orden",
+      "tier": {
+        "pro": "Pro",
+        "elite": "Elite"
+      },
+      "cadence": {
+        "monthly": "Suscripción mensual",
+        "annual": "Suscripción anual",
+        "lifetime": "Acceso vitalicio"
+      },
+      "row": {
+        "subtotal": "Subtotal",
+        "tonQuote": "Cotización TON",
+        "tonUnavailable": "cotización no disponible",
+        "network": "Red",
+        "tonMainnet": "TON mainnet",
+        "total": "Total"
+      },
+      "footnote": "Cotización refresca cada 60s · bloqueo final al crear sesión"
+    },
+    "chain": {
+      "label": "Pagar con",
+      "phase1Label": "Disponible",
+      "phase2Label": "Fase 2"
+    },
+    "wallet": {
+      "connect": "Conectar wallet TON",
+      "signing": "Firmando transacción…",
+      "payNow": "Pagar {amount} TON",
+      "disconnect": "Desconectar"
+    },
+    "status": {
+      "creating": {
+        "label": "Creando sesión",
+        "body": "Bloqueando la cotización USD-TON y derivando la dirección de destino…"
+      },
+      "awaiting_wallet": {
+        "label": "Esperando wallet",
+        "body": "Abre tu wallet, revisa el monto y firma la transacción."
+      },
+      "broadcasting": {
+        "label": "Difundiendo",
+        "body": "La wallet devolvió la transacción. Enviándola a la red TON…"
+      },
+      "pending": {
+        "label": "Pendiente on-chain",
+        "body": "Esperando a que el watcher de TON detecte tu pago. Normalmente <30s."
+      },
+      "confirming": {
+        "label": "Confirmando",
+        "body": "Pago detectado. Finalizando suscripción y emitiendo código de acceso…"
+      },
+      "confirmed": {
+        "label": "Confirmado",
+        "body": "Pago confirmado. Redirigiendo a tu código de acceso…"
+      },
+      "expired": {
+        "label": "Sesión expirada",
+        "body": "El bloqueo de 5 minutos expiró. Inicia una nueva sesión para reintentar. {reason}"
+      },
+      "error": {
+        "label": "Error",
+        "body": "Algo salió mal: {reason}. Puedes reintentar."
+      },
+      "retry": "Reintentar"
+    },
+    "cta": {
+      "start": "Iniciar pago",
+      "creating": "Creando…"
+    },
+    "pending": {
+      "label": "infraestructura de pago pendiente",
+      "title": "El checkout cripto se lanza pronto",
+      "body": "El flujo on-site con TON Connect está listo pero esperamos a que el motor lance los endpoints de pago. Mientras tanto, puedes pagar directamente desde el bot de Telegram — mismo tier, mismo precio, mismo acceso.",
+      "telegramCta": "Pagar en Telegram"
+    },
+    "grant": {
+      "label": "suscripción desbloqueada",
+      "title": "Bienvenido a Vizzor · canjea en Telegram",
+      "body": "Pulsa el botón de abajo para abrir el bot de Telegram. El bot lee el código de acceso del enlace y activa tu suscripción al instante.",
+      "continueCta": "Continuar en Telegram",
+      "codeLabel": "O pega el enlace manualmente",
+      "copyAria": "Copiar enlace de canje",
+      "codeTtl": "Uso único · expira en 24h"
+    },
+    "success": {
+      "pendingLabel": "casi listo",
+      "pendingTitle": "Confirmando pago…",
+      "pendingBody": "Aún esperamos a que el watcher emita tu código de acceso. Aguanta un momento — suele ser unos segundos.",
+      "missingTitle": "Sesión no encontrada",
+      "missingBody": "El id de sesión falta o es desconocido. Inicia un nuevo pago desde la página de precios.",
+      "backToPricing": "Volver a precios"
+    }
+  },
   "manifesto": {
     "manifestoEyebrow": "el manifiesto · firmado por 7ayLabs",
     "manifestoTitle": "Números, no opiniones.",

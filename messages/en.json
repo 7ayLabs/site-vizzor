@@ -492,6 +492,111 @@
       "secondary": "View on GitHub"
     }
   },
+  "pay": {
+    "meta": {
+      "title": "Checkout · {tier} {cadence} · Vizzor",
+      "description": "Pay on-chain. Connect a wallet, sign once, receive a one-time grant code for the Telegram bot.",
+      "successTitle": "Payment confirmed · continue in Telegram"
+    },
+    "eyebrow": "checkout · ton",
+    "title": "Activate {tier}",
+    "sub": "Pay on-chain with TON. We never ask for a card. Once confirmed, your grant code redeems in the Telegram bot.",
+    "legalFootnote": "On-chain payment · 5-min rate lock · cancel anytime",
+    "summary": {
+      "label": "Order summary",
+      "tier": {
+        "pro": "Pro",
+        "elite": "Elite"
+      },
+      "cadence": {
+        "monthly": "Monthly subscription",
+        "annual": "Annual subscription",
+        "lifetime": "Lifetime access"
+      },
+      "row": {
+        "subtotal": "Subtotal",
+        "tonQuote": "TON quote",
+        "tonUnavailable": "rate unavailable",
+        "network": "Network",
+        "tonMainnet": "TON mainnet",
+        "total": "Total"
+      },
+      "footnote": "Quote refreshes every 60s · final lock at session create"
+    },
+    "chain": {
+      "label": "Pay with",
+      "phase1Label": "Live",
+      "phase2Label": "Phase 2"
+    },
+    "wallet": {
+      "connect": "Connect TON wallet",
+      "signing": "Signing transaction…",
+      "payNow": "Pay {amount} TON",
+      "disconnect": "Disconnect"
+    },
+    "status": {
+      "creating": {
+        "label": "Creating session",
+        "body": "Locking the USD-to-TON rate and deriving your destination address…"
+      },
+      "awaiting_wallet": {
+        "label": "Awaiting wallet",
+        "body": "Open your wallet, review the amount, and sign the transaction."
+      },
+      "broadcasting": {
+        "label": "Broadcasting",
+        "body": "Wallet returned the transaction. Submitting to the TON network…"
+      },
+      "pending": {
+        "label": "Pending on-chain",
+        "body": "Waiting for the TON watcher to see your payment. Usually <30s."
+      },
+      "confirming": {
+        "label": "Confirming",
+        "body": "Payment detected. Finalizing subscription and minting grant code…"
+      },
+      "confirmed": {
+        "label": "Confirmed",
+        "body": "Payment confirmed. Redirecting to your grant code…"
+      },
+      "expired": {
+        "label": "Session expired",
+        "body": "The 5-minute rate lock elapsed. Start a new session to try again. {reason}"
+      },
+      "error": {
+        "label": "Error",
+        "body": "Something went wrong: {reason}. You can retry."
+      },
+      "retry": "Retry"
+    },
+    "cta": {
+      "start": "Start payment",
+      "creating": "Creating…"
+    },
+    "pending": {
+      "label": "payment infrastructure pending",
+      "title": "Crypto checkout launches soon",
+      "body": "The on-site TON Connect flow is built but waiting on the engine's payment endpoints to land. In the meantime, you can pay directly through the Telegram bot — same tier, same price, same access.",
+      "telegramCta": "Pay in Telegram"
+    },
+    "grant": {
+      "label": "subscription unlocked",
+      "title": "Welcome to Vizzor · redeem in Telegram",
+      "body": "Click the button below to open the Telegram bot. The bot reads the grant code embedded in the deep-link and activates your subscription immediately.",
+      "continueCta": "Continue in Telegram",
+      "codeLabel": "Or paste the link manually",
+      "copyAria": "Copy redemption link",
+      "codeTtl": "Single-use · expires in 24h"
+    },
+    "success": {
+      "pendingLabel": "almost there",
+      "pendingTitle": "Payment confirming…",
+      "pendingBody": "We're still waiting for the watcher to mint your grant code. Hold tight — usually a few seconds.",
+      "missingTitle": "Session not found",
+      "missingBody": "The session id is missing or unknown. Start a new payment from the pricing page.",
+      "backToPricing": "Back to pricing"
+    }
+  },
   "manifesto": {
     "manifestoEyebrow": "the manifesto · signed by 7ayLabs",
     "manifestoTitle": "Numbers, not opinions.",
