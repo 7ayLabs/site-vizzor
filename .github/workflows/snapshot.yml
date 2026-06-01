@@ -1,0 +1,51 @@
+name: Snapshot refresh
+
+on:
+  schedule:
+    # Hourly at minute 17 (off-peak to avoid GH cron contention)
+    - cron: '17 * * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: snapshot-refresh
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch snapshot from live site
+        id: pull
+        run: |
+          set -e
+          curl --fail --silent --max-time 12 https://vizzor.ai/api/snapshot > snapshot.new.json
+          # Sanity check: at least asOf + ticker present.
+          jq -e '.asOf and .ticker' snapshot.new.json > /dev/null
+          # If the live API returned _stale (its own fallback fired), skip commit.
+          IS_STALE=$(jq -r '._stale // false' snapshot.new.json)
+          echo "stale=$IS_STALE" >> "$GITHUB_OUTPUT"
+
+      - name: Compare and write if changed
+        if: steps.pull.outputs.stale != 'true'
+        run: |
+          set -e
+          # Strip `asOf` so we don't churn on the timestamp alone.
+          jq 'del(.asOf)' snapshot.new.json > .a.json
+          jq 'del(.asOf)' data/snapshot.json > .b.json
+          if ! diff -q .a.json .b.json > /dev/null; then
+            mv snapshot.new.json data/snapshot.json
+            git config user.name "vizzor-bot"
+            git config user.email "bot@vizzor.ai"
+            git add data/snapshot.json
+            git commit -m "chore(data): refresh snapshot $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push
+          else
+            echo "snapshot unchanged, skipping commit"
+          fi
