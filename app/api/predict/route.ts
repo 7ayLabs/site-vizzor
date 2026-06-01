@@ -23,6 +23,7 @@ import { anthropic } from '@ai-sdk/anthropic';
 import { streamText, convertToModelMessages, type UIMessage } from 'ai';
 import { buildIncrementedQuotaCookie, readQuota } from '@/lib/quota';
 import { isTokenLive } from '@/lib/feature-flags';
+import { verifyBurnTx } from '@/lib/solana';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -62,20 +63,32 @@ export async function POST(req: Request) {
   let setCookie: string | null = null;
   let burnApproved = false;
 
-  // Phase 2 hook: verify the burn tx if presented. Until the token is
-  // live this branch is unreachable in practice; we keep the shape so
-  // clients can already start sending the header for forward-compat.
+  // Phase 2: verify the burn tx if presented. The flag gate means we
+  // ignore the header entirely until the token is live, even if a
+  // forward-compat client starts sending it early.
   if (burnHeader && isTokenLive()) {
-    // TODO(phase2): call /lib/solana.verifyBurnTx(burnHeader).
-    burnApproved = false;
+    const verify = await verifyBurnTx(burnHeader);
+    burnApproved = verify.ok;
+    if (!verify.ok) {
+      return Response.json(
+        {
+          error: 'burn_verification_failed',
+          message:
+            'The burn transaction could not be verified. Try again, or check the wallet panel for details.',
+          reason: verify.reason,
+        },
+        { status: 402, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
   }
 
   if (!burnApproved && quota.exhausted) {
     return Response.json(
       {
         error: 'free_quota_exhausted',
-        message:
-          'Free predictions exhausted. The $VIZZOR token launches soon — join the waitlist or connect a wallet to continue.',
+        message: isTokenLive()
+          ? 'Free predictions exhausted. Connect a wallet and burn $VIZZOR to continue.'
+          : 'Free predictions exhausted. The $VIZZOR token launches soon — join the waitlist.',
         quota,
       },
       { status: 402, headers: { 'Cache-Control': 'no-store' } },
