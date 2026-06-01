@@ -34,10 +34,10 @@ import { verifyBurnTx } from '@/lib/solana';
 import {
   formatPredictionText,
   generatePrediction,
-  parseUserMessage,
   type ParsedRequest,
 } from '@/lib/predict-format';
 import { getTicker, getTrackerWR } from '@/lib/snapshot';
+import { parseIntent } from '@/lib/commands';
 import type { Prediction } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -51,7 +51,30 @@ interface PredictRequest {
 }
 
 export async function POST(req: Request) {
-  /* ----------------------------- gate ----------------------------- */
+  /* ------------------------- parse request ----------------------- */
+
+  let body: PredictRequest;
+  try {
+    body = (await req.json()) as PredictRequest;
+  } catch {
+    return Response.json({ error: 'invalid_body' }, { status: 400 });
+  }
+  if (!Array.isArray(body.messages) || body.messages.length === 0) {
+    return Response.json({ error: 'no_messages' }, { status: 400 });
+  }
+
+  const lastUserText = extractLastUserText(body.messages);
+  const intent = parseIntent(lastUserText);
+
+  /* -------------------- non-prediction commands ------------------ */
+  // Info, stats, and bot-only redirects bypass the quota gate — they
+  // don't consume engine cycles, so we don't charge against the free
+  // tier for them.
+  if (intent.kind !== 'predict') {
+    return streamPredictionText(intent.text ?? '', null);
+  }
+
+  /* --------------------- predict gate (quota) -------------------- */
 
   const burnHeader = req.headers.get('x-vizzor-burn-tx');
   const quota = await readQuota();
@@ -91,20 +114,7 @@ export async function POST(req: Request) {
     setCookie = buildIncrementedQuotaCookie(quota.used);
   }
 
-  /* ------------------------- parse request ----------------------- */
-
-  let body: PredictRequest;
-  try {
-    body = (await req.json()) as PredictRequest;
-  } catch {
-    return Response.json({ error: 'invalid_body' }, { status: 400 });
-  }
-  if (!Array.isArray(body.messages) || body.messages.length === 0) {
-    return Response.json({ error: 'no_messages' }, { status: 400 });
-  }
-
-  const lastUserText = extractLastUserText(body.messages);
-  const parsed = parseUserMessage(lastUserText);
+  const parsed: ParsedRequest = intent.predict!;
 
   /* --------------------------- engine ---------------------------- */
 
