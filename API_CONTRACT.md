@@ -1,288 +1,181 @@
-# `api.vizzor.ai` — Site Contract
+# Vizzor engine integration
 
-**Audience:** the team shipping endpoints on the Vizzor product repo
-(`github.com/7ayLabs/vizzor`, Fastify API on port `7100`).
+How `site-vizzor` consumes the Vizzor product engine. **Not a
+prescriptive contract** — this is how the site reads the existing
+public surface of the real engine. When the engine adds endpoints the
+site can use, the integration extends here.
 
-**Why this doc exists:** `site-vizzor` (this repo) consumes the product
-API at `api.vizzor.ai`. Every endpoint listed here is called by the
-site at runtime. Breaking the shape breaks the site. The site has a
-fallback for *every* endpoint (committed snapshot, stub generator,
-etc.), so a missing endpoint degrades gracefully — but the goal is to
-reach a state where the upstream API is the canonical truth and the
-fallbacks only kick in during incidents.
+## TL;DR
 
-All endpoints:
-- Live under `https://api.vizzor.ai/v1/site/*`.
-- Are publicly cacheable except where noted (no auth required).
-- Must respond within **6 seconds** or the site times out and falls
-  back. Tune RPC + DB queries accordingly.
-- Must set permissive CORS (`Access-Control-Allow-Origin: https://vizzor.ai`).
+The site calls **`POST /v1/chat`** on a running Vizzor instance. That's
+the same endpoint the Telegram bot and CLI use. The site is a thin
+proxy + protocol adapter:
 
----
-
-## 1. `GET /v1/site/ticker`
-
-**Status:** Currently *not implemented upstream*. The site proxies
-CoinGecko via `/api/ticker` to provide live prices for the carousel.
-When this endpoint ships upstream, the site's CoinGecko proxy becomes a
-fallback.
-
-**Response:** `TickerEntry[]`
-```ts
-interface TickerEntry {
-  symbol: string;     // e.g. "BTC"
-  price: number;      // USD
-  changePct: number;  // 24h percent change as decimal, e.g. -0.0652
-  source?: string;    // exchange / aggregator that supplied the price
-}
+```
+browser  ──POST /api/predict──▶  site  ──POST /v1/chat──▶  vizzor engine
+                                          (real engine, same as bot/CLI)
 ```
 
-**Cache hint:** safe to `s-maxage=30, stale-while-revalidate=60`.
+The site does **not** generate predictions. The engine does.
 
 ---
 
-## 2. `GET /v1/site/tracker-wr`
+## Running the engine locally
 
-**Response:** `TrackerWR`
-```ts
-interface TrackerWR {
-  aggregate: { wr: number; samples: number; asOf: string };
-  byTier: Record<'high-conviction'|'whale-confirmed'|'tracked'|'advisory', { wr: number; samples: number }>;
-  byHorizon: Record<string, { wr: number; samples: number }>;
-}
+The Vizzor CLI is published on npm as `@vizzor/cli`. It exposes its
+REST API via `vizzor serve`.
+
+```bash
+# One-time setup
+pnpm install                           # site deps include @vizzor/cli devDep
+pnpm exec vizzor setup                 # configure API keys (or use existing config)
+
+# Start the engine alongside the site
+pnpm exec vizzor serve --port 7100     # in terminal A
+pnpm dev                               # in terminal B (site on :3000 or :3001)
 ```
 
-Powers the home page's `TrustBecauseTracked` section.
+In a separate `.env.local`, point the site at the engine:
 
-**Cache hint:** `s-maxage=300` (5 min) — recalibration is slow.
-
----
-
-## 3. `GET /v1/site/last-24h`
-
-**Response:** `Last24h`
-```ts
-interface Last24h {
-  hits: number;
-  misses: number;
-  neutrals: number;
-  pending: number;
-  decisiveWR: number; // hits / (hits + misses)
-}
+```
+VIZZOR_API_URL=http://localhost:7100
 ```
 
-Powers the live counter in the receipts scorecard.
+That's it. The site auto-detects the running engine and routes all
+prediction prompts to it. When the engine is down, the site renders
+"⚠ Vizzor offline" instead of fabricating predictions.
 
-**Cache hint:** `s-maxage=60`.
+### AI provider
+
+The engine uses Anthropic by default but supports Ollama, OpenAI, and
+Gemini. The site doesn't care which — the engine handles model
+routing. To switch providers at runtime:
+
+```bash
+# via API
+curl -X PUT http://localhost:7100/v1/provider \
+  -H 'content-type: application/json' \
+  -d '{"provider":"ollama"}'
+
+# or via CLI inside the TUI
+/provider ollama
+```
+
+If using Ollama, install models first:
+
+```bash
+ollama serve
+ollama pull qwen2.5:14b   # or llama3.2, whatever you prefer
+```
 
 ---
 
-## 4. `GET /v1/site/recent-predictions`
+## Endpoints the site consumes
 
-**Query params:**
-- `limit?: number` — default `20`, max `50`
-- `tier?: 'high-conviction'|'whale-confirmed'|'tracked'|'advisory'`
-- `outcome?: 'hit'|'miss'|'neutral'|'pending'`
+### `POST /v1/chat` — primary
 
-**Response:** `Prediction[]` (most recent first).
+The engine's canonical chat endpoint. SSE streaming with tool use.
 
-**Cache hint:** `s-maxage=30`.
-
----
-
-## 5. `GET /v1/site/prediction/:id`
-
-**Path param:** `:id` is a `Prediction.id` (e.g. `p_5j2k1f`).
-
-**Response:** `Prediction` (full shape with `triggerSnapshot`).
-
-**Cache hint:** if `outcome` is `'pending'`: `no-store`. Otherwise
-`s-maxage=3600` (resolved predictions are immutable).
-
----
-
-## 6. `POST /v1/site/chat` ⭐ **REQUIRED — canonical chat surface**
-
-The Vizzor engine **is** the on-site chat backend. The site is a thin
-consumer with no local prediction logic. Every prediction prompt
-forwarded from the on-site chat at `vizzor.ai/predict` arrives here.
-
-Until this endpoint is live, the site returns an honest **"⚠ Vizzor
-offline"** message to every prediction request. There is no fallback
-that fabricates predictions — that's a deliberate decision: the
-calibration story (`tracked WR`, receipts, trigger snapshots) collapses
-if the site lies when the engine is down.
-
-### Request
-
-```http
-POST /v1/site/chat
-Content-Type: application/json
-Accept: text/event-stream
-x-vizzor-burn-tx: <signature?>   // optional, only when paid tier active
-
+**Request** (Vizzor's flat shape):
+```json
 {
   "messages": [
-    { "id": "m1", "role": "user", "parts": [{ "type": "text", "text": "BTC 4h" }] },
-    { "id": "m2", "role": "assistant", "parts": [{ "type": "text", "text": "..." }] },
-    { "id": "m3", "role": "user", "parts": [{ "type": "text", "text": "now ETH 1h" }] }
-  ]
+    {"role": "user", "content": "Predict BTC 4h"},
+    {"role": "assistant", "content": "..."},
+    {"role": "user", "content": "now ETH 1h"}
+  ],
+  "conversationId": "<optional UUID for persistence>",
+  "userId": "<optional UUID for per-user tool routing>"
 }
 ```
 
-The site forwards **raw user input verbatim** — no symbol/horizon
-parsing, no language detection. The Vizzor engine handles NLU, locale
-inference, command parsing, and content generation. The site's only
-contribution is the conversation history (so multi-turn context works).
+The site translates the AI SDK `UIMessage` shape (`{role, parts: [{type:'text', text}]}`) to this flat shape at the proxy boundary.
 
-### Response
+**Response** — `text/event-stream` with these event types:
 
-The engine returns a **server-sent event stream** in the Vercel AI SDK
-**UI Message Stream protocol**:
+| Event | Data | Site behavior |
+|---|---|---|
+| `conversation` | `{conversationId}` | drop (not user-facing) |
+| `token_data` | `{tokens: [...]}` | drop (engine pre-fetches market data; sent for clients that render live tickers) |
+| `text` | `{delta: "..."}` | forward as `text-delta` |
+| `tool_use` / `tool_call` | `{name, ...}` | render as `\n[tool-name]` so users see when the engine reaches for live data |
+| `tool_result` | `{...}` | drop (engine narrates results via subsequent `text` events) |
+| `error` | `{message}` | surface as `⚠ Vizzor engine error: <msg>` so billing / config issues are visible |
+| `done` | `{usage?}` | drop; the site emits its own AI SDK `text-end` + `[DONE]` |
 
-```
-Content-Type: text/event-stream
-x-vercel-ai-ui-message-stream: v1
+The site's `/api/predict/route.ts` does the SSE→AI-SDK transformation
+in `transformVizzorStream()`. The browser-side `useChat` hook from
+`@ai-sdk/react` consumes the AI SDK protocol natively.
 
-data: {"type":"text-start","id":"<msg-id>"}
+### Snapshot-backed routes (cached, used by local slash commands)
 
-data: {"type":"text-delta","id":"<msg-id>","delta":"🟠 BITCOIN · 1h\n💰 BTC Price: $70,976"}
+These existed in the older contract and are still consumed by the
+local command dispatcher (`/wr`, `/precisions`, `/price`, `/trends`).
+They are **optional** — the site falls back to the committed
+`data/snapshot.json` if any of these are absent on the engine.
 
-data: {"type":"text-delta","id":"<msg-id>","delta":"\n💵 Direction: 📉 SHORT (67%)\n..."}
+- `GET /v1/site/ticker` → `TickerEntry[]` (24h price snapshot)
+- `GET /v1/site/tracker-wr` → `TrackerWR` (aggregate + per-tier + per-horizon WR)
+- `GET /v1/site/last-24h` → `Last24h`
+- `GET /v1/site/recent-predictions?limit=N` → `Prediction[]`
+- `GET /v1/site/prediction/:id` → `Prediction`
 
-data: {"type":"text-end","id":"<msg-id>"}
-
-data: [DONE]
-```
-
-The site passes this stream directly to the browser; the `@ai-sdk/react`
-`useChat` hook on the client renders it natively. The engine team can
-emit this format trivially using the Vercel AI SDK's `streamText()` →
-`toUIMessageStreamResponse()` helpers, or write it manually (it's just
-SSE with JSON envelopes).
-
-### Content responsibility
-
-The engine emits the **canonical Telegram-bot trade-plan format**:
-
-```
-🟠 BITCOIN · 1h
-💰 BTC Price: $70,976.28
-💵 Direction: 📉 SHORT (58%)
-🪙 Entry Zone: $70,976.28 — $71,261.18
-📈 TP1: $70,887.05 (-0.13%)
-📊 SL: $71,615.07 (+0.90%)
-⚠ Skip: R:R 1:0.14 — risk exceeds reward, no trade
-```
-
-or for RANGE markets:
-
-```
-🟣 SOLANA · 1d
-💰 SOL Price: $79.42
-💵 Direction: ➖ RANGE (57%)
-🪙 Band: $78.74 — $80.10
-💹 Best Play: Range fade — long $78.74, short $80.10 (no leverage)
-```
-
-The site renders the engine's output verbatim. **Coin glyphs, R:R
-calculations, verdict thresholds, locale handling, and signal narratives
-are all engine responsibilities.** The site has no `formatPrediction`
-code anymore.
-
-### Burn-tx forwarding
-
-When `isTokenLive()` and the visitor presents a verified burn
-(checked at the site against the Solana RPC), the site forwards the
-`x-vizzor-burn-tx` header to the engine. The engine MAY use this to:
-- record the burn for accounting,
-- unlock higher-tier signal detail (premium signals not shown to free
-  users),
-- skip a confidence floor that the free tier applies.
-
-The engine does **not** need to re-verify the burn — the site has
-already done it. The header is informational.
-
-### Status codes
-
-| Code | Site behavior |
-|---|---|
-| `200` + stream | Pass through verbatim. |
-| `4xx` / `5xx` / timeout / network error | Return the offline message to the browser. |
-
-### Caching
-
-`no-store`. Streaming responses must not be cached.
-
-### Why streaming (not single-shot JSON)
-
-- Matches the bot's UX — receipts feel kinetic as they materialize.
-- The site already has the AI SDK stream protocol wired client-side
-  (`useChat`); upstream emitting the same protocol means zero
-  transformation at the edge.
-- Multi-turn refinements (e.g., "now ETH 1h", "and what about 1d?")
-  arrive as additional messages in the array without protocol changes.
+These were enumerated in the older contract version of this file; the
+shapes are still in `lib/types.ts`. The real engine doesn't expose
+`/v1/site/*` yet (it has `/v1/chronovisor/*`, `/v1/market/*`,
+`/v1/analysis/*` with different shapes) — when the product team
+publishes site-shaped endpoints, the snapshot fallback can be retired.
 
 ---
 
-## 7. `POST /v1/site/burn-context` (optional, future)
+## CORS for production
 
-When the $VIZZOR token launches and the paid tier activates, the site
-will need to call upstream to (a) check the user's recent predict
-history for context-aware responses, and (b) attach the burn tx as
-proof-of-payment.
+When the engine deploys at `api.vizzor.ai`, the Caddy block must allow
+the site origin on `/v1/chat`:
 
-This is **not required for Phase 2** — the site's `/api/predict`
-already handles burn verification locally via `/lib/solana.ts`. But if
-the product team wants to enrich responses based on the burn-paid
-user's prior predictions, this endpoint would carry that.
-
-Tracked for v0.2.0.
-
----
-
-## 8. CORS
-
-All endpoints under `/v1/site/*` must respond with:
-```
-Access-Control-Allow-Origin: https://vizzor.ai
-Access-Control-Allow-Methods: GET, POST, OPTIONS
-Access-Control-Max-Age: 86400
+```caddy
+api.vizzor.ai {
+  reverse_proxy 127.0.0.1:7100
+  @site path /v1/chat /v1/site/*
+  header @site {
+    Access-Control-Allow-Origin "https://vizzor.ai"
+    Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Access-Control-Max-Age "86400"
+  }
+}
 ```
 
-The Caddy block in this repo's README already documents this for the
-GET endpoints. The `POST /v1/site/predict` addition needs the
-`POST` method in the allowlist.
+But the site doesn't talk to the engine from the browser — its server
+route (`/api/predict`) is the proxy, so the request is server-to-server
+and CORS is moot. The CORS rules above only matter if a different
+client wants to talk to the engine directly from a browser.
 
 ---
 
-## 9. Versioning
+## Authentication
 
-The `/v1/` segment is the major version. Breaking changes to any shape
-above must bump to `/v2/`. The site's `lib/api.ts` reads
-`NEXT_PUBLIC_VIZZOR_API_URL` so swapping the API host (e.g. to point at
-a staging server) is a config change, not a code change.
+The current engine doesn't require auth on `/v1/chat` (designed for
+local + LAN deploys). When it ships behind auth, the site forwards
+whatever header the engine expects (an API key in `Authorization`,
+typically) — that's a one-line change in `forwardToVizzor()`.
 
----
-
-## 10. Health probe
-
-The site does **not** call `/v1/site/health` — it has its own
-`/api/health` for container probes. But if the product wants its own,
-follow the same `{ ok, sha, buildTime, uptime }` shape the site uses.
+The `x-vizzor-burn-tx` header (paid-tier burn signature) is already
+forwarded; the engine MAY use it to unlock premium signals or skip
+free-tier confidence floors. The site doesn't require the engine to
+honor it — the burn verification happens on the site side via the
+Solana RPC.
 
 ---
 
-## 11. Implementation priority for the product team
+## Fallback policy
 
-1. **`POST /v1/site/predict`** — unblocks the on-site Vizzor chat
-   experience. Highest user-visible impact.
-2. `GET /v1/site/ticker` — replaces our CoinGecko proxy with first-party
-   data.
-3. `GET /v1/site/tracker-wr` — replaces the committed snapshot.
-4. The remaining GET endpoints — replaces other snapshot fields one by
-   one.
+The site has **no local prediction logic**. When the engine is down or
+returns 5xx, the site streams an honest "⚠ Vizzor offline" message and
+doesn't burn the user's free credit. There is intentionally no
+local stub — fabricating predictions while the engine is offline would
+poison the calibration story the product depends on.
 
-The site can ship and operate with **all** of these missing (falling
-back to snapshot + stub). Shipping them progressively upgrades the
-fidelity of the on-site experience without coordination overhead.
+For development without the real engine, run `pnpm mock` to start a
+deterministic placeholder server at `:7100` that conforms to the same
+SSE protocol. It's labelled `x-vizzor-source: mock` so you can tell
+mock responses apart from real-engine responses at a glance.
