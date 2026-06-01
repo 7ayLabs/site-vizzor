@@ -37,7 +37,15 @@ export async function POST() {
     return new NextResponse('Not Found', { status: 404 });
   }
 
-  // Expire the cookie. Max-Age=0 removes it from the browser jar.
+  // Write the cookie VALUE to "0" with a normal Max-Age rather than
+  // attempting expiry via Max-Age=0. Two reasons:
+  //   1. Cookie deletion requires every attribute on the deleting
+  //      cookie to match the original (Path, Domain, SameSite). Any
+  //      mismatch and the browser keeps the old cookie. Setting a new
+  //      value sidesteps the matching dance — name + path + domain are
+  //      enough for the new cookie to replace the old.
+  //   2. readQuota() treats "0" and "absent" identically (clamps to
+  //      0 either way), so a value-of-0 cookie is functionally a reset.
   const limit = freePredictions();
   const fresh = {
     used: 0,
@@ -53,7 +61,7 @@ export async function POST() {
   });
   headers.append(
     'Set-Cookie',
-    `${QUOTA_COOKIE}=0; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`,
+    `${QUOTA_COOKIE}=0; Path=/; Max-Age=${60 * 60 * 24 * 30}; HttpOnly; SameSite=Lax`,
   );
 
   return new NextResponse(JSON.stringify(fresh), { status: 200, headers });
