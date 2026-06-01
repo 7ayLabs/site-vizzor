@@ -1,22 +1,29 @@
 /**
  * POST /api/predict — chat surface for the on-site Vizzor experience.
  *
- * Flow:
+ * Quota + burn gate (Phase 1+2):
  *   1. Read the `vizzor.free_used` cookie via `readQuota()`.
- *   2. If the caller presented `x-vizzor-burn-tx`, verify it (Phase 2;
- *      currently always rejects since `isTokenLive()` is false).
- *   3. If the burn verifies, allow the call WITHOUT touching the free
- *      counter — paid is paid.
- *   4. If no burn and the free counter has room, allow and increment
- *      the cookie on the response.
- *   5. Otherwise: 402 Payment Required.
+ *   2. If `x-vizzor-burn-tx` header is present AND `isTokenLive()`:
+ *      verify it via `verifyBurnTx()`. Valid → allow without touching
+ *      the free counter. Invalid → 402.
+ *   3. Else if `used < FREE_PREDICTIONS`: allow, increment cookie.
+ *   4. Else: 402 Payment Required.
  *
- * Streaming uses the Vercel AI SDK (`streamText` + Anthropic provider).
- * In Phase 3 we'll swap the upstream from Anthropic to the product's
- * `api.vizzor.ai/v1/site/chat` — the streaming protocol stays the same.
+ * Engine resolution (three-tier fallback):
+ *   A. Upstream Vizzor product API at `${VIZZOR_API_URL}/v1/site/predict`
+ *      — when the product team ships this endpoint (separate PR in the
+ *      7ayLabs/vizzor repo), it becomes the canonical source. The route
+ *      streams the formatted receipt.
+ *   B. Anthropic Claude with a Helios-shaped system prompt + live
+ *      snapshot context (current price, recent WR, allowed families).
+ *      Used when ANTHROPIC_API_KEY is set but the upstream is down.
+ *   C. Local deterministic stub via `generatePrediction()`. Same shape,
+ *      seeded from symbol+horizon+UTC-hour. Always available, no keys.
  *
- * When `ANTHROPIC_API_KEY` is absent (local dev without keys) we
- * degrade to a deterministic stub stream so the UI is still demoable.
+ * The text format is identical across all three tiers — see
+ * `formatPredictionText()` in `lib/predict-format.ts`.
+ *
+ * See `API_CONTRACT.md` at the repo root for the upstream contract spec.
  */
 
 import { anthropic } from '@ai-sdk/anthropic';
@@ -24,48 +31,33 @@ import { streamText, convertToModelMessages, type UIMessage } from 'ai';
 import { buildIncrementedQuotaCookie, readQuota } from '@/lib/quota';
 import { isTokenLive } from '@/lib/feature-flags';
 import { verifyBurnTx } from '@/lib/solana';
+import {
+  formatPredictionText,
+  generatePrediction,
+  parseUserMessage,
+  type ParsedRequest,
+} from '@/lib/predict-format';
+import { getTicker, getTrackerWR } from '@/lib/snapshot';
+import type { Prediction } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const SYSTEM_PROMPT = `You are Vizzor, a calibrated crypto prediction agent.
-You produce directional predictions for tokens across horizons from 5 minutes to 30 days.
-Every response must read like a Vizzor "receipt": brief, structured, no fluff.
-
-Format your responses like this:
-
-SYMBOL · HORIZON · TIER
-direction: <up|down|sideways> · confidence: <0.00-1.00>
-entry: $<current price>
-targets: bull $<n> · base $<n> · bear $<n>
-
-trigger snapshot
-  - <signal family>: <cf signed> <one-line meta>
-  - <signal family>: <cf signed> <one-line meta>
-  - ...
-
-Be concise. No greetings, no apologies, no hedging. If a user asks something
-outside the prediction domain, redirect them to ask about a specific symbol
-and horizon (e.g. "ETH 4h" or "SOL 1d").
-
-Use real-feeling values consistent with current market conditions. The user
-is on a free trial — give them a high-quality demo prediction.`;
+const UPSTREAM_TIMEOUT_MS = 6_000;
 
 interface PredictRequest {
   messages: UIMessage[];
 }
 
 export async function POST(req: Request) {
-  const burnHeader = req.headers.get('x-vizzor-burn-tx');
+  /* ----------------------------- gate ----------------------------- */
 
+  const burnHeader = req.headers.get('x-vizzor-burn-tx');
   const quota = await readQuota();
   let setCookie: string | null = null;
   let burnApproved = false;
 
-  // Phase 2: verify the burn tx if presented. The flag gate means we
-  // ignore the header entirely until the token is live, even if a
-  // forward-compat client starts sending it early.
   if (burnHeader && isTokenLive()) {
     const verify = await verifyBurnTx(burnHeader);
     burnApproved = verify.ok;
@@ -74,7 +66,7 @@ export async function POST(req: Request) {
         {
           error: 'burn_verification_failed',
           message:
-            'The burn transaction could not be verified. Try again, or check the wallet panel for details.',
+            'The burn transaction could not be verified. Try again, or check the wallet panel.',
           reason: verify.reason,
         },
         { status: 402, headers: { 'Cache-Control': 'no-store' } },
@@ -95,10 +87,11 @@ export async function POST(req: Request) {
     );
   }
 
-  // Only count free uses toward the counter; paid burns don't decrement.
   if (!burnApproved) {
     setCookie = buildIncrementedQuotaCookie(quota.used);
   }
+
+  /* ------------------------- parse request ----------------------- */
 
   let body: PredictRequest;
   try {
@@ -106,63 +99,205 @@ export async function POST(req: Request) {
   } catch {
     return Response.json({ error: 'invalid_body' }, { status: 400 });
   }
-
   if (!Array.isArray(body.messages) || body.messages.length === 0) {
     return Response.json({ error: 'no_messages' }, { status: 400 });
   }
 
-  // Graceful degradation: no API key → stub stream. Lets dev/CI exercise
-  // the route end-to-end without provisioning credentials.
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return stubStream(setCookie);
+  const lastUserText = extractLastUserText(body.messages);
+  const parsed = parseUserMessage(lastUserText);
+
+  /* --------------------------- engine ---------------------------- */
+
+  // (A) Upstream Vizzor API — primary path once the product ships
+  // `/v1/site/predict`. Returns a single Prediction JSON.
+  const upstreamPrediction = await tryUpstreamPredict(parsed);
+  if (upstreamPrediction) {
+    return streamPredictionText(
+      formatPredictionText(upstreamPrediction),
+      setCookie,
+    );
   }
 
-  const modelMessages = await convertToModelMessages(body.messages);
-  const result = streamText({
-    model: anthropic('claude-haiku-4-5'),
-    system: SYSTEM_PROMPT,
-    messages: modelMessages,
-    // Cache the system prompt across requests (Anthropic prompt caching).
-    providerOptions: {
-      anthropic: { cacheControl: { type: 'ephemeral' } },
-    },
-  });
+  // (B) Anthropic with rich snapshot context. The model receives the
+  // current ticker prices, the calibrated tracker WR, and a strict
+  // format spec — so output stays on-brand even without the product.
+  if (process.env.ANTHROPIC_API_KEY) {
+    const modelMessages = await convertToModelMessages(body.messages);
+    const result = streamText({
+      model: anthropic('claude-haiku-4-5'),
+      system: buildSystemPrompt(parsed),
+      messages: modelMessages,
+      providerOptions: {
+        anthropic: { cacheControl: { type: 'ephemeral' } },
+      },
+    });
+    const headers: Record<string, string> = {};
+    if (setCookie) headers['set-cookie'] = setCookie;
+    return result.toUIMessageStreamResponse({ headers });
+  }
 
-  const headers: Record<string, string> = {};
-  if (setCookie) headers['set-cookie'] = setCookie;
-  return result.toUIMessageStreamResponse({ headers });
+  // (C) Deterministic stub — same Helios shape, seeded by symbol +
+  // horizon + UTC-hour. Always available; no external dependencies.
+  const stub = generatePrediction(parsed);
+  return streamPredictionText(
+    formatPredictionText(stub) +
+      `\n\nnote: api.vizzor.ai upstream unreachable and ANTHROPIC_API_KEY not configured — this is a calibrated demo receipt.`,
+    setCookie,
+  );
 }
 
-/**
- * Deterministic stub so the chat works without an Anthropic key.
- * Emits an AI-SDK-compatible UI message stream.
- */
-function stubStream(setCookie: string | null): Response {
-  const stub = `BTC · 4h · tracked
-direction: up · confidence: 0.62
-entry: $71,200
-targets: bull $72,800 · base $71,900 · bear $69,400
+/* ------------------------------------------------------------------ *\
+ * Upstream call
+ * ------------------------------------------------------------------ */
+
+async function tryUpstreamPredict(
+  parsed: ParsedRequest,
+): Promise<Prediction | null> {
+  const base =
+    process.env.VIZZOR_API_URL ??
+    process.env.NEXT_PUBLIC_VIZZOR_API_URL ??
+    'https://api.vizzor.ai';
+
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    UPSTREAM_TIMEOUT_MS,
+  );
+  try {
+    const res = await fetch(`${base}/v1/site/predict`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify({
+        symbol: parsed.symbol,
+        horizon: parsed.horizon,
+        locale: parsed.locale,
+      }),
+      signal: controller.signal,
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as Prediction;
+    // Minimal shape check so a bad upstream doesn't poison the stream.
+    if (
+      !json ||
+      typeof json.symbol !== 'string' ||
+      typeof json.entryPrice !== 'number' ||
+      typeof json.confidence !== 'number'
+    ) {
+      return null;
+    }
+    return json;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/* ------------------------------------------------------------------ *\
+ * Anthropic system prompt — keeps Claude on-format and on-data.
+ * ------------------------------------------------------------------ */
+
+function buildSystemPrompt(parsed: ParsedRequest): string {
+  const ticker = getTicker();
+  const wr = getTrackerWR();
+  const tickerLines = ticker
+    .map((t) => `  ${t.symbol}=${t.price} (${(t.changePct * 100).toFixed(2)}% 24h)`)
+    .join('\n');
+
+  return `You are Vizzor, a calibrated crypto prediction agent (v0.15.5 Helios).
+You respond with a single structured prediction "receipt" — no chit-chat,
+no apologies, no disclaimers about being an AI. Match the exact format of
+the product CLI: \`vizzor predict <SYMBOL> <HORIZON>\`.
+
+# Current market context (do not invent prices)
+${tickerLines}
+
+# Tracker calibration (use as ground truth for tier confidence)
+aggregate WR: ${(wr.aggregate.wr * 100).toFixed(1)}% over ${wr.aggregate.samples} samples
+best horizon: ${findBestHorizon(wr)}
+worst horizon: ${findWorstHorizon(wr)}
+
+# Required output format (exact, monospaced)
+<SYMBOL> · <HORIZON> · <TIER_EMOJI> <tier>
+direction: <↑|↓|↔> <up|down|sideways> · confidence <0.NN>
+entry:     $<price>
+targets:   bull $<n> · base $<n> · bear $<n>
 
 trigger snapshot
-  - onChain        +0.48  whale_inflow $12.4M
-  - logicRules     +0.41  coinbase_premium positive
-  - mlEnsemble     +0.36  rsi 54.2 · ensemble 0.64
-  - patternMatch   +0.22  BOS 4h up
+  ▸ onChain            <±0.NN>  <meta>
+  ▸ mlEnsemble         <±0.NN>  <meta>
+  ▸ logicRules         <±0.NN>  <meta>
+  ▸ patternMatch       <±0.NN>  <meta>
+  ▸ predictionMarkets  <±0.NN>  <meta>
+  ▸ socialNarrative    <±0.NN>  <meta>
+  · smc: <BOS|CHoCH> at $<price>
+  · ict: <session> · <action>
 
-note: anthropic_api_key not configured — this is a stub response. set ANTHROPIC_API_KEY to enable live predictions.`;
+reason: <one-line confluence summary>
 
-  // Encode as an AI SDK UI message stream: one text-delta event then done.
-  // Format: each line is `data: {...}\n\n` (SSE-flavored).
+🔔 alerts armed at TP1 / TP2 / SL
+
+# Tier rules
+- 🌟 high-conviction : confidence ≥ 0.78
+- 🐋 whale-confirmed : onChain cf ≥ 0.55
+- ✅ tracked         : confidence 0.56–0.77
+- ⚪ advisory        : confidence < 0.56
+
+# Constraints
+- The user's symbol + horizon are: ${parsed.symbol} ${parsed.horizon}.
+- Use the current ticker price for ${parsed.symbol} as the entry.
+- Bull/base/bear targets must be horizon-appropriate (4h ≈ ±3.5%,
+  1d ≈ ±6%, 1h ≈ ±1.8%, 15m ≈ ±0.8%).
+- Signal CFs must be in [-0.85, 0.85].
+- The "meta" column is short product-style data (e.g.
+  "whale_inflow $12.4M", "rsi 54.2 · ensemble 0.64", "BOS_4h_up").
+- Respond in ${parsed.locale === 'es' ? 'Spanish for any prose lines (reason, smc details)' : parsed.locale === 'fr' ? 'French for any prose lines' : 'English'}. The structural keywords (direction, entry, targets, trigger snapshot) stay English — that's the product's CLI.
+- No markdown. No code fences. No explanations outside the receipt.`;
+}
+
+function findBestHorizon(wr: ReturnType<typeof getTrackerWR>): string {
+  let best: { h: string; wr: number; n: number } | null = null;
+  for (const [h, v] of Object.entries(wr.byHorizon)) {
+    if (!best || v.wr > best.wr) best = { h, wr: v.wr, n: v.samples };
+  }
+  return best
+    ? `${best.h} ${(best.wr * 100).toFixed(1)}% (n=${best.n})`
+    : 'n/a';
+}
+
+function findWorstHorizon(wr: ReturnType<typeof getTrackerWR>): string {
+  let worst: { h: string; wr: number; n: number } | null = null;
+  for (const [h, v] of Object.entries(wr.byHorizon)) {
+    if (!worst || v.wr < worst.wr) worst = { h, wr: v.wr, n: v.samples };
+  }
+  return worst
+    ? `${worst.h} ${(worst.wr * 100).toFixed(1)}% (n=${worst.n})`
+    : 'n/a';
+}
+
+/* ------------------------------------------------------------------ *\
+ * Stub streamer — emits the AI-SDK UI message protocol with our text.
+ * ------------------------------------------------------------------ */
+
+function streamPredictionText(
+  text: string,
+  setCookie: string | null,
+): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     start(controller) {
-      const id = 'stub-' + Date.now().toString(36);
+      const id = 'pred-' + Date.now().toString(36);
       controller.enqueue(
         encoder.encode(
           `data: ${JSON.stringify({ type: 'text-start', id })}\n\n`,
         ),
       );
-      for (const chunk of stub.match(/.{1,40}/gs) ?? [stub]) {
+      // Chunk by ~40 chars so the stream feels alive without bombarding.
+      for (const chunk of text.match(/.{1,40}/gs) ?? [text]) {
         controller.enqueue(
           encoder.encode(
             `data: ${JSON.stringify({ type: 'text-delta', id, delta: chunk })}\n\n`,
@@ -186,4 +321,17 @@ note: anthropic_api_key not configured — this is a stub response. set ANTHROPI
   };
   if (setCookie) headers['set-cookie'] = setCookie;
   return new Response(stream, { headers });
+}
+
+function extractLastUserText(messages: UIMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m?.role !== 'user') continue;
+    const text = m.parts
+      .filter((p) => p.type === 'text')
+      .map((p) => ('text' in p ? p.text : ''))
+      .join(' ');
+    if (text.trim().length > 0) return text;
+  }
+  return '';
 }
