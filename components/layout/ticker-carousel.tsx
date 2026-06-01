@@ -56,13 +56,7 @@ function TickerPill({ entry }: { entry: TickerEntry }) {
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
     >
-      <span
-        className={`
-          flex items-center gap-2 px-4 whitespace-nowrap cursor-default
-          transition-colors duration-150
-          ${open ? 'text-[var(--fg)]' : ''}
-        `}
-      >
+      <span className="flex items-center gap-2 px-4 whitespace-nowrap cursor-default">
         <CoinIcon symbol={entry.symbol} size={16} />
         <span className="mono tabular text-[11px] text-[var(--fg-3)]">
           {entry.symbol}
@@ -90,51 +84,44 @@ function TickerPill({ entry }: { entry: TickerEntry }) {
       </span>
 
       {open && (
+        // Outer wrapper carries an invisible pt-1.5 bridge so the cursor
+        // can travel from the pill bottom into the menu without crossing
+        // a hover-gap that would fire mouseleave on the parent span.
         <div
-          role="menu"
-          aria-label={`${entry.symbol} actions`}
-          className="
-            absolute left-1/2 top-full z-20 mt-1 -translate-x-1/2
-            min-w-[180px] rounded-lg border border-[var(--border)]
-            bg-[var(--surface)] p-1 shadow-lg
-          "
+          className="absolute left-1/2 top-full z-50 -translate-x-1/2 pt-1.5"
         >
-          <a
-            role="menuitem"
-            href={predictHref}
-            target="_blank"
-            rel="noopener"
-            className="
-              flex items-center justify-between gap-3 rounded-md
-              px-3 py-2 text-[12px] font-medium text-[var(--fg)]
-              hover:bg-[var(--surface-2)] transition-colors duration-100
-            "
-          >
-            <span>{t('predict', { symbol: entry.symbol })}</span>
-            <span aria-hidden className="text-[var(--fg-3)]">
-              →
-            </span>
-          </a>
-
           <div
-            role="menuitem"
-            aria-disabled="true"
-            className="
-              flex items-center justify-between gap-3 rounded-md
-              px-3 py-2 text-[12px] font-medium text-[var(--fg-3)]
-              cursor-not-allowed select-none
-            "
+            role="menu"
+            aria-label={`${entry.symbol} actions`}
+            className="border border-[var(--border)] bg-[var(--surface)] whitespace-nowrap"
           >
-            <span>{t('autoTrade', { symbol: entry.symbol })}</span>
-            <span
+            <a
+              role="menuitem"
+              href={predictHref}
+              target="_blank"
+              rel="noopener"
               className="
-                mono tabular rounded-full bg-[var(--surface-2)]
-                px-2 py-[2px] text-[9px] uppercase tracking-[0.12em]
-                text-[var(--fg-2)] border border-[var(--border)]
+                block px-3 py-1.5 mono tabular text-[10.5px]
+                uppercase tracking-[0.14em] text-[var(--fg)]
+                hover:bg-[var(--surface-2)]
               "
             >
-              {t('comingSoon')}
-            </span>
+              {t('predict', { symbol: entry.symbol })}
+            </a>
+            <div
+              role="menuitem"
+              aria-disabled="true"
+              className="
+                flex items-center gap-2 border-t border-[var(--border)]
+                px-3 py-1.5 mono tabular text-[10.5px]
+                uppercase tracking-[0.14em] text-[var(--fg-3)]
+                cursor-not-allowed select-none
+              "
+            >
+              <span>{t('autoTrade', { symbol: entry.symbol })}</span>
+              <span aria-hidden className="opacity-50">·</span>
+              <span>{t('comingSoon')}</span>
+            </div>
           </div>
         </div>
       )}
@@ -160,7 +147,7 @@ export function TickerCarousel({ entries }: TickerCarouselProps) {
       role="marquee"
       aria-label={t('ariaLabel')}
       className="
-        relative w-full
+        relative z-50 w-full
         border-b border-[var(--border)]
         bg-[var(--surface)]
         h-8 sm:h-9
