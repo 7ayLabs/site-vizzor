@@ -99,45 +99,36 @@
       "telegramCta": "Continuer dans Telegram →",
       "resetDev": "réinitialiser · dev seulement"
     },
-    "stats": {
-      "trackerWr": {
-        "label": "Tracker WR",
-        "sub": "n={n} résolues"
+    "shell": {
+      "model": "Vizzor",
+      "modelVersion": "v0.15.5 Helios",
+      "newChat": "Nouveau chat",
+      "collapseSidebar": "Réduire la barre latérale",
+      "openSidebar": "Ouvrir la barre latérale",
+      "searchPlaceholder": "Symbole ou prédiction…",
+      "quotaLine": "Gratuit {used}/{limit}",
+      "nav": {
+        "chat": "Chat",
+        "library": "Reçus",
+        "libraryHint": "/precisions",
+        "tools": "Outils",
+        "toolsHint": "/help"
       },
-      "bestHorizon": {
-        "label": "Meilleur horizon",
-        "sub": "{horizon} · n={n}"
+      "recents": {
+        "label": "Récents",
+        "clear": "Effacer les récents",
+        "empty": "Aucun prompt récent."
       },
-      "worstHorizon": {
-        "label": "Pire horizon",
-        "sub": "{horizon} · n={n}"
+      "welcome": {
+        "eyebrow": "en direct · sur le site",
+        "title": "Que doit prédire Vizzor ?",
+        "sub": "Tapez symbole + horizon — \"BTC 4h\" — ou utilisez un outil comme /wr, /precisions, /price. Trois prédictions gratuites par navigateur."
       },
-      "last24h": {
-        "label": "Dernières 24h",
-        "sub": "décisif {wr}% · {pending} en cours"
-      }
-    },
-    "donut": {
-      "label": "Composition par tier",
-      "center": "Résolues"
-    },
-    "tiers": {
-      "high-conviction": "haute conviction",
-      "whale-confirmed": "baleine confirmée",
-      "tracked": "suivie",
-      "advisory": "consultative"
-    },
-    "table": {
-      "label": "Prédictions récentes",
-      "count": "{n} plus récentes",
-      "cols": {
-        "symbol": "Symbole",
-        "horizon": "Horizon",
-        "direction": "Direction",
-        "confidence": "Confiance",
-        "tier": "Tier",
-        "entry": "Entrée",
-        "outcome": "Résultat"
+      "composer": {
+        "placeholder": "Demandez à Vizzor… (ex. BTC 4h, /help)",
+        "toolHelp": "Lister les commandes",
+        "toolWr": "Afficher le win-rate",
+        "footer": "Vizzor peut se tromper. Vérifiez on-chain. Pas un conseil financier."
       }
     }
   },

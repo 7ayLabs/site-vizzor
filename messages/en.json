@@ -99,45 +99,36 @@
       "telegramCta": "Continue in Telegram →",
       "resetDev": "reset · dev only"
     },
-    "stats": {
-      "trackerWr": {
-        "label": "Tracker WR",
-        "sub": "n={n} resolved"
+    "shell": {
+      "model": "Vizzor",
+      "modelVersion": "v0.15.5 Helios",
+      "newChat": "New chat",
+      "collapseSidebar": "Collapse sidebar",
+      "openSidebar": "Open sidebar",
+      "searchPlaceholder": "Symbol or prediction…",
+      "quotaLine": "Free {used}/{limit}",
+      "nav": {
+        "chat": "Chat",
+        "library": "Receipts",
+        "libraryHint": "/precisions",
+        "tools": "Tools",
+        "toolsHint": "/help"
       },
-      "bestHorizon": {
-        "label": "Best horizon",
-        "sub": "{horizon} · n={n}"
+      "recents": {
+        "label": "Recents",
+        "clear": "Clear recents",
+        "empty": "No recent prompts yet."
       },
-      "worstHorizon": {
-        "label": "Worst horizon",
-        "sub": "{horizon} · n={n}"
+      "welcome": {
+        "eyebrow": "live · on-site",
+        "title": "What should Vizzor predict?",
+        "sub": "Type a symbol and horizon — \"BTC 4h\" — or run a tool like /wr, /precisions, /price. Three free predictions per browser."
       },
-      "last24h": {
-        "label": "Last 24h",
-        "sub": "decisive {wr}% · {pending} pending"
-      }
-    },
-    "donut": {
-      "label": "Tier composition",
-      "center": "Resolved"
-    },
-    "tiers": {
-      "high-conviction": "high-conviction",
-      "whale-confirmed": "whale-confirmed",
-      "tracked": "tracked",
-      "advisory": "advisory"
-    },
-    "table": {
-      "label": "Recent predictions",
-      "count": "{n} most recent",
-      "cols": {
-        "symbol": "Symbol",
-        "horizon": "Horizon",
-        "direction": "Direction",
-        "confidence": "Confidence",
-        "tier": "Tier",
-        "entry": "Entry",
-        "outcome": "Outcome"
+      "composer": {
+        "placeholder": "Ask Vizzor… (e.g. BTC 4h, /help)",
+        "toolHelp": "List commands",
+        "toolWr": "Show win-rate",
+        "footer": "Vizzor can be wrong. Verify on-chain. Not financial advice."
       }
     }
   },
