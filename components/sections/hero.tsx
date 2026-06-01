@@ -11,6 +11,7 @@
  * Server component: pure data read + render, no client state.
  */
 import { getTranslations } from 'next-intl/server';
+import Image from 'next/image';
 import { CopyChip } from '@/components/ui/copy-chip';
 import { GsapHeadline } from '@/components/ui/gsap-headline';
 import { MotionReveal } from '@/components/ui/motion-reveal';
@@ -21,45 +22,25 @@ export async function Hero() {
   return (
     <section className="relative overflow-hidden">
       <div className="mx-auto max-w-[900px] px-4 sm:px-6 lg:px-8 py-32 lg:py-40 text-center">
-        {/* 1. Geometric mark — concentric squares with a single emerald core. */}
+        {/* 1. Brand mark — theme-swapped via the dark: variant (data-theme). */}
         <MotionReveal>
-          <div
-            aria-hidden
-            className="mx-auto mb-12 flex h-24 w-24 items-center justify-center"
-          >
-            <svg
-              viewBox="0 0 96 96"
-              width="96"
-              height="96"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.25"
-              strokeLinecap="square"
-              strokeLinejoin="miter"
-              className="text-[var(--fg)]"
-            >
-              {/* Outer square */}
-              <rect x="4" y="4" width="88" height="88" />
-              {/* Mid square — rotated 45° gives the lens / chronovisor feel */}
-              <rect
-                x="18"
-                y="18"
-                width="60"
-                height="60"
-                transform="rotate(45 48 48)"
-              />
-              {/* Inner square */}
-              <rect x="30" y="30" width="36" height="36" />
-              {/* Accent core — filled emerald */}
-              <rect
-                x="42"
-                y="42"
-                width="12"
-                height="12"
-                fill="var(--accent)"
-                stroke="none"
-              />
-            </svg>
+          <div className="mx-auto mb-12 flex h-24 items-center justify-center">
+            <Image
+              src="/brand/vizzor_darkicon.png"
+              alt="Vizzor"
+              width={364}
+              height={535}
+              priority
+              className="block dark:hidden h-24 w-auto"
+            />
+            <Image
+              src="/brand/vizzor_icon.png"
+              alt="Vizzor"
+              width={364}
+              height={535}
+              priority
+              className="hidden dark:block h-24 w-auto"
+            />
           </div>
         </MotionReveal>
 
