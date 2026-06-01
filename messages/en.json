@@ -334,64 +334,146 @@
     }
   },
   "pricing": {
-    "pricingEyebrow": "transparency, not pricing",
-    "pricingTitle": "Vizzor is free. Here's exactly what it costs to run.",
-    "pricingSub": "We don't charge for predictions. Our CLI, Telegram bot, Discord bot, and web dashboard are open and free. This page explains what costs exist, who pays them, and why the model is honest.",
-    "block1": {
-      "title": "What we don't charge",
-      "items": {
-        "cli": "CLI install + all 18 commands",
-        "bot": "Telegram bot + 32 commands",
-        "discord": "Discord bot + slash commands",
-        "dashboard": "Web dashboard",
-        "predictions": "Every prediction + trigger snapshot",
-        "docs": "Full docs + ChronoVisor math"
-      }
-    },
-    "block2": {
-      "title": "What you bring",
-      "items": {
-        "llmKey": "Your Anthropic / OpenAI / Gemini API key (or run Ollama free)",
-        "rpcKey": "Your Etherscan / RPC key (free tier works)",
-        "dataKey": "Your CoinGecko / CryptoPanic keys (free tiers work)",
-        "botTokens": "Your Telegram / Discord bot tokens (free)",
-        "host": "A VPS or your laptop if self-hosting"
-      }
-    },
-    "block3": {
-      "title": "What 7ayLabs pays",
-      "items": {
-        "telegram": "Hosted Telegram bot infra",
-        "chronovisor": "ChronoVisor engine hosting",
-        "sharedLlm": "Shared Anthropic key (with per-user daily quota)",
-        "domain": "Domain + TLS + monitoring"
-      }
-    },
-    "costRow": {
-      "eyebrow": "the actual numbers",
-      "dailyCost": {
-        "label": "$/active user/day",
-        "hint": "Hosted Telegram"
+    "eyebrow": "tiers · honest billing",
+    "title": "Pricing",
+    "sub": "Three tiers, two billing cadences, six chains accepted. Cancel anytime. Self-host if you'd rather not pay a subscription at all.",
+    "mostPopular": "Most popular",
+    "tiers": {
+      "free": {
+        "name": "Free",
+        "sub": "Get started with Vizzor on Telegram",
+        "price": "$0",
+        "priceUnit": "/ mo",
+        "cta": "Start free",
+        "features": {
+          "predictions": "10 predictions per month",
+          "tiers": "Basic ✅ tracked + ⚪ advisory signals (no 🌟 high-conviction)",
+          "commands": "/predict · /wr · /price · /trends · /help",
+          "cliApi": "CLI install + self-host option (BUSL-1.1)",
+          "community": "Public Telegram channel + GitHub issues"
+        }
       },
-      "dailyQuota": {
-        "label": "LLM messages/user/day",
-        "hint": "free quota"
+      "pro": {
+        "name": "Pro",
+        "sub": "Unlimited predictions, every tier badge",
+        "price": "$9.99",
+        "priceUnit": "/ mo",
+        "annualPrice": "$99",
+        "annualSub": "Save 17% billed annually",
+        "cta": "Get Pro",
+        "everythingIn": "Everything in Free, plus:",
+        "features": {
+          "predictions": "Unlimited predictions per month",
+          "allTiers": "All tier badges (✅ tracked + 🐋 whale-confirmed + 🌟 high-conviction)",
+          "precisions": "/precisions + /wr full breakdown · per-horizon, per-tier, per-session",
+          "alerts": "Unlimited /alerts · TP/SL price thresholds armed automatically",
+          "priority": "Priority during overload (skip the queue)"
+        }
       },
-      "hostedUsers": {
-        "label": "users on hosted bot",
-        "hint": "as of {date}"
-      },
-      "selfHosted": {
-        "label": "self-hosted operators",
-        "hint": "growing weekly"
+      "elite": {
+        "name": "Elite",
+        "sub": "Edge for serious traders",
+        "price": "$29.99",
+        "priceUnit": "/ mo",
+        "annualPrice": "$299",
+        "annualSub": "Save 17% billed annually · $499 lifetime",
+        "cta": "Get Elite",
+        "everythingIn": "Everything in Pro, plus:",
+        "features": {
+          "headStart": "5-minute head start on every signal emission",
+          "restApi": "REST API access (rate-limited 60 req/min)",
+          "priorityQueue": "Dedicated priority queue, never throttled",
+          "privateChannel": "Private Telegram + Discord channel access",
+          "earlyAccess": "Early access to new signals before general release"
+        }
       }
     },
-    "philosophy": "We tried the SaaS path. We built a paywalled tier, drew it on a whiteboard, mocked the upgrade flow. Then we deleted it.\n\nThe reason is simple. A prediction engine that monetizes predictions has an incentive to emit more of them — louder, more often, in more places. That is the exact opposite of what makes Vizzor work. The engine only earns trust by staying silent when the signals disagree, and a paywall punishes silence.\n\nSo we kept the engine free. The CLI, the Telegram bot, the Discord bot, and the dashboard ship under BUSL-1.1 and cost nothing to run on your own machine. 7ayLabs pays for the hosted bot infra, the ChronoVisor engine, and a shared Anthropic key with a per-user daily quota — because someone has to, and we'd rather it be us than a per-call API charge that warps the product.\n\nIf you outgrow the shared quota, you bring your own keys. If you want full control, you self-host. Either way, the math is the same and the receipts are the same. Honest pricing means the page that explains it should fit on one screen.",
-    "cta": {
-      "title": "Self-host for full control",
-      "sub": "All you need is `docker compose up -d` and a VPS.",
-      "quickstart": "Read the quickstart",
-      "github": "View on GitHub"
+    "trial": {
+      "label": "7-day trial",
+      "title": "Every new user gets Pro for 7 days",
+      "body": "On your first /start, full Pro access activates automatically. After 7 days the bot auto-downgrades to Free — no card on file, no expiry surprise, no charge."
+    },
+    "chains": {
+      "eyebrow": "pay with crypto",
+      "title": "Six chains accepted",
+      "sub": "TON Connect for instant confirms on Phase 1. Self-hosted EVM, Solana, and TRON watchers for stablecoin payments — no middleman, no Stripe, no card data.",
+      "phase1Label": "Live now",
+      "phase2Label": "Phase 2",
+      "items": {
+        "ton": {
+          "name": "TON",
+          "token": "TON native",
+          "strategy": "TON Connect deep-link, instant confirm.",
+          "phase": "1"
+        },
+        "polygon": {
+          "name": "Polygon",
+          "token": "USDC",
+          "strategy": "Self-hosted EVM watcher · 12-block finality.",
+          "phase": "2"
+        },
+        "base": {
+          "name": "Base",
+          "token": "USDC",
+          "strategy": "Self-hosted EVM watcher · 12-block finality.",
+          "phase": "2"
+        },
+        "arbitrum": {
+          "name": "Arbitrum",
+          "token": "USDC",
+          "strategy": "Self-hosted EVM watcher · 12-block finality.",
+          "phase": "2"
+        },
+        "solana": {
+          "name": "Solana",
+          "token": "USDC",
+          "strategy": "Self-hosted SOL watcher · 32-slot finality.",
+          "phase": "2"
+        },
+        "tron": {
+          "name": "TRON",
+          "token": "USDT",
+          "strategy": "Self-hosted TRON watcher · 20-block finality.",
+          "phase": "2"
+        }
+      }
+    },
+    "faq": {
+      "eyebrow": "answers",
+      "title": "Frequently asked",
+      "items": {
+        "trial": {
+          "q": "How does the 7-day Pro trial work?",
+          "a": "Send /start to the bot. Full Pro access is granted automatically — unlimited predictions, every tier badge, /alerts. After 7 days the bot auto-downgrades to Free. No card on file, nothing to cancel."
+        },
+        "cancel": {
+          "q": "Can I cancel anytime?",
+          "a": "Yes. Subscriptions are per-period (monthly or annual). When the current period ends, the bot downgrades you to Free. There's no card on file to charge — you pay each period with a fresh on-chain transaction. Stop paying = automatic downgrade."
+        },
+        "chains": {
+          "q": "Which chains can I pay from?",
+          "a": "Phase 1 (live now): TON native via TON Connect. Phase 2: USDC on Polygon, Base, Arbitrum, Solana, and USDT on TRON. Each payment is verified by a self-hosted watcher on the bot — no Stripe, no Plaid, no card data, no middleman."
+        },
+        "selfHost": {
+          "q": "Can I self-host the engine?",
+          "a": "Yes. The CLI, Telegram bot, ChronoVisor engine, and dashboard ship under BUSL-1.1. Clone github.com/7ayLabs/vizzor, run `docker compose up -d`, and you have the same engine the hosted bot uses — no subscription required."
+        },
+        "difference": {
+          "q": "What's the practical difference between Free and Pro?",
+          "a": "Free shows you Vizzor's calibrated baseline (✅ tracked + ⚪ advisory tiers). Pro unlocks 🐋 whale-confirmed and 🌟 high-conviction tiers — the high-WR cohort that drives most of the alpha. If you're using Vizzor seriously, Pro pays for itself in one good signal."
+        },
+        "refund": {
+          "q": "Refunds?",
+          "a": "Within 48 hours of payment, message the bot with /refund and we'll send back the on-chain amount (minus network fees). After 48 hours, no refunds — but you can still cancel for the next period at any time."
+        }
+      }
+    },
+    "selfHost": {
+      "eyebrow": "BUSL-1.1 · free to self-host",
+      "title": "Or run the engine yourself",
+      "sub": "Vizzor is BUSL-1.1 licensed. Self-host the bot, point /start at your own Telegram instance, and skip the subscription entirely. The math is identical, the receipts are identical, your data stays on your VPS.",
+      "primary": "Read the quickstart",
+      "secondary": "View on GitHub"
     }
   },
   "manifesto": {

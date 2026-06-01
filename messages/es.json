@@ -334,64 +334,146 @@
     }
   },
   "pricing": {
-    "pricingEyebrow": "transparencia, no precios",
-    "pricingTitle": "Vizzor es gratis. Esto es exactamente lo que cuesta mantenerlo.",
-    "pricingSub": "No cobramos por predicciones. Nuestro CLI, el bot de Telegram, el bot de Discord y el panel web son abiertos y gratuitos. Esta página explica qué costes existen, quién los asume y por qué el modelo es honesto.",
-    "block1": {
-      "title": "Lo que no cobramos",
-      "items": {
-        "cli": "Instalación del CLI + sus 18 comandos",
-        "bot": "Bot de Telegram + 32 comandos",
-        "discord": "Bot de Discord + comandos slash",
-        "dashboard": "Panel web",
-        "predictions": "Cada predicción + su snapshot de señales",
-        "docs": "Documentación completa + matemática de ChronoVisor"
-      }
-    },
-    "block2": {
-      "title": "Lo que pones tú",
-      "items": {
-        "llmKey": "Tu clave de Anthropic / OpenAI / Gemini (o usa Ollama gratis)",
-        "rpcKey": "Tu clave de Etherscan / RPC (la capa gratuita basta)",
-        "dataKey": "Tus claves de CoinGecko / CryptoPanic (capas gratuitas bastan)",
-        "botTokens": "Tus tokens de bot de Telegram / Discord (gratis)",
-        "host": "Un VPS o tu portátil si lo autoalojas"
-      }
-    },
-    "block3": {
-      "title": "Lo que paga 7ayLabs",
-      "items": {
-        "telegram": "Infraestructura del bot de Telegram alojado",
-        "chronovisor": "Alojamiento del motor ChronoVisor",
-        "sharedLlm": "Clave compartida de Anthropic (con cuota diaria por usuario)",
-        "domain": "Dominio + TLS + monitorización"
-      }
-    },
-    "costRow": {
-      "eyebrow": "los números reales",
-      "dailyCost": {
-        "label": "$/usuario activo/día",
-        "hint": "Telegram alojado"
+    "eyebrow": "tiers · facturación honesta",
+    "title": "Precios",
+    "sub": "Tres tiers, dos cadencias de facturación, seis cadenas aceptadas. Cancela cuando quieras. Autoaloja si prefieres no pagar suscripción.",
+    "mostPopular": "Más popular",
+    "tiers": {
+      "free": {
+        "name": "Free",
+        "sub": "Empieza con Vizzor en Telegram",
+        "price": "$0",
+        "priceUnit": "/ mes",
+        "cta": "Empezar gratis",
+        "features": {
+          "predictions": "10 predicciones por mes",
+          "tiers": "Señales ✅ tracked + ⚪ advisory básicas (sin 🌟 high-conviction)",
+          "commands": "/predict · /wr · /price · /trends · /help",
+          "cliApi": "Instalación del CLI + autoalojado (BUSL-1.1)",
+          "community": "Canal público de Telegram + issues en GitHub"
+        }
       },
-      "dailyQuota": {
-        "label": "mensajes LLM/usuario/día",
-        "hint": "cuota gratis"
+      "pro": {
+        "name": "Pro",
+        "sub": "Predicciones ilimitadas, todas las insignias de tier",
+        "price": "$9.99",
+        "priceUnit": "/ mes",
+        "annualPrice": "$99",
+        "annualSub": "Ahorra 17% con facturación anual",
+        "cta": "Obtener Pro",
+        "everythingIn": "Todo lo de Free, más:",
+        "features": {
+          "predictions": "Predicciones ilimitadas por mes",
+          "allTiers": "Todas las insignias (✅ tracked + 🐋 whale-confirmed + 🌟 high-conviction)",
+          "precisions": "/precisions + /wr desglose completo · por horizonte, por tier, por sesión",
+          "alerts": "/alerts ilimitadas · umbrales TP/SL armados automáticamente",
+          "priority": "Prioridad durante sobrecarga (salta la cola)"
+        }
       },
-      "hostedUsers": {
-        "label": "usuarios en bot alojado",
-        "hint": "a {date}"
-      },
-      "selfHosted": {
-        "label": "operadores autoalojados",
-        "hint": "creciendo cada semana"
+      "elite": {
+        "name": "Elite",
+        "sub": "Ventaja para traders serios",
+        "price": "$29.99",
+        "priceUnit": "/ mes",
+        "annualPrice": "$299",
+        "annualSub": "Ahorra 17% con facturación anual · $499 vitalicio",
+        "cta": "Obtener Elite",
+        "everythingIn": "Todo lo de Pro, más:",
+        "features": {
+          "headStart": "5 minutos de ventaja en cada emisión de señal",
+          "restApi": "Acceso REST API (60 req/min)",
+          "priorityQueue": "Cola dedicada, sin throttling",
+          "privateChannel": "Acceso a canal privado de Telegram + Discord",
+          "earlyAccess": "Acceso temprano a nuevas señales antes del lanzamiento general"
+        }
       }
     },
-    "philosophy": "Probamos la vía SaaS. Construimos un nivel de pago, lo dibujamos en una pizarra, simulamos el flujo de upgrade. Después lo borramos.\n\nLa razón es sencilla. Un motor de predicción que monetiza predicciones tiene el incentivo de emitir más: más alto, más a menudo, en más lugares. Es justo lo contrario de lo que hace que Vizzor funcione. El motor sólo gana confianza cuando se calla mientras las señales no coinciden, y un muro de pago castiga el silencio.\n\nPor eso lo dejamos gratis. El CLI, el bot de Telegram, el bot de Discord y el panel se distribuyen bajo BUSL-1.1 y no cuestan nada si los ejecutas en tu propia máquina. 7ayLabs paga la infraestructura del bot alojado, el motor ChronoVisor y una clave compartida de Anthropic con cuota diaria por usuario — porque alguien tiene que hacerlo y preferimos ser nosotros antes que un cobro por llamada que deforme el producto.\n\nSi te quedas corto con la cuota compartida, traes tus propias claves. Si quieres control total, te autoalojas. En cualquier caso, la matemática es la misma y los recibos son los mismos. Un precio honesto significa que la página que lo explica cabe en una pantalla.",
-    "cta": {
-      "title": "Autoalójalo para tener control total",
-      "sub": "Sólo necesitas `docker compose up -d` y un VPS.",
-      "quickstart": "Leer el inicio rápido",
-      "github": "Ver en GitHub"
+    "trial": {
+      "label": "Prueba 7 días",
+      "title": "Cada usuario nuevo recibe Pro durante 7 días",
+      "body": "En tu primer /start, el acceso Pro completo se activa automáticamente. Tras 7 días el bot baja a Free — sin tarjeta guardada, sin sorpresas, sin cargo."
+    },
+    "chains": {
+      "eyebrow": "paga con cripto",
+      "title": "Seis cadenas aceptadas",
+      "sub": "TON Connect para confirmaciones instantáneas en Fase 1. Watchers autoalojados de EVM, Solana y TRON para pagos en stablecoin — sin intermediarios, sin Stripe, sin datos de tarjeta.",
+      "phase1Label": "Disponible ya",
+      "phase2Label": "Fase 2",
+      "items": {
+        "ton": {
+          "name": "TON",
+          "token": "TON nativo",
+          "strategy": "Deep-link TON Connect, confirmación instantánea.",
+          "phase": "1"
+        },
+        "polygon": {
+          "name": "Polygon",
+          "token": "USDC",
+          "strategy": "Watcher EVM autoalojado · finalidad a 12 bloques.",
+          "phase": "2"
+        },
+        "base": {
+          "name": "Base",
+          "token": "USDC",
+          "strategy": "Watcher EVM autoalojado · finalidad a 12 bloques.",
+          "phase": "2"
+        },
+        "arbitrum": {
+          "name": "Arbitrum",
+          "token": "USDC",
+          "strategy": "Watcher EVM autoalojado · finalidad a 12 bloques.",
+          "phase": "2"
+        },
+        "solana": {
+          "name": "Solana",
+          "token": "USDC",
+          "strategy": "Watcher SOL autoalojado · finalidad a 32 slots.",
+          "phase": "2"
+        },
+        "tron": {
+          "name": "TRON",
+          "token": "USDT",
+          "strategy": "Watcher TRON autoalojado · finalidad a 20 bloques.",
+          "phase": "2"
+        }
+      }
+    },
+    "faq": {
+      "eyebrow": "respuestas",
+      "title": "Preguntas frecuentes",
+      "items": {
+        "trial": {
+          "q": "¿Cómo funciona la prueba Pro de 7 días?",
+          "a": "Envía /start al bot. El acceso Pro completo se activa automáticamente — predicciones ilimitadas, todas las insignias, /alerts. Tras 7 días el bot baja a Free. Sin tarjeta guardada, nada que cancelar."
+        },
+        "cancel": {
+          "q": "¿Puedo cancelar cuando quiera?",
+          "a": "Sí. Las suscripciones son por periodo (mensual o anual). Cuando acabe el periodo actual, el bot te baja a Free. No hay tarjeta guardada que cobrar — pagas cada periodo con una transacción on-chain fresca. Si dejas de pagar = downgrade automático."
+        },
+        "chains": {
+          "q": "¿Desde qué cadenas puedo pagar?",
+          "a": "Fase 1 (ya disponible): TON nativo vía TON Connect. Fase 2: USDC en Polygon, Base, Arbitrum, Solana, y USDT en TRON. Cada pago se verifica con un watcher autoalojado en el bot — sin Stripe, sin Plaid, sin datos de tarjeta, sin intermediarios."
+        },
+        "selfHost": {
+          "q": "¿Puedo autoalojar el motor?",
+          "a": "Sí. El CLI, el bot de Telegram, el motor ChronoVisor y el panel se distribuyen bajo BUSL-1.1. Clona github.com/7ayLabs/vizzor, ejecuta `docker compose up -d`, y tienes el mismo motor que usa el bot alojado — sin suscripción."
+        },
+        "difference": {
+          "q": "¿Cuál es la diferencia práctica entre Free y Pro?",
+          "a": "Free te muestra la línea base calibrada de Vizzor (tiers ✅ tracked + ⚪ advisory). Pro desbloquea 🐋 whale-confirmed y 🌟 high-conviction — la cohorte de alto WR que aporta la mayor parte del alpha. Si usas Vizzor en serio, Pro se paga con una sola señal buena."
+        },
+        "refund": {
+          "q": "¿Reembolsos?",
+          "a": "Dentro de las primeras 48h del pago, escribe al bot con /refund y te devolvemos la cantidad on-chain (menos comisiones de red). Tras 48h no hay reembolsos — pero puedes cancelar para el próximo periodo cuando quieras."
+        }
+      }
+    },
+    "selfHost": {
+      "eyebrow": "BUSL-1.1 · autoalojado gratis",
+      "title": "O ejecuta el motor tú mismo",
+      "sub": "Vizzor se distribuye bajo BUSL-1.1. Autoaloja el bot, apunta /start a tu propia instancia de Telegram, y olvídate de la suscripción. La matemática es idéntica, los recibos son idénticos, tus datos se quedan en tu VPS.",
+      "primary": "Leer el inicio rápido",
+      "secondary": "Ver en GitHub"
     }
   },
   "manifesto": {
