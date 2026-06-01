@@ -64,9 +64,6 @@ export async function Header() {
               className="hidden dark:block h-6 w-auto"
             />
             <span>vizzor</span>
-            <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--fg-3)]">
-              .ai
-            </span>
           </Link>
 
           <NavLinks />
