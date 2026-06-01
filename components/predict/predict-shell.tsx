@@ -172,7 +172,13 @@ export function PredictShell() {
   };
 
   const inner: ReactNode = (
-    <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] h-[calc(100dvh-56px)] border-t border-[var(--border)] overflow-hidden">
+    <div
+      className={`
+        grid grid-cols-1 h-[calc(100dvh-56px)]
+        border-t border-[var(--border)] overflow-hidden
+        ${sidebarOpen ? 'lg:grid-cols-[260px_1fr]' : 'lg:grid-cols-1'}
+      `}
+    >
       {/* ─────────────── Sidebar ─────────────── */}
       {sidebarOpen && (
         <aside className="hidden lg:flex border-r border-[var(--border)] bg-[var(--surface)] flex-col h-full min-h-0 overflow-hidden">
