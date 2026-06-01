@@ -12,6 +12,7 @@
  */
 import { getTranslations } from 'next-intl/server';
 import Image from 'next/image';
+import { Link } from '@/i18n/navigation';
 import { CopyChip } from '@/components/ui/copy-chip';
 import { GsapHeadline } from '@/components/ui/gsap-headline';
 import { MotionReveal } from '@/components/ui/motion-reveal';
@@ -53,24 +54,33 @@ export async function Hero() {
           subClassName="mt-7 text-[17px] sm:text-lg leading-relaxed text-[var(--fg-2)] max-w-[40ch] mx-auto"
         />
 
-        {/* 3. Primary CTA — Ollama-style solid pill, neutral colorway */}
+        {/* 3. Primary CTA — on-site prediction surface. Telegram demotes
+            to a secondary line below; the CLI chip stays as the tertiary
+            affordance. */}
         <MotionReveal delay={160}>
           <div className="mt-12 flex flex-col items-center gap-3">
-            <a
-              href="https://t.me/vizzorai_bot"
-              target="_blank"
-              rel="noopener"
+            <Link
+              href="/predict"
               className="inline-flex h-13 items-center justify-center rounded-full bg-[var(--fg)] px-7 text-[15px] font-semibold tracking-tight text-[var(--bg)] transition-transform duration-150 ease-out hover:scale-[1.02] active:scale-[0.99]"
               style={{ height: '3.25rem' }}
             >
-              <span>{t('primaryCta')}</span>
+              <span>{t('predictCta')}</span>
               <span aria-hidden className="ml-2">
                 →
               </span>
-            </a>
+            </Link>
 
-            {/* 4. Secondary line — quiet CLI install affordance */}
-            <span className="mt-1 inline-flex items-center gap-2 text-[12px] text-[var(--fg-3)]">
+            {/* 4. Secondary line — Telegram + CLI affordances. */}
+            <span className="mt-1 inline-flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[12px] text-[var(--fg-3)]">
+              <a
+                href="https://t.me/vizzorai_bot"
+                target="_blank"
+                rel="noopener"
+                className="underline-offset-4 hover:text-[var(--fg)] hover:underline"
+              >
+                {t('primaryCta')}
+              </a>
+              <span aria-hidden>·</span>
               <span>{t('secondary')}</span>
               <CopyChip command="npm i -g @vizzor/cli" />
             </span>
