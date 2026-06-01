@@ -104,6 +104,36 @@ function detectSymbol(text) {
   return null;
 }
 
+/**
+ * Look for any ticker-shaped uppercase token (2–6 chars) in the
+ * message. Used to distinguish "user typed a symbol we don't know"
+ * from "user didn't specify a symbol at all". If we find one, we
+ * return an honest "not tracked" response rather than silently
+ * defaulting to BTC and pretending it answered the question.
+ */
+function detectUnknownTicker(text) {
+  const stop = new Set([
+    'PREDICT', 'PREDICE', 'PREDIRE', 'PREDICTION', 'PREDICTIONS',
+    'IN', 'EN', 'EL', 'LA', 'LE', 'AT', 'ON', 'FOR', 'POR', 'POUR',
+    'HOUR', 'HOURS', 'HORA', 'HORAS', 'HEURE', 'HEURES',
+    'MIN', 'MINS', 'MINUTE', 'MINUTES', 'MINUTOS',
+    'DAY', 'DAYS', 'DIA', 'DIAS', 'JOUR', 'JOURS',
+    'WEEK', 'WEEKS', 'SEMANA', 'SEMAINE',
+    'MONTH', 'MONTHS', 'MES', 'MESES', 'MOIS',
+    'LONG', 'SHORT', 'RANGE', 'BUY', 'SELL', 'HOLD',
+    'HELP', 'HR', 'HRS',
+  ]);
+  const matches = text.toUpperCase().match(/\b[A-Z]{2,6}\b/g);
+  if (!matches) return null;
+  for (const m of matches) {
+    if (stop.has(m)) continue;
+    if (/^\d+[A-Z]$/.test(m)) continue; // e.g. "4H", "30M"
+    if (Object.prototype.hasOwnProperty.call(COIN_GLYPH, m)) continue;
+    return m;
+  }
+  return null;
+}
+
 function detectHorizon(text) {
   for (const [pat, h] of HORIZON_PATTERNS) {
     if (pat.test(text)) return h;
@@ -283,7 +313,25 @@ function handleChat(req, res) {
     }
 
     const text = extractLastUserText(payload.messages);
-    const symbol = detectSymbol(text) ?? 'BTC';
+    const knownSymbol = detectSymbol(text);
+    const unknownTicker = knownSymbol ? null : detectUnknownTicker(text);
+
+    if (unknownTicker) {
+      const tracked = Object.keys(COIN_GLYPH).join(' · ');
+      streamReceipt(
+        res,
+        `⚠ ${unknownTicker} not tracked.
+
+This demo covers the top-20 spot symbols:
+  ${tracked}
+
+For full-coverage predictions across every chain and token, open the
+Vizzor bot: https://t.me/vizzorai_bot`,
+      );
+      return;
+    }
+
+    const symbol = knownSymbol ?? 'BTC';
     const horizon = detectHorizon(text) ?? '4h';
     const entryPrice = lookupPrice(symbol);
 
