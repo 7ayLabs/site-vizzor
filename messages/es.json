@@ -80,7 +80,17 @@
     },
     "paid": {
       "label": "$VIZZOR · modo de pago",
-      "body": "Conecta una wallet de Solana y quema 1 $VIZZOR por predicción. La UI de wallet llega en la Fase 2."
+      "title": "Capa gratis agotada.",
+      "body": "Conecta una wallet de Solana y quema {amount} $VIZZOR por predicción. Cada quema se verifica on-chain antes de transmitir la siguiente predicción.",
+      "legal": "Las quemas son irreversibles. Verifica la red y la cantidad antes de firmar."
+    },
+    "wallet": {
+      "connect": "Conectar wallet",
+      "connecting": "Conectando…",
+      "disconnect": "Desconectar",
+      "burnCta": "Quemar {amount} $VIZZOR",
+      "burning": "Quemando…",
+      "mintNotConfigured": "Dirección del mint no configurada. Define NEXT_PUBLIC_VIZZOR_MINT para habilitar las quemas."
     }
   },
   "hero": {

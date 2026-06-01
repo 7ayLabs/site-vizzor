@@ -80,7 +80,17 @@
     },
     "paid": {
       "label": "$VIZZOR · paid mode",
-      "body": "Connect a Solana wallet and burn 1 $VIZZOR per prediction. Wallet UI ships in Phase 2."
+      "title": "Free tier exhausted.",
+      "body": "Connect a Solana wallet and burn {amount} $VIZZOR per prediction. Each burn is verified on-chain before the next prediction streams.",
+      "legal": "Burns are final. Verify the network and amount before signing."
+    },
+    "wallet": {
+      "connect": "Connect wallet",
+      "connecting": "Connecting…",
+      "disconnect": "Disconnect",
+      "burnCta": "Burn {amount} $VIZZOR",
+      "burning": "Burning…",
+      "mintNotConfigured": "Mint address not configured. Set NEXT_PUBLIC_VIZZOR_MINT to enable burns."
     }
   },
   "hero": {

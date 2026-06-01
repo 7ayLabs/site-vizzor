@@ -80,7 +80,17 @@
     },
     "paid": {
       "label": "$VIZZOR · mode payant",
-      "body": "Connectez un portefeuille Solana et brûlez 1 $VIZZOR par prédiction. L'interface de portefeuille arrive en Phase 2."
+      "title": "Quota gratuit épuisé.",
+      "body": "Connectez un portefeuille Solana et brûlez {amount} $VIZZOR par prédiction. Chaque combustion est vérifiée on-chain avant le streaming de la prédiction suivante.",
+      "legal": "Les combustions sont irréversibles. Vérifiez le réseau et le montant avant de signer."
+    },
+    "wallet": {
+      "connect": "Connecter le portefeuille",
+      "connecting": "Connexion…",
+      "disconnect": "Déconnecter",
+      "burnCta": "Brûler {amount} $VIZZOR",
+      "burning": "Combustion…",
+      "mintNotConfigured": "Adresse de mint non configurée. Définissez NEXT_PUBLIC_VIZZOR_MINT pour activer les combustions."
     }
   },
   "hero": {
