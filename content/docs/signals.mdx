@@ -1,0 +1,102 @@
+---
+title: Signal families
+description: The six independent signal families fused into every Vizzor forecast — on-chain, ML ensemble, prediction markets, social narrative, pattern match, logic rules.
+---
+
+Every Vizzor forecast is a composite of **six independent signal families**, fused through certainty-factor algebra and Bayesian update. Each family operates on different data sources, so their failure modes don't correlate — when one family abstains, the others still produce a forecast.
+
+## Default weights
+
+The composite blends signal CFs by per-horizon weight profiles. Scalp horizons lean technical; macro horizons lean on-chain + narrative.
+
+| Family | Standard | Scalp |
+|---|---|---|
+| onChain | 25% | 30% |
+| mlEnsemble | 20% | 25% |
+| predictionMarkets | 15% | 5% |
+| logicRules | 15% | 25% |
+| socialNarrative | 10% | 5% |
+| patternMatch | 5% | 10% |
+
+Weights drift online via the per-symbol weight learner — recent resolutions outweigh all-time via exponential decay.
+
+## 1. onChain
+
+<div className="not-prose my-4">
+  <SignalRow signal={{ family: 'onChain', cf: 0.62, direction: 'up', meta: { whales: '7 net buyers' } }} />
+</div>
+
+Whale flows, smart-money accumulation, holder concentration, stablecoin mint/burn velocity, token unlock calendar, exchange-flow imbalance, Coinbase premium spread, SEC EDGAR pre-news filings.
+
+**Data sources:** Etherscan-family explorers, Whale Alert, CoinMarketCap unlocks calendar, Coinbase + Binance public spreads, SEC EDGAR RSS, on-chain RPCs.
+
+**Why it leads:** flows fire **before** price moves — whales accumulating on a 4h horizon usually telegraphs the breakout 30-60 minutes early. Free-tier APIs only; no Nansen / Arkham dependency.
+
+## 2. mlEnsemble
+
+<div className="not-prose my-4">
+  <SignalRow signal={{ family: 'mlEnsemble', cf: 0.34, direction: 'up', meta: { rsi: '64' } }} />
+</div>
+
+Python sidecar (xgboost + lightgbm + isotonic calibration, 16 trained models) **or** JS-native fallback (RSI / MACD / Bollinger / EMA / volume / funding heuristic) when the sidecar is unavailable.
+
+The native JS provider is a complete fallback — no setup required, runs in-process, ships with the CLI binary. When the sidecar is healthy and the engine prefers it, the JS provider takes over silently if the sidecar 500s or times out.
+
+## 3. predictionMarkets
+
+<div className="not-prose my-4">
+  <SignalRow signal={{ family: 'predictionMarkets', cf: -0.18, direction: 'down', meta: { poly: '42% UP' } }} />
+</div>
+
+Gamma + Polymarket implied probabilities, with edge detection. When ChronoVisor's calibrated probability diverges from Polymarket's CLOB midpoint by more than a configured threshold, an edge opportunity surfaces on the `/polymarket` slash command (and the Web Dashboard scanner).
+
+**Auto-registered adapter:** the Gamma API client at `src/data/sources/prediction-markets/crypto-markets.ts` polls top markets on a configurable cadence; results feed both the signal and the Polymarket-Arbitrage agent strategy.
+
+## 4. socialNarrative
+
+<div className="not-prose my-4">
+  <SignalRow signal={{ family: 'socialNarrative', cf: 0.22, direction: 'up', meta: { articles: '14' } }} />
+</div>
+
+News NLP (CryptoPanic + CoinGecko fallback), Reddit + 4chan retail sentiment, LLM catalyst classifier (Claude API, per-article prompt-cached, daily-budget-gated).
+
+The catalyst classifier reads the full article body and emits a structured `{ catalyst: 'unlock' | 'partnership' | 'regulatory' | ..., polarity: number }` per piece. Per-article prompt caching keeps cost low even under heavy news volume.
+
+## 5. patternMatch
+
+<div className="not-prose my-4">
+  <SignalRow signal={{ family: 'patternMatch', cf: 0.41, direction: 'up', meta: { pattern: 'BOS+OB' } }} />
+</div>
+
+Auto-populated pattern library, SMC aggregator (BOS / CHoCH / liquidity sweeps / order blocks), ICT timing (London / NY kill-zones, Asian range sweep).
+
+The pattern library is **not** hand-curated — `PredictionResolver` writes resolved predictions back with their feature snapshot, so the library grows organically with every cycle. Patterns with low historical accuracy get auto-pruned.
+
+## 6. logicRules
+
+<div className="not-prose my-4">
+  <SignalRow signal={{ family: 'logicRules', cf: 0.55, direction: 'up', meta: { rules: '4/14 fired' } }} />
+</div>
+
+14 base + 7 scalping FOL rules over derivatives, macro, and on-chain features. New rules cover:
+
+- **Funding-rate z-score** (multi-venue) — extreme funding suggests mean reversion
+- **Options skew + IV term inversion** — puts vs calls + near vs far IV
+- **Macro-beta cross-asset confluence** — BTC + DXY + ES + TLT correlation regimes
+- **Liquidation-magnet drift bias** — price tends toward cluster of liquidation levels
+
+Per-rule rolling accuracy is tracked; rules that fall below 0.45 get their CF halved automatically.
+
+## How they combine
+
+Each family's CF goes through the [ChronoVisor pipeline](/docs/chronovisor) — correlation decorrelation, Bayesian update, meta-reasoning, Platt calibration, horizon cap — before contributing to the final emission. No family votes alone; no family is overridden by a single contradicting peer.
+
+The full per-prediction trigger snapshot is preserved (`prediction.triggerSnapshot`) and rendered on:
+
+- The emission DM (Telegram + Discord + CLI / TUI)
+- The alert-trigger DM (when price hits a TP/SL level)
+- The resolved DM
+- `/diagnose`, `/playcard`
+- The Web Dashboard prediction detail modal
+
+No hidden contributors — every signal that shaped the call is visible to the operator.

@@ -1,0 +1,192 @@
+---
+title: ChronoVisor engine
+description: The math layer that turns six independent signal families into a calibrated probabilistic forecast — CF algebra, Bayesian update, FOL rules, Platt calibration, meta-reasoning.
+---
+
+The ChronoVisor engine is the math layer that turns six independent signal families into a calibrated probabilistic forecast. The Python-based ML sidecar (xgboost + lightgbm + isotonic calibration, 16 trained models) is **optional** — when unreachable, Vizzor's JS-native heuristic ensemble (RSI / MACD / Bollinger / EMA / volume / funding) takes over automatically, with no setup required.
+
+## Pipeline per prediction
+
+```text
+Signal collection (6 families, parallel fetch, graceful degradation)
+        ↓
+Composite assembly  →  Certainty-Factor algebra (Shortliffe-Buchanan, weak-signal dampening)
+        ↓                Per-signal correlation decorrelation (dampFactor 0.6)
+Bayesian update       →  Family-aware priors (micro/intraday/swing/macro)
+        ↓
+Meta-reasoning        →  Confidence modifier [0.3, 1.0] with trend-alignment factor
+        ↓
+Platt calibration     →  Per family × symbol × regime shards (online SGD)
+        ↓
+Horizon cap + mult.   →  Adaptive — lifted/lowered per `horizon_calibration` table
+        ↓
+Qualification gates   →  Manipulation guard · data-availability · abstention · A+ vote ·
+                          execution-cost · event-risk veto · regime gate
+        ↓
+Emit (tier-tagged)    →  high-conviction · whale-confirmed · tracked · advisory
+```
+
+## 1. Certainty-Factor algebra
+
+Each active signal $s$ contributes a certainty value $CF_s \in [-1, 1]$ where the sign encodes direction (positive = bullish, negative = bearish) and magnitude encodes strength. Inert / weak signals below the threshold ($|CF| < 0.15$) are dropped so they don't dilute the composite — they cannot vote against a strong cohort.
+
+Two CFs combine via the Shortliffe-Buchanan rule:
+
+$$
+CF_{ab} = \begin{cases}
+CF_a + CF_b\,(1 - CF_a) & \text{if } CF_a \geq 0 \text{ and } CF_b \geq 0 \\[4pt]
+CF_a + CF_b\,(1 + CF_a) & \text{if } CF_a \leq 0 \text{ and } CF_b \leq 0 \\[4pt]
+\dfrac{CF_a + CF_b}{1 - \min(|CF_a|,\,|CF_b|)} & \text{otherwise (disagreement)}
+\end{cases}
+$$
+
+The combination is associative — order of signals doesn't matter — and it bounds the result to $[-1, 1]$ without manual clamping.
+
+## 2. Correlation decorrelation
+
+Pairs of signal families that draw from overlapping data sources (e.g. mlEnsemble + logicRules both consume technical indicators) are damped by a correlation matrix:
+
+$$
+CF'_s = CF_s \cdot \prod_{t \neq s} \big(1 - \rho_{s,t} \cdot \alpha\big)
+$$
+
+where $\rho_{s,t}$ is the empirical correlation between family $s$ and $t$, and $\alpha = 0.6$ is the dampening factor. This prevents two correlated signals from being counted as two independent votes.
+
+## 3. Bayesian sequential update
+
+The combined CF is mapped to a posterior probability via family-aware priors. For a prior $P_0$ and a likelihood ratio $\Lambda$ implied by the CF magnitude:
+
+$$
+P_{1} = \frac{\Lambda \cdot P_0}{\Lambda \cdot P_0 + (1 - P_0)}
+$$
+
+Priors differ by horizon family:
+
+| Family | Bull prior | Bear prior |
+|---|---|---|
+| micro (5m–30m) | 0.52 | 0.48 |
+| intraday (1h–6h) | 0.56 | 0.44 |
+| swing (1d–7d) | 0.57 | 0.43 |
+| macro (30d+) | 0.55 | 0.45 |
+
+Sequential updates respect Kolmogorov's axioms — probabilities stay in $[0, 1]$ and complementary events always sum to 1.
+
+## 4. First-order logic rules
+
+14 base + 7 scalping FOL rules encode hand-written market intuition (e.g. *"if funding rate z-score > 2 and OI rising, expect mean reversion"*). Each rule emits a CF; rules are grouped by data source family and combined intra-group first, then inter-group:
+
+$$
+CF_{\text{group}} = \mathrm{CF\_combine}\big(CF_{r_1}, CF_{r_2}, \dots\big)
+$$
+
+The per-rule accuracy tracker stores rolling outcomes. Poor rules ($<0.45$ accuracy) get their CF halved; consistently good rules ($>0.65$) get a $+20\%$ boost.
+
+## 5. Meta-reasoning confidence modifier
+
+A scalar modifier $m \in [0.3, 1.0]$ is applied to the final CF before calibration. It accounts for:
+
+- **Signal coverage** — fewer active families → lower $m$
+- **Disagreement** — diverging CFs → lower $m$
+- **Trend alignment** — HTF trend agrees with predicted direction → higher $m$
+
+For short-horizon predictions (5m / 15m / 30m), counter-trend setups are explicitly capped at 30% confidence regardless of the composite — primary trend wins ties.
+
+## 6. Platt scaling calibration
+
+The raw probability $p$ is passed through a per-family × per-symbol × per-regime sigmoid trained online via SGD:
+
+$$
+P_{\text{cal}} = \sigma(A \cdot p + B) = \frac{1}{1 + e^{-(A p + B)}}
+$$
+
+Until a shard reaches $\geq 30$ resolved samples, the calibrator falls back to a histogram. Each resolved prediction updates $A$ and $B$ via a single SGD step on the cross-entropy loss.
+
+## 7. Horizon cap + multiplier
+
+Each `(slot, horizon, family)` triple has an entry in the `horizon_calibration` table. Once a horizon hits **30+ resolutions** with WR $\geq 0.65$, its probability cap is lifted; horizons that consistently miss have caps lowered. This avoids over-promising on horizons that haven't proven themselves.
+
+## 8. Qualification gates
+
+Before emission, four gates run in order:
+
+1. **Manipulation guard** — aborts the cycle on unambiguous price-manipulation patterns (squeeze, spoof, funding stampede, whale contradiction, thin-liquidity pump).
+2. **Data-availability gate** — abstains when fewer than 4 of 6 signal families have valid data for this symbol.
+3. **Engine abstention** — abstains on low composite confidence, low signal coverage, or signal disagreement above threshold.
+4. **Per-signal qualification** — A+ multi-system confirmation (Vizzor TA + SMC + ICT vote), execution-cost gate (expected move > fee + spread + forward sigma), event-risk veto.
+
+Predictions that pass land in one of four tiers:
+
+<div className="not-prose flex flex-wrap gap-2 my-4">
+  <TierBadge tier="high-conviction" />
+  <TierBadge tier="whale-confirmed" />
+  <TierBadge tier="tracked" />
+  <TierBadge tier="advisory" />
+</div>
+
+## Resolution feedback loop
+
+`PredictionResolver` runs continuously, checks pending predictions every cycle, and force-resolves stale rows past $2\times$ horizon. Outcomes classify into:
+
+- **hit** — directional plan reached predicted price
+- **miss** — directional plan was invalidated before resolution
+- **neutral** — predicted directional, market went sideways (excluded from WR)
+
+Two grading rules are load-bearing:
+
+- **TP-hit-wins-over-band** — a directional plan whose `predictedPrice` (TP) is reached early resolves as HIT in the predicted direction immediately, no SL evaluation.
+- **RANGE in-band-is-HIT** — the persisted forecast band is the authoritative grading criterion; in-band actual = HIT regardless of stored direction.
+
+Each resolution fans out to:
+
+- Per-symbol-per-family Platt calibrator (single SGD step)
+- FOL rule tracker (per-rule rolling accuracy + auto CF dampening)
+- Per-symbol weight learner (online, decay-weighted, blends recent vs all-time)
+- `horizon_calibration` table (per slot × horizon × family)
+- Per-session WR aggregator (asian / EU / US / overlap / weekend / off-hours)
+- Pre-prediction self-check — when the last 3 predictions on a symbol missed, the next emission's probability is pulled toward 0.5
+
+## Persistent state
+
+All state survives process restart via the `vizzor_state` SQLite volume:
+
+- Per-symbol-per-family Platt calibrator shards
+- FOL rule tracker (per-rule accuracy + auto CF dampening)
+- Volatility registry (per-symbol ATR multipliers)
+- Horizon calibration (per slot × horizon × family)
+- Runtime allowlist
+- Scheduler runtime knobs (quality-gate / vol-adapter / auto-disable per slot)
+
+Tracked WR doesn't rebuild from zero after every deploy.
+
+## Quick setup
+
+<TerminalBlock
+  lang="bash"
+  code={`# Interactive wizard — detects Docker or Python, installs deps
+vizzor chronovisor setup
+
+# Start the engine
+vizzor chronovisor start
+
+# Check health
+vizzor chronovisor status`}
+/>
+
+Or via Docker:
+
+<TerminalBlock
+  lang="bash"
+  code={`docker compose up chronovisor-engine
+curl http://localhost:7200/health`}
+/>
+
+If tracked setups keep getting skipped, the first thing to check is engine health.
+
+## Requirements
+
+| Component | Minimum |
+|-----------|---------|
+| RAM | 4 GB (8 GB recommended) |
+| Disk | 1 GB for models |
+| Runtime | Docker (recommended) or Python 3.11+ |
+| GPU | Not required — CPU-based by default |

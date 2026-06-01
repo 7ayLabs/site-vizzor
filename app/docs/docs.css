@@ -1,0 +1,210 @@
+/*
+ * Docs zone styles — self-contained Tailwind v4 universe.
+ *
+ * Tailwind v4 treats each CSS entry as its own compilation; theme tokens
+ * declared in `app/globals.css` are NOT visible to `app/docs/docs.css`'s
+ * Tailwind pass. So this file declares Tailwind base + source scan + the
+ * full theme (breakpoints, fonts, brand color tokens) on its own, then
+ * pulls in the Fumadocs preset, then bridges Fumadocs' `--color-fd-*`
+ * variables to the Vizzor design tokens.
+ *
+ * Why source-scan Fumadocs' dist? Otherwise Tailwind v4 never sees the
+ * grid/sidebar/sticky classes baked into Fumadocs' compiled JS and the
+ * docs layout collapses to flow.
+ */
+
+@import 'tailwindcss';
+
+@source "../../node_modules/fumadocs-ui/dist/**/*.js";
+@source "../../components/**/*.tsx";
+@source "../../content/**/*.{md,mdx}";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, .dark, .dark *));
+
+@theme inline {
+  /* Brand colors — must mirror app/globals.css. */
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-danger: var(--danger);
+  --color-gold: var(--gold);
+  --color-whale: var(--whale);
+  --color-code-bg: var(--code-bg);
+  --color-code-fg: var(--code-fg);
+
+  --font-sans: var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    sans-serif;
+  --font-mono: var(--font-mono), 'SF Mono', ui-monospace, 'JetBrains Mono',
+    monospace;
+
+  /* Breakpoints — Fumadocs' preset uses `2xl:`. */
+  --breakpoint-sm: 40rem;
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 64rem;
+  --breakpoint-xl: 80rem;
+  --breakpoint-2xl: 96rem;
+}
+
+@import 'fumadocs-ui/css/preset.css';
+
+/* ---- Vizzor design tokens (mirror of app/globals.css :root + .dark) -- */
+
+:root {
+  --bg: #fafaf7;
+  --surface: #ffffff;
+  --surface-2: #f5f4ef;
+  --border: #e8e7e0;
+  --fg: #0a0a0a;
+  --fg-2: #52525b;
+  --fg-3: #737373;
+  --accent: #10b981;
+  --accent-fg: #022c20;
+  --danger: #dc2626;
+  --gold: #f59e0b;
+  --whale: #3b82f6;
+  --code-bg: #0a0a0a;
+  --code-fg: #e8e8e8;
+  color-scheme: light;
+}
+
+[data-theme='dark'],
+.dark {
+  --bg: #0a0a0b;
+  --surface: #111114;
+  --surface-2: #17171b;
+  --border: #23232a;
+  --fg: #f5f5f2;
+  --fg-2: #a1a1aa;
+  --fg-3: #71717a;
+  --accent: #34d399;
+  --accent-fg: #022c20;
+  --danger: #f87171;
+  --gold: #fbbf24;
+  --whale: #60a5fa;
+  --code-bg: #000000;
+  --code-fg: #e8e8e8;
+  color-scheme: dark;
+}
+
+/* ---- Color bridge: Fumadocs vars → Vizzor design tokens --------------- */
+
+:root,
+:root:not([data-theme='dark']):not(.dark) {
+  --color-fd-background: var(--bg);
+  --color-fd-foreground: var(--fg);
+  --color-fd-muted: var(--surface-2);
+  --color-fd-muted-foreground: var(--fg-2);
+  --color-fd-popover: var(--surface);
+  --color-fd-popover-foreground: var(--fg);
+  --color-fd-card: var(--surface);
+  --color-fd-card-foreground: var(--fg);
+  --color-fd-border: var(--border);
+  --color-fd-primary: var(--accent);
+  --color-fd-primary-foreground: var(--accent-fg);
+  --color-fd-secondary: var(--surface-2);
+  --color-fd-secondary-foreground: var(--fg);
+  --color-fd-accent: color-mix(in oklab, var(--accent) 12%, transparent);
+  --color-fd-accent-foreground: var(--fg);
+  --color-fd-ring: var(--accent);
+}
+
+[data-theme='dark'],
+.dark {
+  --color-fd-background: var(--bg);
+  --color-fd-foreground: var(--fg);
+  --color-fd-muted: var(--surface-2);
+  --color-fd-muted-foreground: var(--fg-2);
+  --color-fd-popover: var(--surface);
+  --color-fd-popover-foreground: var(--fg);
+  --color-fd-card: var(--surface);
+  --color-fd-card-foreground: var(--fg);
+  --color-fd-border: var(--border);
+  --color-fd-primary: var(--accent);
+  --color-fd-primary-foreground: var(--accent-fg);
+  --color-fd-secondary: var(--surface-2);
+  --color-fd-secondary-foreground: var(--fg);
+  --color-fd-accent: color-mix(in oklab, var(--accent) 16%, transparent);
+  --color-fd-accent-foreground: var(--fg);
+  --color-fd-ring: var(--accent);
+}
+
+/* ---- Base body styles ------------------------------------------------ */
+
+@layer base {
+  html, body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: var(--accent-fg);
+  }
+
+  :where(button, a, [role='button'], input, textarea, select):focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+/* ---- Typography polish ----------------------------------------------- */
+
+#nd-docs-layout,
+#nd-nav,
+#nd-page,
+#nd-toc,
+[data-fumadocs] {
+  font-family: var(--font-sans);
+}
+
+#nd-docs-layout code,
+#nd-docs-layout pre,
+#nd-page code,
+#nd-page pre {
+  font-family: var(--font-mono);
+}
+
+#nd-docs-layout h1,
+#nd-docs-layout h2,
+#nd-docs-layout h3,
+#nd-docs-layout h4,
+#nd-page h1,
+#nd-page h2,
+#nd-page h3,
+#nd-page h4 {
+  letter-spacing: -0.02em;
+}
+
+/* ---- KaTeX --- prevent block math overflow on narrow viewports ------- */
+
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+}
+
+.katex {
+  font-size: 1em;
+}
+
+/* ---- Reduced motion -------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

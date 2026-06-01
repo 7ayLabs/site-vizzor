@@ -1,0 +1,97 @@
+---
+title: Autonomous agents
+description: Set-and-forget trading agents running a continuous think → analyze → decide → act cycle. Paper / live modes, five built-in strategies, seven-step safety pipeline.
+---
+
+Set-and-forget trading agents that run a continuous **think → analyze → decide → act** cycle.
+
+## Requirements
+
+| Requirement | Details |
+|-------------|---------|
+| AI Provider | Any supported provider (Claude recommended for best decisions) |
+| Wallet | Required for live trading; not needed for paper trading or alert-only |
+| RPC Endpoint | Required for live trading (default public RPCs or Alchemy) |
+| Minimum Balance | Agent-specific; configurable spending limits |
+| Always-on Process | Agent runs in a loop — needs a persistent process (terminal, tmux, Docker) |
+
+## Create and run
+
+<TerminalBlock
+  lang="text"
+  showPrompt
+  code={`agent create alpha --strategy momentum --pairs BTC,ETH,SOL --interval 60
+agent start alpha
+agent status alpha
+agent stop alpha`}
+/>
+
+## Execution modes
+
+| Mode | What happens | Wallet needed? |
+|------|--------------|----------------|
+| Alert-only | Generates signals, no trades | No |
+| Paper trading | Simulated trades with realistic slippage model | No |
+| Live trading | On-chain execution via DEX router | Yes |
+
+## Strategies
+
+| Strategy | Signals | Best for |
+|----------|---------|----------|
+| Momentum | RSI + MACD + Bollinger + Funding | Short-term reversals |
+| Trend-Following | EMA Crossover + OBV + Fear & Greed | Swing trades |
+| ML-Adaptive | All TA + ML regime + ChronoVisor | Adaptive, all conditions |
+| ChronoVisor | 6-signal Bayesian engine + FOL rules + meta-reasoning | Multi-timeframe predictions |
+| Polymarket-Arbitrage | ChronoVisor vs Polymarket odds | Prediction market edge trading |
+
+## Safety pipeline (live trading)
+
+Live trades pass through a **7-step pipeline** before execution. A failure at any step aborts the trade with full audit trail — no partial-fill ambiguity.
+
+1. **Validate** — check parameters, balance, spending limits
+2. **Prepare** — build transaction with DEX router quote
+3. **Simulate** — `eth_call` dry run to detect reverts
+4. **Approve** — ERC-20 token approval if needed
+5. **Execute** — submit on-chain transaction
+6. **Record** — log to portfolio + audit trail
+7. **Cleanup** — update positions, trigger alerts
+
+### Additional protections
+
+- Per-agent daily/weekly spending caps
+- Kelly criterion position sizing
+- ATR-based stop losses
+- Max drawdown limits
+- Global emergency kill switch: `/agent emergency-stop`
+
+## Wallet setup
+
+<TerminalBlock
+  lang="bash"
+  code={`vizzor wallet create           # Generate new encrypted wallet
+vizzor wallet import           # Import existing private key
+vizzor wallet list             # List managed wallets`}
+/>
+
+Wallets are encrypted with **AES-256-GCM** (scrypt $N=2^{18}$) and stored at `~/.vizzor/wallets/`. The encryption passphrase is requested interactively — never stored in config.
+
+## Agent lifecycle
+
+Agents persist across CLI restarts. The state machine is:
+
+```text
+draft  →  running  →  paused  →  stopped
+            ↑   ↓
+          (alerts emitted, trades placed, P&L tracked)
+```
+
+`/agent list` shows every agent's current state, last decision timestamp, and aggregate P&L. `/agent trades <name>` shows the full trade history with realized + unrealized P&L per position.
+
+## Observability
+
+Each agent's decisions are written to:
+
+- SQLite `agent_decisions` table (full reasoning trace)
+- The CLI / TUI alerts panel (latest decision + P&L)
+- Telegram DM (when configured) on every trade or position change
+- The Web Dashboard agents view (chart of equity curve + trade log)

@@ -1,0 +1,82 @@
+---
+title: Telegram bot
+description: 32 commands, role-scoped menu, runtime knobs — operate Vizzor entirely from chat without YAML edits.
+---
+
+## Setup
+
+Requires `TELEGRAM_BOT_TOKEN` in `~/.vizzor/config.yaml` or the environment. Any text message triggers AI chat.
+
+<TerminalBlock
+  lang="bash"
+  code={`vizzor bot start --telegram`}
+/>
+
+The blue command-menu button is **scoped per role** — regular users see only end-user commands; admins see the full engine-ops surface.
+
+## User commands
+
+Visible to everyone.
+
+| Group | Commands |
+|---|---|
+| Predictions | `/predict`, `/predictions`, `/precisions`, `/wr` |
+| Market | `/price`, `/trends`, `/scan`, `/audit`, `/track`, `/ico`, `/polymarket` |
+| Subscriptions | `/watchlist`, `/sub`, `/unsub`, `/alerts`, `/alert`, `/mute`, `/quiet`, `/tz`, `/notify_threshold` |
+| Personal | `/me`, `/whoami`, `/settings`, `/playbook`, `/leaderboard` |
+| System | `/start`, `/help` |
+
+## Admin commands
+
+Admin role only — handler-level guard + per-admin menu scope.
+
+| Group | Commands | What they do |
+|---|---|---|
+| Runtime access | `/allow <id>`, `/deny <id>`, `/access` | Grant / revoke Telegram-ID access at runtime — no YAML edit, no redeploy. Survives bot restarts. |
+| Scheduler | `/scheduler` + subcommands | `on`, `off`, `run [slot]`, `quickstart`, `slot <name>`, `enable`, `disable`, `symbols`, `slot-symbols`, `interval`, `firing`, `horizons`, `add`, `remove`, plus runtime knobs `quality-gate`, `vol-adapter`, `auto-disable`. Run `/scheduler help` for the full reference. |
+| Engine | `/chronovisor`, `/diagnose`, `/pending`, `/mode`, `/signaloverride` | Engine + ML sidecar health, per-signal breakdown, pending predictions table, tracking-profile switch (balanced/precision/sniper), polarity overrides on individual signal sources. |
+| Ops | `/health`, `/debug`, `/reset`, `/backtest` | Process + subsystem health, per-user debug ring buffer, data wipe, FOL-rule replay. |
+
+## Runtime knobs without YAML edits
+
+Operator rule: every config must be tunable from chat. There are no YAML-only knobs.
+
+<TerminalBlock
+  lang="text"
+  code={`/scheduler on
+/scheduler quality-gate scalp-30m on conf=65 floor=partial
+/scheduler vol-adapter scalp-30m on
+/scheduler auto-disable scalp-30m on floor=0.35 window=30 breaches=3
+/tz Europe/Madrid
+/quiet 22:00-08:00
+/mode balanced               # or cosmos / sniper
+/allow 1234567890            # admin grants user access on the fly`}
+/>
+
+## Resolved-prediction DM format
+
+When a prediction resolves, the operator gets a message with the following sections:
+
+1. **Outcome banner** — HIT / MISS / NEUTRAL · symbol · horizon · LONG/SHORT/RANGE · tier badge
+2. **Trade summary** — entry → final price, realized % move, target price, trigger reason (target hit / SL / time / expiry)
+3. **Full trade plan** rendered through the same canonical format used on emission DMs, with check / cross marks on each TP/SL line
+4. **Per-symbol WR footer** — tracked WR + display WR with sample counts
+
+## Signal visibility
+
+Every signal/feature contributing to a prediction renders on both the emission DM and the alert-trigger DM. No hidden contributors. The single source of truth is `prediction.triggerSnapshot` — it's also surfaced on `/diagnose`, `/playcard`, the CLI, and the TUI.
+
+## Subscriptions
+
+Users can pre-subscribe to symbols + horizons:
+
+<TerminalBlock
+  lang="text"
+  code={`/sub BTC 1h 4h 1d
+/sub ETH 5m 15m 30m
+/watchlist                   # show current subscriptions
+/unsub BTC 5m
+/notify_threshold tracked    # only tracked+ predictions DMed
+/quiet 22:00-08:00           # respect quiet hours in your TZ
+/tz Europe/Madrid            # IANA timezone for quiet hours + timestamps`}
+/>

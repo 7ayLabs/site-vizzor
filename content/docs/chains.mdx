@@ -1,0 +1,94 @@
+---
+title: Supported chains
+description: 11 chains live today. Adding a new chain means implementing the ChainAdapter interface — no engine changes required.
+---
+
+Vizzor reads on-chain data through a single `ChainAdapter` interface. Each chain plugs in independently; the engine is agnostic to the chain's underlying protocol.
+
+## Live chains
+
+<div className="not-prose flex flex-wrap gap-2 my-4">
+  <ChainPill chain="ethereum" />
+  <ChainPill chain="polygon" />
+  <ChainPill chain="arbitrum" />
+  <ChainPill chain="optimism" />
+  <ChainPill chain="base" />
+  <ChainPill chain="bsc" />
+  <ChainPill chain="avalanche" />
+  <ChainPill chain="solana" />
+  <ChainPill chain="sui" />
+  <ChainPill chain="aptos" />
+  <ChainPill chain="ton" />
+</div>
+
+| Chain | Status |
+|-------|--------|
+| Ethereum | Live |
+| Polygon | Live |
+| Arbitrum | Live |
+| Optimism | Live |
+| Base | Live |
+| BSC | Live |
+| Avalanche | Live |
+| Solana | Live |
+| Sui | Live |
+| Aptos | Live |
+| TON | Live |
+
+EVM chains share a single adapter (parameterized by chain ID + RPC URL). Solana, Sui, Aptos, and TON each have their own adapter.
+
+## The `ChainAdapter` interface
+
+Every chain implements `src/chains/types.ts`. The interface is read-only — Vizzor never signs from a chain adapter; signing flows through wallet management (`src/agents/wallet.ts`) separately.
+
+```ts
+export interface ChainAdapter {
+  readonly chainId: string;
+  readonly displayName: string;
+
+  // Token metadata
+  getTokenInfo(address: string): Promise<TokenInfo>;
+  getTokenHolders(address: string, limit: number): Promise<Holder[]>;
+
+  // Balances
+  getNativeBalance(wallet: string): Promise<bigint>;
+  getTokenBalance(wallet: string, token: string): Promise<bigint>;
+
+  // Transactions
+  getTransactions(wallet: string, opts: TxOpts): Promise<Transaction[]>;
+  getInternalTransactions(tx: string): Promise<InternalTx[]>;
+
+  // Contract introspection
+  getContractCode(address: string): Promise<string | null>;
+  getContractSource?(address: string): Promise<ContractSource | null>;
+
+  // Optional capabilities (per-chain feature flags)
+  capabilities: {
+    erc20: boolean;
+    erc721: boolean;
+    contractSource: boolean;
+    internalTxs: boolean;
+  };
+}
+```
+
+## Adding a new chain
+
+1. **Create the adapter** under `src/chains/<chain>/adapter.ts` implementing `ChainAdapter`.
+2. **Register it** in `src/chains/registry.ts` — the registry is a `Map<string, ChainAdapter>` keyed by chain ID.
+3. **Add the chain glyph** to the design-system map (`ChainPill` / `ChainIcon`) so it renders in the marketing site.
+4. **Wire RPC config** in `~/.vizzor/config.yaml` under `rpc.<chain>`.
+5. **Add the `Chain` literal** to `src/chains/types.ts` so TypeScript knows about it.
+
+The engine will pick up the new chain automatically — no changes to scanner, forensics, or ChronoVisor are required. The chain becomes selectable everywhere the chain selector appears (CLI, TUI, Telegram, Discord, Web).
+
+## Capability flags
+
+Some chains don't expose every primitive — e.g. TON has no equivalent of ERC-721, and some chains' explorers don't return contract source. The `capabilities` object on each adapter is the truth; UI surfaces and the engine both check it before invoking optional methods. A missing capability falls back gracefully instead of throwing.
+
+## RPC + indexer trust model
+
+- **RPC** — used for live state (balances, latest block). Defaults to public RPCs; users can configure premium Alchemy/QuickNode endpoints per chain in `~/.vizzor/config.yaml`.
+- **Indexer** — Etherscan-family explorers for historic txs and contract source. Free-tier API keys recommended; the adapter rate-limits per key.
+
+Vizzor never sends private keys to RPC providers — wallets sign locally, txs are broadcast through the RPC, and the adapter never sees the unencrypted key.

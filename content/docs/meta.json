@@ -1,0 +1,20 @@
+{
+  "title": "Docs",
+  "pages": [
+    "index",
+    "quickstart",
+    "---Surfaces---",
+    "cli",
+    "telegram",
+    "discord",
+    "---Engine---",
+    "chronovisor",
+    "signals",
+    "agents",
+    "---Reference---",
+    "api",
+    "chains",
+    "configuration",
+    "deployment"
+  ]
+}

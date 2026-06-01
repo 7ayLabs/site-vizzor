@@ -1,0 +1,90 @@
+---
+title: CLI reference
+description: Vizzor command-line interface — every subcommand, slash command, and TUI shortcut.
+---
+
+## Top-level commands
+
+Run `vizzor` with no args to enter the interactive TUI. Direct subcommands handle setup, wallets, the REST API, bots, OHLCV collection, and the ChronoVisor engine.
+
+<TerminalBlock
+  lang="bash"
+  code={`vizzor                              # Launch interactive TUI
+vizzor setup                        # Reopen guided setup
+vizzor config init                  # Initialize config
+vizzor config set <key> <value>     # Set config value
+vizzor config show                  # Show config
+vizzor wallet create|import|list|delete  # Wallet management
+vizzor serve [--port 7100]          # Start REST API server
+vizzor api key create "my-app"      # Create API key
+vizzor bot start [options]          # Start Discord/Telegram bots
+vizzor collect start [options]      # Start OHLCV data collection
+vizzor chronovisor setup            # Install ChronoVisor engine
+vizzor chronovisor start            # Start engine
+vizzor chronovisor stop             # Stop engine
+vizzor chronovisor status           # Engine health check
+vizzor predictions reset            # Reset prediction history
+vizzor update                       # Update to latest version
+vizzor health                       # Check config, keys, service connectivity`}
+/>
+
+## Terminal UI
+
+Launch with `vizzor`. Interactive chat with a live price ticker, streaming AI responses, and slash commands.
+
+**Price Ticker:** Arrow keys to navigate, **Enter** to trigger prediction, **Tab** to toggle focus.
+
+### Slash commands
+
+| Command | Description |
+|---------|-------------|
+| `/scan <address> [--chain <chain>]` | Token security + risk scan |
+| `/track <wallet> [--chain <chain>]` | Wallet forensics |
+| `/trends` | Trending tokens + top gainers/losers |
+| `/audit <contract> [--chain <chain>]` | Smart contract audit |
+| `/add <symbol>` | Add token to live price ticker (any source: Binance, CoinGecko, DEX) |
+| `/remove <symbol>` | Remove token from ticker |
+| `/alerts` | Interactive alerts panel — browse predictions, price alerts, notifications |
+| `/alerts clear` | Mark all notifications as read |
+| `/alerts hide` / `/alerts show` | Toggle alerts banner visibility |
+| `/alerts purge [id\|all]` | Delete predictions, notifications, and alert rules |
+| `/alerts delete <id\|all>` | Same as purge (alias) |
+| `/chain [<id>]` | Show/switch chain |
+| `/provider` | Show current AI provider |
+| `/provider <name>` | Switch to `anthropic`, `openai`, `gemini`, `ollama` |
+| `/playbook` | Exact steps for better tracked prediction win rate |
+| `/agent create <name> [options]` | Create autonomous agent |
+| `/agent list` | List agents |
+| `/agent start <name>` | Start agent |
+| `/agent stop <name>` | Stop agent |
+| `/agent status <name>` | Agent status + decisions |
+| `/agent wallet <name>` | Show agent wallet balance |
+| `/agent trades <name>` | Show agent trade history |
+| `/backtest` | Historical strategy backtest |
+| `/chronovisor` | ChronoVisor engine status |
+| `/config` | Show config |
+| `/help` | Command reference |
+
+### Alerts panel
+
+Type `/alerts` to open the interactive panel. Use **Up/Down** to navigate predictions and alerts, **Enter** to view full details (entry price, confidence, outcome, signal snapshot), **Escape** to close.
+
+Resolved predictions remain available after review and become visually muted as seen history. Pending predictions appear first; resolved predictions sort below them.
+
+## Free-text prompts
+
+Inside the TUI, type any prompt — Claude (or your chosen provider) will pick the right tools, fetch data, and respond inline.
+
+<TerminalBlock
+  lang="shell"
+  showPrompt
+  code={`predict BTC price next week
+analyze $PEPE security and price outlook
+what's trending in crypto right now
+full microstructure analysis for ETH
+should I buy SOL now?
+when does the next BTC unlock land?
+compare ChronoVisor vs Polymarket odds for ETH 6h`}
+/>
+
+When the AI emits a directional trade plan (Entry / TP / SL), the `set_trade_plan_alerts` tool automatically arms price-threshold alerts at those exact levels. A `🔔 Alerts armed` footer in the reply confirms the action.

@@ -1,0 +1,106 @@
+---
+title: Deployment
+description: Docker compose, production overlay, backup + restore scripts. Run Vizzor as a long-lived service.
+---
+
+## Docker compose
+
+The base `docker-compose.yml` brings up the full stack: CLI, ChronoVisor engine, PostgreSQL, the Web Dashboard, and the OHLCV collector.
+
+<TerminalBlock
+  lang="bash"
+  code={`cp .env.example .env       # Configure API keys
+docker compose up -d        # Bring everything up`}
+/>
+
+Services exposed by default:
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| Web Dashboard | 3000 | Next.js dashboard (markets, agents, portfolio, Polymarket) |
+| REST API | 3001 | Fastify + Swagger |
+| ChronoVisor engine | 8000 / 7200 | ML sidecar (`x-api-secret` auth) |
+| n8n | 5678 | Workflow automation (optional) |
+| PostgreSQL | 5432 | Persistent storage for predictions, conversations, agents |
+
+## Production overlay
+
+`docker-compose.prod.yml` layers production hardening on top of the base compose:
+
+- `restart: always` on every service
+- JSON log rotation (10 MB × 3 files per service)
+- The `vizzor-backup` sidecar — runs `scripts/backup.sh` every 6 hours with 14-day retention
+
+<TerminalBlock
+  lang="bash"
+  code={`docker compose -f docker-compose.yml -f docker-compose.prod.yml \\
+  --env-file .env up -d`}
+/>
+
+The bot exposes a `/health` endpoint compatible with UptimeRobot, BetterStack, and Docker healthchecks:
+
+<TerminalBlock
+  lang="bash"
+  code={`curl http://localhost:7101/health
+# → {"ok":true,"status":"healthy",...}`}
+/>
+
+## Backup + restore
+
+Both scripts ship in `scripts/` and are wired to the `vizzor-backup` sidecar:
+
+| Script | What it does |
+|---|---|
+| `scripts/backup.sh` | Dumps the `vizzor_state` SQLite volume + Postgres to a timestamped tarball; rotates files older than 14 days. |
+| `scripts/restore.sh` | Restores the latest tarball (or a named one) to the running stack. Verifies checksums before applying. |
+| `scripts/deploy-gen-env.py` | Generates a `.env` file from a template with secret prompts — never echoes secrets to stdout. |
+
+## Health monitoring
+
+The `/health` endpoint returns a structured payload with per-subsystem status:
+
+```json
+{
+  "ok": true,
+  "status": "healthy",
+  "subsystems": {
+    "engine": "healthy",
+    "ml_sidecar": "healthy",
+    "db": "healthy",
+    "telegram": "healthy",
+    "discord": "skipped"
+  },
+  "uptimeSeconds": 87412,
+  "lastPredictionAt": "2025-12-10T14:32:11Z"
+}
+```
+
+Wire this to your monitor of choice — the `subsystems` map shows which leg is degraded so on-call has actionable signal.
+
+## State persistence
+
+The `vizzor_state` volume holds everything that must survive a restart:
+
+- Per-symbol-per-family Platt calibrator shards
+- FOL rule tracker (per-rule accuracy + auto CF dampening)
+- Volatility registry (per-symbol ATR multipliers)
+- Horizon calibration table
+- Runtime allowlist
+- Scheduler runtime knobs (quality-gate / vol-adapter / auto-disable per slot)
+- Resolved prediction history (drives tracked WR)
+
+Backups cover this volume, the Postgres database, and `~/.vizzor/config.yaml`. Wallet files (`~/.vizzor/wallets/`) are **not** part of automated backups — they require interactive passphrase entry and live under operator control.
+
+## Updates
+
+<TerminalBlock
+  lang="bash"
+  code={`# In-place update
+vizzor update                      # checks GitHub releases + npm
+
+# Docker stack
+docker compose pull
+docker compose up -d`}
+/>
+
+Updates that touch the `vizzor_state` schema run idempotent migrations on first start; restores from older backups remain compatible.

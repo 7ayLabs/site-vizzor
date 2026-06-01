@@ -1,0 +1,54 @@
+---
+title: Discord bot
+description: Slash commands + @mention AI chat. Requires the MESSAGE_CONTENT privileged intent.
+---
+
+## Setup
+
+Requires `DISCORD_TOKEN`. Enable the `MESSAGE_CONTENT` privileged intent in the [Discord Developer Portal](https://discord.com/developers/applications).
+
+<TerminalBlock
+  lang="bash"
+  code={`vizzor config set discord.token <your-token>
+vizzor bot start --discord`}
+/>
+
+The bot auto-registers slash commands on first connect. Allow up to a minute for global propagation.
+
+## Slash commands
+
+| Command | Description |
+|---------|-------------|
+| `/predict <symbol>` | AI prediction with signal snapshot |
+| `/scan <address>` | Token security scan |
+| `/trends` | Trending tokens |
+| `/track <wallet>` | Wallet forensics |
+| `/price <symbol>` | Live price |
+| `/audit <contract>` | Contract audit |
+| `/ico` | Upcoming launches |
+| `/agent_create` | Create an autonomous agent (admin) |
+| `/agent_start` | Start an agent (admin) |
+| `/agent_stop` | Stop an agent (admin) |
+| `/agent_status` | Agent status + decisions |
+| `/wr` | Tracked win-rate snapshot |
+| `/precisions` | Tracked accuracy by tier and horizon |
+| `/help` | Command list |
+
+## @mention chat
+
+Mention the bot in any text channel (or DM it directly) to start a free-text conversation:
+
+<TerminalBlock
+  lang="text"
+  code={`@Vizzor what's the BTC 4h outlook?
+@Vizzor scan 0x6B175474E89094C44Da98b954EedeAC495271d0F
+@Vizzor compare ChronoVisor vs Polymarket for ETH 1d`}
+/>
+
+Conversations are persisted per channel (or per DM), so context carries between messages. AI-emitted trade plans automatically arm price-threshold alerts and confirm with a footer in the reply.
+
+## Permissions
+
+- Slash commands respect Discord role-based permissions out of the box.
+- Admin-only commands (`/agent_create`, `/agent_start`, `/agent_stop`) check the operator's role on the configured admin server.
+- The bot never executes wallet operations from Discord — wallet management remains CLI-only by design.

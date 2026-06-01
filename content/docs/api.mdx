@@ -1,0 +1,121 @@
+---
+title: REST API
+description: Fastify + Swagger — 40+ endpoints with API key auth, rate limiting, and a WebSocket push channel.
+---
+
+REST API exposing every Vizzor capability programmatically. Full Swagger documentation at `/docs` when the server is running.
+
+## Setup
+
+<TerminalBlock
+  lang="bash"
+  code={`vizzor api start --port 3100      # Start server
+vizzor api key create "my-app"    # Create API key`}
+/>
+
+All endpoints require an `X-API-Key` header. The server is rate-limited to **300 req/min per key**.
+
+## Authentication
+
+<TerminalBlock
+  lang="bash"
+  code={`curl -H "X-API-Key: $VIZZOR_API_KEY" \\
+  https://api.vizzor.ai/v1/market/price/BTC`}
+/>
+
+Generate keys with `vizzor api key create <name>`; revoke with `vizzor api key revoke <name>`. Keys are stored in the SQLite `api_keys` table — no plaintext leakage to disk.
+
+## Endpoints
+
+```text
+GET  /health                          # Health check (public)
+GET  /docs                            # Swagger UI
+POST /v1/chat                         # AI chat (SSE streaming)
+POST /v1/chat/thread                  # Threaded chat reply
+GET  /v1/conversations                # List conversations
+GET  /v1/conversations/:id            # Get conversation with messages
+
+GET  /v1/market/price/:symbol         # Price
+GET  /v1/market/prices?symbols=       # Batch prices
+GET  /v1/market/trending              # Trending tokens
+GET  /v1/market/fear-greed            # Fear & Greed Index
+GET  /v1/market/ml-health             # ChronoVisor engine status
+GET  /v1/market/trenches              # Trenches scanner
+
+GET  /v1/chronovisor/:symbol          # ChronoVisor prediction
+GET  /v1/chronovisor/predictions      # List all predictions
+GET  /v1/chronovisor/accuracy         # Prediction accuracy metrics
+
+GET  /v1/polymarket/opportunities/:symbol  # Edge opportunities for symbol
+GET  /v1/polymarket/positions              # Open orders + recent trades
+POST /v1/polymarket/trade                  # Place trade on market
+
+GET  /v1/notifications                # List notifications
+GET  /v1/notifications/:id            # Get notification detail
+POST /v1/notifications/mark-read      # Mark all as read
+DELETE /v1/notifications/:id          # Delete notification
+
+GET  /v1/notifications/rules          # List alert rules
+POST /v1/notifications/rules          # Create alert rule
+DELETE /v1/notifications/rules/:id    # Delete alert rule
+
+POST /scan                            # Token security scan
+POST /trends                          # Market trends
+POST /track                           # Wallet forensics
+POST /predict                         # AI prediction
+POST /audit                           # Contract audit
+
+POST /v1/backtest                     # Backtest
+GET  /v1/agents                       # List agents
+POST /v1/agents                       # Create agent
+POST /v1/agents/:name/start           # Start agent
+POST /v1/agents/:name/stop            # Stop agent
+GET  /v1/agents/:name/wallet          # Agent wallet balance
+GET  /v1/agents/:name/trades          # Agent trade history
+GET  /v1/agents/:name/stats           # Agent trade statistics
+GET  /v1/portfolio/:id                # Portfolio
+POST /v1/agents/emergency-stop        # Global kill switch
+
+WS   /ws                              # WebSocket real-time push
+```
+
+## Streaming chat
+
+`POST /v1/chat` returns Server-Sent Events. Pass `conversationId` to continue an existing thread; omit it to create a new conversation:
+
+<TerminalBlock
+  lang="bash"
+  code={`curl -N -H "X-API-Key: $VIZZOR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"message":"predict BTC 4h","conversationId":"abc-123"}' \\
+  https://api.vizzor.ai/v1/chat`}
+/>
+
+The stream emits `event: token` frames during generation and `event: tool_call` frames when the AI invokes a tool (price fetch, scan, prediction, alert-arm). A final `event: done` frame carries the full canonical response.
+
+## WebSocket push
+
+`WS /ws` upgrades to a real-time stream. The server pushes:
+
+- New prediction emissions (per tier)
+- Prediction resolutions (HIT / MISS / NEUTRAL)
+- Price-alert hits
+- Agent decisions + trades
+
+All payloads use the same canonical shape as the REST responses — clients can dedupe by `id`.
+
+## Errors
+
+Every error returns:
+
+```json
+{
+  "error": {
+    "code": "rate_limited",
+    "message": "Rate limit exceeded — 300 req/min",
+    "retryAfter": 42
+  }
+}
+```
+
+Codes are stable; messages are human-readable. `retryAfter` is set on `rate_limited` and `service_unavailable`.

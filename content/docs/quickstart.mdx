@@ -1,0 +1,119 @@
+---
+title: Quickstart
+description: Install Vizzor and run your first prediction in 60 seconds.
+---
+
+## Install
+
+<TerminalBlock
+  lang="bash"
+  code={`npm install -g @vizzor/cli
+vizzor`}
+/>
+
+That's it. Vizzor launches a guided setup wizard that walks you through:
+
+- Choosing your AI provider (Claude, GPT-4, Gemini, or local Ollama)
+- Setting up API keys
+- Picking your default chain
+- Optionally installing the ChronoVisor ML engine on first run
+- Learning the first commands
+
+## Start predicting
+
+<TerminalBlock
+  lang="shell"
+  showPrompt
+  code={`predict BTC price next week
+analyze $PEPE security and price outlook
+what's trending in crypto right now
+full microstructure analysis for ETH
+track wallet 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045
+audit contract 0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984`}
+/>
+
+## Sample output
+
+<TerminalBlock
+  lang="text"
+  code={`ETH at $2,112 | Bullish | Confidence: Medium-High
+  At 4:00 PM:  $2,128 (+0.8%) bull / $2,104 (-0.4%) bear
+  1 day:       $2,156 (+2.1%) bull / $2,068 (-2.1%) bear
+  7 days:      $2,295 (+8.7%) bull / $1,985 (-6.0%) bear
+  1 month:     $2,560 (+21%) bull  / $1,840 (-13%) bear
+  Support: $2,005 / $1,900  |  Resistance: $2,220 / $2,340`}
+/>
+
+## Better prediction accuracy
+
+After setup, follow these tips for the best results:
+
+- Enable the ChronoVisor engine during setup, or run `vizzor chronovisor setup` later
+- Run `/cosmos on` for stricter tracked-only qualification and fewer low-edge setups
+- For intraday: focus on **BTC**, **ETH**, and **SOL** with `2h`, `3h`, `4h`, `6h` horizons
+- For scalping: focus on **BTC** and **ETH** with exact short horizons like `10m`, `20m`, `45m`
+- For long-range: ask for `7d`, `30d`, `90d`, or `1y` scenario ranges
+- Use `/precisions` to check tracked accuracy and `/playbook` for the full operating workflow
+
+## Alternative setups
+
+### Ollama (free, offline, no API key needed)
+
+<TerminalBlock
+  lang="bash"
+  code={`# 1. Install Ollama: https://ollama.ai
+ollama pull llama3.2    # or qwen2.5:14b for better results
+
+# 2. Configure Vizzor
+vizzor config set ai.provider ollama
+vizzor config set ai.model llama3.2
+
+# 3. Launch
+vizzor`}
+/>
+
+### OpenAI or Gemini
+
+<TerminalBlock
+  lang="bash"
+  code={`vizzor config set ai.provider openai
+vizzor config set openaiApiKey sk-...
+# or
+vizzor config set ai.provider gemini
+vizzor config set googleApiKey AI...`}
+/>
+
+### From source
+
+<TerminalBlock
+  lang="bash"
+  code={`git clone https://github.com/7ayLabs/vizzor.git
+cd vizzor
+pnpm install
+pnpm build
+pnpm link --global`}
+/>
+
+### Docker (full stack)
+
+<TerminalBlock
+  lang="bash"
+  code={`cp .env.example .env     # Configure API keys
+docker compose up -d      # CLI + ChronoVisor + PostgreSQL + Web Dashboard`}
+/>
+
+## Prediction tiers
+
+Every emission lands in one of four tiers — only the strict tiers count toward the tracked win-rate cohort.
+
+<div className="not-prose flex flex-wrap gap-2 my-4">
+  <TierBadge tier="high-conviction" />
+  <TierBadge tier="whale-confirmed" />
+  <TierBadge tier="tracked" />
+  <TierBadge tier="advisory" />
+</div>
+
+- **high-conviction** — ≥4-of-6 signal agreement + composite confidence ≥ 75 + horizon proven via calibrator
+- **whale-confirmed** — passes high-conviction AND whale flow confirms direction
+- **tracked** — passes all gates but doesn't meet the higher tier bars
+- **advisory** — passes only the soft gates; doesn't count toward the strict WR cohort

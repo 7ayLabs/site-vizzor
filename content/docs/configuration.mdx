@@ -1,0 +1,114 @@
+---
+title: Configuration
+description: ~/.vizzor/config.yaml, environment overrides, and runtime knobs operators can tune from chat.
+---
+
+Vizzor reads config from `~/.vizzor/config.yaml`. **Environment variables override file values**, so the same image can run in dev, staging, and production with no file edits.
+
+## Sample config
+
+```yaml
+anthropicApiKey: <your-key>
+etherscanApiKey: <your-key>
+defaultChain: ethereum
+
+rpc:
+  ethereum: https://eth-mainnet.g.alchemy.com/v2/<your-key>
+  polygon: https://polygon-mainnet.g.alchemy.com/v2/<your-key>
+
+ai:
+  provider: anthropic        # anthropic | openai | gemini | ollama
+  model: claude-sonnet-4-20250514
+  maxTokens: 4096
+  ollamaHost: http://localhost:11434
+
+output:
+  format: table
+  color: true
+  verbose: false
+
+cacheTtl:
+  tokenInfo: 3600
+  marketData: 300
+  walletData: 600
+  contractCode: 86400
+
+polymarket:
+  enabled: true
+  defaultSize: 10          # USD per trade
+  orderType: limit
+```
+
+## AI provider comparison
+
+| Provider | Quality | Cost | Latency | Tool Support | Offline |
+|----------|---------|------|---------|--------------|---------|
+| Anthropic (Claude) | Best | Pay-per-use | ~2-5s | Full | No |
+| OpenAI (GPT-4) | Great | Pay-per-use | ~2-5s | Full | No |
+| Google (Gemini) | Good | Free tier | ~2-4s | Full | No |
+| Ollama (local) | Varies | Free | ~5-30s | Context injection | Yes |
+
+## API keys
+
+| Key | Required | Free Tier | Purpose |
+|-----|----------|-----------|---------|
+| `ANTHROPIC_API_KEY` | Yes (or use Ollama) | Pay-per-use | Claude AI — best prediction quality |
+| `ETHERSCAN_API_KEY` | Recommended | Yes | Transaction history, contract source |
+| `OPENAI_API_KEY` | No | Pay-per-use | GPT-4 as alternative provider |
+| `GOOGLE_API_KEY` | No | Free tier | Gemini as alternative provider |
+| `ALCHEMY_API_KEY` | No | Free tier | Premium RPC endpoints |
+| `COINGECKO_API_KEY` | No | Free tier | Extended market data |
+| `CRYPTOPANIC_API_KEY` | No | Free tier | News with sentiment |
+| `DISCORD_TOKEN` | No | Free | Discord bot |
+| `TELEGRAM_BOT_TOKEN` | No | Free | Telegram bot |
+| `POLYMARKET_PRIVATE_KEY` | No | N/A | Polymarket CLOB trading (edge execution) |
+
+**No API key at all?** Use Ollama with a local model — fully offline predictions (lower quality but free).
+
+## Runtime knobs (no YAML edit required)
+
+Every operator-tunable setting is reachable from chat. The user rule is explicit: *"edit YAML" is treated as "hardcoded"*. Symbols, slots, thresholds, mode, risk profile, allowlist — all settable at runtime from Telegram (admins) or the CLI.
+
+<TerminalBlock
+  lang="text"
+  code={`# Scheduler — slot-level knobs
+/scheduler on
+/scheduler quality-gate scalp-30m on conf=65 floor=partial
+/scheduler vol-adapter scalp-30m on
+/scheduler auto-disable scalp-30m on floor=0.35 window=30 breaches=3
+/scheduler horizons scalp-30m 5m 15m 30m
+/scheduler symbols scalp-30m BTC ETH SOL
+
+# Engine mode
+/mode balanced               # balanced | precision | sniper | cosmos
+
+# Per-user
+/tz Europe/Madrid
+/quiet 22:00-08:00
+/notify_threshold tracked
+
+# Runtime allowlist (admin only)
+/allow 1234567890
+/deny 9876543210
+/access`}
+/>
+
+These changes:
+
+- Take effect immediately (no restart)
+- Persist via the `vizzor_state` SQLite volume
+- Survive bot restarts
+- Are mirrored back on `/health` and `/scheduler` for inspection
+
+## Cache TTLs
+
+Cache TTLs apply to the SQLite cache that fronts every external API. The defaults are deliberately conservative — tune them per workload:
+
+| Key | Default (s) | What it caches |
+|---|---|---|
+| `cacheTtl.tokenInfo` | 3600 | Token metadata (name, symbol, decimals) |
+| `cacheTtl.marketData` | 300 | Price, volume, trending lists |
+| `cacheTtl.walletData` | 600 | Wallet balances, transaction history |
+| `cacheTtl.contractCode` | 86400 | Contract source + bytecode |
+
+Setting any TTL to `0` disables the cache for that bucket.
