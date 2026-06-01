@@ -91,7 +91,7 @@ export async function Hero() {
         <MotionReveal delay={160}>
           <div className="mt-12 flex flex-col items-center gap-3">
             <a
-              href="https://t.me/VizzorBot"
+              href="https://t.me/vizzorai_bot"
               target="_blank"
               rel="noopener"
               className="inline-flex h-13 items-center justify-center rounded-full bg-[var(--fg)] px-7 text-[15px] font-semibold tracking-tight text-[var(--bg)] transition-transform duration-150 ease-out hover:scale-[1.02] active:scale-[0.99]"

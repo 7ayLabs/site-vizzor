@@ -182,13 +182,13 @@ vizzor predict BTC 4h`}
 
       <Section title="CTA buttons">
         <div className="flex flex-wrap items-center gap-3">
-          <CtaPrimary href="https://t.me/VizzorBot" external>Open in Telegram</CtaPrimary>
+          <CtaPrimary href="https://t.me/vizzorai_bot" external>Open in Telegram</CtaPrimary>
           <CtaSecondary href="https://github.com/7ayLabs/vizzor" external>Read on GitHub</CtaSecondary>
         </div>
         <div className="flex flex-wrap items-center gap-3 mt-3">
-          <CtaPrimary href="https://t.me/VizzorBot" external size="sm">$ npm i -g @vizzor/cli</CtaPrimary>
-          <CtaPrimary href="https://t.me/VizzorBot" external size="md">Get Vizzor</CtaPrimary>
-          <CtaPrimary href="https://t.me/VizzorBot" external size="lg">See predictions</CtaPrimary>
+          <CtaPrimary href="https://t.me/vizzorai_bot" external size="sm">$ npm i -g @vizzor/cli</CtaPrimary>
+          <CtaPrimary href="https://t.me/vizzorai_bot" external size="md">Get Vizzor</CtaPrimary>
+          <CtaPrimary href="https://t.me/vizzorai_bot" external size="lg">See predictions</CtaPrimary>
         </div>
       </Section>
 

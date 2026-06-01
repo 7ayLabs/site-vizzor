@@ -84,7 +84,7 @@ export async function Header() {
           <LanguageSwitch />
           <ThemeToggle />
           <a
-            href="https://t.me/VizzorBot"
+            href="https://t.me/vizzorai_bot"
             target="_blank"
             rel="noopener"
             className="
