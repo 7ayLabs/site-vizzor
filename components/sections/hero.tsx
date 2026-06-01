@@ -2,8 +2,7 @@
  * Hero — Ollama-style aggressive minimalism.
  *
  * One vertical axis, narrow column, massive whitespace. The hero reads top-to-
- * bottom: a quiet ribbon line, a geometric mark, the headline, the sub, one
- * solid CTA, a CLI chip below, and three quiet credibility badges.
+ * bottom: a geometric mark, the headline, the sub, one solid CTA, a CLI chip.
  *
  * Pure neutrals — black text on white / white text on near-black. The accent
  * color shows up exactly once (inside the geometric mark) and nowhere else,
@@ -15,32 +14,18 @@ import { getTranslations } from 'next-intl/server';
 import { CopyChip } from '@/components/ui/copy-chip';
 import { GsapHeadline } from '@/components/ui/gsap-headline';
 import { MotionReveal } from '@/components/ui/motion-reveal';
-import { getCalibrationBanner } from '@/lib/snapshot';
 
 export async function Hero() {
   const t = await getTranslations('hero');
-  const calibration = getCalibrationBanner();
-  const targetPct = Math.round(calibration.target * 100);
-  const ribbonCopy = t('ribbon', {
-    version: calibration.version,
-    target: targetPct,
-  });
 
   return (
     <section className="relative overflow-hidden">
       <div className="mx-auto max-w-[900px] px-4 sm:px-6 lg:px-8 py-32 lg:py-40 text-center">
-        {/* 1. Ribbon line */}
+        {/* 1. Geometric mark — concentric squares with a single emerald core. */}
         <MotionReveal>
-          <p className="mono tabular text-[12px] tracking-[0.18em] uppercase text-[var(--fg-3)]">
-            {ribbonCopy}
-          </p>
-        </MotionReveal>
-
-        {/* 2. Geometric mark — concentric squares with a single emerald core. */}
-        <MotionReveal delay={80}>
           <div
             aria-hidden
-            className="mx-auto mt-12 mb-12 flex h-24 w-24 items-center justify-center"
+            className="mx-auto mb-12 flex h-24 w-24 items-center justify-center"
           >
             <svg
               viewBox="0 0 96 96"
@@ -78,7 +63,7 @@ export async function Hero() {
           </div>
         </MotionReveal>
 
-        {/* 3. Headline */}
+        {/* 2. Headline */}
         <GsapHeadline
           as="h1"
           title={t('headline')}
@@ -87,7 +72,7 @@ export async function Hero() {
           subClassName="mt-7 text-[17px] sm:text-lg leading-relaxed text-[var(--fg-2)] max-w-[40ch] mx-auto"
         />
 
-        {/* 5. Primary CTA — Ollama-style solid pill, neutral colorway */}
+        {/* 3. Primary CTA — Ollama-style solid pill, neutral colorway */}
         <MotionReveal delay={160}>
           <div className="mt-12 flex flex-col items-center gap-3">
             <a
@@ -103,26 +88,11 @@ export async function Hero() {
               </span>
             </a>
 
-            {/* 6. Secondary line — quiet CLI install affordance */}
+            {/* 4. Secondary line — quiet CLI install affordance */}
             <span className="mt-1 inline-flex items-center gap-2 text-[12px] text-[var(--fg-3)]">
               <span>{t('secondary')}</span>
               <CopyChip command="npm i -g @vizzor/cli" />
             </span>
-          </div>
-        </MotionReveal>
-
-        {/* 7. Quiet credibility badges */}
-        <MotionReveal delay={240}>
-          <div className="mt-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[12px] text-[var(--fg-3)]">
-            <span className="mono tabular">{t('badges.chains')}</span>
-            <span aria-hidden className="text-[var(--fg-3)]/40">
-              ·
-            </span>
-            <span className="mono tabular">{t('badges.signals')}</span>
-            <span aria-hidden className="text-[var(--fg-3)]/40">
-              ·
-            </span>
-            <span className="mono tabular">{t('badges.license')}</span>
           </div>
         </MotionReveal>
       </div>
