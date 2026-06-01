@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
+    "mock": "node scripts/mock-vizzor.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

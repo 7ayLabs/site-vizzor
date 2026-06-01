@@ -15,3 +15,5 @@ Dockerfile
 .dockerignore
 docs
 tests
+scripts
+API_CONTRACT.md
