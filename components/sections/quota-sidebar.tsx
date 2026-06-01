@@ -68,20 +68,15 @@ export function QuotaSidebar({
   }
 
   const onReset = async () => {
-    // credentials:'same-origin' is the default but stated explicitly
-    // so the cookie is unambiguously sent on the response's Set-Cookie
-    // hand-off path. The response body carries the fresh state, which
-    // we feed directly into the SWR cache — no round-trip required.
     const res = await fetch('/api/quota/reset', {
       method: 'POST',
       credentials: 'same-origin',
     });
     if (!res.ok) return;
-    const next = (await res.json()) as QuotaState;
-    // Optimistically write the returned state, then revalidate to
-    // reconcile against the server (which should agree).
-    await mutate(next, { revalidate: false });
-    void mutate();
+    // Hard reload guarantees a clean cookie/SWR/UI state. The dev-only
+    // affordance gets dead-code-eliminated from production builds, so
+    // this reload only ever fires in development.
+    window.location.reload();
   };
 
   const body = data.exhausted ? (

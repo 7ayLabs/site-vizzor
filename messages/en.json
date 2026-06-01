@@ -91,6 +91,12 @@
       "burnCta": "Burn {amount} $VIZZOR",
       "burning": "Burning…",
       "mintNotConfigured": "Mint address not configured. Set NEXT_PUBLIC_VIZZOR_MINT to enable burns."
+    },
+    "exhaustedBanner": {
+      "label": "Free tier exhausted",
+      "body": "You've used all three free predictions. The Telegram bot has no per-user cap, or wait for the $VIZZOR token launch to continue here.",
+      "telegramCta": "Continue in Telegram →",
+      "resetDev": "reset · dev only"
     }
   },
   "hero": {

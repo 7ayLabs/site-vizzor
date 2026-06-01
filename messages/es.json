@@ -91,6 +91,12 @@
       "burnCta": "Quemar {amount} $VIZZOR",
       "burning": "Quemando…",
       "mintNotConfigured": "Dirección del mint no configurada. Define NEXT_PUBLIC_VIZZOR_MINT para habilitar las quemas."
+    },
+    "exhaustedBanner": {
+      "label": "Capa gratis agotada",
+      "body": "Usaste las tres predicciones gratis. El bot de Telegram no tiene tope por usuario, o espera el lanzamiento del token $VIZZOR para continuar aquí.",
+      "telegramCta": "Continuar en Telegram →",
+      "resetDev": "reiniciar · solo dev"
     }
   },
   "hero": {
