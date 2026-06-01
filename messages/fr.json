@@ -55,10 +55,39 @@
     "autoTrade": "Auto-trader {symbol}",
     "comingSoon": "Bientôt disponible"
   },
+  "predict": {
+    "meta": {
+      "title": "Prédire — Vizzor",
+      "description": "Demandez à Vizzor une prédiction crypto calibrée. Trois prédictions gratuites par navigateur. Propulsé par le même moteur que le bot Telegram."
+    },
+    "eyebrow": "en direct · sur le site",
+    "title": "Prédictions, sur la page.",
+    "sub": "Tapez un symbole et un horizon — par exemple \"ETH 4h\" ou \"SOL 1d\" — et recevez la même prédiction calibrée et adossée à des reçus que produit le bot Telegram. Les trois premières sont offertes.",
+    "emptyState": "Demandez une prédiction. Essayez \"BTC 4h\", \"ETH 1d\" ou \"SOL 15m\".",
+    "inputPlaceholder": "Symbole + horizon, ex. BTC 4h",
+    "send": "Envoyer",
+    "streaming": "Prédiction en cours…",
+    "loading": "Chargement du quota…",
+    "freeTier": {
+      "label": "Prédictions gratuites",
+      "body": "Utilisées {used} sur {limit}. Réinitialisé au lancement du token $VIZZOR — chaque prédiction supplémentaire coûtera alors une petite combustion de tokens."
+    },
+    "waitlist": {
+      "label": "$VIZZOR · bientôt disponible",
+      "title": "Quota gratuit épuisé.",
+      "body": "Le mode payant s'active au lancement de $VIZZOR — chaque prédiction supplémentaire brûlera une petite quantité de tokens. En attendant, le bot Telegram n'a pas de plafond par utilisateur.",
+      "cta": "Ouvrir dans Telegram →"
+    },
+    "paid": {
+      "label": "$VIZZOR · mode payant",
+      "body": "Connectez un portefeuille Solana et brûlez 1 $VIZZOR par prédiction. L'interface de portefeuille arrive en Phase 2."
+    }
+  },
   "hero": {
     "ribbon": "{version} · en route vers {target}%+ tracked WR",
     "headline": "Prédictions avec reçus.",
     "sub": "Prédictions crypto par IA sur chaque chaîne et horizon de temps. Des chiffres, pas des opinions.",
+    "predictCta": "Essayer Vizzor",
     "primaryCta": "Ouvrir dans Telegram",
     "secondary": "ou installer le CLI",
     "badges": {

@@ -55,10 +55,39 @@
     "autoTrade": "Auto-trade {symbol}",
     "comingSoon": "Coming soon"
   },
+  "predict": {
+    "meta": {
+      "title": "Predict — Vizzor",
+      "description": "Ask Vizzor for a calibrated crypto prediction. Three free predictions per browser. Powered by the same engine as the Telegram bot."
+    },
+    "eyebrow": "live · on-site",
+    "title": "Predictions, on the page.",
+    "sub": "Type a symbol and a horizon — say \"ETH 4h\" or \"SOL 1d\" — and get the same calibrated, receipt-backed prediction the Telegram bot produces. First three are on the house.",
+    "emptyState": "Ask for a prediction. Try \"BTC 4h\", \"ETH 1d\", or \"SOL 15m\".",
+    "inputPlaceholder": "Symbol + horizon, e.g. BTC 4h",
+    "send": "Send",
+    "streaming": "Predicting…",
+    "loading": "Loading quota…",
+    "freeTier": {
+      "label": "Free predictions",
+      "body": "Used {used} of {limit}. Resets after the $VIZZOR token launches, when each additional prediction costs a small token burn."
+    },
+    "waitlist": {
+      "label": "$VIZZOR · launching soon",
+      "title": "Free tier exhausted.",
+      "body": "The paid path activates when $VIZZOR launches — each additional prediction will burn a small amount of token. In the meantime, the Telegram bot has no per-user cap.",
+      "cta": "Open in Telegram →"
+    },
+    "paid": {
+      "label": "$VIZZOR · paid mode",
+      "body": "Connect a Solana wallet and burn 1 $VIZZOR per prediction. Wallet UI ships in Phase 2."
+    }
+  },
   "hero": {
     "ribbon": "{version} · climbing to {target}%+ tracked WR",
     "headline": "Predictions with receipts.",
     "sub": "AI-powered crypto forecasts across every chain and timeframe. Numbers, not opinions.",
+    "predictCta": "Try Vizzor",
     "primaryCta": "Open in Telegram",
     "secondary": "or install the CLI",
     "badges": {
