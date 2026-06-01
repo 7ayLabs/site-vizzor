@@ -355,11 +355,11 @@
       },
       "pro": {
         "name": "Pro",
-        "sub": "Prédictions illimitées, tous les badges de tier",
+        "sub": "Signaux illimités pour le trader manuel actif",
         "price": "9,99 $",
         "priceUnit": "/ mois",
         "annualPrice": "99 $",
-        "annualSub": "Économisez 17% en facturation annuelle",
+        "annualSub": "Économisez 17% annuel · 99 $/an",
         "cta": "Obtenir Pro",
         "everythingIn": "Tout Free, plus :",
         "features": {
@@ -367,24 +367,27 @@
           "allTiers": "Tous les badges (✅ tracked + 🐋 whale-confirmed + 🌟 high-conviction)",
           "precisions": "/precisions + /wr ventilation complète · par horizon, par tier, par session",
           "alerts": "/alerts illimitées · seuils TP/SL armés automatiquement",
-          "priority": "Priorité en cas de surcharge (sautez la file)"
+          "polymarketAlerts": "Alertes d'edge Polymarket quand ChronoVisor diverge du marché",
+          "priority": "Priorité en cas de surcharge — sautez la file"
         }
       },
       "elite": {
         "name": "Elite",
-        "sub": "L'avantage pour les traders sérieux",
-        "price": "29,99 $",
+        "sub": "Agents autonomes qui tradent on-chain sur les signaux Vizzor",
+        "price": "99 $",
         "priceUnit": "/ mois",
-        "annualPrice": "299 $",
-        "annualSub": "Économisez 17% en facturation annuelle · 499 $ à vie",
+        "annualPrice": "999 $",
+        "annualSub": "Économisez 16% annuel · 999 $/an · 2 499 $ à vie (rentable en année 3)",
         "cta": "Obtenir Elite",
         "everythingIn": "Tout Pro, plus :",
         "features": {
-          "headStart": "5 minutes d'avance sur chaque émission de signal",
-          "restApi": "Accès REST API (60 req/min)",
-          "priorityQueue": "File dédiée, sans throttling",
-          "privateChannel": "Accès au canal privé Telegram + Discord",
-          "earlyAccess": "Accès anticipé aux nouveaux signaux avant la sortie générale"
+          "agents": "🤖 Agents de trading autonomes — exécutent les trades on-chain dès qu'un signal s'émet, sans clic manuel",
+          "agentWallets": "Wallets multi-chaînes chiffrées par agent · risque isolé, la clé chaude ne quitte jamais l'appareil",
+          "polymarketAgent": "Agent Polymarket — trade quand les cotes ChronoVisor battent le marché",
+          "circuitBreaker": "Limites de perte par agent + /emergency-stop global — arrêt instantané sur tous les agents actifs",
+          "restApi": "REST API (60 req/min) — interrogez les agents, forcez des trades, surchargez les décisions par programme",
+          "privateChannel": "Canaux privés Telegram + Discord avec l'équipe d'ingénierie",
+          "headStart": "5 minutes d'avance sur chaque émission + accès anticipé aux nouveaux agents et signaux"
         }
       }
     },

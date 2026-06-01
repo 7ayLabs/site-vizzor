@@ -38,8 +38,16 @@ const TIERS: ReadonlyArray<Tier> = [
 
 const FEATURE_KEYS: Record<Tier['key'], readonly string[]> = {
   free: ['predictions', 'tiers', 'commands', 'cliApi', 'community'],
-  pro: ['predictions', 'allTiers', 'precisions', 'alerts', 'priority'],
-  elite: ['headStart', 'restApi', 'priorityQueue', 'privateChannel', 'earlyAccess'],
+  pro: ['predictions', 'allTiers', 'precisions', 'alerts', 'polymarketAlerts', 'priority'],
+  elite: [
+    'agents',
+    'agentWallets',
+    'polymarketAgent',
+    'circuitBreaker',
+    'restApi',
+    'privateChannel',
+    'headStart',
+  ],
 };
 
 const CHAINS = ['ton', 'polygon', 'base', 'arbitrum', 'solana', 'tron'] as const;

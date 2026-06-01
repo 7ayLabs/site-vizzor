@@ -355,11 +355,11 @@
       },
       "pro": {
         "name": "Pro",
-        "sub": "Unlimited predictions, every tier badge",
+        "sub": "Unlimited signals for the active manual trader",
         "price": "$9.99",
         "priceUnit": "/ mo",
         "annualPrice": "$99",
-        "annualSub": "Save 17% billed annually",
+        "annualSub": "Save 17% billed annually · $99/yr",
         "cta": "Get Pro",
         "everythingIn": "Everything in Free, plus:",
         "features": {
@@ -367,24 +367,27 @@
           "allTiers": "All tier badges (✅ tracked + 🐋 whale-confirmed + 🌟 high-conviction)",
           "precisions": "/precisions + /wr full breakdown · per-horizon, per-tier, per-session",
           "alerts": "Unlimited /alerts · TP/SL price thresholds armed automatically",
-          "priority": "Priority during overload (skip the queue)"
+          "polymarketAlerts": "Polymarket edge alerts when ChronoVisor disagrees with the market",
+          "priority": "Priority during overload — skip the queue"
         }
       },
       "elite": {
         "name": "Elite",
-        "sub": "Edge for serious traders",
-        "price": "$29.99",
+        "sub": "Autonomous on-chain trading agents acting on Vizzor signals",
+        "price": "$99",
         "priceUnit": "/ mo",
-        "annualPrice": "$299",
-        "annualSub": "Save 17% billed annually · $499 lifetime",
+        "annualPrice": "$999",
+        "annualSub": "Save 16% annually · $999/yr · $2,499 lifetime (break-even year 3)",
         "cta": "Get Elite",
         "everythingIn": "Everything in Pro, plus:",
         "features": {
-          "headStart": "5-minute head start on every signal emission",
-          "restApi": "REST API access (rate-limited 60 req/min)",
-          "priorityQueue": "Dedicated priority queue, never throttled",
-          "privateChannel": "Private Telegram + Discord channel access",
-          "earlyAccess": "Early access to new signals before general release"
+          "agents": "🤖 Autonomous trading agents — execute trades on-chain the moment a signal fires, no manual click",
+          "agentWallets": "Per-agent encrypted multi-chain wallets · isolated risk, hot-key never leaves the device",
+          "polymarketAgent": "Polymarket trading agent — places trades when ChronoVisor odds beat the market",
+          "circuitBreaker": "Per-agent loss limits + global /emergency-stop — instant kill across every running agent",
+          "restApi": "REST API (60 req/min) — query agents, force trades, override decisions programmatically",
+          "privateChannel": "Private Telegram + Discord channels with the engineering team",
+          "headStart": "5-minute head start on every signal emission + early access to new agents and signals"
         }
       }
     },
