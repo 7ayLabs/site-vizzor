@@ -101,95 +101,127 @@ Powers the live counter in the receipts scorecard.
 
 ---
 
-## 6. `POST /v1/site/predict` ⭐ **NEW (required by Phase 3 of /predict surface)**
+## 6. `POST /v1/site/chat` ⭐ **REQUIRED — canonical chat surface**
 
-This is the **on-site chat surface backend**. The site forwards parsed
-prompts here from `/api/predict`. Until this endpoint ships, the site
-falls back to: (a) Anthropic Claude if `ANTHROPIC_API_KEY` is set, then
-(b) a deterministic local stub. Once shipped, this becomes the canonical
-prediction source.
+The Vizzor engine **is** the on-site chat backend. The site is a thin
+consumer with no local prediction logic. Every prediction prompt
+forwarded from the on-site chat at `vizzor.ai/predict` arrives here.
+
+Until this endpoint is live, the site returns an honest **"⚠ Vizzor
+offline"** message to every prediction request. There is no fallback
+that fabricates predictions — that's a deliberate decision: the
+calibration story (`tracked WR`, receipts, trigger snapshots) collapses
+if the site lies when the engine is down.
 
 ### Request
 
 ```http
-POST /v1/site/predict
+POST /v1/site/chat
 Content-Type: application/json
+Accept: text/event-stream
+x-vizzor-burn-tx: <signature?>   // optional, only when paid tier active
 
 {
-  "symbol": "BTC",
-  "horizon": "4h",
-  "locale": "en"   // optional, "en"|"es"|"fr"; affects prose lines only
+  "messages": [
+    { "id": "m1", "role": "user", "parts": [{ "type": "text", "text": "BTC 4h" }] },
+    { "id": "m2", "role": "assistant", "parts": [{ "type": "text", "text": "..." }] },
+    { "id": "m3", "role": "user", "parts": [{ "type": "text", "text": "now ETH 1h" }] }
+  ]
 }
 ```
 
-The site's `parseUserMessage()` extracts `symbol` and `horizon` from the
-user's free-text prompt (handles `BTC 4h`, `Predice BTC en 1hr`,
-`Prédire ETH en 1d`, etc.). The upstream does **not** need NLU — it
-gets pre-parsed structured input.
+The site forwards **raw user input verbatim** — no symbol/horizon
+parsing, no language detection. The Vizzor engine handles NLU, locale
+inference, command parsing, and content generation. The site's only
+contribution is the conversation history (so multi-turn context works).
 
 ### Response
 
-A single `Prediction` JSON object:
+The engine returns a **server-sent event stream** in the Vercel AI SDK
+**UI Message Stream protocol**:
 
-```ts
-interface Prediction {
-  id: string;
-  symbol: string;
-  chain?: 'ethereum'|'polygon'|'arbitrum'|'optimism'|'base'|'bsc'|'avalanche'|'solana'|'sui'|'aptos'|'ton';
-  horizon: string;           // "5m"|"15m"|"30m"|"1h"|"4h"|"1d"|"7d"|"30d"|...
-  direction: 'up'|'down'|'sideways';
-  confidence: number;        // [0, 1]
-  tier: 'high-conviction'|'whale-confirmed'|'tracked'|'advisory';
-  emittedAt: string;         // ISO 8601
-  entryPrice: number;
-  predictedPrice: number;
-  targets: { bull: number; base: number; bear: number };
-  triggerSnapshot: {
-    vizzorTa: {
-      vote: -1 | 0 | 1;
-      signals: SignalContribution[];   // exactly 6, one per family
-    };
-    smc: { vote: -1|0|1; details: string };
-    ict: { vote: -1|0|1; details: string };
-    flattenedReason: string;
-  };
-}
-
-interface SignalContribution {
-  family: 'onChain'|'mlEnsemble'|'logicRules'|'patternMatch'|'predictionMarkets'|'socialNarrative';
-  cf: number;                 // calibrated CF in [-0.85, 0.85]
-  direction: 'up'|'down'|'sideways';
-  meta?: Record<string, number | string>;
-}
 ```
+Content-Type: text/event-stream
+x-vercel-ai-ui-message-stream: v1
+
+data: {"type":"text-start","id":"<msg-id>"}
+
+data: {"type":"text-delta","id":"<msg-id>","delta":"🟠 BITCOIN · 1h\n💰 BTC Price: $70,976"}
+
+data: {"type":"text-delta","id":"<msg-id>","delta":"\n💵 Direction: 📉 SHORT (67%)\n..."}
+
+data: {"type":"text-end","id":"<msg-id>"}
+
+data: [DONE]
+```
+
+The site passes this stream directly to the browser; the `@ai-sdk/react`
+`useChat` hook on the client renders it natively. The engine team can
+emit this format trivially using the Vercel AI SDK's `streamText()` →
+`toUIMessageStreamResponse()` helpers, or write it manually (it's just
+SSE with JSON envelopes).
+
+### Content responsibility
+
+The engine emits the **canonical Telegram-bot trade-plan format**:
+
+```
+🟠 BITCOIN · 1h
+💰 BTC Price: $70,976.28
+💵 Direction: 📉 SHORT (58%)
+🪙 Entry Zone: $70,976.28 — $71,261.18
+📈 TP1: $70,887.05 (-0.13%)
+📊 SL: $71,615.07 (+0.90%)
+⚠ Skip: R:R 1:0.14 — risk exceeds reward, no trade
+```
+
+or for RANGE markets:
+
+```
+🟣 SOLANA · 1d
+💰 SOL Price: $79.42
+💵 Direction: ➖ RANGE (57%)
+🪙 Band: $78.74 — $80.10
+💹 Best Play: Range fade — long $78.74, short $80.10 (no leverage)
+```
+
+The site renders the engine's output verbatim. **Coin glyphs, R:R
+calculations, verdict thresholds, locale handling, and signal narratives
+are all engine responsibilities.** The site has no `formatPrediction`
+code anymore.
+
+### Burn-tx forwarding
+
+When `isTokenLive()` and the visitor presents a verified burn
+(checked at the site against the Solana RPC), the site forwards the
+`x-vizzor-burn-tx` header to the engine. The engine MAY use this to:
+- record the burn for accounting,
+- unlock higher-tier signal detail (premium signals not shown to free
+  users),
+- skip a confidence floor that the free tier applies.
+
+The engine does **not** need to re-verify the burn — the site has
+already done it. The header is informational.
 
 ### Status codes
 
-| Code | Meaning |
+| Code | Site behavior |
 |---|---|
-| `200` | Prediction returned. |
-| `404` | Unknown symbol or unsupported horizon. The site falls back to its local generator. |
-| `429` | Rate limited. The site fall back **and** logs. |
-| `5xx` | The site falls back. |
+| `200` + stream | Pass through verbatim. |
+| `4xx` / `5xx` / timeout / network error | Return the offline message to the browser. |
 
-### Cache hint
+### Caching
 
-`no-store` (per-request prediction).
+`no-store`. Streaming responses must not be cached.
 
-### Format expectation
+### Why streaming (not single-shot JSON)
 
-The site formats the returned `Prediction` via `formatPredictionText()`
-into the Helios-style text receipt. The upstream does **not** need to
-worry about rendering — just return the structured object.
-
-### Why a single shape (not chat-style streaming)
-
-- Predictions are atomic. Streaming them token-by-token would expose
-  intermediate signals that aren't yet calibrated.
-- The site already handles SSE streaming to the browser internally —
-  it chunks the formatted text to feel kinetic, but the engine call is
-  request/response.
-- Keeps the contract simple and easy to mock/test.
+- Matches the bot's UX — receipts feel kinetic as they materialize.
+- The site already has the AI SDK stream protocol wired client-side
+  (`useChat`); upstream emitting the same protocol means zero
+  transformation at the edge.
+- Multi-turn refinements (e.g., "now ETH 1h", "and what about 1d?")
+  arrive as additional messages in the array without protocol changes.
 
 ---
 
