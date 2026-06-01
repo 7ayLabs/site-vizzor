@@ -7,14 +7,20 @@
  * Three visual states:
  *   1. Free tier active   — shows "Free: N/limit" counter
  *   2. Free exhausted, token NOT live — "$VIZZOR launching soon" panel
- *   3. Free exhausted, token live — "Connect wallet → burn N $VIZZOR"
- *      (Phase 2 wires the actual wallet adapter; for Phase 1 this case
- *      is unreachable because isLive defaults to false.)
+ *   3. Free exhausted, token live — wallet connect + burn flow
+ *
+ * The burn flow (state 3) is rendered by <PaidConnectPanel>, which
+ * lives inside the WalletAdapter that PredictRoute mounted. We render
+ * the wallet components statically here because by the time the
+ * sidebar shows state 3, the wallet provider is already up the tree.
  */
 
 import useSWR from 'swr';
 import { useEffect } from 'react';
 import { useTranslations } from 'next-intl';
+import { ConnectButton } from '@/components/wallet/wallet-connect';
+import { BurnButton } from '@/components/wallet/burn-button';
+import { burnAmount } from '@/lib/solana';
 
 interface QuotaState {
   used: number;
@@ -28,9 +34,13 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface QuotaSidebarProps {
   refreshKey?: number;
+  onBurnConfirmed?: (signature: string) => void;
 }
 
-export function QuotaSidebar({ refreshKey = 0 }: QuotaSidebarProps) {
+export function QuotaSidebar({
+  refreshKey = 0,
+  onBurnConfirmed,
+}: QuotaSidebarProps) {
   const t = useTranslations('predict');
   const { data, mutate } = useSWR<QuotaState>('/api/quota', fetcher, {
     revalidateOnFocus: false,
@@ -53,10 +63,20 @@ export function QuotaSidebar({ refreshKey = 0 }: QuotaSidebarProps) {
   }
 
   if (data.exhausted) {
-    return data.isLive ? <PaidConnectPanel /> : <WaitlistPanel />;
+    return data.isLive ? (
+      <PaidConnectPanel onBurnConfirmed={onBurnConfirmed} />
+    ) : (
+      <WaitlistPanel />
+    );
   }
 
-  return <FreeCounterPanel used={data.used} limit={data.limit} remaining={data.remaining} />;
+  return (
+    <FreeCounterPanel
+      used={data.used}
+      limit={data.limit}
+      remaining={data.remaining}
+    />
+  );
 }
 
 function FreeCounterPanel({
@@ -95,8 +115,7 @@ function FreeCounterPanel({
             key={i}
             className="h-1.5"
             style={{
-              background:
-                i < used ? 'var(--fg-3)' : 'var(--accent)',
+              background: i < used ? 'var(--fg-3)' : 'var(--accent)',
               opacity: i < used ? 0.3 : 1,
             }}
           />
@@ -137,16 +156,36 @@ function WaitlistPanel() {
   );
 }
 
-function PaidConnectPanel() {
-  // Phase 2 wires the Solana wallet adapter here. For Phase 1 the
-  // panel is unreachable; the placeholder copy keeps the shape stable.
+function PaidConnectPanel({
+  onBurnConfirmed,
+}: {
+  onBurnConfirmed?: (signature: string) => void;
+}) {
   const t = useTranslations('predict');
+  const amount = burnAmount();
+
   return (
-    <div className="border border-[var(--border)] bg-[var(--surface)] p-4">
+    <div className="border border-[var(--border)] bg-[var(--surface)] p-4 flex flex-col gap-4">
       <p className="mono tabular text-[10.5px] uppercase tracking-[0.16em] text-[var(--accent)]">
         {t('paid.label')}
       </p>
-      <p className="mt-2 text-[12.5px] text-[var(--fg-2)]">{t('paid.body')}</p>
+
+      <h3 className="text-[16px] font-semibold tracking-tight text-[var(--fg)]">
+        {t('paid.title')}
+      </h3>
+
+      <p className="text-[12.5px] leading-relaxed text-[var(--fg-2)]">
+        {t('paid.body', { amount: String(amount) })}
+      </p>
+
+      <div className="flex flex-col gap-2">
+        <ConnectButton />
+        <BurnButton onConfirmed={(sig) => onBurnConfirmed?.(sig)} />
+      </div>
+
+      <p className="mono tabular text-[9.5px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
+        {t('paid.legal')}
+      </p>
     </div>
   );
 }

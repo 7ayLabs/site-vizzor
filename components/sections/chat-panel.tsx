@@ -13,27 +13,69 @@
  * pivots its sidebar to the paywall state. The chat thread stays
  * mounted so the user's transcript isn't lost.
  *
- * No reduced-motion handling needed — the only "animation" is the
- * stream itself, which is data-driven.
+ * Burn-session handoff (Phase 2):
+ *   The parent passes the latest `burnSig` (or null) and a callback
+ *   `onConsumeBurn`. We mirror `burnSig` into a ref so the chat
+ *   transport's `headers` function — created once at mount — always
+ *   sees the current value when each fetch fires. After a successful
+ *   stream finishes, we clear the sig so a subsequent message
+ *   requires a fresh burn.
  */
 
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { useTranslations } from 'next-intl';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react';
 
 interface ChatPanelProps {
+  burnSig?: string | null;
+  onConsumeBurn?: () => void;
   onQuotaChange?: () => void;
 }
 
-export function ChatPanel({ onQuotaChange }: ChatPanelProps) {
+export function ChatPanel({
+  burnSig,
+  onConsumeBurn,
+  onQuotaChange,
+}: ChatPanelProps) {
   const t = useTranslations('predict');
   const [input, setInput] = useState('');
   const threadRef = useRef<HTMLDivElement | null>(null);
 
+  // Mirror the prop into a ref so the transport's header function (which
+  // closes over its initial value) always reads the latest sig.
+  const burnSigRef = useRef<string | null>(burnSig ?? null);
+  useEffect(() => {
+    burnSigRef.current = burnSig ?? null;
+  }, [burnSig]);
+
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: '/api/predict',
+        headers: (): Record<string, string> => {
+          const sig = burnSigRef.current;
+          return sig ? { 'x-vizzor-burn-tx': sig } : {};
+        },
+      }),
+    [],
+  );
+
   const { messages, sendMessage, status, error } = useChat({
-    transport: new DefaultChatTransport({ api: '/api/predict' }),
-    onFinish: () => onQuotaChange?.(),
+    transport,
+    onFinish: () => {
+      // The burn (if any) has been consumed by the server. Clear so the
+      // next message requires a fresh burn, and re-fetch quota for the
+      // sidebar.
+      if (burnSigRef.current) onConsumeBurn?.();
+      onQuotaChange?.();
+    },
   });
 
   // Auto-scroll on each new chunk.
