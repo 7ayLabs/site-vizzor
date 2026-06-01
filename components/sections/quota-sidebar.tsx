@@ -22,6 +22,11 @@ import { ConnectButton } from '@/components/wallet/wallet-connect';
 import { BurnButton } from '@/components/wallet/burn-button';
 import { burnAmount } from '@/lib/solana';
 
+// Build-time constant. Next.js inlines `process.env.NODE_ENV` so any
+// production build dead-code-eliminates the reset affordance entirely
+// — it doesn't ship in the client bundle at all.
+const IS_DEV = process.env.NODE_ENV !== 'production';
+
 interface QuotaState {
   used: number;
   limit: number;
@@ -62,20 +67,46 @@ export function QuotaSidebar({
     );
   }
 
-  if (data.exhausted) {
-    return data.isLive ? (
+  const onReset = async () => {
+    const res = await fetch('/api/quota/reset', { method: 'POST' });
+    if (res.ok) void mutate();
+  };
+
+  const body = data.exhausted ? (
+    data.isLive ? (
       <PaidConnectPanel onBurnConfirmed={onBurnConfirmed} />
     ) : (
       <WaitlistPanel />
-    );
-  }
-
-  return (
+    )
+  ) : (
     <FreeCounterPanel
       used={data.used}
       limit={data.limit}
       remaining={data.remaining}
     />
+  );
+
+  return (
+    <div className="flex flex-col gap-3">
+      {body}
+      {IS_DEV && <ResetLink onReset={onReset} />}
+    </div>
+  );
+}
+
+function ResetLink({ onReset }: { onReset: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onReset}
+      className="
+        self-start mono tabular text-[10px] uppercase tracking-[0.16em]
+        text-[var(--fg-3)] hover:text-[var(--fg-2)] underline-offset-4
+        hover:underline transition-colors
+      "
+    >
+      reset quota · dev only
+    </button>
   );
 }
 
