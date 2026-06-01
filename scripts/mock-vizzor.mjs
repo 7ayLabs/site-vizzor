@@ -266,22 +266,23 @@ function lookupPrice(symbol) {
  * HTTP server — implements POST /v1/site/chat per API_CONTRACT.md.
 \* ------------------------------------------------------------------ */
 
+// Emit the real Vizzor engine's SSE event format:
+//   event: conversation  data: {...}
+//   event: text          data: {delta:"..."}
+//   event: done          data: {}
+// The site's transform layer in /api/predict/route.ts adapts this to
+// the AI SDK UI Message Stream protocol the browser consumes.
 function streamReceipt(res, text) {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-store',
-    'x-vercel-ai-ui-message-stream': 'v1',
     'x-vizzor-source': 'mock',
   });
-  const id = 'mock-' + Date.now().toString(36);
-  res.write(`data: ${JSON.stringify({ type: 'text-start', id })}\n\n`);
+  res.write(`event: conversation\ndata: ${JSON.stringify({ conversationId: 'mock-' + Date.now().toString(36) })}\n\n`);
   for (const chunk of text.match(/.{1,40}/gs) ?? [text]) {
-    res.write(
-      `data: ${JSON.stringify({ type: 'text-delta', id, delta: chunk })}\n\n`,
-    );
+    res.write(`event: text\ndata: ${JSON.stringify({ delta: chunk })}\n\n`);
   }
-  res.write(`data: ${JSON.stringify({ type: 'text-end', id })}\n\n`);
-  res.write(`data: [DONE]\n\n`);
+  res.write(`event: done\ndata: {}\n\n`);
   res.end();
 }
 
@@ -290,11 +291,18 @@ function extractLastUserText(messages) {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
     if (m?.role !== 'user') continue;
-    const text = (m.parts ?? [])
-      .filter(p => p?.type === 'text')
-      .map(p => p.text ?? '')
-      .join(' ');
-    if (text.trim().length > 0) return text;
+    // Real Vizzor format: {role, content} (flat string).
+    if (typeof m.content === 'string' && m.content.trim().length > 0) {
+      return m.content;
+    }
+    // AI SDK UIMessage format (in case anyone proxies it directly).
+    if (Array.isArray(m.parts)) {
+      const text = m.parts
+        .filter((p) => p?.type === 'text')
+        .map((p) => p.text ?? '')
+        .join(' ');
+      if (text.trim().length > 0) return text;
+    }
   }
   return '';
 }
@@ -359,15 +367,17 @@ const server = createServer((req, res) => {
     return;
   }
 
-  if (req.method === 'POST' && req.url === '/v1/site/chat') {
+  // Match the real Vizzor engine's path: POST /v1/chat (the same
+  // endpoint the Telegram bot and CLI consume).
+  if (req.method === 'POST' && req.url === '/v1/chat') {
     handleChat(req, res);
     return;
   }
 
-  // Tiny health endpoint mirrors the site's own /api/health shape.
-  if (req.method === 'GET' && req.url === '/v1/site/health') {
+  // Mirror the real engine's health probe.
+  if (req.method === 'GET' && req.url === '/health') {
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, service: 'mock-vizzor', uptime: Math.round(process.uptime()) }));
+    res.end(JSON.stringify({ status: 'ok', service: 'mock-vizzor', uptime: Math.round(process.uptime()) }));
     return;
   }
 
