@@ -113,6 +113,22 @@ export function PredictShell() {
     setRecents(loadRecents());
   }, []);
 
+  // Lock body + html scroll while the chat shell is mounted, so only
+  // the thread area scrolls (not the whole page). Restore on unmount
+  // so navigating away from /predict re-enables normal page scroll.
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtml = html.style.overflow;
+    const prevBody = body.style.overflow;
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    return () => {
+      html.style.overflow = prevHtml;
+      body.style.overflow = prevBody;
+    };
+  }, []);
+
   // Auto-scroll the thread on each new chunk.
   useEffect(() => {
     if (threadRef.current) {
@@ -156,10 +172,10 @@ export function PredictShell() {
   };
 
   const inner: ReactNode = (
-    <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] min-h-[calc(100dvh-56px)] border-t border-[var(--border)]">
+    <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] h-[calc(100dvh-56px)] border-t border-[var(--border)] overflow-hidden">
       {/* ─────────────── Sidebar ─────────────── */}
       {sidebarOpen && (
-        <aside className="border-r border-[var(--border)] bg-[var(--surface)] flex flex-col">
+        <aside className="hidden lg:flex border-r border-[var(--border)] bg-[var(--surface)] flex-col h-full min-h-0 overflow-hidden">
           {/* Top: new chat + collapse */}
           <div className="flex items-center justify-between px-3 py-3 border-b border-[var(--border)]">
             <button
@@ -274,7 +290,7 @@ export function PredictShell() {
       )}
 
       {/* ─────────────── Main column ─────────────── */}
-      <div className="flex flex-col min-h-[calc(100dvh-56px)] min-w-0">
+      <div className="flex flex-col h-full min-h-0 min-w-0 overflow-hidden">
         {/* Top bar — model selector + sidebar reopen */}
         <div className="flex items-center gap-3 border-b border-[var(--border)] px-4 py-2.5 bg-[var(--bg)]">
           {!sidebarOpen && (
@@ -300,10 +316,10 @@ export function PredictShell() {
           </div>
         </div>
 
-        {/* Thread */}
+        {/* Thread — the only scrollable element on the page */}
         <div
           ref={threadRef}
-          className="flex-1 overflow-y-auto"
+          className="flex-1 min-h-0 overflow-y-auto"
           aria-live="polite"
         >
           {messages.length === 0 ? (
