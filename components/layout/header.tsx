@@ -13,21 +13,11 @@
  * Server component, async (next-intl getTranslations).
  */
 import { getTranslations } from 'next-intl/server';
-import type { ComponentProps } from 'react';
-import type { Route } from 'next';
 import Image from 'next/image';
 import { Link } from '@/i18n/navigation';
 import { ThemeToggle } from './theme-toggle';
 import { LanguageSwitch } from './language-switch';
-
-type NavKey = 'surfaces' | 'pricing' | 'docs';
-type LinkHref = ComponentProps<typeof Link>['href'];
-
-const NAV: readonly { href: LinkHref; key: NavKey }[] = [
-  { href: '/docs#surfaces' as Route, key: 'surfaces' },
-  { href: '/pricing', key: 'pricing' },
-  { href: '/docs', key: 'docs' },
-];
+import { NavLinks } from './nav-links';
 
 export async function Header() {
   const t = await getTranslations('header');
@@ -79,20 +69,7 @@ export async function Header() {
             </span>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-6 text-[13px]">
-            {NAV.map((item) => (
-              <Link
-                key={item.key}
-                href={item.href}
-                className="
-                  text-[var(--fg-2)] hover:text-[var(--fg)]
-                  transition-colors
-                "
-              >
-                {t(`nav.${item.key}`)}
-              </Link>
-            ))}
-          </nav>
+          <NavLinks />
         </div>
 
         <div className="flex items-center gap-2">

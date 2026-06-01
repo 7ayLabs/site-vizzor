@@ -1,6 +1,7 @@
 {
   "header": {
     "nav": {
+      "predict": "Predict",
       "surfaces": "Surfaces",
       "pricing": "Pricing",
       "docs": "Docs"
@@ -97,6 +98,47 @@
       "body": "You've used all three free predictions. The Telegram bot has no per-user cap, or wait for the $VIZZOR token launch to continue here.",
       "telegramCta": "Continue in Telegram →",
       "resetDev": "reset · dev only"
+    },
+    "stats": {
+      "trackerWr": {
+        "label": "Tracker WR",
+        "sub": "n={n} resolved"
+      },
+      "bestHorizon": {
+        "label": "Best horizon",
+        "sub": "{horizon} · n={n}"
+      },
+      "worstHorizon": {
+        "label": "Worst horizon",
+        "sub": "{horizon} · n={n}"
+      },
+      "last24h": {
+        "label": "Last 24h",
+        "sub": "decisive {wr}% · {pending} pending"
+      }
+    },
+    "donut": {
+      "label": "Tier composition",
+      "center": "Resolved"
+    },
+    "tiers": {
+      "high-conviction": "high-conviction",
+      "whale-confirmed": "whale-confirmed",
+      "tracked": "tracked",
+      "advisory": "advisory"
+    },
+    "table": {
+      "label": "Recent predictions",
+      "count": "{n} most recent",
+      "cols": {
+        "symbol": "Symbol",
+        "horizon": "Horizon",
+        "direction": "Direction",
+        "confidence": "Confidence",
+        "tier": "Tier",
+        "entry": "Entry",
+        "outcome": "Outcome"
+      }
     }
   },
   "hero": {

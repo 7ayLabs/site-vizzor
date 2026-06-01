@@ -1,6 +1,7 @@
 {
   "header": {
     "nav": {
+      "predict": "Predecir",
       "surfaces": "Superficies",
       "pricing": "Precios",
       "docs": "Documentación"
@@ -97,6 +98,47 @@
       "body": "Usaste las tres predicciones gratis. El bot de Telegram no tiene tope por usuario, o espera el lanzamiento del token $VIZZOR para continuar aquí.",
       "telegramCta": "Continuar en Telegram →",
       "resetDev": "reiniciar · solo dev"
+    },
+    "stats": {
+      "trackerWr": {
+        "label": "Tracker WR",
+        "sub": "n={n} resueltas"
+      },
+      "bestHorizon": {
+        "label": "Mejor horizonte",
+        "sub": "{horizon} · n={n}"
+      },
+      "worstHorizon": {
+        "label": "Peor horizonte",
+        "sub": "{horizon} · n={n}"
+      },
+      "last24h": {
+        "label": "Últimas 24h",
+        "sub": "decisivo {wr}% · {pending} pendientes"
+      }
+    },
+    "donut": {
+      "label": "Composición por tier",
+      "center": "Resueltas"
+    },
+    "tiers": {
+      "high-conviction": "alta convicción",
+      "whale-confirmed": "ballena confirmada",
+      "tracked": "rastreada",
+      "advisory": "consultiva"
+    },
+    "table": {
+      "label": "Predicciones recientes",
+      "count": "{n} más recientes",
+      "cols": {
+        "symbol": "Símbolo",
+        "horizon": "Horizonte",
+        "direction": "Dirección",
+        "confidence": "Confianza",
+        "tier": "Tier",
+        "entry": "Entrada",
+        "outcome": "Resultado"
+      }
     }
   },
   "hero": {
