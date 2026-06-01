@@ -31,14 +31,11 @@
 import { getTicker, getTrackerWR } from '@/lib/snapshot';
 import { TOP_20 } from '@/lib/coin-meta';
 import { formatUsd } from '@/lib/utils';
-import { parseUserMessage } from '@/lib/predict-format';
 
 export type IntentKind = 'predict' | 'stat' | 'info' | 'redirect' | 'unknown';
 
 export interface ParsedIntent {
   kind: IntentKind;
-  /** When kind === 'predict', the parsed symbol + horizon are attached. */
-  predict?: { symbol: string; horizon: string; locale: 'en' | 'es' | 'fr' };
   /** When kind !== 'predict', the rendered text to stream back. */
   text?: string;
   /** Command name for telemetry / logging. */
@@ -57,12 +54,12 @@ export function parseIntent(rawText: string): ParsedIntent {
     return { kind: 'unknown' };
   }
 
-  // Free-text → prediction (existing behavior).
+  // Free-text → prediction. The site doesn't parse symbol/horizon
+  // anymore — Vizzor handles all of that. We just classify the intent
+  // so we know whether to apply the quota gate and which upstream
+  // path to use.
   if (!text.startsWith('/')) {
-    return {
-      kind: 'predict',
-      predict: parseUserMessage(text),
-    };
+    return { kind: 'predict' };
   }
 
   // Slash command — first word is the command, rest are args.
@@ -75,13 +72,10 @@ export function parseIntent(rawText: string): ParsedIntent {
     case '/start':
       return { kind: 'info', command: cmd, text: renderHelp() };
 
-    case '/predict': {
-      // `/predict BTC 4h` — pass the rest as a normal prediction prompt
-      // so the existing parser handles symbol + horizon detection.
-      const passthrough = args.join(' ');
-      const parsed = parseUserMessage(passthrough);
-      return { kind: 'predict', command: cmd, predict: parsed };
-    }
+    case '/predict':
+      // `/predict BTC 4h` — still a prediction intent, forwarded raw
+      // to the upstream engine. The site doesn't re-parse the args.
+      return { kind: 'predict', command: cmd };
 
     case '/wr':
     case '/winrate':

@@ -15,7 +15,6 @@
     "postinstall": "fumadocs-mdx"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.81",
     "@ai-sdk/react": "^3.0.195",
     "@gsap/react": "^2.1.2",
     "@react-three/drei": "^10.7.7",

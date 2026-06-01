@@ -1,50 +1,40 @@
 /**
- * POST /api/predict — chat surface for the on-site Vizzor experience.
+ * POST /api/predict — thin proxy from the on-site chat to the Vizzor
+ * engine.
  *
- * Quota + burn gate (Phase 1+2):
- *   1. Read the `vizzor.free_used` cookie via `readQuota()`.
- *   2. If `x-vizzor-burn-tx` header is present AND `isTokenLive()`:
- *      verify it via `verifyBurnTx()`. Valid → allow without touching
- *      the free counter. Invalid → 402.
- *   3. Else if `used < FREE_PREDICTIONS`: allow, increment cookie.
- *   4. Else: 402 Payment Required.
+ * This route does FOUR things, and only four:
  *
- * Engine resolution (three-tier fallback):
- *   A. Upstream Vizzor product API at `${VIZZOR_API_URL}/v1/site/predict`
- *      — when the product team ships this endpoint (separate PR in the
- *      7ayLabs/vizzor repo), it becomes the canonical source. The route
- *      streams the formatted receipt.
- *   B. Anthropic Claude with a Helios-shaped system prompt + live
- *      snapshot context (current price, recent WR, allowed families).
- *      Used when ANTHROPIC_API_KEY is set but the upstream is down.
- *   C. Local deterministic stub via `generatePrediction()`. Same shape,
- *      seeded from symbol+horizon+UTC-hour. Always available, no keys.
+ *   1. Validate the request body.
+ *   2. Apply the quota / burn gate (site-level concern — the Vizzor
+ *      engine doesn't track per-browser free predictions, that's the
+ *      site's monetization layer).
+ *   3. Dispatch slash commands locally via `parseIntent` — info,
+ *      stats, redirects. These read the cached snapshot (which IS
+ *      Vizzor data) but generate no prediction content. The `/help`
+ *      and bot-only redirects are pure UI affordances.
+ *   4. For prediction intents: forward the raw user message to the
+ *      Vizzor engine at `${VIZZOR_API_URL}/v1/site/chat` and stream the
+ *      response straight back to the client. No transformation, no
+ *      fallback, no local generation.
  *
- * The text format is identical across all three tiers — see
- * `formatPredictionText()` in `lib/predict-format.ts`.
+ * When the Vizzor engine is unreachable, the route returns an honest
+ * "Vizzor offline" stream instead of fabricating a prediction. The
+ * Vizzor engine is the only source of predictions on this site.
  *
- * See `API_CONTRACT.md` at the repo root for the upstream contract spec.
+ * See `API_CONTRACT.md` for the upstream chat endpoint spec.
  */
 
-import { anthropic } from '@ai-sdk/anthropic';
-import { streamText, convertToModelMessages, type UIMessage } from 'ai';
+import type { UIMessage } from 'ai';
 import { buildIncrementedQuotaCookie, readQuota } from '@/lib/quota';
 import { isTokenLive } from '@/lib/feature-flags';
 import { verifyBurnTx } from '@/lib/solana';
-import {
-  formatPredictionText,
-  generatePrediction,
-  type ParsedRequest,
-} from '@/lib/predict-format';
-import { getTicker, getTrackerWR } from '@/lib/snapshot';
 import { parseIntent } from '@/lib/commands';
-import type { Prediction } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const UPSTREAM_TIMEOUT_MS = 6_000;
+const UPSTREAM_TIMEOUT_MS = 30_000;
 
 interface PredictRequest {
   messages: UIMessage[];
@@ -67,18 +57,17 @@ export async function POST(req: Request) {
   const intent = parseIntent(lastUserText);
 
   /* -------------------- non-prediction commands ------------------ */
-  // Info, stats, and bot-only redirects bypass the quota gate — they
-  // don't consume engine cycles, so we don't charge against the free
-  // tier for them.
+  // Info, stats, redirects don't consume engine cycles — they're
+  // site-level UI affordances (read-only snapshot reads + Telegram
+  // deep-links). No quota burn.
   if (intent.kind !== 'predict') {
-    return streamPredictionText(intent.text ?? '', null);
+    return streamPlainText(intent.text ?? '', null);
   }
 
   /* --------------------- predict gate (quota) -------------------- */
 
   const burnHeader = req.headers.get('x-vizzor-burn-tx');
   const quota = await readQuota();
-  let setCookie: string | null = null;
   let burnApproved = false;
 
   if (burnHeader && isTokenLive()) {
@@ -110,55 +99,28 @@ export async function POST(req: Request) {
     );
   }
 
-  if (!burnApproved) {
-    setCookie = buildIncrementedQuotaCookie(quota.used);
-  }
+  // The would-be cookie. Only attached when the upstream actually
+  // delivers a prediction — if Vizzor is offline, the user keeps the
+  // credit. Burns don't go through the cookie.
+  const cookieOnSuccess = !burnApproved
+    ? buildIncrementedQuotaCookie(quota.used)
+    : null;
 
-  const parsed: ParsedRequest = intent.predict!;
+  /* --------------------- forward to vizzor engine ---------------- */
 
-  /* --------------------------- engine ---------------------------- */
-
-  // (A) Upstream Vizzor API — primary path once the product ships
-  // `/v1/site/predict`. Returns a single Prediction JSON.
-  const upstreamPrediction = await tryUpstreamPredict(parsed);
-  if (upstreamPrediction) {
-    return streamPredictionText(
-      formatPredictionText(upstreamPrediction),
-      setCookie,
-    );
-  }
-
-  // (B) Anthropic with rich snapshot context. The model receives the
-  // current ticker prices, the calibrated tracker WR, and a strict
-  // format spec — so output stays on-brand even without the product.
-  if (process.env.ANTHROPIC_API_KEY) {
-    const modelMessages = await convertToModelMessages(body.messages);
-    const result = streamText({
-      model: anthropic('claude-haiku-4-5'),
-      system: buildSystemPrompt(parsed),
-      messages: modelMessages,
-      providerOptions: {
-        anthropic: { cacheControl: { type: 'ephemeral' } },
-      },
-    });
-    const headers: Record<string, string> = {};
-    if (setCookie) headers['set-cookie'] = setCookie;
-    return result.toUIMessageStreamResponse({ headers });
-  }
-
-  // (C) Deterministic stub — same Helios shape, seeded by symbol +
-  // horizon + UTC-hour. Always available; no external dependencies.
-  const stub = generatePrediction(parsed);
-  return streamPredictionText(formatPredictionText(stub), setCookie);
+  return forwardToVizzor(body.messages, cookieOnSuccess, burnHeader);
 }
 
 /* ------------------------------------------------------------------ *\
- * Upstream call
+ * Upstream proxy — site sends the full message history to the Vizzor
+ * engine and streams the response straight through.
  * ------------------------------------------------------------------ */
 
-async function tryUpstreamPredict(
-  parsed: ParsedRequest,
-): Promise<Prediction | null> {
+async function forwardToVizzor(
+  messages: UIMessage[],
+  cookieOnSuccess: string | null,
+  burnHeader: string | null,
+): Promise<Response> {
   const base =
     process.env.VIZZOR_API_URL ??
     process.env.NEXT_PUBLIC_VIZZOR_API_URL ??
@@ -169,145 +131,87 @@ async function tryUpstreamPredict(
     () => controller.abort(),
     UPSTREAM_TIMEOUT_MS,
   );
+
   try {
-    const res = await fetch(`${base}/v1/site/predict`, {
+    const upstreamRes = await fetch(`${base}/v1/site/chat`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        accept: 'application/json',
+        accept: 'text/event-stream',
+        ...(burnHeader ? { 'x-vizzor-burn-tx': burnHeader } : {}),
       },
-      body: JSON.stringify({
-        symbol: parsed.symbol,
-        horizon: parsed.horizon,
-        locale: parsed.locale,
-      }),
+      body: JSON.stringify({ messages }),
       signal: controller.signal,
       cache: 'no-store',
     });
-    if (!res.ok) return null;
-    const json = (await res.json()) as Prediction;
-    // Minimal shape check so a bad upstream doesn't poison the stream.
-    if (
-      !json ||
-      typeof json.symbol !== 'string' ||
-      typeof json.entryPrice !== 'number' ||
-      typeof json.confidence !== 'number'
-    ) {
-      return null;
+
+    if (!upstreamRes.ok || !upstreamRes.body) {
+      // Engine couldn't deliver — don't burn the user's free credit.
+      return offlineResponse(null);
     }
-    return json;
+
+    // Pass the upstream stream straight through to the client. The
+    // Vizzor engine emits the same AI SDK UI Message Stream protocol
+    // we already consume client-side, so no transformation is needed.
+    // Only NOW do we increment the quota cookie: a credit is consumed
+    // only when a real prediction is delivered.
+    const headers = new Headers({
+      'Content-Type':
+        upstreamRes.headers.get('content-type') ?? 'text/event-stream',
+      'Cache-Control': 'no-store',
+      'x-vercel-ai-ui-message-stream': 'v1',
+      'x-vizzor-source': 'upstream',
+    });
+    if (cookieOnSuccess) headers.set('set-cookie', cookieOnSuccess);
+
+    return new Response(upstreamRes.body, { status: 200, headers });
   } catch {
-    return null;
+    return offlineResponse(null);
   } finally {
     clearTimeout(timeout);
   }
 }
 
 /* ------------------------------------------------------------------ *\
- * Anthropic system prompt — keeps Claude on-format and on-data.
+ * Honest offline response — no fake prediction. The Vizzor engine is
+ * the only prediction source; when it's down we say so.
  * ------------------------------------------------------------------ */
 
-function buildSystemPrompt(parsed: ParsedRequest): string {
-  const ticker = getTicker();
-  const wr = getTrackerWR();
-  const tickerLines = ticker
-    .map((t) => `  ${t.symbol}=${t.price} (${(t.changePct * 100).toFixed(2)}% 24h)`)
-    .join('\n');
+const OFFLINE_MESSAGE = `⚠ Vizzor offline
 
-  return `You are Vizzor, a calibrated crypto prediction agent (v0.15.5 Helios).
-Respond with a single Vizzor trade-plan receipt — no chit-chat, no
-apologies, no AI disclaimers. Match the exact Telegram-bot format.
+api.vizzor.ai is unreachable. This site is a thin consumer of the
+Vizzor engine — there is no local prediction fallback. Predictions
+resume the moment the engine is back.
 
-# Current market context (do not invent prices)
-${tickerLines}
+In the meantime:
+  • /help — site-runnable commands (read-only stats from cached data)
+  • t.me/vizzorai_bot — the Telegram bot runs its own engine instance
 
-# Tracker calibration
-aggregate WR: ${(wr.aggregate.wr * 100).toFixed(1)}% over ${wr.aggregate.samples} samples
-best horizon: ${findBestHorizon(wr)}
-worst horizon: ${findWorstHorizon(wr)}
+status: vizzor-engine offline`;
 
-# Required output format — directional (LONG / SHORT)
-<EMOJI> <FULL_NAME> · <HORIZON>
-💰 <SYMBOL> Price: $<entry>
-💵 Direction: <📈 LONG | 📉 SHORT> (<NN>%)
-🪙 Entry Zone: $<low> — $<high>
-📈 TP1: $<price> (<±0.NN%>)
-📊 SL: $<price> (<±0.NN%>)
-<verdict line>
-
-# Required output format — RANGE
-<EMOJI> <FULL_NAME> · <HORIZON>
-💰 <SYMBOL> Price: $<entry>
-💵 Direction: ➖ RANGE (<NN>%)
-🪙 Band: $<low> — $<high>
-💹 Best Play: Range fade — long $<low>, short $<high> (no leverage)
-
-# Verdict line rules
-- R:R ≥ 1.0 → ✅ Take: R:R 1:<rr>
-- R:R 0.5–1.0 → ⚠ Caution: R:R 1:<rr> — small edge, partial size only
-- R:R < 0.5 → ⚠ Skip: R:R 1:<rr> — risk exceeds reward, no trade
-- R:R is computed as |TP_distance / SL_distance|.
-
-# Coin glyph map (use full name + correct emoji)
-🟠 BITCOIN · 🔷 ETHEREUM · 🟣 SOLANA · ◽ XRP · 🟡 BNB · 🐕 DOGECOIN
-🔵 CARDANO · 🔴 TRON · 🔺 AVALANCHE · 🐶 SHIBA INU · 🔗 CHAINLINK
-🟤 POLKADOT · 💎 TONCOIN · 🟪 POLYGON · ⚪ LITECOIN · 🟢 BITCOIN CASH
-⬛ NEAR · 🟦 APTOS · 🦄 UNISWAP · 🌐 HYPERLIQUID
-
-# Horizon-scaled trade-plan geometry
-- 1h: zone width ≈ 0.40%, TP ≈ 0.18%, SL ≈ 0.90% (R:R ~ 0.20)
-- 4h: zone width ≈ 0.70%, TP ≈ 0.48%, SL ≈ 2.00% (R:R ~ 0.24)
-- 1d: zone width ≈ 1.20%, TP ≈ 1.10%, SL ≈ 4.20% (R:R ~ 0.26)
-- For LONG: entry zone = [entry - width, entry]; TP above; SL below.
-- For SHORT: entry zone = [entry, entry + width]; TP below; SL above.
-
-# Constraints
-- The user's symbol + horizon are: ${parsed.symbol} ${parsed.horizon}.
-- Use the current ticker price for ${parsed.symbol} as the entry.
-- Direction is your call — bias by signals, but if conviction is mixed
-  (confidence < 0.55), call it RANGE.
-- Output exactly one receipt. No commentary, no markdown, no code fences.
-- Locale: ${parsed.locale} (currency stays USD; emoji + numbers are universal).`;
-}
-
-function findBestHorizon(wr: ReturnType<typeof getTrackerWR>): string {
-  let best: { h: string; wr: number; n: number } | null = null;
-  for (const [h, v] of Object.entries(wr.byHorizon)) {
-    if (!best || v.wr > best.wr) best = { h, wr: v.wr, n: v.samples };
-  }
-  return best
-    ? `${best.h} ${(best.wr * 100).toFixed(1)}% (n=${best.n})`
-    : 'n/a';
-}
-
-function findWorstHorizon(wr: ReturnType<typeof getTrackerWR>): string {
-  let worst: { h: string; wr: number; n: number } | null = null;
-  for (const [h, v] of Object.entries(wr.byHorizon)) {
-    if (!worst || v.wr < worst.wr) worst = { h, wr: v.wr, n: v.samples };
-  }
-  return worst
-    ? `${worst.h} ${(worst.wr * 100).toFixed(1)}% (n=${worst.n})`
-    : 'n/a';
+function offlineResponse(setCookie: string | null): Response {
+  return streamPlainText(OFFLINE_MESSAGE, setCookie, { offline: true });
 }
 
 /* ------------------------------------------------------------------ *\
- * Stub streamer — emits the AI-SDK UI message protocol with our text.
+ * Plain-text streamer — used for local command output AND the offline
+ * message. Emits the AI SDK UI Message Stream protocol.
  * ------------------------------------------------------------------ */
 
-function streamPredictionText(
+function streamPlainText(
   text: string,
   setCookie: string | null,
+  meta: { offline?: boolean } = {},
 ): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     start(controller) {
-      const id = 'pred-' + Date.now().toString(36);
+      const id = 'msg-' + Date.now().toString(36);
       controller.enqueue(
         encoder.encode(
           `data: ${JSON.stringify({ type: 'text-start', id })}\n\n`,
         ),
       );
-      // Chunk by ~40 chars so the stream feels alive without bombarding.
       for (const chunk of text.match(/.{1,40}/gs) ?? [text]) {
         controller.enqueue(
           encoder.encode(
@@ -325,13 +229,15 @@ function streamPredictionText(
     },
   });
 
-  const headers: Record<string, string> = {
+  const headers = new Headers({
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-store',
     'x-vercel-ai-ui-message-stream': 'v1',
-  };
-  if (setCookie) headers['set-cookie'] = setCookie;
-  return new Response(stream, { headers });
+    'x-vizzor-source': meta.offline ? 'offline' : 'local',
+  });
+  if (setCookie) headers.set('set-cookie', setCookie);
+
+  return new Response(stream, { status: 200, headers });
 }
 
 function extractLastUserText(messages: UIMessage[]): string {
