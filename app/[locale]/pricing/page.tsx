@@ -40,6 +40,7 @@ const BOT = 'https://t.me/vizzorai_bot';
 const TIERS: ReadonlyArray<Tier> = [
   {
     key: 'free',
+    // Free tier still deep-links Telegram — no payment to process.
     ctaHref: BOT,
     ctaVariant: 'outline',
     altCadences: [],
@@ -47,25 +48,23 @@ const TIERS: ReadonlyArray<Tier> = [
   {
     key: 'pro',
     highlighted: true,
-    ctaHref: `${BOT}?start=pay_pro_monthly`,
+    // Cadence CTAs now route to the on-site checkout shell at
+    // /pay/[tier]/[cadence]. The shell handles wallet connect + payment
+    // session + grant-code handoff. Stay on-site (no target=_blank).
+    ctaHref: '/pay/pro/monthly',
     ctaVariant: 'primary',
     altCadences: ['annual'],
   },
   {
     key: 'elite',
-    ctaHref: `${BOT}?start=pay_elite_monthly`,
+    ctaHref: '/pay/elite/monthly',
     ctaVariant: 'primary',
     altCadences: ['annual', 'lifetime'],
   },
 ];
 
-/**
- * Deep-link payloads for each cadence. The bot routes
- * `?start=pay_<tier>_<cadence>` to the matching payment flow
- * (TON Connect for Phase 1, EVM/SOL/TRON watchers for Phase 2).
- */
 function cadenceHref(tier: Tier['key'], cadence: Cadence): string {
-  return `${BOT}?start=pay_${tier}_${cadence}`;
+  return `/pay/${tier}/${cadence}`;
 }
 
 const FEATURE_KEYS: Record<Tier['key'], readonly string[]> = {
@@ -283,12 +282,14 @@ function TierCard({
         )}
       </div>
 
-      {/* Primary CTA (monthly) */}
+      {/* Primary CTA (monthly) — Free stays opening Telegram in a new
+          tab; paid tiers route to the on-site /pay checkout shell. */}
       <div className="mt-6">
         <a
           href={tier.ctaHref}
-          target="_blank"
-          rel="noopener"
+          {...(tier.key === 'free'
+            ? { target: '_blank', rel: 'noopener' }
+            : {})}
           className={`
             inline-flex w-full items-center justify-center gap-2
             text-[13px] font-semibold tracking-tight
@@ -314,8 +315,6 @@ function TierCard({
             <li key={cadence}>
               <a
                 href={cadenceHref(tier.key, cadence)}
-                target="_blank"
-                rel="noopener"
                 className="
                   group flex items-center justify-between gap-2
                   border border-[var(--border)] bg-transparent
