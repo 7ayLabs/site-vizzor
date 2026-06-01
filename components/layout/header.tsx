@@ -15,6 +15,7 @@
 import { getTranslations } from 'next-intl/server';
 import type { ComponentProps } from 'react';
 import type { Route } from 'next';
+import Image from 'next/image';
 import { Link } from '@/i18n/navigation';
 import { ThemeToggle } from './theme-toggle';
 import { LanguageSwitch } from './language-switch';
@@ -44,21 +45,35 @@ export async function Header() {
         <div className="flex items-center gap-7">
           <Link
             href="/"
+            aria-label="Vizzor home"
             className="
-              inline-flex items-baseline gap-1.5
+              inline-flex items-center gap-2
               text-[15px] font-semibold tracking-tight
               text-[var(--fg)] hover:text-[var(--accent)]
               transition-colors
             "
           >
-            <span
-              aria-hidden
-              className="mono text-[var(--accent)]"
-              style={{ fontFeatureSettings: '"cv11"' }}
-            >
-              ▣
-            </span>
-            vizzor
+            {/* Two PNGs swapped by theme via the dark: variant wired in
+                globals.css (@custom-variant dark → [data-theme="dark"]).
+                width/height carry intrinsic 364×535 to lock aspect ratio
+                and prevent CLS; the className sizes the rendered output. */}
+            <Image
+              src="/brand/vizzor_darkicon.png"
+              alt=""
+              width={364}
+              height={535}
+              priority
+              className="block dark:hidden h-6 w-auto"
+            />
+            <Image
+              src="/brand/vizzor_icon.png"
+              alt=""
+              width={364}
+              height={535}
+              priority
+              className="hidden dark:block h-6 w-auto"
+            />
+            <span>vizzor</span>
             <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--fg-3)]">
               .ai
             </span>
