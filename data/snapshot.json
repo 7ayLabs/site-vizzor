@@ -1,0 +1,229 @@
+{
+  "_seed": true,
+  "asOf": "2026-05-31T16:00:00.000Z",
+  "calibrationBanner": {
+    "version": "v0.15.5 Helios",
+    "stage": "in progress",
+    "target": 0.7,
+    "note": "Receipts compound. Current decisive WR is the calibrated baseline + partial Helios uplift; the 70%+ target tracks the full release."
+  },
+  "ticker": [
+    { "symbol": "BTC", "price": 108420.18, "changePct": 0.0124, "source": "binance" },
+    { "symbol": "ETH", "price": 2156.42, "changePct": 0.0214, "source": "binance" },
+    { "symbol": "SOL", "price": 184.31, "changePct": -0.0082, "source": "binance" },
+    { "symbol": "XRP", "price": 0.642, "changePct": 0.0091, "source": "binance" },
+    { "symbol": "BNB", "price": 612.4, "changePct": -0.0034, "source": "binance" },
+    { "symbol": "DOGE", "price": 0.182, "changePct": 0.0312, "source": "binance" },
+    { "symbol": "ADA", "price": 0.487, "changePct": -0.0152, "source": "binance" },
+    { "symbol": "TRX", "price": 0.169, "changePct": 0.0024, "source": "binance" },
+    { "symbol": "AVAX", "price": 28.42, "changePct": 0.0211, "source": "binance" },
+    { "symbol": "SHIB", "price": 0.0000186, "changePct": -0.0421, "source": "binance" },
+    { "symbol": "LINK", "price": 16.42, "changePct": 0.0145, "source": "binance" },
+    { "symbol": "DOT", "price": 6.84, "changePct": -0.0067, "source": "binance" },
+    { "symbol": "TON", "price": 5.42, "changePct": 0.0188, "source": "binance" },
+    { "symbol": "MATIC", "price": 0.484, "changePct": 0.0079, "source": "binance" },
+    { "symbol": "LTC", "price": 72.18, "changePct": -0.0113, "source": "binance" },
+    { "symbol": "BCH", "price": 421.42, "changePct": 0.0067, "source": "binance" },
+    { "symbol": "NEAR", "price": 4.42, "changePct": 0.0298, "source": "binance" },
+    { "symbol": "APT", "price": 8.42, "changePct": -0.0156, "source": "binance" },
+    { "symbol": "UNI", "price": 9.12, "changePct": 0.0066, "source": "binance" },
+    { "symbol": "HYPE", "price": 27.41, "changePct": 0.0446, "source": "hyperliquid" }
+  ],
+  "trackerWR": {
+    "aggregate": { "wr": 0.4218, "samples": 1847, "asOf": "2026-05-31T16:00:00.000Z" },
+    "byTier": {
+      "high-conviction": { "wr": 0.614, "samples": 213 },
+      "whale-confirmed": { "wr": 0.668, "samples": 142 },
+      "tracked": { "wr": 0.398, "samples": 893 },
+      "advisory": { "wr": 0.311, "samples": 599 }
+    },
+    "byHorizon": {
+      "5m": { "wr": 0.382, "samples": 144 },
+      "15m": { "wr": 0.394, "samples": 218 },
+      "30m": { "wr": 0.418, "samples": 192 },
+      "1h": { "wr": 0.452, "samples": 287 },
+      "4h": { "wr": 0.478, "samples": 412 },
+      "1d": { "wr": 0.461, "samples": 358 },
+      "7d": { "wr": 0.404, "samples": 153 },
+      "30d": { "wr": 0.398, "samples": 83 }
+    },
+    "last24h": {
+      "hits": 12,
+      "misses": 14,
+      "neutrals": 4,
+      "pending": 3,
+      "decisiveWR": 0.462
+    }
+  },
+  "recentPredictions": [
+    {
+      "id": "p_5j2k1f",
+      "symbol": "ETH",
+      "chain": "ethereum",
+      "horizon": "4h",
+      "direction": "up",
+      "confidence": 0.78,
+      "tier": "high-conviction",
+      "emittedAt": "2026-05-31T12:00:00.000Z",
+      "resolvedAt": "2026-05-31T16:00:00.000Z",
+      "outcome": "hit",
+      "entryPrice": 2112.4,
+      "predictedPrice": 2156.0,
+      "actualPrice": 2156.42,
+      "targets": { "bull": 2174, "base": 2156, "bear": 2128 },
+      "triggerSnapshot": {
+        "vizzorTa": {
+          "vote": 1,
+          "signals": [
+            { "family": "onChain", "cf": 0.62, "direction": "up", "meta": { "whale_inflow_usd": 18400000 } },
+            { "family": "mlEnsemble", "cf": 0.48, "direction": "up", "meta": { "ensemble_prob": 0.71 } },
+            { "family": "logicRules", "cf": 0.55, "direction": "up", "meta": { "fired": "smart_money_accumulation_volume" } },
+            { "family": "predictionMarkets", "cf": 0.31, "direction": "up", "meta": { "implied_prob": 0.64 } },
+            { "family": "patternMatch", "cf": 0.40, "direction": "up", "meta": { "pattern": "BOS_4h_up" } },
+            { "family": "socialNarrative", "cf": 0.18, "direction": "up", "meta": { "sentiment": 0.62 } }
+          ]
+        },
+        "smc": { "vote": 1, "details": "BOS confirmed at $2,118 · OB intact" },
+        "ict": { "vote": 1, "details": "NY kill-zone · liquidity sweep at $2,098" },
+        "flattenedReason": "Whale accumulation + BOS + LSweep confluence on 4h with ML agreement."
+      }
+    },
+    {
+      "id": "p_8m1q3z",
+      "symbol": "BTC",
+      "chain": "ethereum",
+      "horizon": "1d",
+      "direction": "up",
+      "confidence": 0.82,
+      "tier": "whale-confirmed",
+      "emittedAt": "2026-05-30T18:00:00.000Z",
+      "resolvedAt": "2026-05-31T18:00:00.000Z",
+      "outcome": "hit",
+      "entryPrice": 106850,
+      "predictedPrice": 108800,
+      "actualPrice": 108420,
+      "targets": { "bull": 109500, "base": 108800, "bear": 106200 },
+      "triggerSnapshot": {
+        "vizzorTa": {
+          "vote": 1,
+          "signals": [
+            { "family": "onChain", "cf": 0.74, "direction": "up", "meta": { "whale_count": 5, "net_usd": 42100000 } },
+            { "family": "mlEnsemble", "cf": 0.58, "direction": "up", "meta": { "rsi14": 58.3 } },
+            { "family": "logicRules", "cf": 0.49, "direction": "up", "meta": { "fired": "coinbase_premium_positive" } },
+            { "family": "predictionMarkets", "cf": 0.28, "direction": "up", "meta": { "implied_prob": 0.61 } }
+          ]
+        },
+        "smc": { "vote": 1, "details": "Daily BOS · trend continuation" },
+        "ict": { "vote": 0, "details": "neutral session" }
+      }
+    },
+    {
+      "id": "p_3n7w9d",
+      "symbol": "SOL",
+      "chain": "solana",
+      "horizon": "4h",
+      "direction": "down",
+      "confidence": 0.71,
+      "tier": "tracked",
+      "emittedAt": "2026-05-31T14:00:00.000Z",
+      "resolvedAt": "2026-05-31T18:00:00.000Z",
+      "outcome": "hit",
+      "entryPrice": 186.2,
+      "predictedPrice": 182.0,
+      "actualPrice": 184.31,
+      "targets": { "bull": 188, "base": 182, "bear": 178 }
+    },
+    {
+      "id": "p_2k8r5x",
+      "symbol": "HYPE",
+      "chain": "ethereum",
+      "horizon": "1h",
+      "direction": "up",
+      "confidence": 0.68,
+      "tier": "tracked",
+      "emittedAt": "2026-05-31T15:30:00.000Z",
+      "entryPrice": 26.84,
+      "predictedPrice": 27.6,
+      "targets": { "bull": 28.1, "base": 27.6, "bear": 26.3 },
+      "outcome": "pending"
+    },
+    {
+      "id": "p_9f4t2v",
+      "symbol": "ETH",
+      "chain": "ethereum",
+      "horizon": "15m",
+      "direction": "sideways",
+      "confidence": 0.55,
+      "tier": "advisory",
+      "emittedAt": "2026-05-31T15:45:00.000Z",
+      "entryPrice": 2154.0,
+      "predictedPrice": 2154.0,
+      "targets": { "bull": 2162, "base": 2154, "bear": 2146 },
+      "outcome": "pending"
+    },
+    {
+      "id": "p_4h1c0p",
+      "symbol": "BTC",
+      "chain": "ethereum",
+      "horizon": "30m",
+      "direction": "down",
+      "confidence": 0.62,
+      "tier": "tracked",
+      "emittedAt": "2026-05-31T11:00:00.000Z",
+      "resolvedAt": "2026-05-31T11:30:00.000Z",
+      "outcome": "miss",
+      "entryPrice": 108200,
+      "predictedPrice": 107600,
+      "actualPrice": 108450,
+      "targets": { "bull": 108800, "base": 107600, "bear": 106900 }
+    },
+    {
+      "id": "p_7p3w2s",
+      "symbol": "DOGE",
+      "chain": "ethereum",
+      "horizon": "2h",
+      "direction": "up",
+      "confidence": 0.66,
+      "tier": "tracked",
+      "emittedAt": "2026-05-31T13:00:00.000Z",
+      "resolvedAt": "2026-05-31T15:00:00.000Z",
+      "outcome": "miss",
+      "entryPrice": 0.178,
+      "predictedPrice": 0.186,
+      "actualPrice": 0.174,
+      "targets": { "bull": 0.192, "base": 0.186, "bear": 0.172 }
+    },
+    {
+      "id": "p_1q9j2k",
+      "symbol": "AVAX",
+      "chain": "avalanche",
+      "horizon": "1h",
+      "direction": "up",
+      "confidence": 0.69,
+      "tier": "high-conviction",
+      "emittedAt": "2026-05-31T15:00:00.000Z",
+      "resolvedAt": "2026-05-31T16:00:00.000Z",
+      "outcome": "hit",
+      "entryPrice": 27.84,
+      "predictedPrice": 28.4,
+      "actualPrice": 28.42,
+      "targets": { "bull": 28.8, "base": 28.4, "bear": 27.4 }
+    },
+    {
+      "id": "p_6z3x1c",
+      "symbol": "LINK",
+      "chain": "ethereum",
+      "horizon": "4h",
+      "direction": "up",
+      "confidence": 0.73,
+      "tier": "whale-confirmed",
+      "emittedAt": "2026-05-31T11:30:00.000Z",
+      "resolvedAt": "2026-05-31T15:30:00.000Z",
+      "outcome": "hit",
+      "entryPrice": 16.18,
+      "predictedPrice": 16.5,
+      "actualPrice": 16.42,
+      "targets": { "bull": 16.8, "base": 16.5, "bear": 15.9 }
+    }
+  ]
+}
