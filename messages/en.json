@@ -1,0 +1,356 @@
+{
+  "header": {
+    "nav": {
+      "surfaces": "Surfaces",
+      "pricing": "Pricing",
+      "docs": "Docs"
+    },
+    "cta": "Open in Telegram"
+  },
+  "footer": {
+    "tagline": "Predictions with receipts. Calibrated crypto forecasts across every chain, token, and timeframe.",
+    "columns": {
+      "surfaces": {
+        "title": "Surfaces",
+        "telegram": "Telegram bot",
+        "cli": "CLI",
+        "api": "REST API",
+        "discord": "Discord bot"
+      },
+      "project": {
+        "title": "Project",
+        "manifesto": "Manifesto",
+        "pricing": "Pricing",
+        "changelog": "Changelog",
+        "license": "License · BUSL-1.1"
+      },
+      "community": {
+        "title": "Community",
+        "telegramChannel": "Telegram channel",
+        "discord": "Discord server",
+        "github": "GitHub Discussions",
+        "x": "X",
+        "mastodon": "Mastodon"
+      },
+      "resources": {
+        "title": "Resources",
+        "quickstart": "Quickstart",
+        "chronovisor": "ChronoVisor math",
+        "docsIndex": "All docs"
+      }
+    },
+    "license": "BUSL-1.1",
+    "copyright": "© {year} Vizzor — Built by",
+    "builder": "7ayLabs ↗",
+    "social": {
+      "github": "GitHub",
+      "telegram": "Telegram",
+      "discord": "Discord"
+    }
+  },
+  "ticker": {
+    "ariaLabel": "Live market ticker",
+    "live": "LIVE"
+  },
+  "hero": {
+    "ribbon": "{version} · climbing to {target}%+ tracked WR",
+    "headline": "Predictions with receipts.",
+    "sub": "AI-powered crypto forecasts across every chain and timeframe. Numbers, not opinions.",
+    "primaryCta": "Open in Telegram",
+    "secondary": "or install the CLI",
+    "badges": {
+      "chains": "11 chains",
+      "signals": "6 signal families",
+      "license": "BUSL-1.1 licensed"
+    }
+  },
+  "whatsInIt": {
+    "eyebrow": "what you get",
+    "title": "One prediction. Full receipts.",
+    "sub": "Ask Vizzor about any token. You get a directional call, target prices, signal breakdown, and an auto-armed alert at the level the engine says matters.",
+    "bullets": {
+      "directional": "Directional call with calibrated confidence",
+      "targets": "Bull / base / bear targets at the requested horizon",
+      "snapshot": "Trigger snapshot — every signal that fired, no hidden contributors"
+    },
+    "learnMore": "See the math"
+  },
+  "howItWorks": {
+    "eyebrow": "how it works",
+    "title": "Six perspectives. One honest call.",
+    "lede": "Vizzor reads the market from six different angles at once. When most of them agree, you get a prediction. When they don't, you stay quiet.",
+    "footer": "Read the full ChronoVisor math →",
+    "steps": {
+      "fetch": {
+        "title": "Listen",
+        "description": "Twelve live data feeds — prices on every exchange, whale wallets moving on-chain, breaking news, what people are betting on prediction markets. Refreshed every few seconds.",
+        "ariaLabel": "Six input signals fanning into a single fusion node"
+      },
+      "fuse": {
+        "title": "Cross-check",
+        "description": "Each feed votes. Strong signals carry weight; weak ones get dampened. The engine learns from every past call — hits raise their family's vote, misses dampen it.",
+        "ariaLabel": "Two converging curves meeting at a pulsing intersection point"
+      },
+      "emit": {
+        "title": "Wait for an A+ setup",
+        "description": "Most of the time, the signals disagree — and Vizzor stays silent. Only when at least four of six lenses line up does a prediction get sent. Quality over volume.",
+        "ariaLabel": "Four gates of increasing height with a star marking the final A+ emission"
+      }
+    }
+  },
+  "liveReceipts": {
+    "eyebrow": "receipts · live feed",
+    "title": "Calls in, results out.",
+    "lede": "Every prediction gets tracked, resolved, and graded. The decisive WR you see at the top is what's left when we strip out the marketing.",
+    "calibration": {
+      "climbingTo": "climbing to",
+      "trackedWr": "tracked WR"
+    },
+    "footerNote": "Showing the most recent 10. Full history with filters →",
+    "cta": "See all receipts"
+  },
+  "receiptsScorecard": {
+    "eyebrowTop": "last 24 hours",
+    "decisiveWr": "decisive WR · last 24 hours",
+    "outcomes": {
+      "hits": "hits",
+      "misses": "misses",
+      "neutral": "neutral",
+      "pending": "pending"
+    },
+    "aggregate": "aggregate (90d)",
+    "ringLabel": "tracked WR"
+  },
+  "receiptsFeed": {
+    "eyebrow": "recent calls",
+    "live": "LIVE",
+    "outcomes": {
+      "hit": "✓ HIT",
+      "miss": "✗ MISS",
+      "neutral": "◆ NEUT",
+      "pending": "⏳ PEND"
+    },
+    "autoRefresh": "auto-refresh · 30s",
+    "viewAll": "view all →"
+  },
+  "surfaceCompare": {
+    "eyebrow": "surfaces",
+    "title": "One engine. Three surfaces.",
+    "lede": "Vizzor doesn't lock you into one place. Pick the surface that matches how you live — they all share the same predictions and the same trigger snapshot.",
+    "telegram": {
+      "pill": "recommended",
+      "title": "Telegram bot",
+      "sub": "Zero install. 32 commands. Where Vizzor lives day-to-day.",
+      "features": {
+        "alerts": "Auto-armed price alerts on every trade plan",
+        "session": "Per-session WR · timezone-aware",
+        "runtime": "Runtime knobs · no YAML edits"
+      },
+      "cta": "Open Telegram"
+    },
+    "cli": {
+      "title": "Command line",
+      "sub": "Indie quant chic. 18 commands. Pipes cleanly into your terminal workflow.",
+      "features": {
+        "offline": "Local SQLite state · runs offline with Ollama",
+        "json": "JSON output mode for scripting",
+        "engine": "Same engine, same receipts"
+      },
+      "cta": "CLI docs"
+    },
+    "dashboard": {
+      "title": "Web dashboard",
+      "sub": "Visual. Real-time. For when you want to look at the receipts, not just read them.",
+      "features": {
+        "websocket": "Live websocket updates",
+        "polymarket": "Polymarket edge scanner",
+        "paperTrading": "Paper-trading agents"
+      },
+      "cta": "Dashboard docs",
+      "mockup": {
+        "chrome": "vizzor · dashboard",
+        "btcSpot": "BTC · spot",
+        "trackedWr": "tracked WR",
+        "trending": "trending",
+        "trendingHint": "last 4h",
+        "whale": "🐋 events",
+        "whaleHint": "last 1h"
+      }
+    }
+  },
+  "sixSignals": {
+    "eyebrow": "signal families",
+    "title": "Six independent lenses. One verdict.",
+    "lede": "No single signal carries a prediction. Each family must contribute — and signals that disagree get a penalty, not a vote.",
+    "ariaLabel": "{family} signal family",
+    "families": {
+      "onChain": {
+        "description": "Whale flows, smart-money accumulation, stablecoin mint/burn velocity, exchange-flow imbalance, Coinbase premium.",
+        "reveal": "Multi-chain, free-tier APIs only. $250k+ events on 30s cadence."
+      },
+      "mlEnsemble": {
+        "description": "Python sidecar (XGBoost + LightGBM + isotonic) OR JS-native fallback (RSI/MACD/Bollinger/EMA/volume/funding).",
+        "reveal": "Zero silent degradation when Python is absent."
+      },
+      "predictionMarkets": {
+        "description": "Gamma + Polymarket implied probabilities with edge detection.",
+        "reveal": "Trades the spread when ChronoVisor disagrees with the market."
+      },
+      "socialNarrative": {
+        "description": "News NLP (CryptoPanic + CoinGecko) + LLM catalyst classifier (prompt-cached, budget-gated).",
+        "reveal": "Headlines normalized to a calibrated sentiment CF, not a vibe score."
+      },
+      "patternMatch": {
+        "description": "Smart Money Concepts (BOS / CHoCH / liquidity sweeps) + ICT timing (kill-zones).",
+        "reveal": "Pattern library auto-populated from resolved backtest."
+      },
+      "logicRules": {
+        "description": "14 base + 7 scalping FOL rules over derivatives, macro, and on-chain features.",
+        "reveal": "Per-rule accuracy tracked; poor rules halve their CF, good rules get +20%."
+      }
+    }
+  },
+  "trustBecauseTracked": {
+    "eyebrow": "receipts, not promises",
+    "title": "We track our own win rate. Decisively.",
+    "ringLabel": "tracked WR",
+    "ringCaption": "aggregate · all horizons · last 90d",
+    "ladderEyebrow": "four tier emission ladder",
+    "tiers": {
+      "highConviction": {
+        "name": "high-conviction",
+        "description": "≥4-of-6 signal agreement + composite confidence ≥75 + horizon proven via calibrator."
+      },
+      "whaleConfirmed": {
+        "name": "whale-confirmed",
+        "description": "High-conviction AND whale flow confirms direction. Built on multi-chain free-tier flow analysis."
+      },
+      "tracked": {
+        "name": "tracked",
+        "description": "Passes all gates but doesn't meet the higher bars. Still counted in the strict WR cohort."
+      },
+      "advisory": {
+        "name": "advisory",
+        "description": "Passes only the soft gates. Excluded from the strict cohort but still resolves and feeds the calibrator."
+      }
+    }
+  },
+  "ctaBlock": {
+    "eyebrow": "start with one prediction",
+    "title": "Predictions you can actually grade.",
+    "body": "Open the Telegram bot, ask for a prediction on any token, and watch it resolve. If it misses, the next one carries that into the calibrator. Receipts compound.",
+    "ctaTelegram": "Open in Telegram",
+    "ctaCli": "Install the CLI",
+    "manifesto": "Read the manifesto →"
+  },
+  "languageSwitch": {
+    "label": "Change language",
+    "current": "Current language: {name}",
+    "options": {
+      "en": "English",
+      "es": "Spanish",
+      "fr": "French"
+    }
+  },
+  "pricing": {
+    "pricingEyebrow": "transparency, not pricing",
+    "pricingTitle": "Vizzor is free. Here's exactly what it costs to run.",
+    "pricingSub": "We don't charge for predictions. Our CLI, Telegram bot, Discord bot, and web dashboard are open and free. This page explains what costs exist, who pays them, and why the model is honest.",
+    "block1": {
+      "title": "What we don't charge",
+      "items": {
+        "cli": "CLI install + all 18 commands",
+        "bot": "Telegram bot + 32 commands",
+        "discord": "Discord bot + slash commands",
+        "dashboard": "Web dashboard",
+        "predictions": "Every prediction + trigger snapshot",
+        "docs": "Full docs + ChronoVisor math"
+      }
+    },
+    "block2": {
+      "title": "What you bring",
+      "items": {
+        "llmKey": "Your Anthropic / OpenAI / Gemini API key (or run Ollama free)",
+        "rpcKey": "Your Etherscan / RPC key (free tier works)",
+        "dataKey": "Your CoinGecko / CryptoPanic keys (free tiers work)",
+        "botTokens": "Your Telegram / Discord bot tokens (free)",
+        "host": "A VPS or your laptop if self-hosting"
+      }
+    },
+    "block3": {
+      "title": "What 7ayLabs pays",
+      "items": {
+        "telegram": "Hosted Telegram bot infra",
+        "chronovisor": "ChronoVisor engine hosting",
+        "sharedLlm": "Shared Anthropic key (with per-user daily quota)",
+        "domain": "Domain + TLS + monitoring"
+      }
+    },
+    "costRow": {
+      "eyebrow": "the actual numbers",
+      "dailyCost": {
+        "label": "$/active user/day",
+        "hint": "Hosted Telegram"
+      },
+      "dailyQuota": {
+        "label": "LLM messages/user/day",
+        "hint": "free quota"
+      },
+      "hostedUsers": {
+        "label": "users on hosted bot",
+        "hint": "as of {date}"
+      },
+      "selfHosted": {
+        "label": "self-hosted operators",
+        "hint": "growing weekly"
+      }
+    },
+    "philosophy": "We tried the SaaS path. We built a paywalled tier, drew it on a whiteboard, mocked the upgrade flow. Then we deleted it.\n\nThe reason is simple. A prediction engine that monetizes predictions has an incentive to emit more of them — louder, more often, in more places. That is the exact opposite of what makes Vizzor work. The engine only earns trust by staying silent when the signals disagree, and a paywall punishes silence.\n\nSo we kept the engine free. The CLI, the Telegram bot, the Discord bot, and the dashboard ship under BUSL-1.1 and cost nothing to run on your own machine. 7ayLabs pays for the hosted bot infra, the ChronoVisor engine, and a shared Anthropic key with a per-user daily quota — because someone has to, and we'd rather it be us than a per-call API charge that warps the product.\n\nIf you outgrow the shared quota, you bring your own keys. If you want full control, you self-host. Either way, the math is the same and the receipts are the same. Honest pricing means the page that explains it should fit on one screen.",
+    "cta": {
+      "title": "Self-host for full control",
+      "sub": "All you need is `docker compose up -d` and a VPS.",
+      "quickstart": "Read the quickstart",
+      "github": "View on GitHub"
+    }
+  },
+  "manifesto": {
+    "manifestoEyebrow": "the manifesto · signed by 7ayLabs",
+    "manifestoTitle": "Numbers, not opinions.",
+    "manifestoLede": "Vizzor exists because the crypto information layer is broken. Not bearish — broken. We're trying to repair one specific part of it.",
+    "section1": {
+      "title": "Most crypto AI is a chat box with a price feed.",
+      "body": "The pattern is everywhere. Take a language model, give it the BTC price, wrap it in a chat interface, call it an AI trader. The output reads like analysis. It is not analysis. It is a fluent paraphrase of whatever happened to be near the model's context window.\n\nFluent paraphrase is dangerous in markets because the surface looks like a quantitative tool and the substance is a vibe. When the vibe is wrong, the user has no way to know why — there are no signals, no votes, no resolved cohort, nothing to grade. Just a confident sentence that didn't pan out.\n\nVizzor is the opposite construction. Six independent signal families do the work; the language model only renders the result. If the engine has nothing to say, the language model says nothing. Silence is a feature."
+    },
+    "section2": {
+      "title": "Calibrated confidence is a feature.",
+      "body": "Every prediction carries a confidence number that has been Platt-scaled against the resolved cohort. When Vizzor says 72%, it means that across the last several hundred 72%-confidence calls, roughly 72% landed in band. Not metaphor — calibration.\n\nThat number does work. It tells you when to size up, when to size down, and when to ignore the call entirely. It is also how the engine catches itself drifting: if the calibrated 72% bucket starts hitting at 58%, the calibrator notices and pulls the curve. Models that don't track their own calibration cannot do this."
+    },
+    "section3": {
+      "title": "The receipts are the product.",
+      "body": "Every prediction the engine ever emitted lives in `chronovisor_predictions`, with its full trigger snapshot — which signals voted, which direction, what CF, why it passed the gates. The resolved outcome is grafted on when the horizon expires.\n\nThat archive is public. The win rate on the home page is computed from that archive. Filter by horizon, filter by tier, filter by chain — the WR you see is the WR you'd compute yourself.\n\nThis is the part of the product that earns the rest. A prediction engine that hides its history is not a prediction engine, it is a marketing surface for a forecast that has not been tested."
+    },
+    "section4": {
+      "title": "Free-tier APIs are the moat, not the bottleneck.",
+      "body": "We are sometimes asked why Vizzor doesn't integrate Nansen, Arkham, or one of the paid intelligence stacks. The answer is that the moat is in the synthesis, not the data. Anyone willing to pay can buy the same Nansen feed.\n\nVizzor reads whale flow, smart-money accumulation, exchange premia, and stablecoin velocity from chain RPCs and free-tier endpoints. The interesting work is fusing six families through certainty-factor algebra with weak-signal dampening, Bayesian update with family-aware priors, and Platt calibration against the resolved cohort.\n\nThat work travels. It runs on a $5 VPS or a laptop. It does not get more interesting when you bolt on a $1,200/month feed."
+    },
+    "section5": {
+      "title": "Operators run Vizzor. We just maintain it.",
+      "body": "The hosted Telegram bot is convenient. It is also a courtesy, not the product. The product is the open-source engine, the configurable thresholds, the CLI you can pipe into your own shell scripts, the docker-compose file that brings up an entire local stack.\n\nWe will keep hosting the bot as long as the bill stays sane. If it ever doesn't, the project keeps working — every operator already has the code, the config, and the data schema. Vizzor was built to outlast its hosting."
+    },
+    "signature": "Signed, 7ayLabs · 2026-05-31",
+    "seeReceipts": "See the receipts →"
+  },
+  "changelog": {
+    "changelogEyebrow": "release notes · semver",
+    "changelogTitle": "Vizzor changelog",
+    "changelogSub": "Versioned releases. Every change tracked.",
+    "subscribeRss": "Subscribe via RSS",
+    "readMore": "Read full notes",
+    "empty": "No releases yet.",
+    "meta": {
+      "released": "released",
+      "version": "version",
+      "codename": "codename"
+    }
+  }
+}
