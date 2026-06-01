@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
   typedRoutes: true,
   images: {
     remotePatterns: [
-      { protocol: 'https', hostname: 'assets.coincap.io', pathname: '/assets/icons/**' },
+      { protocol: 'https', hostname: 'cdn.jsdelivr.net', pathname: '/gh/atomiclabs/cryptocurrency-icons/**' },
       { protocol: 'https', hostname: 'icons.llamao.fi', pathname: '/icons/**' },
     ],
   },
