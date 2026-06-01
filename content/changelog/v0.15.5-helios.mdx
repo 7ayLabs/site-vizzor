@@ -1,0 +1,37 @@
+---
+version: v0.15.5
+codename: Helios
+date: 2026-05-31
+summary: WR-lift release — confidence and cycle-health gates, volatility-adaptive sizing, per-session WR aggregator, observability metrics, signal snapshot meta.
+---
+
+The Helios release pushes tracked decisive WR from 37% toward the 70%+ bar by tightening the gates predictions must clear before emission, and by surfacing more about why each call fired.
+
+## Added
+
+- **`SignalSnapshot.meta`** — every emission now carries structured metadata about the contributing signals: family weights, raw vs calibrated CF, dampening reasons. The trigger snapshot is no longer an opaque list of votes.
+- **Observability metrics + `/metrics` route** — Prometheus-format counters and gauges for cycle counts, gate rejections, abstain reasons, per-family CF distribution, and resolver latency. New types in `src/metrics/`.
+- **Per-session WR aggregator** — predictions are now bucketed into Asian, EU, US, overlap, weekend, and off-hours sessions. WR drift across sessions is tracked and surfaced via a loud IANA timezone label so the operator always knows which session a call belongs to.
+- **Volatility-adaptive horizon math** — composite confidence now scales with realized vol-z over the prediction's horizon. Calm regimes get tighter bands; high-vol regimes get wider ones, and the timer wiring resamples at the right cadence.
+
+## Changed
+
+- **`minConfidence` gate** — abstain when composite confidence falls below the per-tier floor. Soft gates still resolve and feed the calibrator; strict gates stay silent.
+- **`cycleHealth` gate** — a cycle aborts when fewer than 4 of 6 signal families return valid data, or when manipulation guard flags the symbol. No more silent low-quality emissions.
+- **Resolver pipeline** — `resolvePending()` now checks both expired horizons and price-target hits in a single pass, then feeds resolutions to the Platt calibrator and per-rule tracker for online learning.
+
+## Fixed
+
+- **RANGE in-band grading** — when actual price at resolution sits inside the displayed forecast band, the outcome is now always `HIT`. The persisted band is the authoritative grading criterion.
+- **Stale predictions** — predictions older than 2× their horizon are force-resolved (as sideways or incorrect) when price is unavailable, instead of lingering in `pending` forever.
+- **Direction dead zone** — probability must exceed 52% (or fall below 48%) for a directional call. Anything in between normalizes to sideways so 50.1% → UP noise stops compounding.
+
+```diff
++ SignalSnapshot.meta now carries: rawCf, calibratedCf, weightApplied, dampReason
++ /metrics returns Prometheus text format
++ per-session WR bucketed by IANA timezone
+~ minConfidence + cycleHealth gates run before any emission
+- range-in-band predictions no longer mis-graded as MISS
+```
+
+Upgrade path: no migration required for hosted users. Self-host operators should `pnpm install && pnpm build` and restart the Telegram bot. The new `signal_snapshot` column on `chronovisor_predictions` is added automatically on first start.
