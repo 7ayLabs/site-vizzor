@@ -1,27 +1,32 @@
 /**
  * POST /api/predict — thin proxy from the on-site chat to the Vizzor
- * engine.
+ * engine's canonical `POST /v1/chat` endpoint (the same one the
+ * Telegram bot, CLI, and TUI consume).
  *
- * This route does FOUR things, and only four:
+ * Responsibilities (only four):
  *
  *   1. Validate the request body.
- *   2. Apply the quota / burn gate (site-level concern — the Vizzor
- *      engine doesn't track per-browser free predictions, that's the
- *      site's monetization layer).
+ *   2. Apply the quota / burn gate (site-level monetization concern).
  *   3. Dispatch slash commands locally via `parseIntent` — info,
  *      stats, redirects. These read the cached snapshot (which IS
- *      Vizzor data) but generate no prediction content. The `/help`
- *      and bot-only redirects are pure UI affordances.
- *   4. For prediction intents: forward the raw user message to the
- *      Vizzor engine at `${VIZZOR_API_URL}/v1/site/chat` and stream the
- *      response straight back to the client. No transformation, no
- *      fallback, no local generation.
+ *      Vizzor data) but generate no prediction content.
+ *   4. For prediction intents: translate the AI SDK UIMessage shape
+ *      to Vizzor's `{role, content}` shape, POST to
+ *      `${VIZZOR_API_URL}/v1/chat`, transform the engine's SSE event
+ *      stream into the AI SDK UI Message Stream protocol the client
+ *      already consumes, and pipe it back.
  *
- * When the Vizzor engine is unreachable, the route returns an honest
- * "Vizzor offline" stream instead of fabricating a prediction. The
- * Vizzor engine is the only source of predictions on this site.
+ * When the engine is unreachable, return an honest "Vizzor offline"
+ * stream instead of fabricating a prediction. The Vizzor engine is
+ * the only source of predictions on this site.
  *
- * See `API_CONTRACT.md` for the upstream chat endpoint spec.
+ * The Vizzor `/v1/chat` SSE protocol:
+ *   event: conversation   → {conversationId}                         (drop)
+ *   event: token_data     → {tokens: [...]}                          (drop)
+ *   event: text           → {delta: "..."}                           → text-delta
+ *   event: tool_use       → {name, ...}                              → text-delta (annotated)
+ *   event: error          → {message}                                → text-delta (annotated)
+ *   event: done           → {usage?}                                 → text-end + [DONE]
  */
 
 import type { UIMessage } from 'ai';
@@ -126,6 +131,23 @@ async function forwardToVizzor(
     process.env.NEXT_PUBLIC_VIZZOR_API_URL ??
     'https://api.vizzor.ai';
 
+  // Translate AI SDK UIMessage → Vizzor's flat {role, content} shape.
+  const vizzorMessages = messages
+    .filter((m) => m.role === 'user' || m.role === 'assistant')
+    .map((m) => ({
+      role: m.role,
+      content: (m.parts ?? [])
+        .filter((p) => p.type === 'text')
+        .map((p) => ('text' in p ? p.text : ''))
+        .join('\n')
+        .trim(),
+    }))
+    .filter((m) => m.content.length > 0);
+
+  if (vizzorMessages.length === 0) {
+    return offlineResponse(null);
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
@@ -133,43 +155,157 @@ async function forwardToVizzor(
   );
 
   try {
-    const upstreamRes = await fetch(`${base}/v1/site/chat`, {
+    const upstreamRes = await fetch(`${base}/v1/chat`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         accept: 'text/event-stream',
         ...(burnHeader ? { 'x-vizzor-burn-tx': burnHeader } : {}),
       },
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify({ messages: vizzorMessages }),
       signal: controller.signal,
       cache: 'no-store',
     });
 
     if (!upstreamRes.ok || !upstreamRes.body) {
-      // Engine couldn't deliver — don't burn the user's free credit.
       return offlineResponse(null);
     }
 
-    // Pass the upstream stream straight through to the client. The
-    // Vizzor engine emits the same AI SDK UI Message Stream protocol
-    // we already consume client-side, so no transformation is needed.
-    // Only NOW do we increment the quota cookie: a credit is consumed
-    // only when a real prediction is delivered.
+    // Transform Vizzor SSE → AI SDK UI Message Stream so the client's
+    // `useChat` hook renders it natively. The transform also surfaces
+    // engine errors and tool-use events as readable text so visitors
+    // can see when the engine hit a billing limit or invoked a tool.
+    const transformed = transformVizzorStream(upstreamRes.body);
+
     const headers = new Headers({
-      'Content-Type':
-        upstreamRes.headers.get('content-type') ?? 'text/event-stream',
+      'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-store',
       'x-vercel-ai-ui-message-stream': 'v1',
-      'x-vizzor-source': 'upstream',
+      'x-vizzor-source': 'engine',
     });
     if (cookieOnSuccess) headers.set('set-cookie', cookieOnSuccess);
 
-    return new Response(upstreamRes.body, { status: 200, headers });
+    return new Response(transformed, { status: 200, headers });
   } catch {
     return offlineResponse(null);
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/* ------------------------------------------------------------------ *\
+ * Vizzor SSE → AI SDK UI Message Stream transform
+ * ------------------------------------------------------------------ */
+
+type SseEvent = { event?: string; data: unknown };
+
+function transformVizzorStream(
+  upstream: ReadableStream<Uint8Array>,
+): ReadableStream<Uint8Array> {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  const id = 'vz-' + Date.now().toString(36);
+
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (obj: object) =>
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify(obj)}\n\n`),
+        );
+
+      send({ type: 'text-start', id });
+
+      const reader = upstream.getReader();
+      let buffer = '';
+
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          // SSE events are separated by blank lines.
+          let nl: number;
+          while ((nl = buffer.indexOf('\n\n')) !== -1) {
+            const rawEvent = buffer.slice(0, nl);
+            buffer = buffer.slice(nl + 2);
+            const parsed = parseSseEvent(rawEvent);
+            if (!parsed) continue;
+            const delta = renderVizzorEvent(parsed);
+            if (delta) send({ type: 'text-delta', id, delta });
+          }
+        }
+      } catch (err) {
+        send({
+          type: 'text-delta',
+          id,
+          delta: `\n\n⚠ stream interrupted: ${(err as Error).message}`,
+        });
+      } finally {
+        send({ type: 'text-end', id });
+        controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+        controller.close();
+      }
+    },
+  });
+}
+
+function parseSseEvent(raw: string): SseEvent | null {
+  let event: string | undefined;
+  const dataLines: string[] = [];
+  for (const line of raw.split('\n')) {
+    if (line.startsWith('event:')) event = line.slice(6).trim();
+    else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+  }
+  if (dataLines.length === 0) return null;
+  const dataStr = dataLines.join('\n');
+  try {
+    return { event, data: JSON.parse(dataStr) };
+  } catch {
+    // Plain-text data (e.g. `data: [DONE]`).
+    return { event, data: dataStr };
+  }
+}
+
+function renderVizzorEvent(ev: SseEvent): string | null {
+  const data = ev.data as Record<string, unknown> | string;
+  switch (ev.event) {
+    case 'text': {
+      const delta = (data as { delta?: string }).delta;
+      return typeof delta === 'string' ? delta : null;
+    }
+    case 'error': {
+      const msg = (data as { message?: string }).message ?? 'unknown error';
+      // Make engine errors visible to the user — they're often
+      // actionable (e.g. "credit balance is too low" → top up your key).
+      return `\n\n⚠ Vizzor engine error: ${truncate(msg, 240)}`;
+    }
+    case 'tool_use':
+    case 'tool_call': {
+      const name =
+        (data as { name?: string; tool?: string }).name ??
+        (data as { tool?: string }).tool ??
+        'tool';
+      return `\n[${name}]`;
+    }
+    case 'tool_result': {
+      // Drop tool results from the visible stream unless we want to
+      // render them — they're usually JSON payloads the engine then
+      // narrates with another text event.
+      return null;
+    }
+    case 'conversation':
+    case 'token_data':
+    case 'usage':
+    case 'done':
+      return null;
+    default:
+      return null;
+  }
+}
+
+function truncate(s: string, n: number): string {
+  return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
 
 /* ------------------------------------------------------------------ *\
