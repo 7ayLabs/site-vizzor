@@ -25,6 +25,7 @@ import { useTranslations } from 'next-intl';
 import type { CSSProperties } from 'react';
 import { CoinIcon } from '@/components/ui/coin-icon';
 import { AnimatedNumber } from '@/components/ui/animated-number';
+import { useTicker } from '@/lib/api';
 import { getTicker } from '@/lib/snapshot';
 import type { TickerEntry } from '@/lib/types';
 
@@ -68,7 +69,16 @@ function TickerPill({ entry }: { entry: TickerEntry }) {
 
 export function TickerCarousel({ entries }: TickerCarouselProps) {
   const t = useTranslations('ticker');
-  const data = entries && entries.length > 0 ? entries : getTicker();
+  // SSR seed comes from the snapshot (passed via props by the server
+  // wrapper). Once hydrated, SWR pulls live prices from /api/ticker
+  // every 30s and the component re-renders with kinetic tweens.
+  const live = useTicker(30_000);
+  const data =
+    live.data && live.data.length > 0
+      ? live.data
+      : entries && entries.length > 0
+        ? entries
+        : getTicker();
 
   return (
     <div
