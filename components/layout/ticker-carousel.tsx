@@ -143,6 +143,10 @@ export function TickerCarousel({ entries }: TickerCarouselProps) {
         : getTicker();
 
   return (
+    // `overflow-x-clip` (NOT `hidden`) is the key: per CSS spec, `clip`
+    // can coexist with `visible` on the other axis without auto-promoting.
+    // Using `hidden` would silently force overflow-y to `auto`, clipping
+    // the hover dropdown that escapes below the bar.
     <div
       role="marquee"
       aria-label={t('ariaLabel')}
@@ -151,45 +155,42 @@ export function TickerCarousel({ entries }: TickerCarouselProps) {
         border-b border-[var(--border)]
         bg-[var(--surface)]
         h-8 sm:h-9
+        overflow-x-clip overflow-y-visible
       "
     >
-      {/* Inner clip + scroll container — overflow-hidden lives here so the
-          hover dropdowns on individual pills can escape vertically. */}
-      <div className="relative w-full h-full overflow-x-hidden overflow-y-visible">
-        {/* Scrolling track — duplicated content for seamless wrap. */}
-        <div className="marquee-track flex h-full w-max items-center">
-          <div className="flex h-full items-center" aria-label="ticker entries">
-            {data.map((entry) => (
-              <TickerPill key={`a-${entry.symbol}`} entry={entry} />
-            ))}
-          </div>
-          <div className="flex h-full items-center" aria-hidden="true">
-            {data.map((entry) => (
-              <TickerPill key={`b-${entry.symbol}`} entry={entry} />
-            ))}
-          </div>
+      {/* Scrolling track — duplicated content for seamless wrap. */}
+      <div className="marquee-track flex h-full w-max items-center">
+        <div className="flex h-full items-center" aria-label="ticker entries">
+          {data.map((entry) => (
+            <TickerPill key={`a-${entry.symbol}`} entry={entry} />
+          ))}
         </div>
-
-        {/* Left edge fade. */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 left-0 w-6 z-[1]"
-          style={{
-            background:
-              'linear-gradient(to right, var(--surface), transparent)',
-          }}
-        />
-
-        {/* Right edge fade. */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 right-0 w-6 z-[1]"
-          style={{
-            background:
-              'linear-gradient(to left, var(--surface), transparent)',
-          }}
-        />
+        <div className="flex h-full items-center" aria-hidden="true">
+          {data.map((entry) => (
+            <TickerPill key={`b-${entry.symbol}`} entry={entry} />
+          ))}
+        </div>
       </div>
+
+      {/* Left edge fade. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 left-0 w-6 z-[1]"
+        style={{
+          background:
+            'linear-gradient(to right, var(--surface), transparent)',
+        }}
+      />
+
+      {/* Right edge fade. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 right-0 w-6 z-[1]"
+        style={{
+          background:
+            'linear-gradient(to left, var(--surface), transparent)',
+        }}
+      />
     </div>
   );
 }
