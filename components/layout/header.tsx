@@ -18,6 +18,7 @@ import { Link } from '@/i18n/navigation';
 import { ThemeToggle } from './theme-toggle';
 import { LanguageSwitch } from './language-switch';
 import { NavLinks } from './nav-links';
+import { WalletAuthButton } from '@/components/auth/wallet-auth-button';
 
 export async function Header() {
   const t = await getTranslations('header');
@@ -70,6 +71,7 @@ export async function Header() {
         </div>
 
         <div className="flex items-center gap-2">
+          <WalletAuthButton hasProvider={false} />
           <LanguageSwitch />
           <ThemeToggle />
           <a

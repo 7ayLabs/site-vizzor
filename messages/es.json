@@ -8,6 +8,17 @@
     },
     "cta": "Abrir en Telegram"
   },
+  "auth": {
+    "connect": "Conectar wallet",
+    "connecting": "Conectando…",
+    "sign": "Iniciar sesión",
+    "signing": "Firmando…",
+    "signedInAs": "Sesión iniciada como",
+    "subscription": "Suscripción",
+    "lifetime": "Vitalicio",
+    "expiresOn": "Expira el {date}",
+    "signOut": "Cerrar sesión"
+  },
   "footer": {
     "tagline": "Predicciones con recibos. Pronósticos cripto calibrados en cada cadena, token y horizonte temporal.",
     "columns": {

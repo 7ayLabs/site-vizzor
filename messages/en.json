@@ -8,6 +8,17 @@
     },
     "cta": "Open in Telegram"
   },
+  "auth": {
+    "connect": "Connect wallet",
+    "connecting": "Connecting…",
+    "sign": "Sign in",
+    "signing": "Signing…",
+    "signedInAs": "Signed in as",
+    "subscription": "Subscription",
+    "lifetime": "Lifetime",
+    "expiresOn": "Expires {date}",
+    "signOut": "Sign out"
+  },
   "footer": {
     "tagline": "Predictions with receipts. Calibrated crypto forecasts across every chain, token, and timeframe.",
     "columns": {

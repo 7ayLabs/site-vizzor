@@ -8,6 +8,17 @@
     },
     "cta": "Ouvrir dans Telegram"
   },
+  "auth": {
+    "connect": "Connecter portefeuille",
+    "connecting": "Connexion…",
+    "sign": "Se connecter",
+    "signing": "Signature…",
+    "signedInAs": "Connecté en tant que",
+    "subscription": "Abonnement",
+    "lifetime": "À vie",
+    "expiresOn": "Expire le {date}",
+    "signOut": "Déconnexion"
+  },
   "footer": {
     "tagline": "Prédictions avec reçus. Prévisions crypto calibrées sur chaque chaîne, chaque token et chaque horizon.",
     "columns": {
