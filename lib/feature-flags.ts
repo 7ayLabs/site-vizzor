@@ -35,6 +35,15 @@ export function acceptTonPayments(): boolean {
 }
 
 /**
+ * Phase-1 #2 chain — Solana $VIZZOR payments with tier-specific
+ * discount (25/30/35% off depending on cadence). Gated separately
+ * from TON so each can ship independently.
+ */
+export function acceptVizzorPayments(): boolean {
+  return process.env.NEXT_PUBLIC_ACCEPT_VIZZOR_PAYMENTS === 'true';
+}
+
+/**
  * Lifetime of a payment session before the locked USD-to-TON rate
  * expires. Defaults to 5 minutes.
  */

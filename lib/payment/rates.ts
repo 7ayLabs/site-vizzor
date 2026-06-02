@@ -1,70 +1,115 @@
 /**
- * USD-to-TON rate snapshotter for the checkout flow.
+ * USD-to-token rate snapshotter for the checkout flow.
  *
- * The flow:
- *   1. Visitor lands on /pay/[tier]/[cadence] — UI calls /api/payment/rate
- *      to display a live preview ("You'll pay ~24.3 TON for $99").
- *   2. When they click "Connect & Pay", the rate is snapshotted into the
- *      session record. The watcher daemon validates the on-chain amount
- *      against that snapshot (±0.5% slippage tolerance), not the spot
- *      price at confirmation time.
+ * Supports two Phase-1 tokens: TON (via CoinGecko) and $VIZZOR (via
+ * the engine's price feed — which proxies Jupiter / Birdeye internally
+ * once the token is launched). For now $VIZZOR is feature-flagged and
+ * returns a fixed mock price for development.
  *
- * The /api/payment/rate endpoint is a thin proxy to CoinGecko's free
- * simple-price endpoint (same upstream the ticker carousel uses). 60s
- * in-memory cache so the checkout page doesn't hammer CoinGecko if a
- * visitor reloads.
+ * Both sources are cached for 60s server-side. The actual locked rate
+ * used by the engine to validate the on-chain amount is snapshotted
+ * inside the session record on createSession, not by these helpers.
  */
 
-const COINGECKO_PRICE =
+const COINGECKO_TON =
   'https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd';
 const CACHE_MS = 60_000;
 const FETCH_TIMEOUT_MS = 5_000;
 
-interface CachedRate {
-  /** USD per 1 TON, at `at`. */
-  usdPerTon: number;
+export type PriceToken = 'ton' | 'vizzor';
+
+export interface CachedRate {
+  token: PriceToken;
+  /** USD per 1 token unit, at `at`. */
+  usdPer: number;
   /** Epoch millis when the rate was fetched. */
   at: number;
 }
 
-let cached: CachedRate | null = null;
+const cache = new Map<PriceToken, CachedRate>();
 
-/**
- * Returns the current USD/TON rate, cached for 60 seconds. Returns
- * null if upstream is unreachable AND no fresh cache is available —
- * the caller must handle that (the checkout shows "rate unavailable,
- * retry" rather than fabricating a number).
- */
-export async function getUsdPerTon(): Promise<CachedRate | null> {
+export async function getRate(token: PriceToken): Promise<CachedRate | null> {
   const now = Date.now();
-  if (cached && now - cached.at < CACHE_MS) return cached;
+  const hit = cache.get(token);
+  if (hit && now - hit.at < CACHE_MS) return hit;
 
+  const fresh = await fetchRate(token);
+  if (fresh) {
+    cache.set(token, fresh);
+    return fresh;
+  }
+  // stale-while-error
+  return hit ?? null;
+}
+
+async function fetchRate(token: PriceToken): Promise<CachedRate | null> {
+  if (token === 'ton') return fetchTonRate();
+  return fetchVizzorRate();
+}
+
+async function fetchTonRate(): Promise<CachedRate | null> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
   try {
-    const res = await fetch(COINGECKO_PRICE, {
+    const res = await fetch(COINGECKO_TON, {
       signal: controller.signal,
       headers: { accept: 'application/json' },
       cache: 'no-store',
     });
-    if (!res.ok) return cached; // stale-while-error
+    if (!res.ok) return null;
     const data = (await res.json()) as Record<
       string,
       { usd?: number } | undefined
     >;
     const usd = data['the-open-network']?.usd;
-    if (typeof usd !== 'number' || usd <= 0) return cached;
-    cached = { usdPerTon: usd, at: now };
-    return cached;
+    if (typeof usd !== 'number' || usd <= 0) return null;
+    return { token: 'ton', usdPer: usd, at: Date.now() };
   } catch {
-    return cached;
+    return null;
   } finally {
     clearTimeout(timeout);
   }
 }
 
-/** Convert a USD amount to TON using the current cached rate. */
-export function usdToTon(usd: number, rate: CachedRate): number {
-  return Math.round((usd / rate.usdPerTon) * 100) / 100; // 2 decimals
+/**
+ * $VIZZOR price lookup. Once the token launches, this proxies the
+ * engine's `/v1/market/price/VIZZOR` endpoint which aggregates
+ * Jupiter + Birdeye internally. Until then, we honor the env override
+ * `NEXT_PUBLIC_VIZZOR_MOCK_USD` so dev/staging can simulate any price.
+ */
+async function fetchVizzorRate(): Promise<CachedRate | null> {
+  const mock = process.env.NEXT_PUBLIC_VIZZOR_MOCK_USD;
+  if (mock) {
+    const n = Number.parseFloat(mock);
+    if (Number.isFinite(n) && n > 0) {
+      return { token: 'vizzor', usdPer: n, at: Date.now() };
+    }
+  }
+
+  const base =
+    process.env.VIZZOR_API_URL ??
+    process.env.NEXT_PUBLIC_VIZZOR_API_URL ??
+    'https://api.vizzor.ai';
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${base}/v1/market/price/VIZZOR`, {
+      signal: controller.signal,
+      headers: { accept: 'application/json' },
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { price?: number };
+    if (typeof data.price !== 'number' || data.price <= 0) return null;
+    return { token: 'vizzor', usdPer: data.price, at: Date.now() };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export function toTokenAmount(usd: number, rate: CachedRate): number {
+  return Math.round((usd / rate.usdPer) * 100) / 100;
 }

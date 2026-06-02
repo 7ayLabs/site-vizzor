@@ -74,7 +74,7 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
       const res = await fetch('/api/payment/session', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ tier, cadence, chain: 'ton' }),
+        body: JSON.stringify({ tier, cadence, chain: 'ton', token: 'native' }),
       });
       const data = (await res.json()) as SessionApiResponse;
       if (!data.ok || !data.session) {
@@ -183,7 +183,7 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
         {session && status !== 'confirmed' ? (
           <TonConnectButton
             destAddress={session.destAddress}
-            amountTon={session.amountTon}
+            amountTon={session.amount}
             sessionId={session.sessionId}
             onSent={onSent}
             onError={onWalletError}

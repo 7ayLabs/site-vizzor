@@ -1,13 +1,14 @@
 /**
  * POST /api/payment/session — create a payment session.
  *
- * Body: { tier, cadence, chain }
+ * Body: { tier, cadence, chain, token }
  *
- * The site validates tier+cadence+chain locally (cheap input gate),
- * looks up the canonical USD price in `pricing-table.ts`, then proxies
- * to the engine which derives a unique HD destination address, locks
- * the USD-to-TON rate, and persists the session record. The engine is
- * the source of truth — site-side price is just a guard.
+ * The site validates tier+cadence+(chain,token) locally, looks up the
+ * canonical USD price + applicable discount in `pricing-table.ts`, then
+ * proxies to the engine which derives a unique destination address,
+ * locks the USD-to-token rate, validates the discount math, and persists
+ * the session record. The engine is the source of truth — site-side
+ * price+discount are guards.
  *
  * Returns the engine's session object verbatim on success. On feature-
  * flag off or engine offline: 503 with a `reason` enum so the UI can
@@ -21,8 +22,13 @@ import {
   type PaymentCadence,
   type PaymentChain,
   type PaymentTier,
+  type PaymentToken,
 } from '@/lib/payment/session';
-import { isValidCombo, priceCents } from '@/lib/payment/pricing-table';
+import {
+  discountBps,
+  effectivePriceCents,
+  isValidCombo,
+} from '@/lib/payment/pricing-table';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -31,7 +37,13 @@ interface SessionBody {
   tier?: unknown;
   cadence?: unknown;
   chain?: unknown;
+  token?: unknown;
 }
+
+const VALID_PAIRS = new Set<string>([
+  'ton:native',
+  'solana:vizzor',
+]);
 
 export async function POST(req: Request) {
   let body: SessionBody;
@@ -43,7 +55,8 @@ export async function POST(req: Request) {
 
   const tier = String(body.tier ?? '');
   const cadence = String(body.cadence ?? '');
-  const chain = String(body.chain ?? '');
+  const chain = String(body.chain ?? 'ton');
+  const token = String(body.token ?? 'native');
 
   if (!isValidCombo(tier, cadence)) {
     return NextResponse.json(
@@ -51,16 +64,17 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  if (chain !== 'ton') {
+  if (!VALID_PAIRS.has(`${chain}:${token}`)) {
     return NextResponse.json(
       { ok: false, reason: 'unsupported_chain' },
       { status: 400 },
     );
   }
 
-  const amountUsdCents = priceCents(
+  const amountUsdCents = effectivePriceCents(
     tier as PaymentTier,
     cadence as PaymentCadence,
+    token as PaymentToken,
   );
   if (amountUsdCents === null) {
     return NextResponse.json(
@@ -73,7 +87,13 @@ export async function POST(req: Request) {
     tier: tier as PaymentTier,
     cadence: cadence as PaymentCadence,
     chain: chain as PaymentChain,
-    amountUsdCents,
+    token: token as PaymentToken,
+    amountUsdCents: Math.round(amountUsdCents),
+    discountBps: discountBps(
+      tier as PaymentTier,
+      cadence as PaymentCadence,
+      token as PaymentToken,
+    ),
   });
 
   if (!result.ok) {

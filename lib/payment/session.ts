@@ -15,32 +15,49 @@
  * fake destination address.
  */
 
-import { acceptTonPayments } from '@/lib/feature-flags';
+import { acceptTonPayments, acceptVizzorPayments } from '@/lib/feature-flags';
 
 const UPSTREAM_TIMEOUT_MS = 8_000;
 
 export type PaymentTier = 'pro' | 'elite';
 export type PaymentCadence = 'monthly' | 'annual' | 'lifetime';
-export type PaymentChain = 'ton';
+/** Phase 1 supports two (chain, token) combos: (ton, native), (solana, vizzor). */
+export type PaymentChain = 'ton' | 'solana';
+export type PaymentToken = 'native' | 'vizzor';
 
 export interface CreateSessionInput {
   tier: PaymentTier;
   cadence: PaymentCadence;
   chain: PaymentChain;
-  /** USD amount in cents (e.g. 999 = $9.99) — engine validates against tier table. */
+  token: PaymentToken;
+  /**
+   * Net USD amount in cents the user should pay AFTER any token-specific
+   * discount. The engine recalculates the discount independently and
+   * rejects on mismatch.
+   */
   amountUsdCents: number;
+  /** Discount basis points the site applied (0 for non-token paths). */
+  discountBps: number;
 }
 
 export interface PaymentSession {
   sessionId: string;
+  /** TON wallet address or Solana ATA depending on chain. Opaque to the site. */
   destAddress: string;
-  amountTon: number;
+  /** Amount in token human units (e.g. 4.67 TON, or 1240.5 $VIZZOR). */
+  amount: number;
+  /** Token decimal places (TON: 9, $VIZZOR: 9 typical). */
+  decimals: number;
+  /** Net USD amount in cents after discount. */
   amountUsdCents: number;
   tier: PaymentTier;
   cadence: PaymentCadence;
   chain: PaymentChain;
-  /** Engine-locked rate at session creation (USD per TON). */
-  usdPerTonAtLock: number;
+  token: PaymentToken;
+  /** Engine-locked rate at session creation (USD per single token unit). */
+  rateLocked: number;
+  /** Discount basis points applied (0 for native payments). */
+  discountBps: number;
   /** Epoch ms when the session expires (rate lock window). */
   expiresAt: number;
   /** 'pending' | 'confirmed' | 'expired' | 'failed'. */
@@ -72,18 +89,38 @@ function engineBase(): string {
 export async function createSession(
   input: CreateSessionInput,
 ): Promise<SessionResult> {
-  if (!acceptTonPayments()) return { ok: false, reason: 'feature_disabled' };
+  // Each (chain, token) combo has its own feature flag so they ship
+  // independently and can be toggled separately at launch.
+  const isTon = input.chain === 'ton' && input.token === 'native';
+  const isVizzor = input.chain === 'solana' && input.token === 'vizzor';
+
+  if (isTon && !acceptTonPayments()) {
+    return { ok: false, reason: 'feature_disabled' };
+  }
+  if (isVizzor && !acceptVizzorPayments()) {
+    return { ok: false, reason: 'feature_disabled' };
+  }
+  if (!isTon && !isVizzor) {
+    return { ok: false, reason: 'invalid_input' };
+  }
+
   if (!['pro', 'elite'].includes(input.tier)) {
     return { ok: false, reason: 'invalid_input' };
   }
   if (!['monthly', 'annual', 'lifetime'].includes(input.cadence)) {
     return { ok: false, reason: 'invalid_input' };
   }
-  if (input.chain !== 'ton') return { ok: false, reason: 'invalid_input' };
   if (
     !Number.isFinite(input.amountUsdCents) ||
-    input.amountUsdCents < 99 ||
+    input.amountUsdCents < 49 ||
     input.amountUsdCents > 1_000_000
+  ) {
+    return { ok: false, reason: 'invalid_input' };
+  }
+  if (
+    !Number.isFinite(input.discountBps) ||
+    input.discountBps < 0 ||
+    input.discountBps > 5000
   ) {
     return { ok: false, reason: 'invalid_input' };
   }
@@ -111,7 +148,11 @@ export async function createSession(
 
 /** GET /v1/payment/session/:id — proxy with offline-safe fallback. */
 export async function getSession(id: string): Promise<SessionResult> {
-  if (!acceptTonPayments()) return { ok: false, reason: 'feature_disabled' };
+  // Either flag enables session reads — a confirmed session for the
+  // disabled path still needs to render its grant code on /pay/success.
+  if (!acceptTonPayments() && !acceptVizzorPayments()) {
+    return { ok: false, reason: 'feature_disabled' };
+  }
   if (!/^[a-zA-Z0-9_\-]{8,64}$/.test(id)) {
     return { ok: false, reason: 'invalid_input' };
   }
@@ -147,7 +188,7 @@ export async function getSession(id: string): Promise<SessionResult> {
 export async function issueGrantForSession(
   sessionId: string,
 ): Promise<{ code: string } | null> {
-  if (!acceptTonPayments()) return null;
+  if (!acceptTonPayments() && !acceptVizzorPayments()) return null;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
