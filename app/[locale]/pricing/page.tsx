@@ -407,13 +407,17 @@ function ChainCard({
 }
 
 /**
- * Safely read an i18n key; return null if it's absent (so we can omit
- * the annual line on tiers that don't have one, like Free).
+ * Safely read an i18n key — uses next-intl's `t.has()` to check the
+ * key's existence WITHOUT triggering the `MISSING_MESSAGE` error path
+ * (which logs to stderr even when wrapped in try/catch).
  */
 function safe(
   t: Awaited<ReturnType<typeof getTranslations<'pricing'>>>,
   key: string,
 ): string | null {
+  // `t.has` is available in next-intl >=3.x and doesn't throw.
+  const has = (t as unknown as { has?: (k: string) => boolean }).has;
+  if (typeof has === 'function' && !has.call(t, key)) return null;
   try {
     const v = t(key);
     return v && v !== key ? v : null;
