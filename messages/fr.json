@@ -515,10 +515,15 @@
       },
       "row": {
         "subtotal": "Sous-total",
+        "discount": "Remise $VIZZOR ({pct}%)",
+        "afterDiscount": "Après remise",
         "tonQuote": "Cotation TON",
-        "tonUnavailable": "cotation indisponible",
+        "vizzorQuote": "Cotation $VIZZOR",
+        "tokenUnavailable": "cotation indisponible",
         "network": "Réseau",
         "tonMainnet": "TON mainnet",
+        "solanaMainnet": "Solana mainnet",
+        "savedWithVizzor": "Vous économisez {amount} en payant en $VIZZOR",
         "total": "Total"
       },
       "footnote": "Cotation rafraîchie toutes les 60s · verrouillage final à la création de session"
@@ -526,12 +531,14 @@
     "chain": {
       "label": "Payer avec",
       "phase1Label": "Disponible",
-      "phase2Label": "Phase 2"
+      "phase2Label": "Phase 2",
+      "discountBadge": "Économisez {pct}%"
     },
     "wallet": {
-      "connect": "Connecter portefeuille TON",
+      "connect": "Connecter portefeuille",
       "signing": "Signature de la transaction…",
       "payNow": "Payer {amount} TON",
+      "payNowVizzor": "Payer {amount} $VIZZOR",
       "disconnect": "Déconnecter"
     },
     "status": {
