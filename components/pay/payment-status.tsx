@@ -35,6 +35,38 @@ interface PaymentStatusProps {
   retry?: () => void;
 }
 
+/**
+ * Map opaque engine/site error tokens to a localized human sentence.
+ * Falls back to the raw reason string if no mapping exists, so unknown
+ * errors are still surfaced (debuggable) without crashing.
+ */
+function humanizeReason(
+  reason: string | undefined,
+  t: ReturnType<typeof useTranslations<'pay.status'>>,
+  status: StatusValue,
+): string {
+  if (!reason) return t(`${status}.body`, { reason: '' });
+
+  // Known reasons emitted by /api/payment/session and the site's
+  // session.ts helpers. Each gets a clear, actionable explanation.
+  const KNOWN: Record<string, string> = {
+    feature_disabled: t('reasons.featureDisabled'),
+    engine_offline: t('reasons.engineOffline'),
+    engine_error: t('reasons.engineError'),
+    invalid_input: t('reasons.invalidInput'),
+    invalid_tier_cadence: t('reasons.invalidInput'),
+    unsupported_chain: t('reasons.unsupportedChain'),
+    price_lookup_failed: t('reasons.priceLookup'),
+    session_failed: t('reasons.sessionFailed'),
+    engine_marked_failed: t('reasons.engineMarkedFailed'),
+    mint_not_configured: t('reasons.mintNotConfigured'),
+    wallet_not_connected: t('reasons.walletNotConnected'),
+  };
+  const mapped = KNOWN[reason];
+  if (mapped) return mapped;
+  return t(`${status}.body`, { reason });
+}
+
 const STATE_TONE: Record<StatusValue, 'neutral' | 'pending' | 'success' | 'error'> =
   {
     idle: 'neutral',
@@ -87,9 +119,7 @@ export function PaymentStatus({ status, reason, retry }: PaymentStatusProps) {
           {t(`${status}.label`)}
         </p>
         <p className="text-[12.5px] text-[var(--fg-2)] leading-relaxed">
-          {reason && (status === 'error' || status === 'expired')
-            ? t(`${status}.body`, { reason })
-            : t(`${status}.body`, { reason: '' })}
+          {humanizeReason(reason, t, status)}
         </p>
       </div>
       {(isError || status === 'expired') && retry && (

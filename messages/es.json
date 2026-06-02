@@ -499,8 +499,10 @@
       "successTitle": "Pago confirmado · continúa en Telegram"
     },
     "eyebrow": "checkout · ton",
+    "eyebrowVizzor": "checkout · $vizzor en solana",
     "title": "Activar {tier}",
     "sub": "Paga on-chain con TON. Nunca pedimos tarjeta. Cuando se confirme, tu código de acceso se canjea en el bot de Telegram.",
+    "subVizzor": "Paga on-chain con $VIZZOR en Solana — los holders obtienen descuento. Nunca pedimos tarjeta. Cuando se confirme, tu código de acceso se canjea en el bot de Telegram.",
     "legalFootnote": "Pago on-chain · cotización fija 5 min · cancela cuando quieras",
     "summary": {
       "label": "Resumen de la orden",
@@ -574,7 +576,19 @@
         "label": "Error",
         "body": "Algo salió mal: {reason}. Puedes reintentar."
       },
-      "retry": "Reintentar"
+      "retry": "Reintentar",
+      "reasons": {
+        "featureDisabled": "Aún no aceptamos pagos en esta cadena. Prueba la otra opción de Fase 1, o abre el bot de Telegram.",
+        "engineOffline": "El motor de pagos de Vizzor no está disponible temporalmente. El sitio funciona pero no puede crear una sesión ahora. Reintenta en un momento.",
+        "engineError": "Infraestructura de pagos pendiente: el motor de Vizzor aún no tiene los endpoints de pago desplegados. Usa el bot de Telegram para pagar por ahora — mismo tier, mismo precio.",
+        "engineMarkedFailed": "El motor rechazó esta sesión. Reintenta o contacta a soporte si persiste.",
+        "invalidInput": "El tier o cadencia enviado al servidor no es válido. Refresca y elige un tier desde /pricing.",
+        "unsupportedChain": "Esta cadena aún no es soportada. Cambia a TON o $VIZZOR en Solana.",
+        "priceLookup": "No pudimos buscar el precio del tier en el servidor. Refresca la página.",
+        "sessionFailed": "Falló la creación de sesión. Reintenta, o abre el bot de Telegram si persiste.",
+        "mintNotConfigured": "La dirección del mint de $VIZZOR no está configurada en este deploy. Cambia a TON o espera al lanzamiento.",
+        "walletNotConnected": "Conecta una wallet para continuar."
+      }
     },
     "cta": {
       "start": "Iniciar pago",

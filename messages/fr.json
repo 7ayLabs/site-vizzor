@@ -499,8 +499,10 @@
       "successTitle": "Paiement confirmé · continuez dans Telegram"
     },
     "eyebrow": "checkout · ton",
+    "eyebrowVizzor": "checkout · $vizzor sur solana",
     "title": "Activer {tier}",
     "sub": "Payez on-chain en TON. Aucune carte demandée. Une fois confirmé, votre code d'accès se redeem dans le bot Telegram.",
+    "subVizzor": "Payez on-chain en $VIZZOR sur Solana — les détenteurs du token obtiennent la remise. Aucune carte demandée. Une fois confirmé, votre code d'accès se redeem dans le bot Telegram.",
     "legalFootnote": "Paiement on-chain · taux figé 5 min · annulez quand vous voulez",
     "summary": {
       "label": "Résumé de la commande",
@@ -574,7 +576,19 @@
         "label": "Erreur",
         "body": "Une erreur est survenue : {reason}. Vous pouvez réessayer."
       },
-      "retry": "Réessayer"
+      "retry": "Réessayer",
+      "reasons": {
+        "featureDisabled": "Les paiements ne sont pas encore acceptés sur cette chaîne. Essayez l'autre option Phase 1, ou ouvrez le bot Telegram.",
+        "engineOffline": "Le moteur de paiement Vizzor est temporairement injoignable. Le site est en ligne mais ne peut pas créer de session pour le moment. Réessayez sous peu.",
+        "engineError": "Infrastructure de paiement en attente : le moteur Vizzor n'a pas encore déployé les endpoints de paiement. Utilisez le bot Telegram pour payer pour l'instant — même tier, même prix.",
+        "engineMarkedFailed": "Le moteur a rejeté cette session. Réessayez ou contactez le support si le problème persiste.",
+        "invalidInput": "Le tier ou la cadence envoyés au serveur ne sont pas valides. Rafraîchissez et choisissez un tier depuis /pricing.",
+        "unsupportedChain": "Cette chaîne n'est pas encore prise en charge. Passez à TON ou $VIZZOR sur Solana.",
+        "priceLookup": "Impossible de récupérer le prix du tier sur le serveur. Rafraîchissez la page.",
+        "sessionFailed": "Échec de la création de session. Réessayez, ou ouvrez le bot Telegram si le problème persiste.",
+        "mintNotConfigured": "L'adresse du mint $VIZZOR n'est pas configurée sur ce déploiement. Passez à TON ou attendez le lancement.",
+        "walletNotConnected": "Connectez un portefeuille pour continuer."
+      }
     },
     "cta": {
       "start": "Démarrer le paiement",

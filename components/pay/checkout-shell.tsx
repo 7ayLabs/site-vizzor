@@ -255,17 +255,19 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
   })();
 
   const inner = (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 pt-4 sm:pt-6">
       <div className="flex flex-col gap-6">
         <header className="flex flex-col gap-2">
           <p className="mono tabular text-[10px] uppercase tracking-[0.18em] text-[var(--accent)]">
-            {t('eyebrow')}
+            {selector.token === 'vizzor'
+              ? t('eyebrowVizzor')
+              : t('eyebrow')}
           </p>
-          <h1 className="display text-[var(--fg)] text-[28px] sm:text-[34px] lg:text-[38px] leading-[1.05] tracking-tight font-semibold text-balance">
+          <h1 className="display text-[var(--fg)] text-[28px] sm:text-[34px] lg:text-[38px] leading-[1.1] tracking-tight font-semibold text-balance">
             {t('title', { tier: t(`summary.tier.${tier}`) })}
           </h1>
           <p className="text-[14px] leading-relaxed text-[var(--fg-2)] max-w-[60ch]">
-            {t('sub')}
+            {selector.token === 'vizzor' ? t('subVizzor') : t('sub')}
           </p>
         </header>
 
@@ -282,7 +284,10 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
           retry={status === 'error' || status === 'expired' ? retry : undefined}
         />
 
-        {payButton}
+        {/* Hide the primary CTA while an error/expired banner is visible
+            — the inline Retry button on the status panel is the right
+            action and the bottom button would just confuse users. */}
+        {status !== 'error' && status !== 'expired' && payButton}
 
         <p className="mono tabular text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)] text-center">
           {t('legalFootnote')}
