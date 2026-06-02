@@ -282,6 +282,8 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
           status={status}
           reason={reason}
           retry={status === 'error' || status === 'expired' ? retry : undefined}
+          tier={tier}
+          cadence={cadence}
         />
 
         {/* Hide the primary CTA while an error/expired banner is visible

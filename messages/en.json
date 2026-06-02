@@ -578,6 +578,9 @@
       },
       "retry": "Retry",
       "reasons": {
+        "infraPendingLabel": "infrastructure pending",
+        "payInTelegram": "Pay in Telegram",
+        "retryAnyway": "retry anyway",
         "featureDisabled": "Payments aren't accepting on this chain yet. Try the other Phase-1 option, or open the Telegram bot.",
         "engineOffline": "The Vizzor payment engine is temporarily unreachable. The site is online but can't create a session right now. Retry in a moment.",
         "engineError": "Payment infrastructure pending: the Vizzor engine doesn't have payment endpoints deployed yet. Use the Telegram bot to pay for now — same tier, same price.",

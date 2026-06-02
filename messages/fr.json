@@ -578,6 +578,9 @@
       },
       "retry": "Réessayer",
       "reasons": {
+        "infraPendingLabel": "infrastructure en attente",
+        "payInTelegram": "Payer dans Telegram",
+        "retryAnyway": "réessayer quand même",
         "featureDisabled": "Les paiements ne sont pas encore acceptés sur cette chaîne. Essayez l'autre option Phase 1, ou ouvrez le bot Telegram.",
         "engineOffline": "Le moteur de paiement Vizzor est temporairement injoignable. Le site est en ligne mais ne peut pas créer de session pour le moment. Réessayez sous peu.",
         "engineError": "Infrastructure de paiement en attente : le moteur Vizzor n'a pas encore déployé les endpoints de paiement. Utilisez le bot Telegram pour payer pour l'instant — même tier, même prix.",
