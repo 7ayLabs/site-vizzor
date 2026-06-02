@@ -34,6 +34,7 @@ import { buildIncrementedQuotaCookie, readQuota } from '@/lib/quota';
 import { isTokenLive } from '@/lib/feature-flags';
 import { verifyBurnTx } from '@/lib/solana';
 import { parseIntent } from '@/lib/commands';
+import { getSubscriptionForActiveSession } from '@/lib/payment/auth-session';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -75,6 +76,12 @@ export async function POST(req: Request) {
   const quota = await readQuota();
   let burnApproved = false;
 
+  // Wallet-based subscription bypass — if the visitor signed in with
+  // SIWS and that wallet has an active subscription on file, every
+  // prediction is free and the quota counter is left untouched.
+  const subscription = await getSubscriptionForActiveSession();
+  const subscribed = !!subscription;
+
   if (burnHeader && isTokenLive()) {
     const verify = await verifyBurnTx(burnHeader);
     burnApproved = verify.ok;
@@ -91,13 +98,13 @@ export async function POST(req: Request) {
     }
   }
 
-  if (!burnApproved && quota.exhausted) {
+  if (!burnApproved && !subscribed && quota.exhausted) {
     return Response.json(
       {
         error: 'free_quota_exhausted',
         message: isTokenLive()
-          ? 'Free predictions exhausted. Connect a wallet and burn $VIZZOR to continue.'
-          : 'Free predictions exhausted. The $VIZZOR token launches soon — join the waitlist.',
+          ? 'Free predictions exhausted. Subscribe at /pricing, or connect a wallet and burn $VIZZOR to continue.'
+          : 'Free predictions exhausted. Subscribe at /pricing — pay in TON or $VIZZOR on Solana.',
         quota,
       },
       { status: 402, headers: { 'Cache-Control': 'no-store' } },
@@ -105,11 +112,12 @@ export async function POST(req: Request) {
   }
 
   // The would-be cookie. Only attached when the upstream actually
-  // delivers a prediction — if Vizzor is offline, the user keeps the
-  // credit. Burns don't go through the cookie.
-  const cookieOnSuccess = !burnApproved
-    ? buildIncrementedQuotaCookie(quota.used)
-    : null;
+  // delivers a prediction. Burns AND subscribers don't increment the
+  // free counter — they're paying / paid via a different surface.
+  const cookieOnSuccess =
+    !burnApproved && !subscribed
+      ? buildIncrementedQuotaCookie(quota.used)
+      : null;
 
   /* --------------------- forward to vizzor engine ---------------- */
 
