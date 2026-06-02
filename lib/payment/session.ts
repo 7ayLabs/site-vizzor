@@ -1,27 +1,37 @@
 /**
- * Payment session — thin proxy to the engine's /v1/payment/session API.
+ * Payment session — site-owned creation + lookup.
  *
- * The site does NOT mint sessions locally. The engine owns the master
- * HD wallet for destination-address derivation, the payment_sessions
- * Postgres table, and the TON watcher daemon. The site just routes
- * requests through and returns "offline" honest fallback when the
- * engine is unreachable. Same architectural discipline as /api/predict
- * → api.vizzor.ai/v1/chat.
+ * The site no longer proxies to a remote engine for payment session
+ * state. Instead it mints sessions locally:
+ *   1. Generates a unique session id
+ *   2. Snapshots the current USD-to-token rate via getRate()
+ *   3. Picks the treasury destination address for the chain
+ *   4. Persists the session row in SQLite (`payment_sessions`)
+ *   5. Returns the in-memory shape the UI expects
  *
- * Per the plan, when the engine is down OR the feature flag is off,
- * we return null + a reason. The route handlers turn that into a
- * 503 with a user-readable explanation; the checkout UI surfaces it
- * as "payment infrastructure pending" rather than fabricating a
- * fake destination address.
+ * The watcher daemon (lib/payment/watcher.ts) is what flips
+ * `status='confirmed'` on the row once the on-chain transfer is seen.
+ *
+ * The previous engine-proxy exports stay in place for compatibility
+ * with the existing route handlers — same function names, same
+ * SessionResult union, just different internals.
  */
 
-import { acceptTonPayments, acceptVizzorPayments } from '@/lib/feature-flags';
-
-const UPSTREAM_TIMEOUT_MS = 8_000;
+import { randomBytes } from 'node:crypto';
+import { acceptTonPayments, acceptVizzorPayments, paymentRateLockSeconds } from '@/lib/feature-flags';
+import {
+  attachGrantCodeToSession,
+  expireStaleSessions,
+  getSessionRow,
+  insertGrant,
+  insertSession,
+  type SessionRow,
+} from './db';
+import { getRate } from './rates';
+import { solanaTreasury, tonTreasury } from './treasury';
 
 export type PaymentTier = 'pro' | 'elite';
 export type PaymentCadence = 'monthly' | 'annual' | 'lifetime';
-/** Phase 1 supports two (chain, token) combos: (ton, native), (solana, vizzor). */
 export type PaymentChain = 'ton' | 'solana';
 export type PaymentToken = 'native' | 'vizzor';
 
@@ -30,41 +40,29 @@ export interface CreateSessionInput {
   cadence: PaymentCadence;
   chain: PaymentChain;
   token: PaymentToken;
-  /**
-   * Net USD amount in cents the user should pay AFTER any token-specific
-   * discount. The engine recalculates the discount independently and
-   * rejects on mismatch.
-   */
   amountUsdCents: number;
-  /** Discount basis points the site applied (0 for non-token paths). */
   discountBps: number;
 }
 
 export interface PaymentSession {
   sessionId: string;
-  /** TON wallet address or Solana ATA depending on chain. Opaque to the site. */
   destAddress: string;
-  /** Amount in token human units (e.g. 4.67 TON, or 1240.5 $VIZZOR). */
   amount: number;
-  /** Token decimal places (TON: 9, $VIZZOR: 9 typical). */
   decimals: number;
-  /** Net USD amount in cents after discount. */
   amountUsdCents: number;
   tier: PaymentTier;
   cadence: PaymentCadence;
   chain: PaymentChain;
   token: PaymentToken;
-  /** Engine-locked rate at session creation (USD per single token unit). */
   rateLocked: number;
-  /** Discount basis points applied (0 for native payments). */
   discountBps: number;
-  /** Epoch ms when the session expires (rate lock window). */
   expiresAt: number;
-  /** 'pending' | 'confirmed' | 'expired' | 'failed'. */
   status: 'pending' | 'confirmed' | 'expired' | 'failed';
   txSig?: string;
   confirmedAt?: number;
   grantCode?: string;
+  /** Short memo string the wallet payload should carry (the session id). */
+  memo: string;
 }
 
 export type SessionResult =
@@ -73,24 +71,20 @@ export type SessionResult =
 
 export type SessionFailure =
   | 'feature_disabled'
-  | 'engine_offline'
-  | 'invalid_input'
-  | 'engine_error';
+  | 'rate_unavailable'
+  | 'invalid_input';
 
-function engineBase(): string {
-  return (
-    process.env.VIZZOR_API_URL ??
-    process.env.NEXT_PUBLIC_VIZZOR_API_URL ??
-    'https://api.vizzor.ai'
-  );
+const TON_DECIMALS = 9;
+const VIZZOR_DECIMALS = 9;
+
+function newSessionId(): string {
+  // 16 random bytes → 22 chars base64url. Short, URL-safe, unique.
+  return 'ses_' + randomBytes(16).toString('base64url');
 }
 
-/** POST /v1/payment/session — proxy with offline-safe fallback. */
 export async function createSession(
   input: CreateSessionInput,
 ): Promise<SessionResult> {
-  // Each (chain, token) combo has its own feature flag so they ship
-  // independently and can be toggled separately at launch.
   const isTon = input.chain === 'ton' && input.token === 'native';
   const isVizzor = input.chain === 'solana' && input.token === 'vizzor';
 
@@ -103,7 +97,6 @@ export async function createSession(
   if (!isTon && !isVizzor) {
     return { ok: false, reason: 'invalid_input' };
   }
-
   if (!['pro', 'elite'].includes(input.tier)) {
     return { ok: false, reason: 'invalid_input' };
   }
@@ -125,86 +118,112 @@ export async function createSession(
     return { ok: false, reason: 'invalid_input' };
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+  // Snapshot the current rate.
+  const rate = await getRate(isTon ? 'ton' : 'vizzor');
+  if (!rate) return { ok: false, reason: 'rate_unavailable' };
 
-  try {
-    const res = await fetch(`${engineBase()}/v1/payment/session`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(input),
-      signal: controller.signal,
-      cache: 'no-store',
-    });
-    if (!res.ok) return { ok: false, reason: 'engine_error' };
-    const session = (await res.json()) as PaymentSession;
-    return { ok: true, session };
-  } catch {
-    return { ok: false, reason: 'engine_offline' };
-  } finally {
-    clearTimeout(timeout);
-  }
+  const usd = input.amountUsdCents / 100;
+  const amount = Math.round((usd / rate.usdPer) * 100) / 100;
+  const decimals = isTon ? TON_DECIMALS : VIZZOR_DECIMALS;
+  const destAddress = isTon ? tonTreasury() : solanaTreasury();
+  const sessionId = newSessionId();
+  const expiresAt = Date.now() + paymentRateLockSeconds() * 1000;
+
+  insertSession({
+    session_id: sessionId,
+    tier: input.tier,
+    cadence: input.cadence,
+    chain: input.chain,
+    token: input.token,
+    dest_address: destAddress,
+    amount,
+    decimals,
+    amount_usd_cents: input.amountUsdCents,
+    discount_bps: input.discountBps,
+    rate_locked: rate.usdPer,
+    expires_at: expiresAt,
+    status: 'pending',
+    memo: sessionId,
+  });
+
+  return {
+    ok: true,
+    session: {
+      sessionId,
+      destAddress,
+      amount,
+      decimals,
+      amountUsdCents: input.amountUsdCents,
+      tier: input.tier,
+      cadence: input.cadence,
+      chain: input.chain,
+      token: input.token,
+      rateLocked: rate.usdPer,
+      discountBps: input.discountBps,
+      expiresAt,
+      status: 'pending',
+      memo: sessionId,
+    },
+  };
 }
 
-/** GET /v1/payment/session/:id — proxy with offline-safe fallback. */
 export async function getSession(id: string): Promise<SessionResult> {
-  // Either flag enables session reads — a confirmed session for the
-  // disabled path still needs to render its grant code on /pay/success.
   if (!acceptTonPayments() && !acceptVizzorPayments()) {
     return { ok: false, reason: 'feature_disabled' };
   }
-  if (!/^[a-zA-Z0-9_\-]{8,64}$/.test(id)) {
+  if (!/^[A-Za-z0-9_-]{4,128}$/.test(id)) {
     return { ok: false, reason: 'invalid_input' };
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+  // Sweep stale-pending sessions to 'expired' so the UI sees the
+  // correct state.
+  expireStaleSessions(Date.now());
 
-  try {
-    const res = await fetch(
-      `${engineBase()}/v1/payment/session/${encodeURIComponent(id)}`,
-      {
-        method: 'GET',
-        signal: controller.signal,
-        cache: 'no-store',
-      },
-    );
-    if (!res.ok) return { ok: false, reason: 'engine_error' };
-    const session = (await res.json()) as PaymentSession;
-    return { ok: true, session };
-  } catch {
-    return { ok: false, reason: 'engine_offline' };
-  } finally {
-    clearTimeout(timeout);
-  }
+  const row = getSessionRow(id);
+  if (!row) return { ok: false, reason: 'invalid_input' };
+
+  return { ok: true, session: rowToSession(row) };
 }
 
+function rowToSession(r: SessionRow): PaymentSession {
+  return {
+    sessionId: r.session_id,
+    destAddress: r.dest_address,
+    amount: r.amount,
+    decimals: r.decimals,
+    amountUsdCents: r.amount_usd_cents,
+    tier: r.tier as PaymentTier,
+    cadence: r.cadence as PaymentCadence,
+    chain: r.chain as PaymentChain,
+    token: r.token as PaymentToken,
+    rateLocked: r.rate_locked,
+    discountBps: r.discount_bps,
+    expiresAt: r.expires_at,
+    status: r.status,
+    txSig: r.tx_sig ?? undefined,
+    confirmedAt: r.confirmed_at ?? undefined,
+    grantCode: r.grant_code ?? undefined,
+    memo: r.memo ?? r.session_id,
+  };
+}
+
+const GRANT_TTL_MS = 24 * 60 * 60 * 1000;
+
 /**
- * POST /v1/grants — mint a grant code for a confirmed session.
- * Returns the grant code on success, or null if the engine is
- * unreachable. Idempotent — the engine returns the existing grant
- * code if one was already minted for this session.
+ * Mint a grant code for a confirmed session. Idempotent: if the
+ * session already has a grant attached, return that instead of
+ * creating a new one.
  */
 export async function issueGrantForSession(
   sessionId: string,
 ): Promise<{ code: string } | null> {
-  if (!acceptTonPayments() && !acceptVizzorPayments()) return null;
+  const row = getSessionRow(sessionId);
+  if (!row || row.status !== 'confirmed') return null;
+  if (row.grant_code) return { code: row.grant_code };
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
-  try {
-    const res = await fetch(`${engineBase()}/v1/grants`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ sessionId }),
-      signal: controller.signal,
-      cache: 'no-store',
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as { code: string };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
+  const code = 'g_' + randomBytes(12).toString('base64url');
+  const expiresAt = Date.now() + GRANT_TTL_MS;
+  insertGrant({ code, session_id: sessionId, expires_at: expiresAt });
+  attachGrantCodeToSession(sessionId, code);
+  return { code };
 }

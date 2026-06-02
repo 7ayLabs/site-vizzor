@@ -29,6 +29,7 @@ import {
   effectivePriceCents,
   isValidCombo,
 } from '@/lib/payment/pricing-table';
+import { ensureWatcherStarted } from '@/lib/payment/watcher';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -46,6 +47,10 @@ const VALID_PAIRS = new Set<string>([
 ]);
 
 export async function POST(req: Request) {
+  // Lazy boot of the on-chain watcher daemon on the first session
+  // create. Idempotent — only starts once per Node process.
+  ensureWatcherStarted();
+
   let body: SessionBody;
   try {
     body = (await req.json()) as SessionBody;
@@ -97,9 +102,15 @@ export async function POST(req: Request) {
   });
 
   if (!result.ok) {
+    const status =
+      result.reason === 'invalid_input'
+        ? 400
+        : result.reason === 'rate_unavailable'
+          ? 503
+          : 503;
     return NextResponse.json(
       { ok: false, reason: result.reason },
-      { status: result.reason === 'invalid_input' ? 400 : 503 },
+      { status },
     );
   }
   return NextResponse.json(
