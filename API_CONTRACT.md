@@ -183,35 +183,66 @@ Request:
 {
   "tier": "pro" | "elite",
   "cadence": "monthly" | "annual" | "lifetime",
-  "chain": "ton",
-  "amountUsdCents": 999
+  "chain": "ton" | "solana",
+  "token": "native" | "vizzor",
+  "amountUsdCents": 999,
+  "discountBps": 0
 }
 ```
 
-The engine validates `amountUsdCents` against its canonical pricing
-table (the site sends the table-derived amount; the engine is the
-final authority). On accept, the engine:
-1. Derives a fresh HD destination address from the master mnemonic
-   (`VIZZOR_PAYMENT_HD_MASTER` env, server-only).
-2. Snapshots the current USD-to-TON rate (CoinGecko or equivalent).
-3. Persists a `payment_sessions` row with `status='pending'` and
+**Valid (chain, token) combos for Phase 1:**
+
+| chain | token | Phase 1 source | Discount |
+|---|---|---|---|
+| `ton` | `native` | TON Connect, TON mainnet | `0` (base price) |
+| `solana` | `vizzor` | Solana wallet adapter + SPL `transferChecked` | `2500 / 3000 / 3500` (Pro / Elite m+y / Elite lifetime) |
+
+The engine MUST:
+1. Independently recompute `discountBps` from its canonical pricing
+   table (`pro=2500 any cadence; elite=3000 m+y; elite=3500 lifetime`)
+   and reject on mismatch with the site-provided value. Same SQLite-
+   overlay hot-tune path applies — when the operator runs
+   `/plans discount elite lifetime 4000`, the engine value diverges
+   from the site's static table for ~1 deploy cycle. The site's
+   constant gets updated in the next release.
+2. Independently recompute `amountUsdCents` = base × (10000 − discountBps) / 10000
+   from the same table and reject on mismatch.
+3. Derive a fresh destination per session:
+   - TON: HD address from `VIZZOR_PAYMENT_HD_MASTER` mnemonic (server-only).
+   - Solana-$VIZZOR: pre-derived treasury ATA from the engine's fixed
+     `VIZZOR_TREASURY_OWNER` Solana keypair (the site sends payments
+     to this fixed ATA; the memo program instruction carries the
+     session ID for disambiguation since the ATA is shared).
+4. Snapshot the current USD-to-token rate (CoinGecko for TON;
+   Jupiter / Birdeye for $VIZZOR — the engine MAY proxy this through
+   its own `/v1/market/price/VIZZOR` endpoint).
+5. Persist a `payment_sessions` row with `status='pending'` and
    `expiresAt = now + paymentRateLockSeconds` (default 5 minutes).
-4. Returns the full session record:
+6. Return the full session record:
 
 ```json
 {
   "sessionId": "ses_<uuid>",
-  "destAddress": "UQ...xyz",
-  "amountTon": 4.67,
+  "destAddress": "UQ...xyz | base58SolanaATA",
+  "amount": 4.67,
+  "decimals": 9,
   "amountUsdCents": 999,
   "tier": "pro",
   "cadence": "monthly",
   "chain": "ton",
-  "usdPerTonAtLock": 2.14,
+  "token": "native",
+  "rateLocked": 2.14,
+  "discountBps": 0,
   "expiresAt": 1780355499304,
   "status": "pending"
 }
 ```
+
+For $VIZZOR-pay sessions, `destAddress` is a base58 Solana ATA, and
+the site's `<VizzorPayButton>` builds an SPL `transferChecked` +
+Memo program instruction. The memo data is the raw `sessionId` string
+so the watcher daemon can match incoming txs to pending sessions even
+when the destination ATA is shared across users.
 
 ### `GET /v1/payment/session/:id`
 
@@ -282,6 +313,27 @@ On success:
 If the grant is already redeemed or expired, return 409 / 410 with a
 clear reason.
 
+### Solana-$VIZZOR watcher daemon (background process)
+
+Mirrors the TON watcher. Polls Solana mainnet via
+`connection.getSignaturesForAddress(VIZZOR_TREASURY_ATA, ...)` every
+~5 seconds. For each new signature, parses the transaction and looks
+for:
+- A `spl-token transferChecked` instruction whose `destination` matches
+  the treasury ATA and whose `mint` matches `$VIZZOR_MINT`.
+- A Memo program instruction whose data decodes to a UTF-8 string
+  matching a pending `session.sessionId`.
+- Token amount within `±0.5%` of the session's expected `amount`.
+- Tx block time `<= session.expiresAt`.
+
+On match: `UPDATE payment_sessions SET status='confirmed', txSig=$1, confirmedAt=now() WHERE id=$2`.
+
+The treasury ATA is **shared** across all users (unlike TON where each
+session gets a unique HD-derived address). The memo+amount combo is
+the disambiguation key. Pre-flight check: if two pending sessions for
+the same tier+cadence have the same expected amount AND no memo
+match found, log the conflict and don't auto-resolve.
+
 ### TON watcher daemon (background process)
 
 Runs independently of the API workers. Polls TON mainnet every 5
@@ -311,10 +363,21 @@ Telegram sends the bot `/start grant_<uuid>`. The bot:
 
 | Var | Purpose |
 |---|---|
-| `VIZZOR_PAYMENT_HD_MASTER` | BIP-39 mnemonic for HD wallet derivation. Server-only. Never reaches the browser. |
-| `TON_RPC_URL` | TonCenter or LiteServer endpoint for the watcher daemon. |
+| `VIZZOR_PAYMENT_HD_MASTER` | BIP-39 mnemonic for TON HD wallet derivation. Server-only. Never reaches the browser. |
+| `TON_RPC_URL` | TonCenter or LiteServer endpoint for the TON watcher. |
 | `TON_API_KEY` | TonCenter API key if applicable. |
+| `VIZZOR_TREASURY_KEYPAIR` | Solana keypair (json-array form) owning the treasury ATA that receives all $VIZZOR-pay subscriptions. Server-only. |
+| `VIZZOR_MINT` | Solana mint address of the $VIZZOR token (same as `NEXT_PUBLIC_VIZZOR_MINT` on the site). |
+| `SOLANA_RPC_URL` | Solana mainnet RPC for the $VIZZOR watcher. |
 | `PAYMENT_RATE_LOCK_SECONDS` | Default 300. Must match the site's `NEXT_PUBLIC_PAYMENT_RATE_LOCK_SECONDS`. |
+
+### Env vars (site-side, $VIZZOR-pay path)
+
+| Var | Scope | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_ACCEPT_VIZZOR_PAYMENTS` | public | Build-time gate for the $VIZZOR-pay path. Independent of the TON flag. |
+| `NEXT_PUBLIC_VIZZOR_MINT` | public | Already used by the predict-surface burn flow. Shared with the $VIZZOR-pay button for ATA derivation. |
+| `NEXT_PUBLIC_VIZZOR_MOCK_USD` | public, dev-only | Override the $VIZZOR/USD rate for local development (e.g. `0.05`). Production reads from the engine's market endpoint instead. |
 
 ---
 
