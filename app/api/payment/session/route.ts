@@ -43,6 +43,14 @@ import {
 import { ensureWatcherStarted } from '@/lib/payment/watcher';
 import { ensureTonWatcherStarted } from '@/lib/payment/ton-watcher';
 import { ensureEvmWatchersStarted } from '@/lib/payment/evm-watcher';
+import {
+  PAYMENT_SESSION_ROUTE_REQUIREMENTS,
+  assertRequiredEnv,
+} from '@/lib/env';
+
+// Fail fast in production if the payment session route is misconfigured.
+// No-op in dev/CI. See lib/env.ts for the declarative requirements bundle.
+assertRequiredEnv('payment-session', PAYMENT_SESSION_ROUTE_REQUIREMENTS);
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
