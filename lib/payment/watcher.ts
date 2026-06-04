@@ -40,6 +40,25 @@ const g = globalThis as unknown as GlobalWithWatcher;
 
 export function ensureWatcherStarted(): void {
   if (!acceptVizzorPayments()) return;
+  // Fail fast in production if the operator did not configure a dedicated
+  // Solana RPC. The public mainnet-beta endpoint is rate-limited (100 req
+  // per 10s per IP) and the watcher polls every 5s with up to N parsed-tx
+  // round-trips per tick — it WILL hit 429 under any meaningful payment
+  // volume and silently stop confirming payments. Better to refuse to
+  // start the watcher than to limp along producing pending sessions
+  // past their TTL.
+  if (
+    process.env.NODE_ENV === 'production' &&
+    !process.env.SOLANA_RPC_URL &&
+    !process.env.NEXT_PUBLIC_SOLANA_RPC_URL
+  ) {
+    throw new Error(
+      '[vizzor-watcher] refusing to start: SOLANA_RPC_URL is unset in production. ' +
+        'The public mainnet-beta default is rate-limited and unsafe for the 5s-poll watcher. ' +
+        'Configure a dedicated provider (Helius, Triton, QuickNode, or equivalent) and set ' +
+        'SOLANA_RPC_URL on the site host. See docs/ops/secrets.md.',
+    );
+  }
   const state = (g[KEY] = g[KEY] ?? { started: false, lastSlot: null });
   if (state.started) return;
   state.started = true;
