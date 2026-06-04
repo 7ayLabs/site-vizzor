@@ -390,17 +390,17 @@
       "elite": {
         "name": "Elite",
         "sub": "Agentes autónomos que operan on-chain con las señales de Vizzor",
-        "price": "$99",
+        "price": "$49",
         "priceUnit": "/ mes",
-        "annualPrice": "$999",
-        "annualSub": "Ahorra 16% con facturación anual",
-        "cta": "Obtener Elite · $99/mes",
+        "annualPrice": "$499",
+        "annualSub": "Ahorra 15% con facturación anual",
+        "cta": "Obtener Elite · $49/mes",
         "cadences": {
           "annual": {
-            "label": "Pagar anualmente · $999/año (ahorras $189)"
+            "label": "Pagar anualmente · $499/año (ahorras $89)"
           },
           "lifetime": {
-            "label": "Pago único · $2,499 vitalicio (rentabiliza año 3)"
+            "label": "Pago único · $1,249 vitalicio (rentabiliza año 3)"
           }
         },
         "everythingIn": "Todo lo de Pro, más:",

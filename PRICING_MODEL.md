@@ -25,9 +25,9 @@ Three tiers (Free / Pro / Elite). Three billing cadences (Monthly / Annual / Lif
 | **Free**  | $0/mo     | n/a               | n/a              | n/a                  |
 | **Pro Monthly**   | $9.99/mo  | $9.99 equiv      | **$7.49 equiv** (–25%)   | 1,000 $VIZZOR locked = ongoing access |
 | **Pro Annual**    | $99/yr    | $99 equiv        | **$74 equiv** (–25%)     | 1,000 $VIZZOR (same) |
-| **Elite Monthly** | $99/mo    | $99 equiv        | **$69 equiv** (–30%)     | 5,000 $VIZZOR locked = ongoing access |
-| **Elite Annual**  | $999/yr   | $999 equiv       | **$699 equiv** (–30%)    | 5,000 $VIZZOR (same) |
-| **Elite Lifetime**| $2,499 once | $2,499 equiv  | **$1,624 equiv** (–35%)  | 10,000 $VIZZOR locked = permanent access |
+| **Elite Monthly** | $49/mo    | $49 equiv        | **$34 equiv** (–30%)     | 5,000 $VIZZOR locked = ongoing access |
+| **Elite Annual**  | $499/yr   | $499 equiv       | **$349 equiv** (–30%)    | 5,000 $VIZZOR (same) |
+| **Elite Lifetime**| $1,249 once | $1,249 equiv  | **$812 equiv** (–35%)    | 10,000 $VIZZOR locked = permanent access |
 
 **Why 25/30/35%?** Tested ranges for crypto-native SaaS: <15% feels token-gimmicky, >40% squeezes margin while attracting yield-farmers. 25-35% is the sweet spot — meaningful enough to drive token demand, narrow enough to stay healthy.
 
@@ -130,12 +130,12 @@ Staked $VIZZOR (Elite: 5k × 700 subs)                 ─           ─        
 
 Worked example (round numbers):
 - 7,000 Pro subscribers × $99/yr × 30% paying in $VIZZOR = $208k notional in $VIZZOR/yr → $104k/yr burned, $104k/yr to treasury
-- 3,000 Elite subscribers × $999/yr × 30% paying in $VIZZOR = $899k notional → $449k burned, $449k to treasury
+- 3,000 Elite subscribers × $499/yr × 30% paying in $VIZZOR = $449k notional → $224k burned, $224k to treasury
 - 3,000 Pro stakers × 1k $VIZZOR = 3M tokens permanently held in stake contract
 - 700 Elite stakers × 5k $VIZZOR = 3.5M tokens permanently held
 
-**Annual burn**: ~$550k notional ($VIZZOR equivalent at year-1 prices)
-**Annual treasury inflow**: ~$550k + stablecoin revenue from non-token payers
+**Annual burn**: ~$328k notional ($VIZZOR equivalent at year-1 prices)
+**Annual treasury inflow**: ~$328k + stablecoin revenue from non-token payers
 **Effective supply reduction**: ~3-5% of circulating supply per year (assuming 10-20M circulating)
 
 ---

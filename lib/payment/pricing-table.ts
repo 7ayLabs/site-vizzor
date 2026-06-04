@@ -21,9 +21,9 @@ export const TIER_PRICES_USD_CENTS: Readonly<
     annual: 9900, // $99.00
   },
   elite: {
-    monthly: 9900, // $99.00
-    annual: 99900, // $999.00
-    lifetime: 249900, // $2,499.00
+    monthly: 4900, // $49.00
+    annual: 49900, // $499.00
+    lifetime: 124900, // $1,249.00
   },
 };
 

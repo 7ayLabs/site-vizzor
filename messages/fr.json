@@ -390,17 +390,17 @@
       "elite": {
         "name": "Elite",
         "sub": "Agents autonomes qui tradent on-chain sur les signaux Vizzor",
-        "price": "99 $",
+        "price": "49 $",
         "priceUnit": "/ mois",
-        "annualPrice": "999 $",
-        "annualSub": "Économisez 16% en facturation annuelle",
-        "cta": "Obtenir Elite · 99 $/mois",
+        "annualPrice": "499 $",
+        "annualSub": "Économisez 15% en facturation annuelle",
+        "cta": "Obtenir Elite · 49 $/mois",
         "cadences": {
           "annual": {
-            "label": "Payer annuellement · 999 $/an (économisez 189 $)"
+            "label": "Payer annuellement · 499 $/an (économisez 89 $)"
           },
           "lifetime": {
-            "label": "Paiement unique · 2 499 $ à vie (rentable en année 3)"
+            "label": "Paiement unique · 1 249 $ à vie (rentable en année 3)"
           }
         },
         "everythingIn": "Tout Pro, plus :",

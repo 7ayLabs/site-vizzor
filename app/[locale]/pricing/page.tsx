@@ -308,7 +308,7 @@ function TierCard({
 
       {/* Secondary cadence CTAs — annual + lifetime when applicable.
           Each is a real deep-link to the bot with its own payment
-          payload, so the lifetime $2,499 is actually purchasable. */}
+          payload, so the lifetime $1,249 is actually purchasable. */}
       {tier.altCadences.length > 0 && (
         <ul className="mt-3 flex flex-col gap-1.5">
           {tier.altCadences.map((cadence) => (

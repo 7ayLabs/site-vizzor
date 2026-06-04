@@ -390,17 +390,17 @@
       "elite": {
         "name": "Elite",
         "sub": "Autonomous on-chain trading agents acting on Vizzor signals",
-        "price": "$99",
+        "price": "$49",
         "priceUnit": "/ mo",
-        "annualPrice": "$999",
-        "annualSub": "Save 16% billed annually",
-        "cta": "Get Elite · $99/mo",
+        "annualPrice": "$499",
+        "annualSub": "Save 15% billed annually",
+        "cta": "Get Elite · $49/mo",
         "cadences": {
           "annual": {
-            "label": "Pay annually · $999/yr (save $189)"
+            "label": "Pay annually · $499/yr (save $89)"
           },
           "lifetime": {
-            "label": "Pay once · $2,499 lifetime (break-even year 3)"
+            "label": "Pay once · $1,249 lifetime (break-even year 3)"
           }
         },
         "everythingIn": "Everything in Pro, plus:",
