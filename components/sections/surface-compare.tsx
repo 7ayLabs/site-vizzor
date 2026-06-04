@@ -201,7 +201,7 @@ export async function SurfaceCompare() {
               bullets={telegramBullets}
               cta={
                 <CtaSecondary
-                  href="https://t.me/VizzorBot"
+                  href="https://t.me/vizzorai_bot"
                   external
                   size="md"
                 >

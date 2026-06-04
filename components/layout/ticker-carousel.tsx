@@ -19,12 +19,21 @@
  *
  * prefers-reduced-motion freezes the marquee via .marquee-track's media rule
  * in globals.css.
+ *
+ * On hover, each pill surfaces a small action menu:
+ *   - "Predict {SYMBOL}" — deep-links the visitor into the Telegram bot
+ *     with a pre-filled /start payload so the conversation lands on the
+ *     prediction flow for that symbol.
+ *   - "Auto-trade {SYMBOL}" — disabled, badged "Coming soon". The
+ *     autonomous execution surface is on the roadmap; the visible
+ *     placeholder pre-signals it without making a clickable promise.
  */
 
 import { useTranslations } from 'next-intl';
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { CoinIcon } from '@/components/ui/coin-icon';
 import { AnimatedNumber } from '@/components/ui/animated-number';
+import { useTicker } from '@/lib/api';
 import { getTicker } from '@/lib/snapshot';
 import type { TickerEntry } from '@/lib/types';
 
@@ -35,50 +44,118 @@ interface TickerCarouselProps {
 const DIVIDER_STYLE: CSSProperties = { height: '14px' };
 
 function TickerPill({ entry }: { entry: TickerEntry }) {
+  const t = useTranslations('ticker');
+  const [open, setOpen] = useState(false);
   const positive = entry.changePct >= 0;
+
+  const predictHref = `https://t.me/vizzorai_bot?start=predict_${entry.symbol}`;
+
   return (
-    <span className="flex items-center gap-2 px-4 whitespace-nowrap">
-      <CoinIcon symbol={entry.symbol} size={16} />
-      <span className="mono tabular text-[11px] text-[var(--fg-3)]">
-        {entry.symbol}
-      </span>
-      <span className="mono tabular text-[12px] text-[var(--fg)]">
-        <AnimatedNumber value={entry.price} format="usd" duration={500} />
-      </span>
-      <span
-        className="mono tabular text-[11px]"
-        style={{ color: positive ? 'var(--accent)' : 'var(--danger)' }}
-      >
-        <AnimatedNumber
-          value={entry.changePct * 100}
-          format="pct"
-          duration={500}
-          decimals={2}
-          prefix={positive ? '+' : ''}
+    <span
+      className="relative inline-flex items-center"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <span className="flex items-center gap-2 px-4 whitespace-nowrap cursor-default">
+        <CoinIcon symbol={entry.symbol} size={16} />
+        <span className="mono tabular text-[11px] text-[var(--fg-3)]">
+          {entry.symbol}
+        </span>
+        <span className="mono tabular text-[12px] text-[var(--fg)]">
+          <AnimatedNumber value={entry.price} format="usd" duration={500} />
+        </span>
+        <span
+          className="mono tabular text-[11px]"
+          style={{ color: positive ? 'var(--accent)' : 'var(--danger)' }}
+        >
+          <AnimatedNumber
+            value={entry.changePct * 100}
+            format="pct"
+            duration={500}
+            decimals={2}
+            prefix={positive ? '+' : ''}
+          />
+        </span>
+        <span
+          aria-hidden
+          className="ml-2 inline-block w-px bg-[var(--border)] align-middle"
+          style={DIVIDER_STYLE}
         />
       </span>
-      <span
-        aria-hidden
-        className="ml-2 inline-block w-px bg-[var(--border)] align-middle"
-        style={DIVIDER_STYLE}
-      />
+
+      {open && (
+        // Outer wrapper carries an invisible pt-1.5 bridge so the cursor
+        // can travel from the pill bottom into the menu without crossing
+        // a hover-gap that would fire mouseleave on the parent span.
+        <div
+          className="absolute left-1/2 top-full z-50 -translate-x-1/2 pt-1.5"
+        >
+          <div
+            role="menu"
+            aria-label={`${entry.symbol} actions`}
+            className="border border-[var(--border)] bg-[var(--surface)] whitespace-nowrap"
+          >
+            <a
+              role="menuitem"
+              href={predictHref}
+              target="_blank"
+              rel="noopener"
+              className="
+                block px-3 py-1.5 mono tabular text-[10.5px]
+                uppercase tracking-[0.14em] text-[var(--fg)]
+                hover:bg-[var(--surface-2)]
+              "
+            >
+              {t('predict', { symbol: entry.symbol })}
+            </a>
+            <div
+              role="menuitem"
+              aria-disabled="true"
+              className="
+                flex items-center gap-2 border-t border-[var(--border)]
+                px-3 py-1.5 mono tabular text-[10.5px]
+                uppercase tracking-[0.14em] text-[var(--fg-3)]
+                cursor-not-allowed select-none
+              "
+            >
+              <span>{t('autoTrade', { symbol: entry.symbol })}</span>
+              <span aria-hidden className="opacity-50">·</span>
+              <span>{t('comingSoon')}</span>
+            </div>
+          </div>
+        </div>
+      )}
     </span>
   );
 }
 
 export function TickerCarousel({ entries }: TickerCarouselProps) {
   const t = useTranslations('ticker');
-  const data = entries && entries.length > 0 ? entries : getTicker();
+  // SSR seed comes from the snapshot (passed via props by the server
+  // wrapper). Once hydrated, SWR pulls live prices from /api/ticker
+  // every 30s and the component re-renders with kinetic tweens.
+  const live = useTicker(30_000);
+  const data =
+    live.data && live.data.length > 0
+      ? live.data
+      : entries && entries.length > 0
+        ? entries
+        : getTicker();
 
   return (
+    // `overflow-x-clip` (NOT `hidden`) is the key: per CSS spec, `clip`
+    // can coexist with `visible` on the other axis without auto-promoting.
+    // Using `hidden` would silently force overflow-y to `auto`, clipping
+    // the hover dropdown that escapes below the bar.
     <div
       role="marquee"
       aria-label={t('ariaLabel')}
       className="
-        relative w-full overflow-hidden
+        relative z-50 w-full
         border-b border-[var(--border)]
         bg-[var(--surface)]
         h-8 sm:h-9
+        overflow-x-clip overflow-y-visible
       "
     >
       {/* Scrolling track — duplicated content for seamless wrap. */}

@@ -1,18 +1,21 @@
 /**
  * Top-20 cryptocurrency metadata for the homepage ticker carousel.
  *
- * Logo URLs use CoinCap's public CDN (https://assets.coincap.io/assets/icons/)
- * — free, reliable, ~2kb per icon. Chain icons use DeFiLlama's CDN.
+ * Logo URLs use the open-source `atomiclabs/cryptocurrency-icons` repo
+ * served via jsDelivr — globally cached, free, predictable URL pattern.
+ * The `<CoinIcon>` component falls back to a monogram tile if a key 404s
+ * (e.g. for newer tokens like HYPE that pre-date the icon repo).
  *
  * Add a symbol here and it shows up in the ticker. Order is roughly
- * market-cap descending as of 2026-05-31; tweak freely.
+ * market-cap descending (stablecoins intentionally excluded — they don't
+ * carry price-action information for prediction context).
  */
 
 export interface CoinMeta {
   symbol: string;
   name: string;
   geckoId: string;
-  iconKey: string; // CoinCap icon key (lowercase symbol usually)
+  iconKey: string; // jsdelivr icon key (lowercase symbol; alias for renames)
   chain?: string;
 }
 
@@ -30,7 +33,9 @@ export const TOP_20: CoinMeta[] = [
   { symbol: 'LINK', name: 'Chainlink', geckoId: 'chainlink', iconKey: 'link' },
   { symbol: 'DOT', name: 'Polkadot', geckoId: 'polkadot', iconKey: 'dot' },
   { symbol: 'TON', name: 'Toncoin', geckoId: 'the-open-network', iconKey: 'ton' },
-  { symbol: 'MATIC', name: 'Polygon', geckoId: 'matic-network', iconKey: 'matic' },
+  // MATIC migrated to POL in late 2024. Logo glyph is identical, so we
+  // reuse the matic icon key to avoid a monogram fallback for POL.
+  { symbol: 'POL', name: 'Polygon', geckoId: 'matic-network', iconKey: 'matic' },
   { symbol: 'LTC', name: 'Litecoin', geckoId: 'litecoin', iconKey: 'ltc' },
   { symbol: 'BCH', name: 'Bitcoin Cash', geckoId: 'bitcoin-cash', iconKey: 'bch' },
   { symbol: 'NEAR', name: 'NEAR Protocol', geckoId: 'near', iconKey: 'near' },
@@ -48,7 +53,7 @@ export const TOP_20_BY_SYMBOL: Record<string, CoinMeta> = TOP_20.reduce(
 );
 
 export function coinIconUrl(iconKey: string): string {
-  return `https://assets.coincap.io/assets/icons/${iconKey.toLowerCase()}@2x.png`;
+  return `https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@master/svg/color/${iconKey.toLowerCase()}.svg`;
 }
 
 export function chainIconUrl(chain: string): string {

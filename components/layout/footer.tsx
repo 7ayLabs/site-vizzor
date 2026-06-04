@@ -15,6 +15,7 @@
  */
 import type { ComponentProps } from 'react';
 import { getTranslations } from 'next-intl/server';
+import Image from 'next/image';
 import { Github, Send, MessagesSquare, Twitter, AtSign } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 
@@ -86,10 +87,24 @@ export async function Footer() {
           <div className="col-span-2 md:col-span-1">
             <Link
               href="/"
-              className="inline-flex items-baseline gap-1.5 text-[15px] font-semibold tracking-tight text-[var(--fg)]"
+              aria-label="Vizzor home"
+              className="inline-flex items-center gap-2 text-[15px] font-semibold tracking-tight text-[var(--fg)]"
             >
-              <span aria-hidden className="mono text-[var(--accent)]">▣</span>
-              vizzor
+              <Image
+                src="/brand/vizzor_darkicon.png"
+                alt=""
+                width={364}
+                height={535}
+                className="block dark:hidden h-6 w-auto"
+              />
+              <Image
+                src="/brand/vizzor_icon.png"
+                alt=""
+                width={364}
+                height={535}
+                className="hidden dark:block h-6 w-auto"
+              />
+              <span>vizzor</span>
               <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--fg-3)]">.ai</span>
             </Link>
             <p className="mt-3 text-[13px] leading-relaxed text-[var(--fg-2)] max-w-[260px]">
