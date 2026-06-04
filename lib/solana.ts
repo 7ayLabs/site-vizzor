@@ -26,6 +26,35 @@ export function solanaRpcUrl(): string {
   );
 }
 
+/**
+ * Production-safe wrapper around `solanaRpcUrl()`. Throws if running in
+ * production without a dedicated RPC configured.
+ *
+ * Use this in any code path that triggers a real RPC call. The plain
+ * `solanaRpcUrl()` is preserved for dev/test code that wants the
+ * fallback chain unconditionally.
+ *
+ * The public mainnet-beta default is rate-limited and unsafe for burn
+ * verification under load (plan §10.2, A6 RPC compromise / outage).
+ * Failing closed at startup is preferable to a quiet degradation that
+ * surfaces as `rpc_error` to paying users.
+ */
+export function getRpc(): string {
+  if (
+    process.env.NODE_ENV === 'production' &&
+    !process.env.SOLANA_RPC_URL &&
+    !process.env.NEXT_PUBLIC_SOLANA_RPC_URL
+  ) {
+    throw new Error(
+      '[vizzor-solana] refusing to call RPC: SOLANA_RPC_URL is unset in production. ' +
+        'The public mainnet-beta default is rate-limited and unsafe for burn verification ' +
+        'under load. Configure a dedicated provider and set SOLANA_RPC_URL. ' +
+        'See docs/ops/secrets.md.',
+    );
+  }
+  return solanaRpcUrl();
+}
+
 export function vizzorMint(): string | null {
   return process.env.NEXT_PUBLIC_VIZZOR_MINT ?? null;
 }
