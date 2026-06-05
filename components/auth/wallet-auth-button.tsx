@@ -236,7 +236,7 @@ function ConnectFlow({
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ wallet }),
+        body: JSON.stringify({ wallet, action: 'login' }),
       });
       const nonceData = (await nonceRes.json()) as {
         ok: boolean;
@@ -261,6 +261,7 @@ function ConnectFlow({
         body: JSON.stringify({
           wallet,
           signature: sigB58,
+          action: 'login',
           issuedAt: nonceData.issuedAt,
           expiresAt: nonceData.expiresAt,
         }),

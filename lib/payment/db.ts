@@ -162,6 +162,22 @@ function runV020Migrations(db: DB): void {
     `CREATE INDEX IF NOT EXISTS idx_subs_telegram ON subscriptions(telegram_user_id)`,
   );
   addColumnIfMissing(db, 'auth_sessions', 'telegram_user_id', 'INTEGER');
+
+  // Persistent burn-signature replay cache. Replaces the in-memory
+  // LRU previously held inside lib/solana.ts. Eviction policy is the
+  // same: cap at VIZZOR_REPLAY_CACHE_SIZE (default 4096) rows, drop
+  // the oldest 25% by `seen_at` when over the cap. See RFC
+  // docs/rfc/v0.2.0/crypto-security.md §6.1 for the threat model.
+  // The table is additive; a fresh deploy with no rows behaves
+  // identically to a fresh in-memory cache. (C4 owns this table.)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS signature_replay_cache (
+      signature  TEXT PRIMARY KEY,
+      seen_at    INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000)
+    );
+    CREATE INDEX IF NOT EXISTS idx_replay_seen_at
+      ON signature_replay_cache(seen_at);
+  `);
 }
 
 export function getDb(): DB {

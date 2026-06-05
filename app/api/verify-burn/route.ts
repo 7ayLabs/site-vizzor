@@ -15,7 +15,7 @@
  */
 
 import { isTokenLive } from '@/lib/feature-flags';
-import { verifyBurnTx } from '@/lib/solana';
+import { verifyBurnTx } from '@/lib/solana-server';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
