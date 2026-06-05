@@ -29,6 +29,32 @@ export const SIWS_DOMAIN = 'vizzor.ai';
 export const NONCE_TTL_MS = 5 * 60 * 1000;
 export const AUTH_TTL_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Scope of the SIWS signature. `login` produces a session cookie;
+ * `link` binds the wallet to a Telegram user via wallet_links. Action
+ * is baked into the canonical message bytes, so an ed25519 signature
+ * for one action cannot satisfy the other route. See RFC §5.2.
+ */
+export type SiwsAction = 'login' | 'link';
+
+const ACTION_LABELS: Record<SiwsAction, string> = {
+  login: 'Login',
+  link: 'Link Wallet',
+};
+
+export function siwsActionLabel(action: SiwsAction): string {
+  return ACTION_LABELS[action];
+}
+
+/**
+ * Parse an `action` field from an untrusted source (request body or
+ * cookie segment). Returns null on anything not in the enum; callers
+ * MUST fail closed on null.
+ */
+export function parseSiwsAction(raw: unknown): SiwsAction | null {
+  return raw === 'login' || raw === 'link' ? raw : null;
+}
+
 export function generateNonce(): string {
   // 16 bytes hex = 32 chars, plenty of entropy for nonce purposes.
   return randomBytes(16).toString('hex');
@@ -41,12 +67,17 @@ export function generateAuthToken(): string {
 
 /**
  * Build the canonical SIWS message the wallet signs. Format follows
- * the CAIP-122 / SIWE template adapted for Solana. Domain and nonce
- * are bound; any rewrite invalidates the signature.
+ * the CAIP-122 / SIWE template adapted for Solana. Domain, nonce, and
+ * action are bound; any rewrite invalidates the signature.
+ *
+ * The `Action:` line is an extension over the CAIP-122 baseline. It
+ * defends against cross-route signature replay (login signature
+ * replayed against the link route or vice versa) — see RFC §5.2.
  */
 export function buildSiwsMessage(opts: {
   wallet: string;
   nonce: string;
+  action: SiwsAction;
   issuedAt: Date;
   expiresAt: Date;
 }): string {
@@ -59,6 +90,7 @@ export function buildSiwsMessage(opts: {
     `URI: https://${SIWS_DOMAIN}`,
     'Version: 1',
     `Chain ID: solana:mainnet`,
+    `Action: ${ACTION_LABELS[opts.action]}`,
     `Nonce: ${opts.nonce}`,
     `Issued At: ${opts.issuedAt.toISOString()}`,
     `Expiration Time: ${opts.expiresAt.toISOString()}`,

@@ -14,7 +14,7 @@ This RFC discharges the deferred audit obligation that the binding RFC §8 deleg
 The surface in scope:
 
 - `lib/payment/siws.ts` — wallet-based browser auth (SIWS) for the site.
-- `lib/solana.ts` — `verifyBurnTx` + the SPL transfer parser that gates the burn-to-predict path.
+- `lib/solana.ts` (client-safe constants + env helpers) and `lib/solana-server.ts` (`verifyBurnTx` + SPL transfer parser + ATA self-test) — the burn-to-predict gate.
 - `lib/payment/watcher.ts` — Solana watcher that confirms session payments and mints subscriptions.
 - `lib/payment/treasury.ts` — treasury address indirection (HD derivation comes from C1).
 - `lib/payment/db.ts` — site SQLite store for sessions, subscriptions, grants, auth sessions, wallet links.
@@ -80,8 +80,8 @@ For each pair, the relevant attack vectors, the controls today, and the gaps + r
 ### 4.2 Treasury keypair × A4 (supply chain)
 
 - **Vector**: a compromised `@solana/spl-token` or `@solana/web3.js` derives an unexpected ATA, so the watcher confirms transfers that did not actually land in the incinerator or treasury ATA.
-- **Today**: ATA derivation in `lib/solana.ts:257-268` is implemented locally with hard-coded program IDs (`TOKEN_PROGRAM_ID`, `ATA_PROGRAM_ID`) rather than imported from `@solana/spl-token`. This is a defensive choice that reduces blast radius. The watcher's owner check in `lib/payment/watcher.ts:181-211` does NOT call `getAssociatedTokenAddress`; instead it cross-references via post-token-balance owner == `treasuryOwner`, which is robust to a single compromised dependency.
-- **Gap**: P2 — `deriveAssociatedTokenAddress` in `lib/solana.ts` calls `PublicKey.findProgramAddressSync` from `@solana/web3.js`, so a compromise of that package can still influence the derived ATA. The fallback path that uses post-token-balance owner deltas (lib/solana.ts:227-244) catches this for the burn path. Recommendation: add a startup assertion that `INCINERATOR` ATA derivation against a known mint matches the on-chain value at boot, and refuse to start the watcher otherwise. Backlog item B1.
+- **Today**: ATA derivation in `lib/solana.ts` is implemented locally with hard-coded program IDs (`TOKEN_PROGRAM_ID`, `ATA_PROGRAM_ID`) rather than imported from `@solana/spl-token`. This is a defensive choice that reduces blast radius. The watcher's owner check in `lib/payment/watcher.ts:181-211` does NOT call `getAssociatedTokenAddress`; instead it cross-references via post-token-balance owner == `treasuryOwner`, which is robust to a single compromised dependency.
+- **Patch in this PR**: §6.2 below. `verifyBurnTx` now runs a memoized startup assertion (`runAtaSelfTest`) that compares the derived incinerator ATA against `VIZZOR_EXPECTED_INCINERATOR_ATA` and fails closed with `ata_self_test_failed` on mismatch. When the env var is unset the self-test is a no-op (dev/staging). Backlog item B1 / B9 closed.
 
 ### 4.3 Treasury keypair × A5 (insider)
 
@@ -130,7 +130,7 @@ For each pair, the relevant attack vectors, the controls today, and the gaps + r
 
 - **Vector**: steal the cookie via XSS, MITM, or session fixation.
 - **Today**: cookies are `HttpOnly`, `SameSite=Lax`. The verify route deletes the nonce cookie on success.
-- **Gap**: P2 — the auth-session cookie does NOT set `Secure`. On a non-TLS dev path that ships to prod, the cookie can be intercepted. Recommendation: add `Secure` when `NODE_ENV === 'production'` or when `req.url` is HTTPS. Patch shipped in this PR? No — left as backlog B6 because it requires a coordinated env-var change with C6 (`NODE_ENV` enforcement) and the existing v0.1.0 cookies must not regress on staging which often runs without TLS.
+- **Patch in this PR**: both `vizzor.siws.nonce` and `vizzor.auth` now append `; Secure` when `process.env.NODE_ENV === 'production'`. Staging without TLS keeps the pre-patch behavior (no regression). The toggle lives in `app/api/auth/siws/{nonce,verify}/route.ts`. Backlog item B6 closed.
 
 ### 4.11 Replay cache × A1, A2
 
@@ -226,9 +226,9 @@ No correctness gap. The library choice (`tweetnacl` 1.0.3) is the upstream Solan
 
 ### 6.1 Persistent replay cache (P0, patched in this PR)
 
-**Finding.** The in-memory `usedSignatures` map in `lib/solana.ts:39-52` survives only as long as the Node process. A restart wipes it. If a user's burn signature is within the 5-minute on-chain replay window AND the process restarts in that window, the signature is replayable against `/api/predict` once more, granting an extra paid prediction.
+**Finding.** The in-memory `usedSignatures` map previously held in `lib/solana.ts` survived only as long as the Node process. A restart wiped it. If a user's burn signature is within the 5-minute on-chain replay window AND the process restarted in that window, the signature was replayable against `/api/predict` once more, granting an extra paid prediction.
 
-**Patch shipped.** This PR introduces `lib/payment/replay-cache.ts` with a `signature_replay_cache` SQLite table backing the same `rememberSignature` / `wasSignatureUsed` API. Eviction policy: cap at `VIZZOR_REPLAY_CACHE_SIZE` (default 4096) rows ordered by `seen_at` ASC; the insert drops the oldest 25% when over the cap (matches the in-memory policy verbatim). The table is additive (added to `runV020Migrations` in `lib/payment/db.ts`); a fresh deploy with no rows behaves identically to a fresh in-memory cache, preserving backwards compatibility.
+**Patch shipped.** `lib/payment/replay-cache.ts` exports `hasSignature(sig)` and `rememberSignature(sig)` backed by the `signature_replay_cache` SQLite table. `lib/solana-server.ts:verifyBurnTx` calls these instead of the old in-memory Map. Eviction policy: cap at `VIZZOR_REPLAY_CACHE_SIZE` (default 4096) rows ordered by `seen_at` ASC; the insert drops the oldest 25% when over the cap (matches the in-memory policy verbatim). The table is additive (added to `runV020Migrations` in `lib/payment/db.ts`); a fresh deploy with no rows behaves identically to a fresh in-memory cache, preserving backwards compatibility.
 
 **Schema.**
 
@@ -248,7 +248,7 @@ The `signature` column is the same base58 signature string the on-chain check se
 
 ### 6.2 ATA validation in `sumIncineratorTransfers`
 
-**Finding (P3, informational).** The incinerator ATA derivation in `lib/solana.ts:170-178` is correct:
+**Finding (P3, informational).** The incinerator ATA derivation in `lib/solana.ts` is correct:
 
 ```ts
 incineratorAta = deriveAssociatedTokenAddress(
@@ -257,13 +257,11 @@ incineratorAta = deriveAssociatedTokenAddress(
 );
 ```
 
-`deriveAssociatedTokenAddress` (`lib/solana.ts:257-268`) uses the canonical `[owner, TOKEN_PROGRAM_ID, mint]` PDA derivation under the Associated Token Program ID. The comparison at line 211 (`if (dest === incineratorAta)`) is exact-string. There is no permissive prefix match, no case-insensitive match.
+`deriveAssociatedTokenAddress` uses the canonical `[owner, TOKEN_PROGRAM_ID, mint]` PDA derivation under the Associated Token Program ID. The comparison `if (dest === incineratorAta)` is exact-string. There is no permissive prefix match, no case-insensitive match.
 
 **Defense in depth.** When the parsed-instruction path does not yield a definitive match (transferred.matchedMint false OR matchedDestination false), the code falls back to walking `postTokenBalances` and matches `owner === INCINERATOR_ADDRESS && mint === expectedMint`. This is robust to instruction-parsing variations across RPC providers and to a malicious RPC that elides the parsed `info.destination`.
 
-**Gap (P3, B9).** The current code computes `incineratorAta` once per call and trusts the local helper. If `@solana/web3.js`'s `PublicKey.findProgramAddressSync` is compromised (A4), the derived ATA could be different. The fallback path catches this; the parsed-instruction path does not. Recommended hardening: add a startup self-test that derives the ATA for the configured `vizzorMint()` and compares against an env-configured `EXPECTED_INCINERATOR_ATA`; refuse to call `verifyBurnTx` if mismatched. Backlog B1+B9.
-
-**Patch in this PR?** No — the assert-on-startup change requires an env var (`VIZZOR_EXPECTED_INCINERATOR_ATA`) and the v0.2.0 `.env.example` registry is C6's responsibility. Recorded as B9 with a concrete patch ready.
+**Patch shipped (B1 / B9).** `verifyBurnTx` now runs `runAtaSelfTest(mint)` immediately after the mint check. The helper memoizes a once-per-process assertion that the derived incinerator ATA equals `process.env.VIZZOR_EXPECTED_INCINERATOR_ATA`. On mismatch the function latches `passed=false` for that mint and `verifyBurnTx` returns `{ ok: false, reason: 'ata_self_test_failed' }` for every subsequent call. When the env var is unset the self-test is a no-op so dev / staging stay functional. The expected value must be added to C6's `.env.example` registry; operators set it via the secrets manager. The combination of (a) local derivation with hard-coded program IDs, (b) startup self-test, and (c) `postTokenBalances` fallback closes the A4 attack surface.
 
 ### 6.3 Burn-amount slippage
 
@@ -407,15 +405,15 @@ Steps 1–3 are zero-downtime. Between steps 4 and 5 (bot deploys but site has n
 
 The following findings are NOT patched in this PR. They are filed here as a checklist for follow-up cycles. Severity-tagged.
 
-- [ ] **B1 (P2)**: Add a startup self-test that asserts `deriveAssociatedTokenAddress(INCINERATOR, vizzorMint())` matches a known-good `VIZZOR_EXPECTED_INCINERATOR_ATA` env var. Refuse to serve `/api/predict` burn checks if mismatched.
+- [x] **B1 (P2)** *(shipped this PR)*: `runAtaSelfTest` memoizes a startup assertion that `deriveAssociatedTokenAddress(INCINERATOR, vizzorMint())` matches `VIZZOR_EXPECTED_INCINERATOR_ATA`. `verifyBurnTx` returns `ata_self_test_failed` on mismatch. No-op when the env var is unset (dev / staging).
 - [ ] **B2 (P2)**: Per-IP rate limit (10/s) on `/api/grants/[code]/redeem`, `/api/subscriptions/lookup`, `/api/wallet-links/challenge`. Fail-closed.
 - [ ] **B3 (P3)**: Emit a `bot_auth_failed_total` metric increment on every 401 from a bot-authed route. Alert on sustained >1/min.
 - [ ] **B4 (P2)**: Per-challenge nonce-cookie naming (UUID-keyed) so concurrent SIWS challenges do not race-overwrite each other.
 - [ ] **B5 (P3)**: Render the Telegram deep-link as a tap-to-open intent on mobile rather than an `<a href>` that leaks the code to referrer/history.
-- [ ] **B6 (P2)**: Add `Secure` attribute to the `vizzor.auth` cookie when serving over HTTPS. Requires coordination with C6 for the env-driven toggle.
+- [x] **B6 (P2)** *(shipped this PR)*: `vizzor.auth` and `vizzor.siws.nonce` cookies append `; Secure` when `NODE_ENV === 'production'`. Staging without TLS is unaffected.
 - [ ] **B7 (P3)**: Store SHA-256 of `auth_sessions.token` instead of the raw token. Defends against stolen DB snapshots; v0.3.0 candidate due to migration cost.
 - [ ] **B8 (P3)**: Add `Statement:` label to the SIWS message line so SIWE-strict wallet UIs render the statement prominently.
-- [ ] **B9 (P2)**: Same as B1 — sub-finding for the ATA-derivation path; covered by the B1 self-test.
+- [x] **B9 (P2)** *(shipped this PR)*: Closed by B1's self-test; same code path covers both.
 - [ ] **B10 (P1)**: `pnpm overrides` to force `protobufjs >= 7.5.8`. Apply on `release/v0.2.0` after sub-branches merge, as a single mechanical commit.
 - [ ] **B11 (P3)**: Track `bigint-buffer` upstream; consider replacing `@solana/spl-token` with `@solana/kit` once stable.
 - [ ] **B12 (P3)**: Drop `@solana/wallet-adapter-torus` from the wallet bundle. Currently only Phantom + Solflare are instantiated in `components/wallet/wallet-provider.tsx`; torus is dead code that drags in `elliptic`. Use a slim wallet bundle.
@@ -430,18 +428,20 @@ The following findings are NOT patched in this PR. They are filed here as a chec
 | -------- | ----- | --- |
 | P0       | 2     | §5.2 SIWS cross-route replay (patched), §6.1 in-memory replay cache (patched) |
 | P1       | 3     | §4.3 treasury custody (specification in §7), §4.6 bot-secret leakage limited by single-use grants (RFC §9 rotation), §4.14 RPC fail-closed (defer to C6) |
-| P2       | 7     | §4.2 (B1), §4.5 (B2), §4.8 (B4), §4.10 (B6), §4.13 (B7), §6.2 (B9), §8.1 (B10) |
+| P2       | 7     | §4.2 / §6.2 (B1, B9 — patched), §4.5 (B2), §4.8 (B4), §4.10 (B6 — patched), §4.13 (B7), §8.1 (B10) |
 | P3       | 8     | §4.5 (B3), §4.9 (B5), §5.3 (B8), §8.1 (B11–B16) |
 
 ## 12. Verification
 
 The patches shipped in this PR are verified by:
 
-- `pnpm typecheck` passes on the branch HEAD after the SIWS action-scope changes and the persistent replay-cache module.
+- `pnpm typecheck` passes on the branch HEAD after the SIWS action-scope changes, the persistent replay-cache wiring, the ATA self-test, and the `Secure` cookie additions.
 - The `signature_replay_cache` migration is idempotent: re-running `init()` is a no-op (CREATE TABLE IF NOT EXISTS).
-- The action-scope change is a CONTRACT change; the verify route asserts the action it expects. C2's PR must consume `buildSiwsMessage({ action: 'Link Wallet', ... })`. This RFC and the PR body flag the coordination.
+- The action-scope change is a CONTRACT change. `buildSiwsMessage` now REQUIRES an `action: SiwsAction` argument; the verify route at `app/api/auth/siws/verify/route.ts` asserts `cookieAction === bodyAction === 'login'` and rejects with `action_mismatch` otherwise. C2's PR must consume `buildSiwsMessage({ action: 'link', ... })` for the link-wallet route. This RFC and the PR body flag the coordination.
+- ATA self-test latches on first mismatch and is mint-keyed: `runAtaSelfTest(mint)` re-validates if the configured `NEXT_PUBLIC_VIZZOR_MINT` changes at runtime, but a failure for a given mint persists until process restart.
+- Cookie `Secure` flag is gated on `process.env.NODE_ENV === 'production'`; staging continues to issue plain cookies and is unaffected.
 
-The audit findings listed in §10 are tracked in the v0.2.0 backlog under the labels they are tagged with.
+The audit findings listed in §10 are tracked in the v0.2.0 backlog under the labels they are tagged with. B1, B6, B9 are now closed by this PR.
 
 ---
 
@@ -451,12 +451,13 @@ Per `BRANCHING.md` Section 6, this RFC contains no `Co-Authored-By` trailer, no 
 
 ## Appendix B: References
 
-- `lib/payment/siws.ts:47-66` — current `buildSiwsMessage`. Extended in this PR with the `Action:` line.
-- `lib/payment/siws.ts:73-102` — `verifySiwsSignature`. Unchanged; the new wrapper `verifySiwsScopedSignature` adds the action assertion.
-- `lib/solana.ts:39-52` — in-memory `usedSignatures`. Replaced by `lib/payment/replay-cache.ts` in this PR.
-- `lib/solana.ts:97-146` — `verifyBurnTx`. Patched to consume the persistent cache.
-- `lib/solana.ts:170-178, 257-268` — `deriveAssociatedTokenAddress` and the incinerator ATA cross-check. Audit findings in §6.2.
+- `lib/payment/siws.ts` — `buildSiwsMessage` now takes a required `action: SiwsAction` argument and emits an `Action:` line above the `Nonce:` line. `parseSiwsAction` (new) is the boundary parser callers use on untrusted input. `verifySiwsSignature` is unchanged; the route layer composes the action assertion.
+- `lib/payment/replay-cache.ts` — persistent burn-signature replay cache backing `hasSignature` / `rememberSignature`. Replaces the in-memory `usedSignatures` Map previously held in `lib/solana.ts`.
+- `lib/solana.ts` — trimmed to client-safe constants and env helpers (`INCINERATOR_ADDRESS`, `solanaRpcUrl`, `vizzorMint`, `burnAmount`). Server-only verification moved to `lib/solana-server.ts` so the SQLite-backed replay cache is not pulled into the client bundle by the wallet components.
+- `lib/solana-server.ts` (new, `import 'server-only'`) — `verifyBurnTx`, `BurnVerification`, `runAtaSelfTest`, `sumIncineratorTransfers`, `deriveAssociatedTokenAddress`. `verifyBurnTx` now (a) consumes the persistent cache via `hasSignature(sig)` / `rememberSignature(sig)` and (b) gates every call behind `runAtaSelfTest(mint)`. `BurnVerification.reason` gains `ata_self_test_failed`. Imported by `app/api/predict/route.ts` and `app/api/verify-burn/route.ts`.
 - `lib/payment/db.ts` — gains `signature_replay_cache` table via `runV020Migrations`.
-- `app/api/auth/siws/verify/route.ts` — recomputes with `action: 'Login'`.
-- `docs/rfc/v0.2.0/architecture.md` §4, §5, §6 — invariants, env-var registry, failure-mode catalog.
-- `docs/rfc/v0.2.0/wallet-telegram-binding.md` §7 — bot shared-secret rotation contract.
+- `app/api/auth/siws/nonce/route.ts` — accepts `action` in body, embeds it as the 3rd dotted segment of the `vizzor.siws.nonce` cookie value, passes to `buildSiwsMessage`. Adds `; Secure` in production.
+- `app/api/auth/siws/verify/route.ts` — parses cookie action and body action, asserts both equal the route's expected action (`login`), rejects with `action_mismatch` otherwise. Adds `; Secure` in production on both the nonce-delete and the `vizzor.auth` cookies.
+- `components/auth/wallet-auth-button.tsx` — passes `action: 'login'` to both nonce and verify requests.
+- `docs/rfc/v0.2.0/architecture.md` §4, §5, §6 — invariants, env-var registry, failure-mode catalog. `VIZZOR_EXPECTED_INCINERATOR_ATA` is a new env addition (C6 will register).
+- `docs/rfc/v0.2.0/wallet-telegram-binding.md` §7 — bot shared-secret rotation contract. The link-wallet route landed there MUST consume `buildSiwsMessage({ action: 'link', ... })`.
