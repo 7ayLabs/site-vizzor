@@ -37,8 +37,19 @@ import { solanaTreasury, tonTreasury } from './treasury';
 
 export type PaymentTier = 'pro' | 'elite';
 export type PaymentCadence = 'monthly' | 'annual' | 'lifetime';
-export type PaymentChain = 'ton' | 'solana';
-export type PaymentToken = 'native' | 'vizzor';
+/**
+ * Chains accepted by v0.2.0 plan payments:
+ *   - 'ton'      — TON native, 15% discount, in-Telegram wallet UX
+ *   - 'solana'   — Solana, native SOL gets 10%, $VIZZOR (token='vizzor')
+ *                  gets the tiered 25/30/35% discount once isVzrLive()
+ *   - 'base'     — Base USDC, 5% discount, EVM L2 stablecoin
+ *   - 'arbitrum' — Arbitrum USDC, 5% discount, EVM L2 stablecoin
+ *
+ * The 'vzr' alias is reserved for the future $VZR token rename. Until
+ * the contract lands, on-chain payments on Solana use token='vizzor'.
+ */
+export type PaymentChain = 'ton' | 'solana' | 'base' | 'arbitrum';
+export type PaymentToken = 'native' | 'vizzor' | 'usdc';
 
 export interface CreateSessionInput {
   tier: PaymentTier;

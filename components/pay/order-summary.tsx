@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import type {
   PaymentCadence,
+  PaymentChain,
   PaymentTier,
   PaymentToken,
 } from '@/lib/payment/session';
@@ -26,6 +27,7 @@ import {
 interface OrderSummaryProps {
   tier: PaymentTier;
   cadence: PaymentCadence;
+  chain: PaymentChain;
   token: PaymentToken;
 }
 
@@ -35,7 +37,7 @@ interface RateResponse {
   reason?: string;
 }
 
-export function OrderSummary({ tier, cadence, token }: OrderSummaryProps) {
+export function OrderSummary({ tier, cadence, chain, token }: OrderSummaryProps) {
   const t = useTranslations('pay.summary');
   const [rate, setRate] = useState<number | null>(null);
   const [rateLoading, setRateLoading] = useState(true);
@@ -73,9 +75,11 @@ export function OrderSummary({ tier, cadence, token }: OrderSummaryProps) {
   const basePriceCents = priceCents(tier, cadence) ?? 0;
   const basePriceLabel = priceUsd(tier, cadence) ?? '$0';
   const effectivePriceLabel =
-    effectivePriceUsd(tier, cadence, token) ?? basePriceLabel;
+    effectivePriceUsd(tier, cadence, chain, token) ?? basePriceLabel;
   const effectivePriceUsdNumber = parsePriceUsd(effectivePriceLabel);
-  const discountPct = Math.round(discountBps(tier, cadence, token) / 100);
+  const discountPct = Math.round(
+    discountBps(tier, cadence, chain, token) / 100,
+  );
   const savedCents = Math.round(basePriceCents - (effectivePriceUsdNumber * 100));
   const savedLabel = `$${(savedCents / 100).toFixed(2)}`;
 

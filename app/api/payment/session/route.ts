@@ -79,6 +79,7 @@ export async function POST(req: Request) {
   const amountUsdCents = effectivePriceCents(
     tier as PaymentTier,
     cadence as PaymentCadence,
+    chain as PaymentChain,
     token as PaymentToken,
   );
   if (amountUsdCents === null) {
@@ -97,6 +98,7 @@ export async function POST(req: Request) {
     discountBps: discountBps(
       tier as PaymentTier,
       cadence as PaymentCadence,
+      chain as PaymentChain,
       token as PaymentToken,
     ),
   });
