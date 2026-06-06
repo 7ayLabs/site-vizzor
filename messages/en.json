@@ -246,48 +246,47 @@
     }
   },
   "hero": {
-    "ribbon": "{version} · climbing to {target}%+ tracked WR",
-    "headline": "Predictions with receipts.",
-    "sub": "AI-powered crypto forecasts across every chain and timeframe. Numbers, not opinions.",
-    "predictCta": "Try Vizzor",
-    "primaryCta": "Open in Telegram",
-    "secondary": "or install the CLI",
+    "ribbon": "{version} · climbing toward {target}% on the record",
+    "headline": "Predict. Resolve. Score.",
+    "sub": "Crypto AI that grades itself in public. Six lenses, one verdict.",
+    "tryCta": "Try Vizzor",
+    "orLabel": "or run it locally",
     "badges": {
-      "chains": "11 chains",
+      "chains": "11 chains live",
       "signals": "6 signal families",
-      "license": "BUSL-1.1 licensed"
+      "license": "BUSL-1.1 · self-host free"
     }
   },
   "whatsInIt": {
-    "eyebrow": "what you get",
+    "eyebrow": "what you actually get",
     "title": "One prediction. Full receipts.",
-    "sub": "Ask Vizzor about any token. You get a directional call, target prices, signal breakdown, and an auto-armed alert at the level the engine says matters.",
+    "sub": "Drop a ticker. Get a call, the targets, the signals behind it, and an alert that arms itself at the level the engine flagged. No screenshots, no shilling — every call hits the public ledger.",
     "bullets": {
-      "directional": "Directional call with calibrated confidence",
-      "targets": "Bull / base / bear targets at the requested horizon",
-      "snapshot": "Trigger snapshot — every signal that fired, no hidden contributors"
+      "directional": "Direction + calibrated confidence — not a vibe",
+      "targets": "Bull / base / bear targets at your horizon",
+      "snapshot": "Every signal that fired — nothing hidden, nothing cherry-picked"
     },
     "learnMore": "See the math"
   },
   "howItWorks": {
     "eyebrow": "how it works",
-    "title": "Six perspectives. One honest call.",
-    "lede": "Vizzor reads the market from six different angles at once. When most of them agree, you get a prediction. When they don't, you stay quiet.",
+    "title": "Six angles. One honest call.",
+    "lede": "Most AI tools take one feed and dress it up. Vizzor reads six independent angles at once — and stays silent unless they line up. Signal over noise, every time.",
     "footer": "Read the full ChronoVisor math →",
     "steps": {
       "fetch": {
         "title": "Listen",
-        "description": "Twelve live data feeds — prices on every exchange, whale wallets moving on-chain, breaking news, what people are betting on prediction markets. Refreshed every few seconds.",
+        "description": "Twelve live feeds wired in: exchange prices, whale wallets on-chain, breaking news, prediction-market odds. Refreshed every few seconds — no delays, no caching tricks.",
         "ariaLabel": "Six input signals fanning into a single fusion node"
       },
       "fuse": {
         "title": "Cross-check",
-        "description": "Each feed votes. Strong signals carry weight; weak ones get dampened. The engine learns from every past call — hits raise their family's vote, misses dampen it.",
+        "description": "Each feed casts a weighted vote. The engine remembers what worked: hits boost the family's voice, misses dampen it. The model keeps re-grading itself in public.",
         "ariaLabel": "Two converging curves meeting at a pulsing intersection point"
       },
       "emit": {
-        "title": "Wait for an A+ setup",
-        "description": "Most of the time, the signals disagree — and Vizzor stays silent. Only when at least four of six lenses line up does a prediction get sent. Quality over volume.",
+        "title": "Only ship when it lines up",
+        "description": "Most of the time, the signals disagree — and you hear nothing. A call only ships when at least four of six lenses agree. Fewer pings, sharper edge.",
         "ariaLabel": "Four gates of increasing height with a star marking the final A+ emission"
       }
     }
@@ -328,37 +327,37 @@
     "viewAll": "view all →"
   },
   "surfaceCompare": {
-    "eyebrow": "surfaces",
-    "title": "One engine. Three surfaces.",
-    "lede": "Vizzor doesn't lock you into one place. Pick the surface that matches how you live — they all share the same predictions and the same trigger snapshot.",
+    "eyebrow": "how you use it",
+    "title": "One engine. Three doors in.",
+    "lede": "Pick how you live. Same engine, same receipts — meet it on Telegram, in your terminal, or on a dashboard. Switch anytime.",
     "telegram": {
-      "pill": "recommended",
+      "pill": "most used",
       "title": "Telegram bot",
-      "sub": "Zero install. 32 commands. Where Vizzor lives day-to-day.",
+      "sub": "Zero install. 32 commands. Where Vizzor lives most days.",
       "features": {
-        "alerts": "Auto-armed price alerts on every trade plan",
-        "session": "Per-session WR · timezone-aware",
-        "runtime": "Runtime knobs · no YAML edits"
+        "alerts": "Alerts arm themselves at the level the engine flagged",
+        "session": "Win rate by session, tracked in your timezone",
+        "runtime": "Tune the engine from chat — no config files"
       },
       "cta": "Open Telegram"
     },
     "cli": {
       "title": "Command line",
-      "sub": "Indie quant chic. 18 commands. Pipes cleanly into your terminal workflow.",
+      "sub": "For terminal nerds. 18 commands. Pipes into anything.",
       "features": {
-        "offline": "Local SQLite state · runs offline with Ollama",
-        "json": "JSON output mode for scripting",
-        "engine": "Same engine, same receipts"
+        "offline": "Runs offline with Ollama · local SQLite state",
+        "json": "JSON output — drop it into scripts and notebooks",
+        "engine": "Same engine, same receipts, same calibration"
       },
       "cta": "CLI docs"
     },
     "dashboard": {
       "title": "Web dashboard",
-      "sub": "Visual. Real-time. For when you want to look at the receipts, not just read them.",
+      "sub": "Visual. Real-time. For when reading isn't enough — you want to watch it move.",
       "features": {
-        "websocket": "Live websocket updates",
-        "polymarket": "Polymarket edge scanner",
-        "paperTrading": "Paper-trading agents"
+        "websocket": "Streams over websocket — no refresh",
+        "polymarket": "Catches edges where Polymarket disagrees",
+        "paperTrading": "Paper-trade agents that follow signals"
       },
       "cta": "Dashboard docs",
       "mockup": {
@@ -374,65 +373,65 @@
   },
   "sixSignals": {
     "eyebrow": "signal families",
-    "title": "Six independent lenses. One verdict.",
-    "lede": "No single signal carries a prediction. Each family must contribute — and signals that disagree get a penalty, not a vote.",
+    "title": "Six lenses. One call.",
+    "lede": "No single signal carries a prediction. Each family has to chip in — and lenses that disagree cost the call confidence, they don't get to outvote the others.",
     "ariaLabel": "{family} signal family",
     "families": {
       "onChain": {
-        "description": "Whale flows, smart-money accumulation, stablecoin mint/burn velocity, exchange-flow imbalance, Coinbase premium.",
-        "reveal": "Multi-chain, free-tier APIs only. $250k+ events on 30s cadence."
+        "description": "Whale wallets, smart-money flows, stablecoin mint/burn, exchange in/outflows, Coinbase premium.",
+        "reveal": "Multi-chain. Free-tier RPCs only. Tracks $250k+ moves on a 30-second loop."
       },
       "mlEnsemble": {
-        "description": "Python sidecar (XGBoost + LightGBM + isotonic) OR JS-native fallback (RSI/MACD/Bollinger/EMA/volume/funding).",
-        "reveal": "Zero silent degradation when Python is absent."
+        "description": "Python ML stack (XGBoost + LightGBM, isotonic-calibrated) with a JS fallback (RSI, MACD, Bollinger, EMA, volume, funding).",
+        "reveal": "If Python is offline, the JS path takes over silently — same calibration, no downtime."
       },
       "predictionMarkets": {
-        "description": "Gamma + Polymarket implied probabilities with edge detection.",
-        "reveal": "Trades the spread when ChronoVisor disagrees with the market."
+        "description": "Polymarket and Gamma odds, with built-in edge detection.",
+        "reveal": "Trades the spread when ChronoVisor disagrees with the crowd."
       },
       "socialNarrative": {
-        "description": "News NLP (CryptoPanic + CoinGecko) + LLM catalyst classifier (prompt-cached, budget-gated).",
-        "reveal": "Headlines normalized to a calibrated sentiment CF, not a vibe score."
+        "description": "News NLP (CryptoPanic, CoinGecko) plus an LLM catalyst classifier — prompt-cached and budget-gated.",
+        "reveal": "Sentiment is a calibrated number, not a vibe — and we show the headline that moved it."
       },
       "patternMatch": {
-        "description": "Smart Money Concepts (BOS / CHoCH / liquidity sweeps) + ICT timing (kill-zones).",
-        "reveal": "Pattern library auto-populated from resolved backtest."
+        "description": "Smart Money Concepts (BOS, CHoCH, liquidity sweeps) plus ICT kill-zone timing.",
+        "reveal": "Pattern library rebuilds itself from every resolved trade."
       },
       "logicRules": {
-        "description": "14 base + 7 scalping FOL rules over derivatives, macro, and on-chain features.",
-        "reveal": "Per-rule accuracy tracked; poor rules halve their CF, good rules get +20%."
+        "description": "14 core rules + 7 scalping rules. First-order logic over derivatives, macro, and on-chain features.",
+        "reveal": "Each rule's accuracy is tracked live. Losing rules get their weight halved; winning rules get +20%."
       }
     }
   },
   "trustBecauseTracked": {
     "eyebrow": "receipts, not promises",
-    "title": "We track our own win rate. Decisively.",
-    "ringLabel": "tracked WR",
-    "ringCaption": "aggregate · all horizons · last 90d",
-    "ladderEyebrow": "four tier emission ladder",
+    "title": "Our win rate is public. Decisively scored.",
+    "ringLabel": "tracked win rate",
+    "ringCaption": "all horizons · last 90 days · everything counted",
+    "ladderEyebrow": "four-tier emission ladder",
     "tiers": {
       "highConviction": {
         "name": "high-conviction",
-        "description": "≥4-of-6 signal agreement + composite confidence ≥75 + horizon proven via calibrator."
+        "description": "At least 4 of 6 signals agree. Composite confidence ≥75. Horizon already proven by the calibrator."
       },
       "whaleConfirmed": {
         "name": "whale-confirmed",
-        "description": "High-conviction AND whale flow confirms direction. Built on multi-chain free-tier flow analysis."
+        "description": "High-conviction AND whale wallets are moving the same direction. The rarest tier — and the highest hit rate."
       },
       "tracked": {
         "name": "tracked",
-        "description": "Passes all gates but doesn't meet the higher bars. Still counted in the strict WR cohort."
+        "description": "Clears every gate, just shy of the top tiers. Still inside the strict cohort that decides the public WR."
       },
       "advisory": {
         "name": "advisory",
-        "description": "Passes only the soft gates. Excluded from the strict cohort but still resolves and feeds the calibrator."
+        "description": "Passes the soft gates only. Not in the strict cohort — but still resolved, still graded, still feeds the calibrator."
       }
     }
   },
   "ctaBlock": {
     "eyebrow": "start with one prediction",
     "title": "Predictions you can actually grade.",
-    "body": "Open the Telegram bot, ask for a prediction on any token, and watch it resolve. If it misses, the next one carries that into the calibrator. Receipts compound.",
+    "body": "Open the bot, ask about any token, and watch the call resolve. If it misses, the next one is sharper — the calibrator absorbs every outcome. Receipts compound.",
     "ctaTelegram": "Open in Telegram",
     "ctaCli": "Install the CLI",
     "manifesto": "Read the manifesto →"
