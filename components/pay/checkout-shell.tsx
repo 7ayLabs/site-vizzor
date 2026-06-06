@@ -296,7 +296,12 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
         </p>
       </div>
 
-      <OrderSummary tier={tier} cadence={cadence} token={selector.token} />
+      <OrderSummary
+        tier={tier}
+        cadence={cadence}
+        chain={selector.chain}
+        token={selector.token}
+      />
     </div>
   );
 
@@ -345,7 +350,7 @@ function PaymentInfraPending({
           <span aria-hidden>→</span>
         </a>
       </div>
-      <OrderSummary tier={tier} cadence={cadence} token="native" />
+      <OrderSummary tier={tier} cadence={cadence} chain="ton" token="native" />
     </div>
   );
 }
