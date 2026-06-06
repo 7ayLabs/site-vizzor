@@ -1,0 +1,98 @@
+# site-vizzor compose entry — production
+#
+# This file is the source of truth for the site-vizzor service block that
+# lives in the adjacent `7ayLabs/vizzor` product repo's
+# `docker-compose.prod.yml`. It is committed here for review under v0.2.0
+# infra-hardening (C6) but the operator-facing edit happens in the product
+# repo, NOT here.
+#
+# To apply: copy the `site-vizzor:` block below into the `services:` map of
+# `docker-compose.prod.yml`, copy the `site-vizzor-db:` block into the
+# `volumes:` map at the bottom of the same file, then on the VPS:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d \
+#     --no-deps --force-recreate site-vizzor
+#
+# Port 7120 is reserved for site-vizzor in the 71xx block. Do not change.
+
+services:
+  site-vizzor:
+    image: ghcr.io/7aylabs/site-vizzor:latest
+    container_name: site-vizzor
+    restart: always
+    # ──────────────────────────────────────────────────────────────────
+    # Persistent state
+    # ──────────────────────────────────────────────────────────────────
+    # The SQLite DB at /app/.vizzor/site.db holds payment_sessions,
+    # subscriptions, grants, auth_sessions, and (from C2) wallet_links.
+    # Without this volume, every container recreate wipes all of them.
+    volumes:
+      - site-vizzor-db:/app/.vizzor
+    # ──────────────────────────────────────────────────────────────────
+    # Environment
+    # ──────────────────────────────────────────────────────────────────
+    # All values come from /opt/7aylabs/.env on the VPS, which is
+    # rendered by `op inject` from 1Password per docs/ops/secrets.md.
+    # The block below documents the contract; real values never live
+    # in this YAML.
+    environment:
+      # — Build identity (informational; baked into the image but mirrored
+      #   into runtime env for /api/health) —
+      NODE_ENV: production
+
+      # — Public-facing API base; consumed by both server and client code —
+      NEXT_PUBLIC_VIZZOR_API_URL: https://api.vizzor.ai
+
+      # — Persistent DB path (must point inside the named volume) —
+      VIZZOR_SITE_DB: /app/.vizzor/site.db
+
+      # — Solana RPC (REQUIRED in production; the site refuses to start
+      #   the watcher without this; see lib/payment/watcher.ts) —
+      SOLANA_RPC_URL: ${SOLANA_RPC_URL}
+      NEXT_PUBLIC_SOLANA_RPC_URL: ${NEXT_PUBLIC_SOLANA_RPC_URL}
+
+      # — Treasury addresses (public; not secret but env-driven for chain
+      #   isolation between staging and prod) —
+      VIZZOR_SOLANA_TREASURY: ${VIZZOR_SOLANA_TREASURY}
+      VIZZOR_TON_TREASURY: ${VIZZOR_TON_TREASURY}
+
+      # — $VIZZOR mint (public; on-chain identifier) —
+      NEXT_PUBLIC_VIZZOR_MINT: ${NEXT_PUBLIC_VIZZOR_MINT}
+
+      # — Bot ↔ site shared secret for the C2 binding routes —
+      VIZZOR_BOT_SHARED_SECRET: ${VIZZOR_BOT_SHARED_SECRET}
+
+      # — HD treasury mnemonic (required only once VIZZOR_HD_DERIVATION_ENABLED
+      #   is flipped on by C1 + C4) —
+      VIZZOR_TREASURY_MNEMONIC: ${VIZZOR_TREASURY_MNEMONIC}
+      VIZZOR_HD_DERIVATION_ENABLED: ${VIZZOR_HD_DERIVATION_ENABLED:-false}
+
+      # — Observability sink. Unset => Sentry is a no-op. —
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.0}
+
+    # ──────────────────────────────────────────────────────────────────
+    # Networking
+    # ──────────────────────────────────────────────────────────────────
+    # Bind to loopback only; Caddy on the VPS handles TLS and reverse
+    # proxy at vizzor.ai -> 127.0.0.1:7120.
+    ports:
+      - "127.0.0.1:7120:3000"
+    # ──────────────────────────────────────────────────────────────────
+    # Healthcheck — matches the HEALTHCHECK in the Dockerfile so compose
+    # has a second source of truth. The 8x5s smoke-test cadence in
+    # .github/workflows/deploy.yml lives inside the 20s start_period.
+    # ──────────────────────────────────────────────────────────────────
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  site-vizzor-db:
+    name: site-vizzor-db
+    # Default driver (local) is fine on a single-VPS deployment. If/when
+    # the deployment moves to a multi-host cluster, swap to an external
+    # driver (e.g. a managed NFS or a CSI plugin) at that point.

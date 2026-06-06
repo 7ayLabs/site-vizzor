@@ -36,6 +36,7 @@ import { acceptTonPayments } from '@/lib/feature-flags';
 import { listPendingSessions, type SessionRow } from './db';
 import { finalizeSession } from './session';
 import { tonTreasury } from './treasury';
+import { markStarted, markTick } from './watcher-liveness';
 
 const POLL_INTERVAL_MS = 5_000;
 const SLIPPAGE_TOLERANCE = 0.005; // ±0.5%
@@ -62,6 +63,7 @@ export function ensureTonWatcherStarted(): void {
   });
   if (state.started) return;
   state.started = true;
+  markStarted('ton');
   void tick(state);
 }
 
@@ -88,6 +90,7 @@ async function tick(state: WatcherState): Promise<void> {
   try {
     await pollOnce(state);
     state.consecutiveFailures = 0;
+    markTick('ton');
   } catch (e) {
     state.consecutiveFailures += 1;
     // eslint-disable-next-line no-console

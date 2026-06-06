@@ -23,7 +23,10 @@ import Database from 'better-sqlite3';
 
 const TEST_DB_PATH = `/tmp/vizzor-test-${process.pid}.db`;
 
-process.env.NODE_ENV = 'test';
+// TypeScript 5.7+ types process.env.NODE_ENV as a readonly literal
+// union; cast through a mutable record so the test harness can pin
+// it to 'test' without disabling strict mode anywhere else.
+(process.env as Record<string, string | undefined>).NODE_ENV = 'test';
 process.env.VIZZOR_SITE_DB = TEST_DB_PATH;
 // Feature flags must be on for createSession/watcher paths under test.
 process.env.NEXT_PUBLIC_ACCEPT_VIZZOR_PAYMENTS = 'true';
