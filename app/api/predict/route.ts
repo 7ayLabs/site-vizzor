@@ -35,6 +35,14 @@ import { isTokenLive } from '@/lib/feature-flags';
 import { verifyBurnTx } from '@/lib/solana-server';
 import { parseIntent } from '@/lib/commands';
 import { getSubscriptionForActiveSession } from '@/lib/payment/auth-session';
+import {
+  PREDICT_ROUTE_REQUIREMENTS,
+  assertRequiredEnv,
+} from '@/lib/env';
+
+// Fail fast in production if the predict route is misconfigured. No-op in
+// dev/CI. See lib/env.ts for the declarative requirements bundle.
+assertRequiredEnv('predict', PREDICT_ROUTE_REQUIREMENTS);
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
