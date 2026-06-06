@@ -3,36 +3,42 @@
 /**
  * PaymentStatus — visible state of the payment lifecycle.
  *
- * States:
- *   idle              — user hasn't started the payment yet
- *   creating          — POST /api/payment/session in flight
- *   awaiting_wallet   — session created, waiting for wallet sign
- *   broadcasting      — wallet returned the tx, broadcasting to chain
- *   pending           — broadcast confirmed, watcher hasn't seen it yet
- *   confirming        — watcher saw it, finalizing
- *   confirmed         — done, grant code minted
- *   expired           — session TTL elapsed before payment
- *   error             — anything went wrong; user can retry
+ * The component is intentionally presentational: it accepts a discrete
+ * `status` and an optional `reason`, picks the right copy via the
+ * `pay.state` namespace and the centralized error taxonomy in
+ * `lib/payment/errors.ts`, and renders a banner with an aria-live
+ * region so screen readers announce state changes as they happen.
  *
- * Special case: `reason === 'engine_error'` is not a true failure — it
- * means the engine endpoint isn't deployed yet (e.g. payment infra is
- * pending). The banner pivots to a neutral "infrastructure pending"
- * tone with a constructive "Pay in Telegram" CTA instead of a red
- * Retry that won't help.
+ * Behavioral classes (drawn from `classifyReason()`) drive the
+ * banner's tone and CTA:
+ *   - 'infra-pending' → neutral info banner + "Pay in Telegram"
+ *   - 'transient'     → amber pending banner + Retry
+ *   - 'fatal'         → red error banner + Retry
+ *   - 'user-action'   → amber banner, no Retry (user must act)
  */
 
 import { useTranslations } from 'next-intl';
 import { Loader2, CheckCircle2, AlertTriangle, Clock, Info } from 'lucide-react';
 import type { PaymentCadence, PaymentTier } from '@/lib/payment/session';
+import {
+  classifyReason,
+  mapReasonToCopyKey,
+  type ReasonClass,
+} from '@/lib/payment/errors';
 
+/**
+ * Visible status values. Mirrors `PurchaseState['kind']` from
+ * `purchase-state.ts` but kept independent so this component remains
+ * presentational and reusable outside the checkout shell.
+ */
 export type StatusValue =
   | 'idle'
-  | 'creating'
-  | 'awaiting_wallet'
-  | 'broadcasting'
-  | 'pending'
+  | 'connecting'
+  | 'wrong-network'
+  | 'signing'
+  | 'paying'
   | 'confirming'
-  | 'confirmed'
+  | 'done'
   | 'expired'
   | 'error';
 
@@ -45,20 +51,21 @@ interface PaymentStatusProps {
   cadence?: PaymentCadence;
 }
 
-const STATE_TONE: Record<StatusValue, 'neutral' | 'pending' | 'success' | 'error'> =
-  {
-    idle: 'neutral',
-    creating: 'pending',
-    awaiting_wallet: 'pending',
-    broadcasting: 'pending',
-    pending: 'pending',
-    confirming: 'pending',
-    confirmed: 'success',
-    expired: 'error',
-    error: 'error',
-  };
+type Tone = 'neutral' | 'pending' | 'success' | 'error' | 'info';
 
-const TONE_COLOR: Record<'neutral' | 'pending' | 'success' | 'error' | 'info', string> = {
+const STATE_TONE: Record<StatusValue, Tone> = {
+  idle: 'neutral',
+  connecting: 'pending',
+  'wrong-network': 'info',
+  signing: 'pending',
+  paying: 'pending',
+  confirming: 'pending',
+  done: 'success',
+  expired: 'error',
+  error: 'error',
+};
+
+const TONE_COLOR: Record<Tone, string> = {
   neutral: 'var(--fg-3)',
   pending: 'var(--accent)',
   success: 'var(--accent)',
@@ -66,41 +73,17 @@ const TONE_COLOR: Record<'neutral' | 'pending' | 'success' | 'error' | 'info', s
   info: 'var(--fg-2)',
 };
 
-/**
- * Engine error tokens that represent "infrastructure pending" rather
- * than a true failure. These get the info tone + Telegram fallback CTA
- * instead of a red Retry.
- */
-const INFRA_PENDING_REASONS = new Set([
-  'engine_error',
-  'engine_offline',
-  'feature_disabled',
-  'mint_not_configured',
-]);
-
-function humanizeReason(
-  reason: string | undefined,
-  t: ReturnType<typeof useTranslations<'pay.status'>>,
+function resolveCopy(
   status: StatusValue,
+  reason: string | undefined,
+  state: ReturnType<typeof useTranslations<'pay.state'>>,
+  errorNs: ReturnType<typeof useTranslations<'pay.error'>>,
 ): string {
-  if (!reason) return t(`${status}.body`, { reason: '' });
-
-  const KNOWN: Record<string, string> = {
-    feature_disabled: t('reasons.featureDisabled'),
-    engine_offline: t('reasons.engineOffline'),
-    engine_error: t('reasons.engineError'),
-    invalid_input: t('reasons.invalidInput'),
-    invalid_tier_cadence: t('reasons.invalidInput'),
-    unsupported_chain: t('reasons.unsupportedChain'),
-    price_lookup_failed: t('reasons.priceLookup'),
-    session_failed: t('reasons.sessionFailed'),
-    engine_marked_failed: t('reasons.engineMarkedFailed'),
-    mint_not_configured: t('reasons.mintNotConfigured'),
-    wallet_not_connected: t('reasons.walletNotConnected'),
-  };
-  const mapped = KNOWN[reason];
-  if (mapped) return mapped;
-  return t(`${status}.body`, { reason });
+  if (reason) {
+    const key = mapReasonToCopyKey(reason);
+    return errorNs(key);
+  }
+  return state(`${status}.body`);
 }
 
 export function PaymentStatus({
@@ -110,20 +93,43 @@ export function PaymentStatus({
   tier,
   cadence,
 }: PaymentStatusProps) {
-  const t = useTranslations('pay.status');
+  const stateNs = useTranslations('pay.state');
+  const errorNs = useTranslations('pay.error');
+
   if (status === 'idle') return null;
 
-  const baseTone = STATE_TONE[status];
-  const isInfraPending =
-    baseTone === 'error' && reason !== undefined && INFRA_PENDING_REASONS.has(reason);
+  const stateTone = STATE_TONE[status];
+  const reasonClass: ReasonClass | null = reason ? classifyReason(reason) : null;
 
-  // The infra-pending case demotes from "error red" to neutral "info" —
-  // it's not a failure, it's a deployment phase.
-  const tone = isInfraPending ? 'info' : baseTone;
+  // Infra-pending demotes the visual tone from error red to neutral
+  // info — it's not a failure, it's a deployment phase.
+  const isInfraPending = reasonClass === 'infra-pending';
+  const isUserAction = reasonClass === 'user-action';
+
+  const tone: Tone = isInfraPending
+    ? 'info'
+    : isUserAction
+      ? 'pending'
+      : stateTone;
+
   const color = TONE_COLOR[tone];
-  const isError = baseTone === 'error' && !isInfraPending;
-  const isSuccess = baseTone === 'success';
-  const isPending = baseTone === 'pending';
+  const isError = stateTone === 'error' && !isInfraPending && !isUserAction;
+  const isSuccess = stateTone === 'success';
+  const isPending = tone === 'pending';
+
+  // For non-error states, derive the label from `pay.state.<status>`.
+  // For error / expired states, prefer the error namespace label if a
+  // recognized reason is present, otherwise the state label.
+  let label: string;
+  if (isInfraPending) {
+    label = errorNs('infraPendingLabel');
+  } else if (reason && (status === 'error' || status === 'expired')) {
+    label = stateNs(`${status}.label`);
+  } else {
+    label = stateNs(`${status}.label`);
+  }
+
+  const body = resolveCopy(status, reason, stateNs, errorNs);
 
   const telegramHref =
     tier && cadence
@@ -132,15 +138,15 @@ export function PaymentStatus({
 
   return (
     <div
-      className={`
-        border bg-[var(--surface)] px-4 py-3 flex items-start gap-3
-        ${isInfraPending ? 'border-[var(--border)]' : 'border-[var(--border)]'}
-      `}
+      className="border border-[var(--border)] bg-[var(--surface)] px-4 py-3 flex items-start gap-3"
       role="status"
       aria-live="polite"
+      aria-atomic="true"
     >
-      <span style={{ color }} className="flex-none pt-0.5">
-        {isPending && <Loader2 size={16} strokeWidth={2} className="animate-spin" />}
+      <span style={{ color }} className="flex-none pt-0.5" aria-hidden>
+        {isPending && (
+          <Loader2 size={16} strokeWidth={2} className="animate-spin motion-reduce:animate-none" />
+        )}
         {isSuccess && <CheckCircle2 size={16} strokeWidth={2} />}
         {isInfraPending && <Info size={16} strokeWidth={2} />}
         {isError && status === 'expired' && <Clock size={16} strokeWidth={2} />}
@@ -153,11 +159,9 @@ export function PaymentStatus({
           className="mono tabular text-[10.5px] uppercase tracking-[0.16em]"
           style={{ color }}
         >
-          {isInfraPending ? t('reasons.infraPendingLabel') : t(`${status}.label`)}
+          {label}
         </p>
-        <p className="text-[12.5px] text-[var(--fg-2)] leading-relaxed">
-          {humanizeReason(reason, t, status)}
-        </p>
+        <p className="text-[12.5px] text-[var(--fg-2)] leading-relaxed">{body}</p>
         {isInfraPending && (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <a
@@ -171,7 +175,7 @@ export function PaymentStatus({
                 hover:opacity-90 transition-opacity
               "
             >
-              <span>{t('reasons.payInTelegram')}</span>
+              <span>{errorNs('payInTelegram')}</span>
               <span aria-hidden>→</span>
             </a>
             {retry && (
@@ -184,19 +188,19 @@ export function PaymentStatus({
                   underline-offset-4 hover:underline transition-colors
                 "
               >
-                {t('reasons.retryAnyway')}
+                {errorNs('retryAnyway')}
               </button>
             )}
           </div>
         )}
       </div>
-      {!isInfraPending && (isError || status === 'expired') && retry && (
+      {!isInfraPending && !isUserAction && (isError || status === 'expired') && retry && (
         <button
           type="button"
           onClick={retry}
           className="mono tabular text-[10px] uppercase tracking-[0.14em] border border-[var(--fg)] bg-[var(--fg)] text-[var(--bg)] px-2.5 py-1.5 hover:opacity-90 transition-opacity"
         >
-          {t('retry')}
+          {stateNs('retry')}
         </button>
       )}
     </div>
