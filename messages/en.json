@@ -605,7 +605,15 @@
       "install": "Install",
       "footer": "MetaMask isn't a Solana wallet — use it for the USDC rails via the Telegram handoff.",
       "emptyTitle": "No Solana wallets detected.",
-      "emptyHint": "Install Phantom or Solflare and refresh."
+      "emptyHint": "Install Phantom or Solflare and refresh.",
+      "devnet": {
+        "label": "Devnet funds",
+        "airdrop": "Airdrop 1 SOL",
+        "airdropPending": "Airdropping…",
+        "airdropOk": "Done · check Phantom",
+        "airdropFail": "Faucet busy — try the web one",
+        "webFaucet": "Open the web faucet"
+      }
     },
     "state": {
       "idle": {
@@ -661,6 +669,8 @@
       "priceLookup": "Couldn't look up the tier price on the server. Refresh the page.",
       "sessionFailed": "Session creation failed. Retry, or open the Telegram bot if it persists.",
       "walletNotConnected": "Connect a wallet to continue.",
+      "insufficientBalance": "Your wallet doesn't have enough SOL to cover this payment plus the network fee. On devnet you can airdrop 1 SOL from the panel above, or top up at faucet.solana.com.",
+      "invalidDestination": "The destination treasury address is misconfigured for this network. Check VIZZOR_SOLANA_TREASURY for the active cluster.",
       "walletRejected": "You rejected the transaction in your wallet. Click Pay again when you're ready.",
       "unknown": "Something went wrong. Retry, or use the Telegram bot if the problem persists."
     },
@@ -677,14 +687,33 @@
       "body": "The on-site SOL checkout is built but the treasury hasn't been activated yet. In the meantime, you can pay directly through the Telegram bot — same tier, same price, same access.",
       "telegramCta": "Pay in Telegram"
     },
+    "prelink": {
+      "cta": "Skip this step next time — link your wallet to Telegram now so future payments auto-attribute.",
+      "ctaButton": "Link wallet",
+      "linkedLabel": "wallet linked",
+      "linked": "Linked to @{handle}. Future payments will skip this step.",
+      "modalTitle": "Link your wallet to Telegram",
+      "modalBody": "Open the bot and run the command below. It posts a one-time challenge you'll sign with this wallet — same key, no extra setup.",
+      "modalCommandLabel": "Run in the bot",
+      "modalCloseAria": "Close",
+      "botCommand": "/link wallet"
+    },
     "grant": {
       "label": "subscription unlocked",
-      "title": "Welcome to Vizzor · redeem in Telegram",
-      "body": "Click the button below to open the Telegram bot. The bot reads the grant code embedded in the deep-link and activates your subscription immediately.",
+      "title": "Redeem in Telegram",
+      "body": "Open the bot to activate your subscription. The grant code is embedded in the deep link — single-use, expires in 24h.",
+      "openTelegram": "Open Telegram",
+      "tryAgain": "Reopen link",
       "continueCta": "Continue in Telegram",
-      "codeLabel": "Or paste the link manually",
+      "codeLabel": "Grant code",
+      "copyCode": "Copy code",
       "copyAria": "Copy redemption link",
-      "codeTtl": "Single-use · expires in 24h"
+      "copied": "Copied",
+      "codeTtl": "Single-use · expires in 24h",
+      "qrLabel": "Scan with your phone",
+      "qrShow": "Show QR",
+      "qrHide": "Hide QR",
+      "qrAlt": "QR code linking to the Telegram bot redemption"
     },
     "success": {
       "pendingLabel": "almost there",

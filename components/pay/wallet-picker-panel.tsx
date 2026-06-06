@@ -20,12 +20,20 @@
  * can't sign Solana transactions — listing them would be a dead end.
  */
 
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletReadyState, type Adapter } from '@solana/wallet-adapter-base';
-import { Check, ExternalLink, LogOut, Wallet2 } from 'lucide-react';
+import { Connection, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import {
+  Check,
+  Droplets,
+  ExternalLink,
+  LogOut,
+  Wallet2,
+} from 'lucide-react';
 import Image from 'next/image';
+import { isNonProd, paymentNetwork } from '@/lib/payment/network';
 
 const NON_SOLANA_WALLETS: ReadonlySet<string> = new Set([
   'MetaMask',
@@ -107,62 +115,12 @@ export function WalletPickerPanel({ onReady }: WalletPickerPanelProps) {
   // STATUS mode — wallet connected. Compact pill + disconnect.
   if (connected && wallet && publicKey) {
     return (
-      <section
-        id="wallet-picker-panel"
-        aria-label={t('label')}
-        className="
-          rounded-xl border border-[var(--border)] bg-[var(--surface)]
-          flex items-center gap-3 p-3 scroll-mt-24
-        "
-      >
-        <span
-          aria-hidden
-          className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[var(--surface-2)]"
-        >
-          {wallet.adapter.icon ? (
-            <Image
-              src={wallet.adapter.icon}
-              alt={wallet.adapter.name}
-              width={32}
-              height={32}
-              unoptimized
-            />
-          ) : (
-            <Wallet2 size={16} strokeWidth={2} />
-          )}
-        </span>
-        <span className="flex flex-col min-w-0 flex-1">
-          <span className="text-[13px] font-semibold text-[var(--fg)] truncate">
-            {wallet.adapter.name}
-          </span>
-          <span className="mono tabular text-[10.5px] text-[var(--fg-3)] truncate">
-            {truncateAddress(publicKey.toBase58())}
-          </span>
-        </span>
-        <span
-          aria-hidden
-          className="mono tabular text-[9.5px] uppercase tracking-[0.14em] px-2 py-0.5 rounded-md bg-[color:color-mix(in_oklab,var(--accent)_18%,transparent)] text-[var(--accent)] inline-flex items-center gap-1"
-        >
-          <span
-            className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] motion-safe:animate-[pulse-dot_1.6s_ease-in-out_infinite]"
-            aria-hidden
-          />
-          {t('connected')}
-        </span>
-        <button
-          type="button"
-          onClick={() => void disconnect().catch(() => {})}
-          aria-label={t('disconnect')}
-          title={t('disconnect')}
-          className="
-            inline-flex h-8 w-8 items-center justify-center rounded-lg
-            text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)]
-            transition-colors
-          "
-        >
-          <LogOut size={14} strokeWidth={2} />
-        </button>
-      </section>
+      <ConnectedStatus
+        adapterName={wallet.adapter.name}
+        adapterIcon={wallet.adapter.icon}
+        address={publicKey.toBase58()}
+        onDisconnect={() => void disconnect().catch(() => {})}
+      />
     );
   }
 
@@ -310,6 +268,189 @@ function EmptyHint() {
       <p className="mt-1 mono tabular text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
         {t('emptyHint')}
       </p>
+    </div>
+  );
+}
+
+interface ConnectedStatusProps {
+  adapterName: string;
+  adapterIcon: string | undefined;
+  address: string;
+  onDisconnect: () => void;
+}
+
+function ConnectedStatus({
+  adapterName,
+  adapterIcon,
+  address,
+  onDisconnect,
+}: ConnectedStatusProps) {
+  const t = useTranslations('pay.walletPicker');
+  const showDevnetTools = isNonProd();
+  const isDevnet = paymentNetwork() === 'devnet';
+  return (
+    <section
+      id="wallet-picker-panel"
+      aria-label={t('label')}
+      className="
+        rounded-xl border border-[var(--border)] bg-[var(--surface)]
+        flex flex-col gap-2 p-3 scroll-mt-24
+      "
+    >
+      <div className="flex items-center gap-3">
+        <span
+          aria-hidden
+          className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[var(--surface-2)]"
+        >
+          {adapterIcon ? (
+            <Image
+              src={adapterIcon}
+              alt={adapterName}
+              width={32}
+              height={32}
+              unoptimized
+            />
+          ) : (
+            <Wallet2 size={16} strokeWidth={2} />
+          )}
+        </span>
+        <span className="flex flex-col min-w-0 flex-1">
+          <span className="text-[13px] font-semibold text-[var(--fg)] truncate">
+            {adapterName}
+          </span>
+          <span className="mono tabular text-[10.5px] text-[var(--fg-3)] truncate">
+            {truncateAddress(address)}
+          </span>
+        </span>
+        <span
+          aria-hidden
+          className="mono tabular text-[9.5px] uppercase tracking-[0.14em] px-2 py-0.5 rounded-md bg-[color:color-mix(in_oklab,var(--accent)_18%,transparent)] text-[var(--accent)] inline-flex items-center gap-1"
+        >
+          <span
+            className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] motion-safe:animate-[pulse-dot_1.6s_ease-in-out_infinite]"
+            aria-hidden
+          />
+          {t('connected')}
+        </span>
+        <button
+          type="button"
+          onClick={onDisconnect}
+          aria-label={t('disconnect')}
+          title={t('disconnect')}
+          className="
+            inline-flex h-8 w-8 items-center justify-center rounded-lg
+            text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)]
+            transition-colors
+          "
+        >
+          <LogOut size={14} strokeWidth={2} />
+        </button>
+      </div>
+      {showDevnetTools && isDevnet && <DevnetFundingRow address={address} />}
+    </section>
+  );
+}
+
+interface DevnetFundingRowProps {
+  address: string;
+}
+
+function devnetRpc(): string {
+  return (
+    process.env.NEXT_PUBLIC_SOLANA_RPC_URL_DEVNET ??
+    process.env.NEXT_PUBLIC_SOLANA_RPC_URL ??
+    'https://api.devnet.solana.com'
+  );
+}
+
+/**
+ * Testnet-only funding affordance. One-click airdrop button calls the
+ * devnet RPC's `requestAirdrop` (capped at 1 SOL per call by Solana's
+ * public devnet faucet) plus a manual fallback link to the official
+ * web faucet if the rate-limit blocks the in-page call.
+ */
+function DevnetFundingRow({ address }: DevnetFundingRowProps) {
+  const t = useTranslations('pay.walletPicker.devnet');
+  const [status, setStatus] = useState<'idle' | 'pending' | 'ok' | 'fail'>(
+    'idle',
+  );
+
+  const airdrop = useCallback(async () => {
+    setStatus('pending');
+    try {
+      const { PublicKey } = await import('@solana/web3.js');
+      const conn = new Connection(devnetRpc(), 'confirmed');
+      const sig = await conn.requestAirdrop(
+        new PublicKey(address),
+        LAMPORTS_PER_SOL,
+      );
+      const latest = await conn.getLatestBlockhash('confirmed');
+      await conn.confirmTransaction(
+        {
+          signature: sig,
+          blockhash: latest.blockhash,
+          lastValidBlockHeight: latest.lastValidBlockHeight,
+        },
+        'confirmed',
+      );
+      setStatus('ok');
+      window.setTimeout(() => setStatus('idle'), 4000);
+    } catch {
+      setStatus('fail');
+      window.setTimeout(() => setStatus('idle'), 4000);
+    }
+  }, [address]);
+
+  const buttonLabel =
+    status === 'pending'
+      ? t('airdropPending')
+      : status === 'ok'
+        ? t('airdropOk')
+        : status === 'fail'
+          ? t('airdropFail')
+          : t('airdrop');
+
+  return (
+    <div className="flex items-center justify-between gap-2 pt-2 border-t border-[var(--border)]">
+      <p className="mono tabular text-[10px] uppercase tracking-[0.16em] text-[var(--fg-3)] inline-flex items-center gap-1.5">
+        <Droplets size={11} strokeWidth={2} />
+        <span>{t('label')}</span>
+      </p>
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={airdrop}
+          disabled={status === 'pending'}
+          className={`
+            mono tabular text-[10px] uppercase tracking-[0.14em]
+            px-2.5 py-1 rounded-md
+            border transition-colors
+            disabled:opacity-50 disabled:cursor-not-allowed
+            ${
+              status === 'ok'
+                ? 'border-[var(--accent)] bg-[color:color-mix(in_oklab,var(--accent)_18%,transparent)] text-[var(--accent)]'
+                : status === 'fail'
+                  ? 'border-[var(--danger)] text-[var(--danger)]'
+                  : 'border-[var(--border)] text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]'
+            }
+          `}
+        >
+          {buttonLabel}
+        </button>
+        <a
+          href={`https://faucet.solana.com/?cluster=devnet&address=${address}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="
+            inline-flex items-center gap-1
+            mono tabular text-[10px] uppercase tracking-[0.14em]
+            text-[var(--fg-3)] hover:text-[var(--fg)] transition-colors
+          "
+          title={t('webFaucet')}
+        >
+          <ExternalLink size={11} strokeWidth={2} />
+        </a>
+      </div>
     </div>
   );
 }

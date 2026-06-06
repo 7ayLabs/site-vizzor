@@ -60,6 +60,8 @@ export type PaymentReason =
   | 'wallet_rejected'
   | 'mint_not_configured'
   | 'rpc_unavailable'
+  | 'insufficient_balance'
+  | 'invalid_destination'
   // Catch-all. Always last in chain so the UI shows a coherent fallback.
   | 'unknown_reason';
 
@@ -108,6 +110,14 @@ const REASON_TABLE: Readonly<Record<PaymentReason, ReasonDescriptor>> = {
     klass: 'user-action',
   },
   wallet_rejected: { copyKey: 'walletRejected', klass: 'user-action' },
+  insufficient_balance: {
+    copyKey: 'insufficientBalance',
+    klass: 'user-action',
+  },
+  invalid_destination: {
+    copyKey: 'invalidDestination',
+    klass: 'fatal',
+  },
 
   // Fallback.
   unknown_reason: { copyKey: 'unknown', klass: 'fatal' },

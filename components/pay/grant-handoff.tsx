@@ -4,37 +4,35 @@
  * GrantHandoff — success card with the one-time grant code and the
  * Telegram redemption affordances.
  *
- * The card surfaces three ways for the user to complete the handoff
- * to the bot:
- *
- *   1. Primary CTA "Open in Telegram" — a deep-link click that, on a
- *      device with Telegram installed, opens directly into the bot's
- *      `/start` flow with the grant code attached.
- *   2. Copy-to-clipboard for the standalone grant code, in case the
- *      user wants to paste it into a different device (e.g. paid on
- *      desktop, redeems on phone).
+ * Three handoff paths share one card:
+ *   1. Primary CTA "Open Telegram" — deep-link click; opens the
+ *      `/start` flow with the grant code attached when Telegram is
+ *      installed.
+ *   2. Copy-to-clipboard for the standalone code, in case the user
+ *      wants to paste it on a different device.
  *   3. QR code rendering of the same deep-link, for the common
- *      cross-device case: paid on desktop, scan with the phone's
- *      camera to open Telegram on the device that has it installed.
+ *      cross-device case: paid on desktop, redeem on phone.
  *
- * A "Try again" affordance restarts the deep-link in case the
- * Telegram protocol handler didn't fire on the first click (a real
- * problem on iOS Safari when the user just dismissed a deep-link
- * permission prompt).
+ * A "Reopen link" affordance restarts the deep-link click for cases
+ * where the OS protocol handler didn't fire on the first attempt.
  *
- * Accessibility:
- *   - The copy button auto-focuses on mount so keyboard users land on
- *     the most likely first action.
- *   - The "Copied" state is announced via aria-live=polite.
- *   - The QR image carries an aria-label naming the deep-link so screen
- *     readers can read its purpose; the link is also present as text.
- *   - `prefers-reduced-motion`: the QR fade-in respects it (no CSS
- *     transition when set), via Tailwind `motion-reduce:` utilities.
+ * Visual treatment: neutral surface (no accent glow) so the success
+ * state reads as calm completion rather than alarming highlight. The
+ * `SubscriptionUnlocked` eyebrow + check icon carry the accent color
+ * — the rest of the card is `var(--surface)` on `var(--border)`.
  */
 
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Copy, Check, QrCode, RefreshCcw, ExternalLink } from 'lucide-react';
+import {
+  ArrowUpRight,
+  Check,
+  CheckCircle2,
+  Copy,
+  QrCode,
+  RotateCcw,
+  Send,
+} from 'lucide-react';
 import QRCode from 'qrcode';
 
 interface GrantHandoffProps {
@@ -43,11 +41,6 @@ interface GrantHandoffProps {
 
 const COPY_FEEDBACK_MS = 1800;
 
-/**
- * Telegram bot username. Defaults to the production handle but can be
- * overridden at deploy time via NEXT_PUBLIC_TG_BOT_USERNAME, per the
- * v0.2.0 env-var registry (`docs/rfc/v0.2.0/architecture.md` §5).
- */
 const BOT_USERNAME =
   process.env.NEXT_PUBLIC_TG_BOT_USERNAME ?? 'vizzorai_bot';
 
@@ -60,21 +53,13 @@ export function GrantHandoff({ code }: GrantHandoffProps) {
   const copyButtonRef = useRef<HTMLButtonElement>(null);
   const deepLinkRef = useRef<HTMLAnchorElement>(null);
 
-  // Per the wallet-telegram-binding RFC §5, the bot-side start payload
-  // is `g_<code>` — the `g_` prefix is part of the grant id minted by
-  // `issueGrantForSession`. The route handler stamps the prefix; we
-  // do not double-prefix here.
   const startPayload = code.startsWith('g_') ? code : `g_${code}`;
   const deepLink = `https://t.me/${BOT_USERNAME}?start=${startPayload}`;
 
-  // Auto-focus the copy button on mount — keyboard users land on the
-  // most likely first action (copy the link to a phone).
   useEffect(() => {
     copyButtonRef.current?.focus();
   }, []);
 
-  // Render the QR exactly once when the disclosure opens. On a small
-  // viewport we render it eagerly — see the second effect below.
   useEffect(() => {
     if (!qrOpen) return;
     if (qrDataUrl !== null) return;
@@ -82,15 +67,8 @@ export function GrantHandoff({ code }: GrantHandoffProps) {
     QRCode.toDataURL(deepLink, {
       errorCorrectionLevel: 'M',
       margin: 1,
-      width: 240,
-      color: {
-        // The QR has to stay scannable in dark mode. Foreground/back
-        // are inverted compared to the page so the camera reads a
-        // crisp light-on-dark pattern regardless of theme. Both
-        // contrast pairs comfortably exceed WCAG AA.
-        dark: '#0d0e10',
-        light: '#ffffff',
-      },
+      width: 224,
+      color: { dark: '#0d0e10', light: '#ffffff' },
     })
       .then((url) => {
         if (!cancelled) {
@@ -112,10 +90,7 @@ export function GrantHandoff({ code }: GrantHandoffProps) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
     } catch {
-      // Clipboard API can fail under iframe/permission-policy. Fall
-      // back to selecting the visible code so the user can copy
-      // manually. We do not surface an error — the visible code
-      // remains readable either way.
+      // Clipboard policy can deny — visible code remains readable.
     }
   };
 
@@ -124,19 +99,26 @@ export function GrantHandoff({ code }: GrantHandoffProps) {
   };
 
   return (
-    <div className="border border-[var(--accent)] shadow-[0_0_0_1px_var(--accent)] bg-[var(--surface)] p-6 flex flex-col gap-5">
-      <p className="mono tabular text-[10px] uppercase tracking-[0.18em] text-[var(--accent)]">
-        {t('label')}
-      </p>
-
-      <div className="flex flex-col gap-2">
-        <h2 className="display text-[22px] sm:text-[26px] font-semibold tracking-tight text-[var(--fg)] leading-tight">
-          {t('title')}
-        </h2>
-        <p className="text-[13.5px] leading-relaxed text-[var(--fg-2)] max-w-[48ch]">
-          {t('body')}
-        </p>
-      </div>
+    <div className="border border-[var(--border)] bg-[var(--surface)] rounded-2xl p-6 flex flex-col gap-5">
+      <header className="flex items-start gap-3">
+        <span
+          aria-hidden
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[color:color-mix(in_oklab,var(--accent)_15%,transparent)] text-[var(--accent)]"
+        >
+          <CheckCircle2 size={18} strokeWidth={2.2} />
+        </span>
+        <div className="flex flex-col gap-1.5 min-w-0">
+          <p className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--accent)]">
+            {t('label')}
+          </p>
+          <h2 className="text-[20px] sm:text-[22px] font-semibold tracking-tight text-[var(--fg)] leading-tight">
+            {t('title')}
+          </h2>
+          <p className="text-[13px] leading-relaxed text-[var(--fg-2)] max-w-[52ch]">
+            {t('body')}
+          </p>
+        </div>
+      </header>
 
       <div className="flex flex-wrap items-center gap-2">
         <a
@@ -145,38 +127,45 @@ export function GrantHandoff({ code }: GrantHandoffProps) {
           target="_blank"
           rel="noopener"
           className="
-            inline-flex items-center justify-center gap-2 h-11 px-4
+            group inline-flex items-center justify-center gap-2 h-11 px-4
+            rounded-xl bg-[var(--fg)] text-[var(--bg)]
             text-[13px] font-semibold tracking-tight
-            bg-[var(--accent)] text-[var(--accent-fg)]
-            hover:opacity-90 transition-opacity
-            focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]
+            transition-[transform,opacity] duration-200 ease-out
+            motion-safe:hover:-translate-y-[1px] hover:opacity-95
+            focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fg)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]
           "
         >
-          <ExternalLink size={14} strokeWidth={2} aria-hidden />
+          <Send size={14} strokeWidth={2.2} aria-hidden />
           <span>{t('openTelegram')}</span>
+          <ArrowUpRight
+            size={14}
+            strokeWidth={2.2}
+            aria-hidden
+            className="transition-transform duration-200 ease-out motion-safe:group-hover:translate-x-0.5 motion-safe:group-hover:-translate-y-0.5"
+          />
         </a>
         <button
           type="button"
           onClick={onTryAgain}
           className="
             inline-flex items-center justify-center gap-1.5 h-11 px-3
-            mono tabular text-[10.5px] uppercase tracking-[0.14em]
-            border border-[var(--border)] bg-[var(--surface)] text-[var(--fg-2)]
+            rounded-xl border border-[var(--border)] bg-[var(--surface)]
+            text-[12px] font-medium text-[var(--fg-2)]
             hover:bg-[var(--surface-2)] hover:text-[var(--fg)] transition-colors
             focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fg)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]
           "
         >
-          <RefreshCcw size={13} strokeWidth={2} aria-hidden />
+          <RotateCcw size={13} strokeWidth={2} aria-hidden />
           <span>{t('tryAgain')}</span>
         </button>
       </div>
 
       <div className="border-t border-[var(--border)] pt-4 flex flex-col gap-2">
-        <p className="mono tabular text-[10px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
+        <p className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--fg-3)]">
           {t('codeLabel')}
         </p>
         <div className="flex items-center gap-2">
-          <code className="flex-1 mono tabular text-[12px] bg-[var(--surface-2)] border border-[var(--border)] px-3 py-2 text-[var(--fg)] truncate">
+          <code className="flex-1 mono tabular text-[12.5px] rounded-lg bg-[var(--surface-2)] border border-[var(--border)] px-3 py-2 text-[var(--fg)] truncate">
             {startPayload}
           </code>
           <button
@@ -186,16 +175,22 @@ export function GrantHandoff({ code }: GrantHandoffProps) {
             aria-label={copied ? t('copied') : t('copyCode')}
             title={copied ? t('copied') : t('copyCode')}
             className="
-              inline-flex items-center justify-center
-              h-10 w-10 border border-[var(--border)] bg-[var(--surface)]
-              hover:bg-[var(--surface-2)] transition-colors text-[var(--fg-2)]
+              inline-flex items-center justify-center gap-1.5
+              h-10 px-3 rounded-lg border border-[var(--border)] bg-[var(--surface)]
+              text-[11.5px] font-medium text-[var(--fg-2)]
+              hover:bg-[var(--surface-2)] hover:text-[var(--fg)] transition-colors
               focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fg)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]
             "
           >
-            {copied ? <Check size={14} aria-hidden /> : <Copy size={14} aria-hidden />}
+            {copied ? (
+              <Check size={13} strokeWidth={2.4} aria-hidden />
+            ) : (
+              <Copy size={13} strokeWidth={2} aria-hidden />
+            )}
+            <span>{copied ? t('copied') : t('copyCode')}</span>
           </button>
         </div>
-        <p className="mono tabular text-[9.5px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+        <p className="mono tabular text-[9.5px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
           {t('codeTtl')}
         </p>
         <p className="sr-only" aria-live="polite" aria-atomic="true">
@@ -203,14 +198,9 @@ export function GrantHandoff({ code }: GrantHandoffProps) {
         </p>
       </div>
 
-      {/*
-        QR disclosure — collapsed by default on >=md (desktop), but
-        rendered eagerly via the always-visible block at <=md so
-        mobile/cross-device users can scan without an extra click.
-       */}
       <div className="border-t border-[var(--border)] pt-4 flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
-          <p className="mono tabular text-[10px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
+          <p className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--fg-3)]">
             {t('qrLabel')}
           </p>
           <button
@@ -220,9 +210,10 @@ export function GrantHandoff({ code }: GrantHandoffProps) {
             aria-controls="grant-handoff-qr"
             className="
               hidden md:inline-flex items-center justify-center gap-1.5
-              mono tabular text-[10px] uppercase tracking-[0.14em]
-              text-[var(--fg-3)] hover:text-[var(--fg)]
-              underline-offset-4 hover:underline transition-colors
+              h-8 px-2.5 rounded-md
+              mono tabular text-[10.5px] uppercase tracking-[0.16em]
+              text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)]
+              transition-colors
               focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fg)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]
             "
           >
@@ -245,9 +236,6 @@ export function GrantHandoff({ code }: GrantHandoffProps) {
             ariaLabel={t('qrAlt')}
           />
         </div>
-        {/* Mobile-first: render QR eagerly under md so users on a
-            phone can scan immediately. Suppressed on md+ where the
-            disclosure controls visibility. */}
         <div className="md:hidden grid place-items-center">
           <QrSurface
             dataUrl={qrDataUrl}
@@ -272,7 +260,6 @@ interface QrSurfaceProps {
   error: boolean;
   deepLink: string;
   ariaLabel: string;
-  /** When true, trigger QR generation via `onForceLoad`. */
   forceLoad?: boolean;
   onForceLoad?: () => void;
 }
@@ -285,9 +272,6 @@ function QrSurface({
   forceLoad,
   onForceLoad,
 }: QrSurfaceProps) {
-  // The mobile-first surface generates the QR even when the
-  // disclosure has not been clicked. Defer to onForceLoad so the
-  // owning component manages the actual generation state.
   useEffect(() => {
     if (forceLoad && dataUrl === null && !error) {
       onForceLoad?.();
@@ -311,10 +295,10 @@ function QrSurface({
   if (dataUrl === null) {
     return (
       <div
-        className="h-[240px] w-[240px] border border-[var(--border)] bg-[var(--surface-2)] grid place-items-center"
+        className="h-[224px] w-[224px] rounded-lg border border-[var(--border)] bg-[var(--surface-2)] grid place-items-center"
         aria-hidden
       >
-        <span className="mono tabular text-[9.5px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+        <span className="mono tabular text-[9.5px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
           …
         </span>
       </div>
@@ -326,9 +310,9 @@ function QrSurface({
       <img
         src={dataUrl}
         alt={ariaLabel}
-        width={240}
-        height={240}
-        className="border border-[var(--border)] bg-white motion-reduce:transition-none"
+        width={224}
+        height={224}
+        className="rounded-lg border border-[var(--border)] bg-white motion-reduce:transition-none"
       />
     </div>
   );

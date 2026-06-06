@@ -605,7 +605,15 @@
       "install": "Installer",
       "footer": "MetaMask n'est pas un portefeuille Solana — utilisez-le pour les rails USDC via le handoff Telegram.",
       "emptyTitle": "Aucun portefeuille Solana détecté.",
-      "emptyHint": "Installez Phantom ou Solflare et rafraîchissez."
+      "emptyHint": "Installez Phantom ou Solflare et rafraîchissez.",
+      "devnet": {
+        "label": "Fonds devnet",
+        "airdrop": "Airdrop 1 SOL",
+        "airdropPending": "Envoi…",
+        "airdropOk": "Fait · vérifiez Phantom",
+        "airdropFail": "Faucet saturé — essayez la version web",
+        "webFaucet": "Ouvrir le faucet web"
+      }
     },
     "status": {
       "creating": {
@@ -654,7 +662,9 @@
         "priceLookup": "Impossible de récupérer le prix du tier sur le serveur. Rafraîchissez la page.",
         "sessionFailed": "Échec de la création de session. Réessayez, ou ouvrez le bot Telegram si le problème persiste.",
         "rpcUnavailable": "Le RPC Solana est rate-limited en ce moment. Réessayez sous peu, ou passez à TON / USDC.",
-        "walletNotConnected": "Connectez un portefeuille pour continuer."
+        "walletNotConnected": "Connectez un portefeuille pour continuer.",
+        "insufficientBalance": "Votre portefeuille n'a pas assez de SOL pour couvrir ce paiement et les frais réseau. Sur devnet vous pouvez demander un airdrop de 1 SOL depuis le panneau ci-dessus, ou recharger via faucet.solana.com.",
+        "invalidDestination": "L'adresse de la trésorerie de destination est mal configurée pour ce réseau. Vérifiez VIZZOR_SOLANA_TREASURY pour le cluster actif."
       }
     },
     "cta": {
@@ -670,14 +680,33 @@
       "body": "Le checkout SOL on-site est prêt mais la trésorerie n'a pas encore été activée. En attendant, vous pouvez payer directement via le bot Telegram — même tier, même prix, même accès.",
       "telegramCta": "Payer dans Telegram"
     },
+    "prelink": {
+      "cta": "Passez cette étape la prochaine fois — liez votre portefeuille à Telegram maintenant pour que les paiements futurs s'auto-attribuent.",
+      "ctaButton": "Lier le portefeuille",
+      "linkedLabel": "portefeuille lié",
+      "linked": "Lié à @{handle}. Les paiements futurs sauteront cette étape.",
+      "modalTitle": "Liez votre portefeuille à Telegram",
+      "modalBody": "Ouvrez le bot et exécutez la commande ci-dessous. Il vous donnera un défi unique à signer avec ce portefeuille — même clé, sans config supplémentaire.",
+      "modalCommandLabel": "Exécuter dans le bot",
+      "modalCloseAria": "Fermer",
+      "botCommand": "/link wallet"
+    },
     "grant": {
       "label": "abonnement débloqué",
-      "title": "Bienvenue chez Vizzor · redeem dans Telegram",
-      "body": "Cliquez sur le bouton ci-dessous pour ouvrir le bot Telegram. Le bot lit le code d'accès du lien et active votre abonnement instantanément.",
+      "title": "Redeem dans Telegram",
+      "body": "Ouvrez le bot pour activer votre abonnement. Le code d'accès est intégré dans le lien — usage unique, expire dans 24h.",
+      "openTelegram": "Ouvrir Telegram",
+      "tryAgain": "Rouvrir le lien",
       "continueCta": "Continuer dans Telegram",
-      "codeLabel": "Ou collez le lien manuellement",
+      "codeLabel": "Code d'accès",
+      "copyCode": "Copier le code",
       "copyAria": "Copier le lien de redeem",
-      "codeTtl": "Usage unique · expire dans 24h"
+      "copied": "Copié",
+      "codeTtl": "Usage unique · expire dans 24h",
+      "qrLabel": "Scannez avec votre téléphone",
+      "qrShow": "Afficher le QR",
+      "qrHide": "Masquer le QR",
+      "qrAlt": "Code QR vers le lien de redeem du bot Telegram"
     },
     "success": {
       "pendingLabel": "presque fini",

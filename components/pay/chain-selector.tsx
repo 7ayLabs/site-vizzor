@@ -32,7 +32,7 @@ import type {
 import { discountBps } from '@/lib/payment/pricing-table';
 import type { ChainIconId } from './chain-icons';
 import { ChainOptionIcon } from './chain-option-icon';
-import { isTestnet } from '@/lib/payment/network';
+import { isNonProd, networkBadgeLabel } from '@/lib/payment/network';
 
 export interface SelectorValue {
   chain: PaymentChain;
@@ -55,7 +55,6 @@ interface ChainOption {
   /** Optional small badge to overlay (e.g. USDC over Base/Arbitrum). */
   networkBadge?: ChainIconId;
   label: string;
-  sub: string;
 }
 
 /**
@@ -68,8 +67,7 @@ const OPTIONS: ReadonlyArray<ChainOption> = [
     chain: 'solana',
     token: 'native',
     primaryIcon: 'solana',
-    label: 'SOL on Solana',
-    sub: 'Native SOL · sub-second finality · ~$0.0001 fees',
+    label: 'SOL · Solana',
   },
   {
     id: 'ton:native',
@@ -77,7 +75,6 @@ const OPTIONS: ReadonlyArray<ChainOption> = [
     token: 'native',
     primaryIcon: 'ton',
     label: 'TON',
-    sub: 'TON native · in-Telegram wallet · instant confirm',
   },
   {
     id: 'base:usdc',
@@ -85,8 +82,7 @@ const OPTIONS: ReadonlyArray<ChainOption> = [
     token: 'usdc',
     primaryIcon: 'usdc',
     networkBadge: 'base',
-    label: 'USDC on Base',
-    sub: 'Circle USDC · L2 stablecoin · ~$0.01 gas',
+    label: 'USDC · Base',
   },
   {
     id: 'arbitrum:usdc',
@@ -94,8 +90,7 @@ const OPTIONS: ReadonlyArray<ChainOption> = [
     token: 'usdc',
     primaryIcon: 'usdc',
     networkBadge: 'arbitrum',
-    label: 'USDC on Arbitrum',
-    sub: 'Circle USDC · L2 stablecoin · ~$0.01 gas',
+    label: 'USDC · Arbitrum',
   },
 ];
 
@@ -158,21 +153,20 @@ export function ChainSelector({
     <div className="flex flex-col gap-3">
       <p
         id="pay-chain-label"
-        className="mono tabular text-[10px] uppercase tracking-[0.16em] text-[var(--fg-3)] inline-flex items-center gap-2"
+        className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--fg-3)] inline-flex items-center gap-2"
       >
         <span>{t('label')}</span>
-        {isTestnet() && (
+        {isNonProd() && (
           <span
             className="
               rounded-md px-1.5 py-0.5
-              text-[9px] tracking-[0.18em]
+              mono tabular text-[9.5px] uppercase tracking-[0.18em]
               bg-[color:color-mix(in_oklab,var(--gold)_22%,transparent)]
               text-[var(--gold)]
               border border-[color:color-mix(in_oklab,var(--gold)_45%,transparent)]
             "
-            title="Payments target testnet in dev"
           >
-            TESTNET
+            {networkBadgeLabel()}
           </span>
         )}
       </p>
@@ -204,16 +198,14 @@ export function ChainSelector({
                 }
                 onKeyDown={(e) => onKeyDown(e, idx)}
                 className={`
-                  group relative w-full flex items-center gap-3
-                  border px-3.5 py-3 text-left rounded-xl
-                  transition-[transform,border-color,background-color,box-shadow]
-                  duration-200 ease-out
-                  focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]
-                  motion-safe:hover:-translate-y-[1px]
+                  group w-full flex items-center gap-3
+                  px-3 py-2.5 rounded-xl
+                  border transition-colors
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]
                   ${
                     active
-                      ? 'border-[var(--accent)] bg-[var(--surface)] shadow-[0_0_0_1px_var(--accent),0_10px_24px_-12px_color-mix(in_oklab,var(--accent)_50%,transparent)]'
-                      : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-2)] hover:border-[color:color-mix(in_oklab,var(--accent)_30%,var(--border))]'
+                      ? 'border-[var(--accent)] bg-[var(--surface-2)]'
+                      : 'border-transparent bg-[var(--surface)] hover:border-[var(--border)] hover:bg-[var(--surface-2)]'
                   }
                 `}
               >
@@ -221,48 +213,37 @@ export function ChainSelector({
                   primary={c.primaryIcon}
                   networkBadge={c.networkBadge}
                   active={active}
+                  size={32}
                 />
 
-                <span className="flex flex-col min-w-0 flex-1">
-                  <span className="text-[13.5px] font-semibold text-[var(--fg)] truncate">
-                    {c.label}
-                  </span>
-                  <span className="text-[11.5px] text-[var(--fg-2)] truncate">
-                    {c.sub}
-                  </span>
+                <span className="flex-1 min-w-0 text-[13.5px] font-medium text-[var(--fg)] truncate">
+                  {c.label}
                 </span>
 
-                {pct > 0 ? (
+                {pct > 0 && (
                   <span
                     className={`
-                      mono tabular text-[9.5px] uppercase tracking-[0.14em]
-                      px-2 py-1 rounded-md shrink-0
-                      transition-colors duration-200 ease-out
+                      mono tabular text-[9.5px] uppercase tracking-[0.16em]
+                      px-1.5 py-0.5 rounded-md shrink-0
                       ${
                         active
                           ? 'bg-[var(--accent)] text-[var(--accent-fg)]'
-                          : 'bg-[color:color-mix(in_oklab,var(--accent)_15%,transparent)] text-[var(--accent)]'
+                          : 'text-[var(--accent)]'
                       }
                     `}
                   >
-                    {t('discountBadge', { pct })}
+                    −{pct}%
                   </span>
-                ) : null}
+                )}
 
                 <span
                   aria-hidden
                   className={`
-                    flex h-5 w-5 shrink-0 items-center justify-center
-                    rounded-full border
-                    transition-[opacity,transform,background-color,border-color] duration-200 ease-out
-                    ${
-                      active
-                        ? 'border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-fg)] scale-100 opacity-100'
-                        : 'border-[var(--border)] bg-transparent text-transparent scale-90 opacity-70'
-                    }
+                    mono tabular text-[10px] uppercase tracking-[0.16em] shrink-0 transition-colors
+                    ${active ? 'text-[var(--accent)]' : 'text-[var(--fg-3)] group-hover:text-[var(--accent)]'}
                   `}
                 >
-                  <Check size={12} strokeWidth={3} />
+                  {active ? <Check size={14} strokeWidth={2.4} /> : '→'}
                 </span>
               </button>
             </li>
