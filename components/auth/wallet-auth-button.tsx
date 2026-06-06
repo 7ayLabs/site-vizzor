@@ -28,6 +28,7 @@ import useSWR from 'swr';
 import { Wallet, LogOut, Check } from 'lucide-react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
+import { WalletSelectorModal } from './wallet-selector-modal';
 
 interface AuthState {
   ok: boolean;
@@ -72,22 +73,15 @@ export function WalletAuthButton({
   }
 
   if (!hasProvider) {
-    // No wallet provider on this route — direct user to /predict to
-    // sign in (the wallet adapter is loaded there).
+    // No wallet provider on this route. The Solana adapter bundle is
+    // intentionally only loaded on /predict and /pay to keep marketing
+    // pages light. So instead of routing immediately, we open the
+    // WalletSelectorModal which lets the user pick a provider; each
+    // option then deep-routes to the page where the adapter (Solana or
+    // TON) actually lives, with a `?connect=<id>` hint the destination
+    // route consumes to auto-fire the connect flow.
     return (
-      <a
-        href="/predict"
-        className="
-          hidden sm:inline-flex h-8 items-center gap-1.5 rounded-full
-          border border-[var(--border)] bg-transparent px-3
-          text-[11.5px] font-medium text-[var(--fg-2)]
-          hover:bg-[var(--surface-2)] hover:text-[var(--fg)]
-          transition-colors
-        "
-      >
-        <Wallet size={13} strokeWidth={2} />
-        <span>{t('connect')}</span>
-      </a>
+      <ProviderlessConnect label={t('connect')} />
     );
   }
 
@@ -352,4 +346,33 @@ function base58Encode(bytes: Uint8Array): string {
 
 function capitalize(s: string): string {
   return s.length === 0 ? s : s[0]!.toUpperCase() + s.slice(1);
+}
+
+/* ────────────── providerless connect (opens selector modal) ────────────── */
+
+function ProviderlessConnect({ label }: { label: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className="
+          hidden sm:inline-flex h-8 items-center gap-1.5 rounded-full
+          border border-[var(--border)] bg-transparent px-3
+          text-[11.5px] font-medium text-[var(--fg-2)]
+          hover:bg-[var(--surface-2)] hover:text-[var(--fg)]
+          focus-visible:outline-none focus-visible:ring-2
+          focus-visible:ring-[var(--accent)]
+          transition-colors
+        "
+      >
+        <Wallet size={13} strokeWidth={2} />
+        <span>{label}</span>
+      </button>
+      <WalletSelectorModal open={open} onClose={() => setOpen(false)} />
+    </>
+  );
 }

@@ -17,7 +17,40 @@
     "subscription": "Abonnement",
     "lifetime": "À vie",
     "expiresOn": "Expire le {date}",
-    "signOut": "Déconnexion"
+    "signOut": "Déconnexion",
+    "close": "Fermer",
+    "modal": {
+      "eyebrow": "Portefeuilles",
+      "eyebrowConnecting": "Connexion",
+      "title": "Connecter un portefeuille",
+      "titleConnecting": "{wallet}",
+      "footer": "Les portefeuilles Solana se connectent via SIWS. Les portefeuilles TON paient directement les forfaits. Vous pouvez changer de chaîne à tout moment.",
+      "connecting": "Ouvre {wallet} pour approuver",
+      "connectingSubtitle": "En attente de ton portefeuille…",
+      "signing": "Connexion à vizzor.ai",
+      "signingSubtitle": "Confirme le message dans {wallet}",
+      "success": "Portefeuille connecté",
+      "successSubtitle": "Tu es connecté",
+      "retry": "Réessayer",
+      "installAction": "Installer le portefeuille",
+      "error": {
+        "wallet_not_installed": "{wallet} n'est pas installé",
+        "user_rejected": "Connexion annulée",
+        "nonce_failed": "Impossible de démarrer la connexion",
+        "verify_failed": "Signature refusée",
+        "unknown": "Une erreur est survenue"
+      }
+    },
+    "wallets": {
+      "phantom": "Phantom",
+      "phantomCaption": "Solana · se connecter",
+      "solflare": "Solflare",
+      "solflareCaption": "Solana · se connecter",
+      "ton": "TON Connect",
+      "tonCaption": "TON · payer un forfait",
+      "more": "Plus de portefeuilles",
+      "moreCaption": "Autres adaptateurs Solana"
+    }
   },
   "footer": {
     "tagline": "Prédictions avec reçus. Prévisions crypto calibrées sur chaque chaîne, chaque token et chaque horizon.",

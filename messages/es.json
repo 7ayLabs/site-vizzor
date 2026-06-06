@@ -17,7 +17,40 @@
     "subscription": "Suscripción",
     "lifetime": "Vitalicio",
     "expiresOn": "Expira el {date}",
-    "signOut": "Cerrar sesión"
+    "signOut": "Cerrar sesión",
+    "close": "Cerrar",
+    "modal": {
+      "eyebrow": "Wallets",
+      "eyebrowConnecting": "Conectando",
+      "title": "Conectar una wallet",
+      "titleConnecting": "{wallet}",
+      "footer": "Las wallets de Solana inician sesión con SIWS. Las wallets TON pagan planes directamente. Puedes cambiar de cadena cuando quieras.",
+      "connecting": "Abre {wallet} para aprobar",
+      "connectingSubtitle": "Esperando tu wallet…",
+      "signing": "Inicia sesión en vizzor.ai",
+      "signingSubtitle": "Confirma el mensaje en {wallet}",
+      "success": "Wallet conectada",
+      "successSubtitle": "Sesión iniciada",
+      "retry": "Reintentar",
+      "installAction": "Instalar wallet",
+      "error": {
+        "wallet_not_installed": "{wallet} no está instalada",
+        "user_rejected": "Conexión cancelada",
+        "nonce_failed": "No se pudo iniciar el inicio de sesión",
+        "verify_failed": "Firma rechazada",
+        "unknown": "Algo salió mal"
+      }
+    },
+    "wallets": {
+      "phantom": "Phantom",
+      "phantomCaption": "Solana · iniciar sesión",
+      "solflare": "Solflare",
+      "solflareCaption": "Solana · iniciar sesión",
+      "ton": "TON Connect",
+      "tonCaption": "TON · pagar un plan",
+      "more": "Más wallets",
+      "moreCaption": "Otros adaptadores de Solana"
+    }
   },
   "footer": {
     "tagline": "Predicciones con recibos. Pronósticos cripto calibrados en cada cadena, token y horizonte temporal.",
