@@ -25,10 +25,17 @@ const TON_TESTNET_DEFAULT = '0QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
 const EVM_TESTNET_DEFAULT = '0x0000000000000000000000000000000000000000';
 
 export function solanaTreasury(): string {
-  const main = paymentNetwork() === 'mainnet';
-  if (main) {
+  const n = paymentNetwork();
+  if (n === 'mainnet') {
     return (
       process.env.VIZZOR_SOLANA_TREASURY_MAINNET ??
+      process.env.VIZZOR_SOLANA_TREASURY ??
+      SOLANA_DEVNET_DEFAULT
+    );
+  }
+  if (n === 'testnet') {
+    return (
+      process.env.VIZZOR_SOLANA_TREASURY_TESTNET ??
       process.env.VIZZOR_SOLANA_TREASURY ??
       SOLANA_DEVNET_DEFAULT
     );

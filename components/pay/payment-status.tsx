@@ -80,6 +80,13 @@ function resolveCopy(
   errorNs: ReturnType<typeof useTranslations<'pay.error'>>,
 ): string {
   if (reason) {
+    // SolanaPayButton tags exceptions it can't classify with an
+    // `unexpected:` prefix carrying the raw RPC/wallet message. Pass
+    // those straight through so the user sees something diagnostic
+    // instead of the generic "unknown" copy.
+    if (reason.startsWith('unexpected:')) {
+      return reason.slice('unexpected:'.length).trim();
+    }
     const key = mapReasonToCopyKey(reason);
     return errorNs(key);
   }

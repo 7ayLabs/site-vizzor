@@ -1,54 +1,63 @@
 /**
  * Solana shared constants and env-driven config.
  *
- * Safe to import from BOTH client and server code. v0.2.0 ships
- * Solana-native-only: no $VIZZOR mint, no burn flow, no SPL helpers.
- *
  * Network resolution (see lib/payment/network.ts):
- *   - mainnet → public-RPC fallback or operator-configured RPC
- *   - testnet → Solana devnet (browser-CORS-friendly, free)
+ *   - mainnet → operator-configured RPC or public-RPC fallback
+ *   - testnet → api.testnet.solana.com (validator-test cluster)
+ *   - devnet  → api.devnet.solana.com  (developer cluster, faucet enabled)
  *
- * Env precedence:
- *   1. SOLANA_RPC_URL (server) / NEXT_PUBLIC_SOLANA_RPC_URL (client)
- *      — applies to whichever network is active.
- *   2. SOLANA_RPC_URL_DEVNET / NEXT_PUBLIC_SOLANA_RPC_URL_DEVNET
- *      — testnet-only override.
- *   3. SOLANA_RPC_URL_MAINNET / NEXT_PUBLIC_SOLANA_RPC_URL_MAINNET
- *      — mainnet-only override.
- *   4. Network default fallback.
+ * Env precedence per cluster:
+ *   1. Cluster-specific override
+ *      SOLANA_RPC_URL_{MAINNET,TESTNET,DEVNET}
+ *      NEXT_PUBLIC_SOLANA_RPC_URL_{MAINNET,TESTNET,DEVNET}
+ *   2. Generic SOLANA_RPC_URL / NEXT_PUBLIC_SOLANA_RPC_URL — applied
+ *      to whichever cluster is active.
+ *   3. Cluster default fallback (see below).
  */
 
 import { paymentNetwork } from './payment/network';
 
 const MAINNET_FALLBACK = 'https://solana-rpc.publicnode.com';
+const TESTNET_FALLBACK = 'https://api.testnet.solana.com';
 const DEVNET_FALLBACK = 'https://api.devnet.solana.com';
 
 export function solanaRpcUrl(): string {
-  const main = paymentNetwork() === 'mainnet';
+  const network = paymentNetwork();
 
-  if (main) {
-    const explicit =
+  if (network === 'mainnet') {
+    return (
       process.env.SOLANA_RPC_URL_MAINNET ??
       process.env.NEXT_PUBLIC_SOLANA_RPC_URL_MAINNET ??
       process.env.SOLANA_RPC_URL ??
-      process.env.NEXT_PUBLIC_SOLANA_RPC_URL;
-    if (explicit) return explicit;
-    return MAINNET_FALLBACK;
+      process.env.NEXT_PUBLIC_SOLANA_RPC_URL ??
+      MAINNET_FALLBACK
+    );
   }
 
-  const explicit =
+  if (network === 'testnet') {
+    return (
+      process.env.SOLANA_RPC_URL_TESTNET ??
+      process.env.NEXT_PUBLIC_SOLANA_RPC_URL_TESTNET ??
+      process.env.SOLANA_RPC_URL ??
+      process.env.NEXT_PUBLIC_SOLANA_RPC_URL ??
+      TESTNET_FALLBACK
+    );
+  }
+
+  return (
     process.env.SOLANA_RPC_URL_DEVNET ??
     process.env.NEXT_PUBLIC_SOLANA_RPC_URL_DEVNET ??
     process.env.SOLANA_RPC_URL ??
-    process.env.NEXT_PUBLIC_SOLANA_RPC_URL;
-  if (explicit) return explicit;
-  return DEVNET_FALLBACK;
+    process.env.NEXT_PUBLIC_SOLANA_RPC_URL ??
+    DEVNET_FALLBACK
+  );
 }
 
 /**
  * Production-safe wrapper. Throws if running in production *mainnet*
- * without a dedicated RPC. Testnet is exempt — devnet's public
- * endpoint is operator-acceptable.
+ * without a dedicated RPC. Non-mainnet clusters are exempt — both
+ * api.testnet.solana.com and api.devnet.solana.com are operator-
+ * acceptable.
  */
 export function getRpc(): string {
   if (

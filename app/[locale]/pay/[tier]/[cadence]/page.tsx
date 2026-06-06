@@ -44,7 +44,7 @@ export default async function PayPage({
 
   return (
     <section className="relative">
-      <div className="mx-auto max-w-[1100px] px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+      <div className="mx-auto max-w-[1040px] px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
         <CheckoutShell
           tier={tier as PaymentTier}
           cadence={cadence as PaymentCadence}

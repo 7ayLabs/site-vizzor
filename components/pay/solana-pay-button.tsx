@@ -77,6 +77,43 @@ function rpcCandidates(): string[] {
   return configured ? [configured, ...fallbacks] : fallbacks;
 }
 
+/**
+ * Maps a raw wallet / RPC exception to one of our PaymentReason
+ * codes so the banner shows accurate copy. The patterns cover what
+ * Phantom + the Solana RPC actually throw — kept here next to the
+ * code path that produces them so it's obvious why each branch exists.
+ */
+function classifyWalletError(msg: string): string {
+  // User dismissed Phantom's approve dialog.
+  if (/reject|denied|user rejected|cancel/i.test(msg)) {
+    return 'wallet_rejected';
+  }
+  // Wallet/RPC pre-flight told us the payer has no devnet SOL. The
+  // Solana RPC verbatim returns "Attempt to debit an account but found
+  // no record of a prior credit" when balance is below the fee.
+  if (
+    /insufficient|debit an account|found no record|too little/i.test(msg)
+  ) {
+    return 'insufficient_balance';
+  }
+  // Blockhash race — the one we fetched expired before the wallet
+  // signed and broadcast.
+  if (/blockhash|expired|too old/i.test(msg)) {
+    return 'rpc_unavailable';
+  }
+  // Network / RPC layer (5xx, timeout, DNS).
+  if (/429|503|fetch failed|network|aborted|timeout/i.test(msg)) {
+    return 'rpc_unavailable';
+  }
+  // Account doesn't exist — usually the treasury env was unset.
+  if (/account does not exist|invalid account|invalid pub/i.test(msg)) {
+    return 'invalid_destination';
+  }
+  // Unknown — surface a truncated diagnostic so the user can copy it
+  // into support instead of staring at "Something went wrong."
+  return `unexpected: ${msg.slice(0, 140)}`;
+}
+
 async function getBlockhashWithFallback(): Promise<{
   connection: Connection;
   blockhash: string;
@@ -166,6 +203,23 @@ export function SolanaPayButton({
       }
       const { connection, blockhash, lastValidBlockHeight } = prep;
 
+      // Pre-flight balance check. The wallet will surface the same
+      // "not enough SOL" error inside its popup, but catching it here
+      // means we can route to a specific banner (with a devnet faucet
+      // link in testnet) instead of leaving the user staring at a
+      // generic wallet error. A 5_000-lamport buffer covers the
+      // network fee + memo program rent.
+      try {
+        const balance = await connection.getBalance(publicKey);
+        if (balance < lamports + 5_000) {
+          onError('insufficient_balance');
+          return;
+        }
+      } catch {
+        // RPC blip on the balance check — don't block; the wallet
+        // popup will run its own check and surface any shortfall.
+      }
+
       const tx = new Transaction();
       tx.recentBlockhash = blockhash;
       tx.lastValidBlockHeight = lastValidBlockHeight;
@@ -189,11 +243,7 @@ export function SolanaPayButton({
       onSent(signature);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      onError(
-        /rejected|user denied|user rejected/i.test(msg)
-          ? 'wallet_rejected'
-          : msg.slice(0, 200),
-      );
+      onError(classifyWalletError(msg));
     }
   }, [
     amount,

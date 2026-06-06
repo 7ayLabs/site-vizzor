@@ -77,8 +77,11 @@ interface SessionApiResponse {
   reason?: string;
 }
 
-const POLL_INTERVAL_MS = 3_000;
-const POLL_MAX_ATTEMPTS = 200; // ~10 min wall clock
+// 5s matches the Solana watcher's own poll cadence — quicker than that
+// just generates redundant requests against an unchanged session row.
+const POLL_INTERVAL_MS = 5_000;
+// 120 attempts × 5s = 10 minutes wall clock (matches the session TTL).
+const POLL_MAX_ATTEMPTS = 120;
 
 const DEFAULT_SELECTOR: SelectorValue = { chain: 'solana', token: 'native' };
 
@@ -100,19 +103,12 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
   const selectorRef = useRef<SelectorValue>(DEFAULT_SELECTOR);
   const headerRef = useRef<HTMLElement | null>(null);
   const pollAttempts = useRef(0);
-  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [selector, setSelector] = useReducerSelector(DEFAULT_SELECTOR);
 
   const featureOn = acceptSolanaPayments();
 
   selectorRef.current = selector;
-
-  useEffect(() => {
-    return () => {
-      if (pollTimer.current) clearTimeout(pollTimer.current);
-    };
-  }, []);
 
   // Header entrance — eyebrow + title + sub slide up + fade in.
   useEffect(() => {
@@ -175,44 +171,83 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
     }
   }, [tier, cadence]);
 
-  const startPolling = useCallback((sessionId: string) => {
+  // Poll the session row only while we're in `paying`. The effect is
+  // keyed on `(state.kind === 'paying', sessionId)` rather than the
+  // full state object so a `poll-update` dispatch that mutates state
+  // does NOT tear down + re-arm the loop — that previous shape caused
+  // a runaway request storm (each tick triggered a re-render which
+  // re-ran the effect which started a fresh tick on top of the one
+  // already in flight).
+  const isPaying = state.kind === 'paying';
+  const payingSessionId = isPaying ? state.session.sessionId : null;
+
+  useEffect(() => {
+    if (!isPaying || !payingSessionId) return;
+
+    let cancelled = false;
+    let attempts = 0;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let etag: string | null = null;
     pollAttempts.current = 0;
+
     const tick = async () => {
-      pollAttempts.current += 1;
-      if (pollAttempts.current > POLL_MAX_ATTEMPTS) {
+      if (cancelled) return;
+      attempts += 1;
+      pollAttempts.current = attempts;
+      if (attempts > POLL_MAX_ATTEMPTS) {
         dispatch({ type: 'poll-expired' });
         return;
       }
       try {
-        const res = await fetch(`/api/payment/session/${sessionId}`);
-        const data = (await res.json()) as SessionApiResponse;
-        if (data.ok && data.session) {
-          dispatch({ type: 'poll-update', session: data.session });
-        } else if (!data.ok) {
-          dispatch({
-            type: 'poll-error',
-            reason: data.reason ?? 'session_failed',
-          });
-          return;
+        const res = await fetch(`/api/payment/session/${payingSessionId}`, {
+          cache: 'no-store',
+          headers: etag ? { 'if-none-match': etag } : undefined,
+        });
+        if (cancelled) return;
+
+        // 304 — server says the row is unchanged. No body, no dispatch.
+        // Just re-arm. This is the hot path: the watcher hasn't seen
+        // the on-chain tx yet, so 95% of polls land here.
+        if (res.status === 304) {
+          const nextEtag = res.headers.get('etag');
+          if (nextEtag) etag = nextEtag;
+        } else {
+          const data = (await res.json()) as SessionApiResponse;
+          if (cancelled) return;
+          // Capture ETag for the NEXT request.
+          const nextEtag = res.headers.get('etag');
+          if (nextEtag) etag = nextEtag;
+          if (data.ok && data.session) {
+            dispatch({ type: 'poll-update', session: data.session });
+            if (
+              data.session.status === 'confirmed' ||
+              data.session.status === 'expired' ||
+              data.session.status === 'failed'
+            ) {
+              return;
+            }
+          } else if (!data.ok) {
+            dispatch({
+              type: 'poll-error',
+              reason: data.reason ?? 'session_failed',
+            });
+            return;
+          }
         }
       } catch {
-        // Transient — keep polling.
+        // Transient (network blip / dev HMR) — keep polling.
       }
-      pollTimer.current = setTimeout(tick, POLL_INTERVAL_MS);
+      if (cancelled) return;
+      timeoutId = setTimeout(tick, POLL_INTERVAL_MS);
     };
-    void tick();
-  }, []);
 
-  useEffect(() => {
-    if (state.kind === 'paying') {
-      const session = state.session;
-      startPolling(session.sessionId);
-      return () => {
-        if (pollTimer.current) clearTimeout(pollTimer.current);
-      };
-    }
-    return undefined;
-  }, [state, startPolling]);
+    void tick();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [isPaying, payingSessionId]);
 
   const onSent = useCallback((signature: string) => {
     dispatch({ type: 'tx-signed', txSig: signature });
@@ -223,7 +258,8 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
   }, []);
 
   const retry = useCallback(() => {
-    if (pollTimer.current) clearTimeout(pollTimer.current);
+    // The polling effect's own cleanup tears down the in-flight loop
+    // as soon as `state.kind` transitions out of `paying` after reset.
     dispatch({ type: 'reset' });
   }, []);
 
@@ -301,17 +337,17 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
   })();
 
   const inner = (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 pt-4 sm:pt-6">
-      <div className="flex flex-col gap-6">
-        <header ref={headerRef} className="flex flex-col gap-2">
-          <p className="mono tabular text-[10px] uppercase tracking-[0.18em] text-[var(--accent)]">
-            {t('eyebrow')}
-          </p>
-          <h1 className="display text-[var(--fg)] text-[28px] sm:text-[34px] lg:text-[42px] leading-[1.05] tracking-tight font-semibold text-balance">
+    <div className="mx-auto w-full max-w-[1040px] grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 pt-4 sm:pt-6">
+      <div className="flex flex-col gap-5">
+        <header
+          ref={headerRef}
+          className="flex items-baseline justify-between gap-3"
+        >
+          <h1 className="text-[26px] sm:text-[30px] leading-[1.1] tracking-tight font-semibold text-[var(--fg)]">
             {t('title', { tier: t(`summary.tier.${tier}`) })}
           </h1>
-          <p className="text-[14px] leading-relaxed text-[var(--fg-2)] max-w-[60ch]">
-            {t('sub')}
+          <p className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--fg-3)] whitespace-nowrap">
+            {t(`summary.cadence.${cadence}`)}
           </p>
         </header>
 
@@ -334,7 +370,7 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
 
         {!ctaHidden(state) && payButton}
 
-        <p className="mono tabular text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)] text-center">
+        <p className="mono tabular text-[9.5px] uppercase tracking-[0.14em] text-[var(--fg-3)] text-center">
           {t('legalFootnote')}
         </p>
       </div>

@@ -605,7 +605,15 @@
       "install": "Instalar",
       "footer": "MetaMask no es una wallet de Solana — úsala para los rails USDC vía el handoff a Telegram.",
       "emptyTitle": "No se detectaron wallets Solana.",
-      "emptyHint": "Instala Phantom o Solflare y refresca."
+      "emptyHint": "Instala Phantom o Solflare y refresca.",
+      "devnet": {
+        "label": "Fondos devnet",
+        "airdrop": "Airdrop 1 SOL",
+        "airdropPending": "Enviando…",
+        "airdropOk": "Listo · revisa Phantom",
+        "airdropFail": "Faucet saturada — prueba la web",
+        "webFaucet": "Abrir faucet web"
+      }
     },
     "status": {
       "creating": {
@@ -654,7 +662,9 @@
         "priceLookup": "No pudimos buscar el precio del tier en el servidor. Refresca la página.",
         "sessionFailed": "Falló la creación de sesión. Reintenta, o abre el bot de Telegram si persiste.",
         "rpcUnavailable": "El RPC de Solana está rate-limited ahora mismo. Reintenta en un momento, o cambia a TON / USDC.",
-        "walletNotConnected": "Conecta una wallet para continuar."
+        "walletNotConnected": "Conecta una wallet para continuar.",
+        "insufficientBalance": "Tu wallet no tiene suficiente SOL para cubrir este pago y la comisión de red. En devnet puedes pedir un airdrop de 1 SOL desde el panel de arriba, o cargar saldo en faucet.solana.com.",
+        "invalidDestination": "La dirección del tesoro de destino está mal configurada para esta red. Revisa VIZZOR_SOLANA_TREASURY para el cluster activo."
       }
     },
     "cta": {
@@ -670,14 +680,33 @@
       "body": "El checkout de SOL on-site está listo pero el tesoro aún no se ha activado. Mientras tanto, puedes pagar directamente desde el bot de Telegram — mismo tier, mismo precio, mismo acceso.",
       "telegramCta": "Pagar en Telegram"
     },
+    "prelink": {
+      "cta": "Sáltate este paso la próxima vez — vincula tu wallet a Telegram ahora y los pagos futuros se atribuirán solos.",
+      "ctaButton": "Vincular wallet",
+      "linkedLabel": "wallet vinculada",
+      "linked": "Vinculada a @{handle}. Los pagos futuros saltarán este paso.",
+      "modalTitle": "Vincula tu wallet a Telegram",
+      "modalBody": "Abre el bot y ejecuta el comando de abajo. Te dará un desafío único que firmas con esta wallet — misma clave, sin configuración extra.",
+      "modalCommandLabel": "Ejecuta en el bot",
+      "modalCloseAria": "Cerrar",
+      "botCommand": "/link wallet"
+    },
     "grant": {
       "label": "suscripción desbloqueada",
-      "title": "Bienvenido a Vizzor · canjea en Telegram",
-      "body": "Pulsa el botón de abajo para abrir el bot de Telegram. El bot lee el código de acceso del enlace y activa tu suscripción al instante.",
+      "title": "Canjea en Telegram",
+      "body": "Abre el bot para activar tu suscripción. El código de acceso está embebido en el enlace — de un solo uso, expira en 24h.",
+      "openTelegram": "Abrir Telegram",
+      "tryAgain": "Reabrir enlace",
       "continueCta": "Continuar en Telegram",
-      "codeLabel": "O pega el enlace manualmente",
+      "codeLabel": "Código de acceso",
+      "copyCode": "Copiar código",
       "copyAria": "Copiar enlace de canje",
-      "codeTtl": "Uso único · expira en 24h"
+      "copied": "Copiado",
+      "codeTtl": "Uso único · expira en 24h",
+      "qrLabel": "Escanea con tu móvil",
+      "qrShow": "Mostrar QR",
+      "qrHide": "Ocultar QR",
+      "qrAlt": "Código QR con el enlace de canje al bot de Telegram"
     },
     "success": {
       "pendingLabel": "casi listo",
