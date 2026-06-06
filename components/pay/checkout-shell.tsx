@@ -51,6 +51,8 @@ import type {
 } from '@/lib/payment/session';
 import {
   acceptTonPayments,
+  acceptUsdcArbPayments,
+  acceptUsdcBasePayments,
   acceptVizzorPayments,
 } from '@/lib/feature-flags';
 
@@ -71,6 +73,11 @@ const SolanaWalletAdapter = dynamic(
 
 const VizzorPayButton = dynamic(
   () => import('./vizzor-pay-button').then((m) => m.VizzorPayButton),
+  { ssr: false, loading: () => null },
+);
+
+const EvmPayButton = dynamic(
+  () => import('./evm-pay-button').then((m) => m.EvmPayButton),
   { ssr: false, loading: () => null },
 );
 
@@ -119,7 +126,9 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
 
   const tonOn = acceptTonPayments();
   const vizzorOn = acceptVizzorPayments();
-  const featureOn = tonOn || vizzorOn;
+  const usdcBaseOn = acceptUsdcBasePayments();
+  const usdcArbOn = acceptUsdcArbPayments();
+  const featureOn = tonOn || vizzorOn || usdcBaseOn || usdcArbOn;
 
   selectorRef.current = selector;
 
@@ -300,6 +309,19 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
         />
       );
     }
+    if (selector.token === 'usdc') {
+      return (
+        <EvmPayButton
+          destAddress={session.destAddress}
+          amount={session.amount}
+          sessionId={session.sessionId}
+          chain={selector.chain === 'arbitrum' ? 'arbitrum' : 'base'}
+          onSent={onSent}
+          onError={onWalletError}
+          disabled={disabled}
+        />
+      );
+    }
     return (
       <TonConnectButton
         destAddress={session.destAddress}
@@ -363,6 +385,11 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
 
   if (selector.token === 'vizzor') {
     return <SolanaWalletAdapter>{inner}</SolanaWalletAdapter>;
+  }
+  if (selector.token === 'usdc') {
+    // EVM USDC payments use EIP-6963 wallet discovery directly via
+    // window.ethereum — no provider tree needed. Bundle stays light.
+    return inner;
   }
   return <TonProvider>{inner}</TonProvider>;
 }

@@ -349,6 +349,21 @@
     "title": "Precios",
     "sub": "Tres tiers, dos cadencias de facturación, seis cadenas aceptadas. Cancela cuando quieras. Autoaloja si prefieres no pagar suscripción.",
     "mostPopular": "Más popular",
+    "promo": {
+      "lifetime": {
+        "eyebrow": "Oferta Lifetime",
+        "title": "Paga una vez. Vizzor Elite para siempre.",
+        "subtitle": "Asegura el acceso de por vida al precio de hoy. Sin renovaciones, sin estrés de cuota — todas las familias de señales, todos los horizontes, mientras Vizzor exista.",
+        "lifetimePriceLabel": "Lifetime",
+        "lifetimePriceCaption": "Pago único",
+        "comparisonLabel": "Elite mensual · 10 años",
+        "comparisonCaption": "Lo que pagarías de otra forma",
+        "vzrFootnote": "Ahorra 35% adicional pagando en $VZR (próximamente)",
+        "cta": "Ver la oferta Lifetime",
+        "dismiss": "No, gracias",
+        "retriggerPill": "Oferta Lifetime"
+      }
+    },
     "tiers": {
       "free": {
         "name": "Free",
@@ -552,6 +567,10 @@
       "signing": "Firmando transacción…",
       "payNow": "Pagar {amount} TON",
       "payNowVizzor": "Pagar {amount} $VIZZOR",
+      "payNowUsdc": "Pagar {amount} USDC en {chain}",
+      "noEvmWallet": "No se detectó wallet EVM",
+      "noEvmWalletHint": "Instala MetaMask, Rainbow o Coinbase Wallet para pagar en USDC.",
+      "walletPicker": "Elige una wallet",
       "disconnect": "Desconectar"
     },
     "status": {
