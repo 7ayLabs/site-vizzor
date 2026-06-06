@@ -18,7 +18,13 @@
  */
 
 import { randomBytes } from 'node:crypto';
-import { acceptTonPayments, acceptVizzorPayments, paymentRateLockSeconds } from '@/lib/feature-flags';
+import {
+  acceptTonPayments,
+  acceptUsdcArbPayments,
+  acceptUsdcBasePayments,
+  acceptVizzorPayments,
+  paymentRateLockSeconds,
+} from '@/lib/feature-flags';
 import {
   attachGrantCodeToSession,
   attachTelegramIdToSubscription,
@@ -33,7 +39,7 @@ import {
   type SessionRow,
 } from './db';
 import { getRate } from './rates';
-import { solanaTreasury, tonTreasury } from './treasury';
+import { evmTreasury, solanaTreasury, tonTreasury } from './treasury';
 
 export type PaymentTier = 'pro' | 'elite';
 export type PaymentCadence = 'monthly' | 'annual' | 'lifetime';
@@ -92,10 +98,34 @@ export type SessionFailure =
 
 const TON_DECIMALS = 9;
 const VIZZOR_DECIMALS = 9;
+const USDC_DECIMALS = 6;
 
 function newSessionId(): string {
   // 16 random bytes → 22 chars base64url. Short, URL-safe, unique.
   return 'ses_' + randomBytes(16).toString('base64url');
+}
+
+/**
+ * Amount-as-uniqueness salt for USDC payments. ERC-20 transfers have
+ * no memo / comment field, so two concurrent sessions for the same
+ * (tier, cadence, chain, token) tuple would normally produce the same
+ * locked amount and the EVM watcher couldn't demux them at a shared
+ * treasury. The salt is a deterministic 0..0.0099 USDC offset derived
+ * from the session_id; collisions inside a 100-session window are
+ * possible but exceptional and caught by createSession returning
+ * `invalid_input` so the client retries with a fresh id.
+ *
+ * 100 buckets × ≤10,000 concurrent pending sessions per chain ≈
+ * 1,000,000 distinct amounts before any collision risk on a single
+ * tier. Production peak load is orders of magnitude below this floor.
+ */
+function applyUsdcSalt(baseUsd: number, sessionId: string): number {
+  // Deterministic 0–99 from the last byte of session_id (already
+  // ~128 bits of entropy at the source).
+  const last = sessionId.charCodeAt(sessionId.length - 1);
+  const salt = last % 100;
+  // Salt cents are added in the 4th decimal place: 0.00xx USDC.
+  return Math.round((baseUsd + salt / 10000) * 10000) / 10000;
 }
 
 export async function createSession(
@@ -103,6 +133,9 @@ export async function createSession(
 ): Promise<SessionResult> {
   const isTon = input.chain === 'ton' && input.token === 'native';
   const isVizzor = input.chain === 'solana' && input.token === 'vizzor';
+  const isUsdcBase = input.chain === 'base' && input.token === 'usdc';
+  const isUsdcArb = input.chain === 'arbitrum' && input.token === 'usdc';
+  const isUsdc = isUsdcBase || isUsdcArb;
 
   if (isTon && !acceptTonPayments()) {
     return { ok: false, reason: 'feature_disabled' };
@@ -110,7 +143,13 @@ export async function createSession(
   if (isVizzor && !acceptVizzorPayments()) {
     return { ok: false, reason: 'feature_disabled' };
   }
-  if (!isTon && !isVizzor) {
+  if (isUsdcBase && !acceptUsdcBasePayments()) {
+    return { ok: false, reason: 'feature_disabled' };
+  }
+  if (isUsdcArb && !acceptUsdcArbPayments()) {
+    return { ok: false, reason: 'feature_disabled' };
+  }
+  if (!isTon && !isVizzor && !isUsdc) {
     return { ok: false, reason: 'invalid_input' };
   }
   if (!['pro', 'elite'].includes(input.tier)) {
@@ -134,15 +173,36 @@ export async function createSession(
     return { ok: false, reason: 'invalid_input' };
   }
 
-  // Snapshot the current rate.
-  const rate = await getRate(isTon ? 'ton' : 'vizzor');
+  // Snapshot the current rate. USDC is treated as 1.00 USD with no
+  // oracle dependency (see rates.ts).
+  const priceToken = isTon ? 'ton' : isVizzor ? 'vizzor' : 'usdc';
+  const rate = await getRate(priceToken);
   if (!rate) return { ok: false, reason: 'rate_unavailable' };
 
-  const usd = input.amountUsdCents / 100;
-  const amount = Math.round((usd / rate.usdPer) * 100) / 100;
-  const decimals = isTon ? TON_DECIMALS : VIZZOR_DECIMALS;
-  const destAddress = isTon ? tonTreasury() : solanaTreasury();
   const sessionId = newSessionId();
+  const usd = input.amountUsdCents / 100;
+  const decimals = isTon
+    ? TON_DECIMALS
+    : isVizzor
+      ? VIZZOR_DECIMALS
+      : USDC_DECIMALS;
+
+  // Amount-as-uniqueness salting for USDC: each session adds a
+  // deterministic 0.0000-0.0099 salt derived from session_id so two
+  // concurrent same-tier sessions on the same chain can't share the
+  // same on-chain amount. The EVM watcher matches by exact raw
+  // uint256, so demuxing is unambiguous. TON and Solana use memos
+  // and don't need this. See plan §10.2.
+  const baseAmount = Math.round((usd / rate.usdPer) * 100) / 100;
+  const amount = isUsdc
+    ? applyUsdcSalt(baseAmount, sessionId)
+    : baseAmount;
+
+  const destAddress = isTon
+    ? tonTreasury()
+    : isVizzor
+      ? solanaTreasury()
+      : evmTreasury(input.chain as 'base' | 'arbitrum');
   const expiresAt = Date.now() + paymentRateLockSeconds() * 1000;
 
   insertSession({

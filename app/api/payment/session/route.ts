@@ -31,6 +31,7 @@ import {
 } from '@/lib/payment/pricing-table';
 import { ensureWatcherStarted } from '@/lib/payment/watcher';
 import { ensureTonWatcherStarted } from '@/lib/payment/ton-watcher';
+import { ensureEvmWatchersStarted } from '@/lib/payment/evm-watcher';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -45,6 +46,8 @@ interface SessionBody {
 const VALID_PAIRS = new Set<string>([
   'ton:native',
   'solana:vizzor',
+  'base:usdc',
+  'arbitrum:usdc',
 ]);
 
 export async function POST(req: Request) {
@@ -53,6 +56,7 @@ export async function POST(req: Request) {
   // gated by its own feature flag (accept*Payments).
   ensureWatcherStarted();
   ensureTonWatcherStarted();
+  ensureEvmWatchersStarted();
 
   let body: SessionBody;
   try {
