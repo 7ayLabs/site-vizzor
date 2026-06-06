@@ -31,3 +31,25 @@ export function solanaTreasury(): string {
     '11111111111111111111111111111111'
   );
 }
+
+/**
+ * EVM USDC treasury address for the given chain. Production must
+ * configure both per-chain env vars before flipping
+ * acceptUsdc*Payments() to true; the EVM watcher refuses to start
+ * for any chain whose treasury is missing.
+ *
+ * Throws on missing config so the watcher surface logs a clear
+ * `treasury missing` message rather than silently confirming
+ * payments to the zero address.
+ */
+export function evmTreasury(chain: 'base' | 'arbitrum'): string {
+  const env = chain === 'base'
+    ? process.env.VIZZOR_EVM_TREASURY_BASE
+    : process.env.VIZZOR_EVM_TREASURY_ARB;
+  if (!env || !/^0x[a-fA-F0-9]{40}$/.test(env)) {
+    throw new Error(
+      `EVM treasury not configured for ${chain} — set VIZZOR_EVM_TREASURY_${chain.toUpperCase()}`,
+    );
+  }
+  return env;
+}

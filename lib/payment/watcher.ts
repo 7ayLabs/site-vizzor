@@ -22,12 +22,8 @@
 
 import { Connection, PublicKey } from '@solana/web3.js';
 import { acceptVizzorPayments } from '@/lib/feature-flags';
-import {
-  insertSubscription,
-  listPendingSessions,
-  markSessionConfirmed,
-  type SessionRow,
-} from './db';
+import { listPendingSessions } from './db';
+import { finalizeSession } from './session';
 import { solanaTreasury } from './treasury';
 
 const POLL_INTERVAL_MS = 5_000;
@@ -130,8 +126,15 @@ async function pollOnce(state: { lastSlot: number | null }): Promise<void> {
       continue;
     }
 
-    // Confirm + create subscription atomically.
-    finalizeSession(session, sig.signature, transfer.payer);
+    // Confirm + create subscription + mint grant + back-fill TG id
+    // atomically via the shared finalizeSession helper.
+    const result = finalizeSession(session, sig.signature, transfer.payer);
+    if (result.confirmed) {
+      // eslint-disable-next-line no-console
+      console.info(
+        `[vizzor-watcher] confirmed ${session.session_id} · ${session.tier}/${session.cadence} · payer=${transfer.payer || 'unknown'}${result.walletLinkedTo ? ` · tg=${result.walletLinkedTo}` : ''}`,
+      );
+    }
   }
 
   // Track the highest slot we've seen to short-circuit future polls.
@@ -215,42 +218,4 @@ function amountMatches(paid: number, expected: number, _decimals: number): boole
   if (paid <= 0 || expected <= 0) return false;
   const ratio = paid / expected;
   return ratio >= 1 - SLIPPAGE_TOLERANCE && ratio <= 1 + SLIPPAGE_TOLERANCE;
-}
-
-function cadenceExpiry(cadence: string): number | null {
-  const now = Date.now();
-  switch (cadence) {
-    case 'monthly':
-      return now + 30 * 24 * 60 * 60 * 1000;
-    case 'annual':
-      return now + 365 * 24 * 60 * 60 * 1000;
-    case 'lifetime':
-      return null;
-    default:
-      return now + 30 * 24 * 60 * 60 * 1000;
-  }
-}
-
-function finalizeSession(
-  session: SessionRow,
-  txSig: string,
-  payer: string,
-): void {
-  markSessionConfirmed(session.session_id, txSig, payer, Date.now());
-
-  // Create the wallet-bound subscription. The payer wallet address is
-  // what /predict will look up via the SIWS auth cookie.
-  if (payer) {
-    insertSubscription({
-      wallet_address: payer,
-      tier: session.tier,
-      cadence: session.cadence,
-      expires_at: cadenceExpiry(session.cadence),
-      session_id: session.session_id,
-    });
-  }
-  // eslint-disable-next-line no-console
-  console.info(
-    `[vizzor-watcher] confirmed ${session.session_id} · ${session.tier}/${session.cadence} · payer=${payer || 'unknown'}`,
-  );
 }

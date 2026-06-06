@@ -82,7 +82,7 @@ export function ChainSelector({
       <ul className="flex flex-col gap-2">
         {PHASE_1.map((c) => {
           const active = value.chain === c.chain && value.token === c.token;
-          const bps = discountBps(tier, cadence, c.token);
+          const bps = discountBps(tier, cadence, c.chain, c.token);
           const pct = Math.round(bps / 100);
           return (
             <li key={c.id}>

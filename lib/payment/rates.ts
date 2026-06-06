@@ -16,7 +16,7 @@ const COINGECKO_TON =
 const CACHE_MS = 60_000;
 const FETCH_TIMEOUT_MS = 5_000;
 
-export type PriceToken = 'ton' | 'vizzor';
+export type PriceToken = 'ton' | 'vizzor' | 'usdc';
 
 export interface CachedRate {
   token: PriceToken;
@@ -44,6 +44,14 @@ export async function getRate(token: PriceToken): Promise<CachedRate | null> {
 
 async function fetchRate(token: PriceToken): Promise<CachedRate | null> {
   if (token === 'ton') return fetchTonRate();
+  if (token === 'usdc') {
+    // USDC is a USD-pegged stablecoin issued by Circle. Treat as
+    // 1.00 USD per token with zero oracle dependency. The actual
+    // on-chain value can deviate (peg break, depeg event), but
+    // those are exceptional conditions that warrant a manual halt
+    // via acceptUsdc*Payments() rather than runtime oracle drift.
+    return { token: 'usdc', usdPer: 1, at: Date.now() };
+  }
   return fetchVizzorRate();
 }
 
@@ -78,7 +86,7 @@ async function fetchTonRate(): Promise<CachedRate | null> {
  * `NEXT_PUBLIC_VIZZOR_MOCK_USD` so dev/staging can simulate any price.
  */
 async function fetchVizzorRate(): Promise<CachedRate | null> {
-  const mock = process.env.NEXT_PUBLIC_VIZZOR_MOCK_USD;
+  const mock = process.env.NEXT_PUBLIC_VZR_MOCK_USD ?? process.env.NEXT_PUBLIC_VIZZOR_MOCK_USD;
   if (mock) {
     const n = Number.parseFloat(mock);
     if (Number.isFinite(n) && n > 0) {
