@@ -2,9 +2,16 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, release/**]
   push:
-    branches: [main, develop, feat/**, fix/**, hotfix/**]
+    branches:
+      - main
+      - develop
+      - feat/**
+      - fix/**
+      - hotfix/**
+      - feature/v0.2.0/**
+      - release/v0.2.0**
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -40,8 +47,7 @@ jobs:
         continue-on-error: true
 
       - name: Test
-        run: pnpm test || echo "no tests yet"
-        continue-on-error: true
+        run: pnpm test
 
       - name: Build
         run: pnpm build
@@ -49,3 +55,7 @@ jobs:
           NEXT_PUBLIC_VIZZOR_API_URL: https://api.vizzor.ai
           GIT_SHA: ${{ github.sha }}
           BUILD_TIME: ${{ github.event.head_commit.timestamp || 'pr-build' }}
+
+      - name: Dependency audit (advisory)
+        run: pnpm audit --audit-level high --prod || echo "pnpm audit reported advisories — review manually"
+        continue-on-error: true
