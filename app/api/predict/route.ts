@@ -32,7 +32,7 @@
 import type { UIMessage } from 'ai';
 import { buildIncrementedQuotaCookie, readQuota } from '@/lib/quota';
 import { isTokenLive } from '@/lib/feature-flags';
-import { verifyBurnTx } from '@/lib/solana';
+import { verifyBurnTx } from '@/lib/solana-server';
 import { parseIntent } from '@/lib/commands';
 import { getSubscriptionForActiveSession } from '@/lib/payment/auth-session';
 
