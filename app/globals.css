@@ -50,6 +50,20 @@
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, .dark, .dark *));
 
+/*
+ * Vizzor goes strict black-and-white. We keep the historical color
+ * token names — `--accent`, `--gold`, `--whale`, `--danger` — because
+ * every component reads them, but every one now resolves to a value
+ * inside the neutral scale that flips correctly between light and
+ * dark mode. No green, no orange, no blue, no red. The only emphasis
+ * comes from inversion (`bg-fg / text-bg`) or contrast steps inside
+ * the fg / fg-2 / fg-3 ramp.
+ *
+ * Why redefine instead of search-and-replace every callsite: every
+ * future component that reaches for the token gets the right value
+ * automatically. There is one source of truth.
+ */
+
 :root {
   --bg: #fafaf7;
   --surface: #ffffff;
@@ -58,11 +72,14 @@
   --fg: #0a0a0a;
   --fg-2: #52525b;
   --fg-3: #737373;
-  --accent: #10b981;
-  --accent-fg: #022c20;
-  --danger: #dc2626;
-  --gold: #f59e0b;
-  --whale: #3b82f6;
+
+  /* Token aliases — all collapsed to the neutral scale. */
+  --accent: var(--fg);
+  --accent-fg: var(--bg);
+  --danger: var(--fg);
+  --gold: var(--fg-2);
+  --whale: var(--fg-2);
+
   --code-bg: #0a0a0a;
   --code-fg: #e8e8e8;
 
@@ -77,11 +94,13 @@
   --fg: #f5f5f2;
   --fg-2: #a1a1aa;
   --fg-3: #71717a;
-  --accent: #34d399;
-  --accent-fg: #022c20;
-  --danger: #f87171;
-  --gold: #fbbf24;
-  --whale: #60a5fa;
+
+  --accent: var(--fg);
+  --accent-fg: var(--bg);
+  --danger: var(--fg);
+  --gold: var(--fg-2);
+  --whale: var(--fg-2);
+
   --code-bg: #000000;
   --code-fg: #e8e8e8;
 

@@ -38,14 +38,12 @@ export function TelegramHandoffButton({
         if (disabled) e.preventDefault();
       }}
       className={`
-        group relative inline-flex items-center justify-center gap-2 h-12 px-5 w-full
-        rounded-xl text-[13px] font-semibold tracking-tight
-        bg-[var(--accent)] text-[var(--accent-fg)]
-        transition-[transform,opacity,box-shadow] duration-200 ease-out
-        shadow-[0_8px_28px_-12px_color-mix(in_oklab,var(--accent)_60%,transparent)]
+        group relative inline-flex items-center justify-center gap-2 h-13 px-5 w-full py-3
+        rounded-xl text-[14px] font-semibold tracking-tight
+        bg-[var(--fg)] text-[var(--bg)]
+        transition-[transform,opacity] duration-200 ease-out
         motion-safe:hover:-translate-y-[1px]
-        motion-safe:hover:shadow-[0_12px_30px_-12px_color-mix(in_oklab,var(--accent)_70%,transparent)]
-        ${disabled ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-95'}
+        ${disabled ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-90'}
       `}
     >
       <span>{t('cta.continueInTelegram', { chain: chainLabel })}</span>
