@@ -67,10 +67,12 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/three": "^0.184.1",
+    "@vitest/coverage-v8": "^2.1.0",
     "@vizzor/cli": "^0.15.2",
     "postcss": "^8.4.49",
     "tailwindcss": "^4.0.0",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.0"
   },
   "engines": {
     "node": ">=20"
