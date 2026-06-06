@@ -42,6 +42,13 @@ export function assertRequiredEnv(
   required: readonly EnvRequirement[],
 ): void {
   if (process.env.NODE_ENV !== 'production') return;
+  // Skip during `next build`'s page-data collection. NEXT_PHASE is
+  // 'phase-production-build' while the build worker imports the
+  // route module to extract metadata — at that point the runtime
+  // env (treasury addresses, RPC URLs, etc.) is intentionally not
+  // present. The same module loaded at request time WILL see the
+  // injected env and assert correctly.
+  if (process.env.NEXT_PHASE === 'phase-production-build') return;
   const missing: EnvRequirement[] = [];
   for (const req of required) {
     const val = process.env[req.name];
