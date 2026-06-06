@@ -3,14 +3,18 @@
 /**
  * CheckoutShell — top-level client component for /pay/[tier]/[cadence].
  *
- * v0.2.0 ships Solana-native-only. The selected chain/token is always
- * `solana:native`; the ChainSelector shows the active option plus
- * disabled placeholders for later cycles.
+ * Four live rails: SOL on Solana (native on-site), TON / USDC-Base /
+ * USDC-Arbitrum (session created locally, payment redirected into
+ * the Telegram bot which owns the wallet flow there). The bot writes
+ * back to the same subscriptions / wallet_links tables.
  *
  * Every state mutation goes through the `next()` reducer — the
  * component never assigns to the state setter directly. The reducer
  * guarantees we cannot enter an invalid composition (e.g. a "done"
  * state without a grant code, or a "paying" state with no session).
+ *
+ * Animation: GSAP entrance for the title block + status banner; CSS
+ * transitions on every button hover and the active chain swap.
  */
 
 import dynamic from 'next/dynamic';
@@ -23,10 +27,12 @@ import {
   type ReactNode,
 } from 'react';
 import { useTranslations } from 'next-intl';
+import { gsap } from 'gsap';
 import { useRouter } from '@/i18n/navigation';
 import { OrderSummary } from './order-summary';
 import { ChainSelector, type SelectorValue } from './chain-selector';
 import { PaymentStatus, type StatusValue } from './payment-status';
+import { TelegramHandoffButton } from './telegram-handoff-button';
 import {
   ctaHidden,
   initial,
@@ -38,6 +44,7 @@ import {
 } from './purchase-state';
 import type {
   PaymentCadence,
+  PaymentChain,
   PaymentSession,
   PaymentTier,
 } from '@/lib/payment/session';
@@ -74,11 +81,19 @@ function asStatusValue(kind: PurchaseState['kind']): StatusValue {
   return kind;
 }
 
+function chainLabel(chain: PaymentChain): string {
+  if (chain === 'ton') return 'TON';
+  if (chain === 'base') return 'Base';
+  if (chain === 'arbitrum') return 'Arbitrum';
+  return 'Solana';
+}
+
 export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
   const t = useTranslations('pay');
   const router = useRouter();
   const [state, dispatch] = useReducer(reducer, undefined, initial);
   const selectorRef = useRef<SelectorValue>(DEFAULT_SELECTOR);
+  const headerRef = useRef<HTMLElement | null>(null);
   const pollAttempts = useRef(0);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -92,6 +107,23 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
     return () => {
       if (pollTimer.current) clearTimeout(pollTimer.current);
     };
+  }, []);
+
+  // Header entrance — eyebrow + title + sub slide up + fade in.
+  useEffect(() => {
+    if (!headerRef.current) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    gsap.fromTo(
+      headerRef.current.children,
+      { opacity: 0, y: 14 },
+      {
+        opacity: 1,
+        y: 0,
+        duration: 0.45,
+        ease: 'power2.out',
+        stagger: 0.08,
+      },
+    );
   }, []);
 
   useEffect(() => {
@@ -203,6 +235,8 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
     );
   }
 
+  const isSolana = selector.chain === 'solana' && selector.token === 'native';
+
   const payButton: ReactNode = (() => {
     if (!session) {
       return (
@@ -211,17 +245,25 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
           onClick={createSession}
           disabled={state.kind === 'connecting'}
           className="
-            inline-flex items-center justify-center gap-2 h-12 px-5 w-full
-            text-[13px] font-semibold tracking-tight
+            group relative inline-flex items-center justify-center gap-2 h-12 px-5 w-full
+            rounded-xl text-[13px] font-semibold tracking-tight
             bg-[var(--fg)] text-[var(--bg)]
-            disabled:opacity-40 disabled:cursor-not-allowed
-            hover:opacity-90 transition-opacity
+            transition-[transform,opacity,box-shadow] duration-200 ease-out
+            shadow-[0_8px_28px_-14px_rgba(0,0,0,0.45)]
+            disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none
+            motion-safe:enabled:hover:-translate-y-[1px]
+            enabled:hover:opacity-95
           "
         >
           <span>
             {state.kind === 'connecting' ? t('cta.creating') : t('cta.start')}
           </span>
-          <span aria-hidden>→</span>
+          <span
+            aria-hidden
+            className="transition-transform duration-200 ease-out motion-safe:group-hover:translate-x-0.5"
+          >
+            →
+          </span>
         </button>
       );
     }
@@ -231,26 +273,36 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
       state.kind === 'confirming' ||
       state.kind === 'connecting';
 
+    if (isSolana) {
+      return (
+        <SolanaPayButton
+          destAddress={session.destAddress}
+          amount={session.amount}
+          sessionId={session.sessionId}
+          onSent={onSent}
+          onError={onWalletError}
+          disabled={disabled}
+        />
+      );
+    }
+
     return (
-      <SolanaPayButton
-        destAddress={session.destAddress}
-        amount={session.amount}
+      <TelegramHandoffButton
         sessionId={session.sessionId}
-        onSent={onSent}
-        onError={onWalletError}
+        chainLabel={chainLabel(selector.chain)}
         disabled={disabled}
       />
     );
   })();
 
   const inner = (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 pt-4 sm:pt-6">
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 pt-4 sm:pt-6">
       <div className="flex flex-col gap-6">
-        <header className="flex flex-col gap-2">
+        <header ref={headerRef} className="flex flex-col gap-2">
           <p className="mono tabular text-[10px] uppercase tracking-[0.18em] text-[var(--accent)]">
             {t('eyebrow')}
           </p>
-          <h1 className="display text-[var(--fg)] text-[28px] sm:text-[34px] lg:text-[38px] leading-[1.1] tracking-tight font-semibold text-balance">
+          <h1 className="display text-[var(--fg)] text-[28px] sm:text-[34px] lg:text-[42px] leading-[1.05] tracking-tight font-semibold text-balance">
             {t('title', { tier: t(`summary.tier.${tier}`) })}
           </h1>
           <p className="text-[14px] leading-relaxed text-[var(--fg-2)] max-w-[60ch]">
@@ -289,7 +341,10 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
     </div>
   );
 
-  return <SolanaWalletAdapter>{inner}</SolanaWalletAdapter>;
+  if (isSolana) {
+    return <SolanaWalletAdapter>{inner}</SolanaWalletAdapter>;
+  }
+  return inner;
 }
 
 function reducer(state: PurchaseState, event: PurchaseEvent): PurchaseState {
@@ -317,8 +372,8 @@ function PaymentInfraPending({
 }) {
   const t = useTranslations('pay');
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
-      <div className="border border-[var(--border)] bg-[var(--surface)] p-6 flex flex-col gap-4">
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
+      <div className="border border-[var(--border)] bg-[var(--surface)] p-6 flex flex-col gap-4 rounded-xl">
         <p className="mono tabular text-[10px] uppercase tracking-[0.18em] text-[var(--accent)]">
           {t('pending.label')}
         </p>
@@ -334,8 +389,10 @@ function PaymentInfraPending({
           rel="noopener"
           className="
             inline-flex items-center justify-center gap-2 h-11 px-4 w-fit
-            text-[13px] font-semibold tracking-tight
-            bg-[var(--fg)] text-[var(--bg)] hover:opacity-90
+            rounded-xl text-[13px] font-semibold tracking-tight
+            bg-[var(--fg)] text-[var(--bg)]
+            transition-[transform,opacity] duration-200 ease-out
+            motion-safe:hover:-translate-y-[1px] hover:opacity-95
           "
         >
           <span>{t('pending.telegramCta')}</span>

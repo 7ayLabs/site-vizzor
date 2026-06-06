@@ -542,9 +542,9 @@
       "description": "Payez on-chain. Connectez un portefeuille, signez une fois, recevez un code d'accès unique pour le bot Telegram.",
       "successTitle": "Paiement confirmé · continuez dans Telegram"
     },
-    "eyebrow": "checkout · sol sur solana",
+    "eyebrow": "checkout · choisissez votre rail",
     "title": "Activer {tier}",
-    "sub": "Payez on-chain en SOL sur Solana — économisez 10% instantanément. Aucune carte demandée. Une fois confirmé, votre code d'accès se redeem dans le bot Telegram.",
+    "sub": "Payez on-chain en SOL, TON ou USDC — chaque rail a sa propre remise intégrée. Aucune carte demandée. Une fois confirmé, votre code d'accès se redeem dans le bot Telegram.",
     "legalFootnote": "Paiement on-chain · taux figé 5 min · annulez quand vous voulez",
     "summary": {
       "label": "Résumé de la commande",
@@ -559,13 +559,13 @@
       },
       "row": {
         "subtotal": "Sous-total",
-        "discount": "Remise Solana ({pct}%)",
+        "discount": "Remise chaîne ({pct}%)",
         "afterDiscount": "Après remise",
-        "solQuote": "Cotation SOL",
+        "tokenQuote": "Cotation {token}",
         "tokenUnavailable": "cotation indisponible",
         "network": "Réseau",
         "solanaMainnet": "Solana mainnet",
-        "savedWithSol": "Vous économisez {amount} en payant en SOL",
+        "savedWithChain": "Vous économisez {amount} en payant en {token}",
         "total": "Total"
       },
       "footnote": "Cotation rafraîchie toutes les 60s · verrouillage final à la création de session"
@@ -636,7 +636,8 @@
       "start": "Démarrer le paiement",
       "creating": "Création…",
       "payWithSol": "Payer avec SOL",
-      "connectAndPay": "Connecter le portefeuille et payer"
+      "connectAndPay": "Connecter le portefeuille et payer",
+      "continueInTelegram": "Continuer le paiement {chain} dans Telegram"
     },
     "pending": {
       "label": "infrastructure de paiement en attente",

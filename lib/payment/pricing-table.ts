@@ -1,12 +1,12 @@
 /**
  * Single source of truth for tier-cadence pricing in cents AND for
- * the Solana flat-discount math.
+ * the per-chain discount math.
  *
- * v0.2.0 ships Solana-native-only with a single 10% flat discount on
- * every paid SOL transaction. The engine has the same table (and can
- * hot-tune via SQLite overlay per the operator spec). The site copy
- * here is the *display* number we use to render the order summary
- * and to pre-validate the amount before the upstream call.
+ * Discount matrix (per PRICING_MODEL.md strategy doc):
+ *   - SOL on Solana:        15% off  (primary rail, sub-second finality)
+ *   - TON native on TON:    10% off  (in-Telegram wallet UX, instant confirm)
+ *   - USDC on Base:          5% off  (Circle USDC, USD-stable, L2 gas)
+ *   - USDC on Arbitrum:      5% off  (Circle USDC, USD-stable, L2 gas)
  *
  * Lifetime is Elite-only by product decision.
  */
@@ -33,10 +33,16 @@ export const TIER_PRICES_USD_CENTS: Readonly<
 };
 
 /**
- * Flat Solana-native discount (in basis points). 10% off every paid
- * SOL transaction, independent of tier × cadence.
+ * Per-chain flat discount basis points (independent of tier × cadence).
+ * The key is a `${chain}:${token}` join so a new chain doesn't risk
+ * accidentally inheriting another chain's discount.
  */
-const SOLANA_DISCOUNT_BPS = 1000;
+const CHAIN_DISCOUNT_BPS: Readonly<Record<string, number>> = {
+  'solana:native': 1500,
+  'ton:native': 1000,
+  'base:usdc': 500,
+  'arbitrum:usdc': 500,
+};
 
 export function priceCents(
   tier: PaymentTier,
@@ -56,10 +62,7 @@ export function priceUsd(
 
 /**
  * Discount basis points for a (tier, cadence, chain, token) combo.
- * Returns SOLANA_DISCOUNT_BPS (1000 = 10%) for solana:native, 0 otherwise.
- *
- * The signature keeps tier+cadence for future per-tier promotions
- * even though the current implementation ignores them.
+ * Returns 0 for unsupported pairs.
  */
 export function discountBps(
   _tier: PaymentTier,
@@ -67,8 +70,7 @@ export function discountBps(
   chain: PaymentChain,
   token: PaymentToken,
 ): number {
-  if (chain === 'solana' && token === 'native') return SOLANA_DISCOUNT_BPS;
-  return 0;
+  return CHAIN_DISCOUNT_BPS[`${chain}:${token}`] ?? 0;
 }
 
 /** Discounted price in cents for a (tier, cadence, chain, token) combo. */

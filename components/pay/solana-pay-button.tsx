@@ -127,17 +127,26 @@ export function SolanaPayButton({
       onClick={handleClick}
       disabled={disabled}
       className="
-        inline-flex items-center justify-center gap-2 h-12 px-5 w-full
-        text-[13px] font-semibold tracking-tight
+        group relative inline-flex items-center justify-center gap-2 h-12 px-5 w-full
+        rounded-xl text-[13px] font-semibold tracking-tight
         bg-[var(--accent)] text-[var(--accent-fg)]
-        disabled:opacity-40 disabled:cursor-not-allowed
-        hover:opacity-90 transition-opacity
+        transition-[transform,opacity,box-shadow] duration-200 ease-out
+        shadow-[0_8px_28px_-12px_color-mix(in_oklab,var(--accent)_60%,transparent)]
+        disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none
+        motion-safe:enabled:hover:-translate-y-[1px]
+        motion-safe:enabled:hover:shadow-[0_12px_30px_-12px_color-mix(in_oklab,var(--accent)_70%,transparent)]
+        enabled:hover:opacity-95
       "
     >
       <span>
         {connected ? t('cta.payWithSol') : t('cta.connectAndPay')}
       </span>
-      <span aria-hidden>→</span>
+      <span
+        aria-hidden
+        className="transition-transform duration-200 ease-out motion-safe:group-hover:translate-x-0.5"
+      >
+        →
+      </span>
     </button>
   );
 }

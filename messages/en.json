@@ -542,9 +542,9 @@
       "description": "Pay on-chain. Connect a wallet, sign once, receive a one-time grant code for the Telegram bot.",
       "successTitle": "Payment confirmed · continue in Telegram"
     },
-    "eyebrow": "checkout · sol on solana",
+    "eyebrow": "checkout · pick your rail",
     "title": "Activate {tier}",
-    "sub": "Pay on-chain with SOL on Solana — save 10% instantly. We never ask for a card. Once confirmed, your grant code redeems in the Telegram bot.",
+    "sub": "Pay on-chain in SOL, TON, or USDC — each rail has its own built-in discount. We never ask for a card. Once confirmed, your grant code redeems in the Telegram bot.",
     "legalFootnote": "On-chain payment · 5-min rate lock · cancel anytime",
     "summary": {
       "label": "Order summary",
@@ -559,13 +559,13 @@
       },
       "row": {
         "subtotal": "Subtotal",
-        "discount": "Solana discount ({pct}%)",
+        "discount": "Chain discount ({pct}%)",
         "afterDiscount": "After discount",
-        "solQuote": "SOL quote",
+        "tokenQuote": "{token} quote",
         "tokenUnavailable": "rate unavailable",
         "network": "Network",
         "solanaMainnet": "Solana mainnet",
-        "savedWithSol": "You save {amount} paying in SOL",
+        "savedWithChain": "You save {amount} paying in {token}",
         "total": "Total"
       },
       "footnote": "Quote refreshes every 60s · final lock at session create"
@@ -643,7 +643,8 @@
       "start": "Start payment",
       "creating": "Creating…",
       "payWithSol": "Pay with SOL",
-      "connectAndPay": "Connect wallet & pay"
+      "connectAndPay": "Connect wallet & pay",
+      "continueInTelegram": "Continue {chain} payment in Telegram"
     },
     "pending": {
       "label": "payment infrastructure pending",
