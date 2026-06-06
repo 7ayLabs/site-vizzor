@@ -583,14 +583,38 @@
       "walletPicker": "Elige una wallet",
       "disconnect": "Desconectar"
     },
+    "connectAlert": {
+      "eyebrow": "wallet requerida",
+      "title": "Conecta una wallet de Solana para continuar",
+      "body": "Nunca vemos tus claves — tu wallet firma la transacción localmente y nosotros solo recibimos la firma. Elige una wallet para continuar.",
+      "primary": "Conectar wallet",
+      "secondary": "Ver wallets instaladas",
+      "dismiss": "Cancelar"
+    },
+    "walletPicker": {
+      "label": "Wallets Solana",
+      "detected": "{n} detectada(s)",
+      "none": "Ninguna detectada",
+      "installed": "Lista",
+      "notInstalled": "No instalada",
+      "connecting": "Conectando…",
+      "connected": "Conectada",
+      "disconnect": "Desconectar",
+      "use": "Usar",
+      "connect": "Conectar",
+      "install": "Instalar",
+      "footer": "MetaMask no es una wallet de Solana — úsala para los rails USDC vía el handoff a Telegram.",
+      "emptyTitle": "No se detectaron wallets Solana.",
+      "emptyHint": "Instala Phantom o Solflare y refresca."
+    },
     "status": {
       "creating": {
         "label": "Creando sesión",
         "body": "Bloqueando la cotización USD-TON y derivando la dirección de destino…"
       },
       "awaiting_wallet": {
-        "label": "Esperando wallet",
-        "body": "Abre tu wallet, revisa el monto y firma la transacción."
+        "label": "Sesión lista",
+        "body": "Conecta tu wallet abajo si aún no lo has hecho, luego pulsa Pagar para firmar."
       },
       "broadcasting": {
         "label": "Difundiendo",
@@ -629,14 +653,15 @@
         "unsupportedChain": "Solo Solana está soportada en este release. Cambia a SOL en Solana.",
         "priceLookup": "No pudimos buscar el precio del tier en el servidor. Refresca la página.",
         "sessionFailed": "Falló la creación de sesión. Reintenta, o abre el bot de Telegram si persiste.",
+        "rpcUnavailable": "El RPC de Solana está rate-limited ahora mismo. Reintenta en un momento, o cambia a TON / USDC.",
         "walletNotConnected": "Conecta una wallet para continuar."
       }
     },
     "cta": {
       "start": "Iniciar pago",
       "creating": "Creando…",
-      "payWithSol": "Pagar con SOL",
-      "connectAndPay": "Conectar wallet y pagar",
+      "payWithSol": "Pagar con SOL · {wallet}",
+      "connectAndPay": "Conecta una wallet para continuar",
       "continueInTelegram": "Continuar el pago en {chain} desde Telegram"
     },
     "pending": {

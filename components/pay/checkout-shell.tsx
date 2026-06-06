@@ -60,6 +60,11 @@ const SolanaPayButton = dynamic(
   { ssr: false, loading: () => null },
 );
 
+const WalletPickerPanel = dynamic(
+  () => import('./wallet-picker-panel').then((m) => m.WalletPickerPanel),
+  { ssr: false, loading: () => null },
+);
+
 interface CheckoutShellProps {
   tier: PaymentTier;
   cadence: PaymentCadence;
@@ -325,6 +330,8 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
           cadence={cadence}
         />
 
+        {isSolana && session && <WalletPickerPanel />}
+
         {!ctaHidden(state) && payButton}
 
         <p className="mono tabular text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)] text-center">
@@ -342,7 +349,14 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
   );
 
   if (isSolana) {
-    return <SolanaWalletAdapter>{inner}</SolanaWalletAdapter>;
+    // autoConnect=true so the wallet picked during the navbar SIWS
+    // flow is silently restored when the user arrives on /pay. The
+    // RPC fallback chain is browser-friendly (PublicNode mainnet,
+    // devnet for testnet) so the on-mount blockhash fetch the adapter
+    // performs no longer 403s the way mainnet-beta did.
+    return (
+      <SolanaWalletAdapter autoConnect={true}>{inner}</SolanaWalletAdapter>
+    );
   }
   return inner;
 }

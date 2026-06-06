@@ -35,7 +35,7 @@ import {
   type SessionRow,
 } from './db';
 import { getRate } from './rates';
-import { solanaTreasury } from './treasury';
+import { evmTreasury, solanaTreasury, tonTreasury } from './treasury';
 
 export type PaymentTier = 'pro' | 'elite';
 export type PaymentCadence = 'monthly' | 'annual' | 'lifetime';
@@ -115,15 +115,8 @@ function priceTokenFor(
 }
 
 function destinationFor(chain: PaymentChain): string {
-  if (chain === 'ton') {
-    return process.env.VIZZOR_TON_TREASURY ?? 'UQ-PLACEHOLDER-TON';
-  }
-  if (chain === 'base') {
-    return process.env.VIZZOR_EVM_TREASURY_BASE ?? '0x0000000000000000000000000000000000000000';
-  }
-  if (chain === 'arbitrum') {
-    return process.env.VIZZOR_EVM_TREASURY_ARB ?? '0x0000000000000000000000000000000000000000';
-  }
+  if (chain === 'ton') return tonTreasury();
+  if (chain === 'base' || chain === 'arbitrum') return evmTreasury(chain);
   return solanaTreasury();
 }
 
