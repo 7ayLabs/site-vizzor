@@ -25,6 +25,7 @@ import { acceptVizzorPayments } from '@/lib/feature-flags';
 import { listPendingSessions } from './db';
 import { finalizeSession } from './session';
 import { solanaTreasury } from './treasury';
+import { markStarted, markTick } from './watcher-liveness';
 
 const POLL_INTERVAL_MS = 5_000;
 const SLIPPAGE_TOLERANCE = 0.005; // ±0.5%
@@ -62,6 +63,7 @@ export function ensureWatcherStarted(): void {
   const state = (g[KEY] = g[KEY] ?? { started: false, lastSlot: null });
   if (state.started) return;
   state.started = true;
+  markStarted('solana');
   // Fire-and-forget loop; tick() schedules its own next run.
   void tick(state);
 }
@@ -81,6 +83,7 @@ function vizzorMint(): string | null {
 async function tick(state: { lastSlot: number | null }): Promise<void> {
   try {
     await pollOnce(state);
+    markTick('solana');
   } catch (e) {
     // Swallow — watcher must keep running. Log to stderr for ops.
     // eslint-disable-next-line no-console

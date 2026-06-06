@@ -56,6 +56,7 @@ import {
 import { listPendingSessions, type SessionRow } from './db';
 import { finalizeSession } from './session';
 import { evmTreasury } from './treasury';
+import { markStarted, markTick } from './watcher-liveness';
 
 /** Circle-issued USDC contract addresses. Hard-coded — no env override.
  *  Anything pretending to be USDC at a different address is rejected. */
@@ -111,6 +112,7 @@ function startChain(chain: EvmChain, states: Map<EvmChain, WatcherState>) {
   }
   if (state.started) return;
   state.started = true;
+  markStarted(chain);
   void tick(state);
 }
 
@@ -143,6 +145,7 @@ async function tick(state: WatcherState): Promise<void> {
   try {
     await pollOnce(state);
     state.consecutiveFailures = 0;
+    markTick(state.chain);
   } catch (e) {
     state.consecutiveFailures += 1;
     // eslint-disable-next-line no-console

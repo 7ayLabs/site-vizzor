@@ -34,24 +34,24 @@ const PAYER = 'PayerWalletAddressForTests1111111111111';
 const SESSION_ID = 'ses_test_finalize_0001';
 
 function insertPendingSession(overrides: Partial<SessionRow> = {}): SessionRow {
+  const memo = overrides.memo === null ? undefined : overrides.memo;
   insertSession({
-    session_id: SESSION_ID,
-    tier: 'pro',
-    cadence: 'monthly',
-    chain: 'solana',
-    token: 'vizzor',
-    dest_address: '11111111111111111111111111111111',
-    amount: 100,
-    decimals: 9,
-    amount_usd_cents: 999,
-    discount_bps: 2500,
-    rate_locked: 0.1,
-    expires_at: Date.now() + 5 * 60 * 1000,
-    status: 'pending',
-    memo: SESSION_ID,
-    ...overrides,
+    session_id: overrides.session_id ?? SESSION_ID,
+    tier: overrides.tier ?? 'pro',
+    cadence: overrides.cadence ?? 'monthly',
+    chain: overrides.chain ?? 'solana',
+    token: overrides.token ?? 'vizzor',
+    dest_address: overrides.dest_address ?? '11111111111111111111111111111111',
+    amount: overrides.amount ?? 100,
+    decimals: overrides.decimals ?? 9,
+    amount_usd_cents: overrides.amount_usd_cents ?? 999,
+    discount_bps: overrides.discount_bps ?? 2500,
+    rate_locked: overrides.rate_locked ?? 0.1,
+    expires_at: overrides.expires_at ?? Date.now() + 5 * 60 * 1000,
+    status: overrides.status ?? 'pending',
+    memo: memo ?? SESSION_ID,
   });
-  const row = getSessionRow(SESSION_ID);
+  const row = getSessionRow(overrides.session_id ?? SESSION_ID);
   if (!row) throw new Error('test fixture row missing');
   return row;
 }
