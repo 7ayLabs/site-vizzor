@@ -17,7 +17,9 @@
  * Vizzor `/v1/chat`. SSE → AI SDK protocol translation happens server-
  * side; we just render whatever streams in.
  *
- * Wallet adapter (Phase 2) wraps the shell only when isTokenLive().
+ * Wallet adapter wraps the shell unconditionally so SIWS sign-in
+ * works regardless of token-launch status. The burn-to-predict UI
+ * inside the shell is still feature-flagged.
  */
 
 import { useChat } from '@ai-sdk/react';
@@ -75,6 +77,12 @@ export function PredictShell() {
   const [burnSig, setBurnSig] = useState<string | null>(null);
   const [recents, setRecents] = useState<ReturnType<typeof loadRecents>>([]);
   const threadRef = useRef<HTMLDivElement | null>(null);
+
+  // The heavy wallet-adapter tree only mounts when the burn-to-predict
+  // flow is wired (`isTokenLive()`). Wallet sign-in lives in the navbar
+  // modal now, which mounts its own ephemeral adapter on demand — no
+  // URL-hint plumbing needed here.
+  const wantsWallet = isTokenLive();
 
   // Quota — shared SWR key with QuotaSidebar so the data dedupes.
   const { data: quota } = useSWR<QuotaState>('/api/quota', quotaFetcher, {
@@ -419,7 +427,14 @@ export function PredictShell() {
     </div>
   );
 
-  return isTokenLive() ? <WalletAdapter>{inner}</WalletAdapter> : inner;
+  // The wallet adapter is heavy (~300KB gzipped) and `dynamic({ ssr:
+  // false })` — wrapping the shell with it unconditionally would bail
+  // the whole route out of SSR (blank first-paint until the chunk
+  // loads). We only mount it when the burn-to-predict UI is wired
+  // (`isTokenLive()`). Wallet sign-in happens in the navbar modal
+  // which mounts its own adapter on demand and tears it down when the
+  // modal closes.
+  return wantsWallet ? <WalletAdapter>{inner}</WalletAdapter> : inner;
 }
 
 /* ────────────── subcomponents ────────────── */

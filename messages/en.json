@@ -17,7 +17,40 @@
     "subscription": "Subscription",
     "lifetime": "Lifetime",
     "expiresOn": "Expires {date}",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "close": "Close",
+    "modal": {
+      "eyebrow": "Wallets",
+      "eyebrowConnecting": "Connecting",
+      "title": "Connect a wallet",
+      "titleConnecting": "{wallet}",
+      "footer": "Solana wallets sign in via SIWS. TON wallets pay plans directly. You can switch chains anytime.",
+      "connecting": "Open {wallet} to approve",
+      "connectingSubtitle": "Waiting for your wallet…",
+      "signing": "Sign in to vizzor.ai",
+      "signingSubtitle": "Confirm the message in {wallet}",
+      "success": "Wallet connected",
+      "successSubtitle": "You're signed in",
+      "retry": "Try again",
+      "installAction": "Install wallet",
+      "error": {
+        "wallet_not_installed": "{wallet} isn't installed",
+        "user_rejected": "Connection cancelled",
+        "nonce_failed": "Could not start sign-in",
+        "verify_failed": "Signature was rejected",
+        "unknown": "Something went wrong"
+      }
+    },
+    "wallets": {
+      "phantom": "Phantom",
+      "phantomCaption": "Solana · sign in",
+      "solflare": "Solflare",
+      "solflareCaption": "Solana · sign in",
+      "ton": "TON Connect",
+      "tonCaption": "TON · pay a plan",
+      "more": "More wallets",
+      "moreCaption": "Other Solana adapters"
+    }
   },
   "footer": {
     "tagline": "Predictions with receipts. Calibrated crypto forecasts across every chain, token, and timeframe.",
