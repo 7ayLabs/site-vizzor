@@ -50,32 +50,44 @@ describe('isValidCombo', () => {
   });
 });
 
-describe('discountBps — Solana native flat 10%', () => {
-  it('applies 10% for every (tier, cadence) on solana:native', () => {
-    expect(discountBps('pro', 'monthly', 'solana', 'native')).toBe(1000);
-    expect(discountBps('pro', 'annual', 'solana', 'native')).toBe(1000);
-    expect(discountBps('elite', 'monthly', 'solana', 'native')).toBe(1000);
-    expect(discountBps('elite', 'annual', 'solana', 'native')).toBe(1000);
-    expect(discountBps('elite', 'lifetime', 'solana', 'native')).toBe(1000);
+describe('discountBps — per-chain matrix', () => {
+  it('applies 15% on solana:native (primary rail)', () => {
+    expect(discountBps('pro', 'monthly', 'solana', 'native')).toBe(1500);
+    expect(discountBps('elite', 'lifetime', 'solana', 'native')).toBe(1500);
+  });
+
+  it('applies 10% on ton:native', () => {
+    expect(discountBps('pro', 'monthly', 'ton', 'native')).toBe(1000);
+    expect(discountBps('elite', 'lifetime', 'ton', 'native')).toBe(1000);
+  });
+
+  it('applies 5% on USDC L2 rails', () => {
+    expect(discountBps('pro', 'monthly', 'base', 'usdc')).toBe(500);
+    expect(discountBps('elite', 'lifetime', 'arbitrum', 'usdc')).toBe(500);
+  });
+
+  it('returns 0 for unsupported chain × token pairs', () => {
+    expect(discountBps('pro', 'monthly', 'solana', 'usdc')).toBe(0);
+    expect(discountBps('pro', 'monthly', 'ton', 'usdc')).toBe(0);
   });
 });
 
 describe('effectivePriceCents', () => {
-  it('applies the discount and rounds to integer cents', () => {
-    // Pro monthly $9.99 × 90% = $8.991 → 899.1 cents.
+  it('applies the SOL discount and rounds to integer cents', () => {
+    // Pro monthly $9.99 × 85% = $8.4915 → 849.15 cents.
     const cents = effectivePriceCents('pro', 'monthly', 'solana', 'native');
-    expect(cents).toBeCloseTo(899.1, 1);
+    expect(cents).toBeCloseTo(849.15, 1);
   });
 
-  it('applies the 10% Solana lifetime discount to $1,249', () => {
+  it('applies the 15% SOL lifetime discount to $1,249', () => {
     const cents = effectivePriceCents(
       'elite',
       'lifetime',
       'solana',
       'native',
     );
-    // 124900 * 0.90 = 112410 cents = $1,124.10
-    expect(cents).toBe(112410);
+    // 124900 * 0.85 = 106165 cents = $1,061.65
+    expect(cents).toBe(106165);
   });
 
   it('returns null for invalid tier-cadence combos', () => {
@@ -86,12 +98,15 @@ describe('effectivePriceCents', () => {
 });
 
 describe('effectivePriceUsd — display formatting', () => {
-  it('formats with two-decimal precision', () => {
+  it('formats with two-decimal precision per rail', () => {
     expect(effectivePriceUsd('pro', 'monthly', 'solana', 'native')).toBe(
+      '$8.49',
+    );
+    expect(effectivePriceUsd('pro', 'monthly', 'ton', 'native')).toBe(
       '$8.99',
     );
-    expect(effectivePriceUsd('elite', 'lifetime', 'solana', 'native')).toBe(
-      '$1124.10',
+    expect(effectivePriceUsd('pro', 'monthly', 'base', 'usdc')).toBe(
+      '$9.49',
     );
   });
 });

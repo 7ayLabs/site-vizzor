@@ -60,12 +60,19 @@ interface SessionBody {
   token?: unknown;
 }
 
-const VALID_PAIRS = new Set<string>(['solana:native']);
+const VALID_PAIRS = new Set<string>([
+  'solana:native',
+  'ton:native',
+  'base:usdc',
+  'arbitrum:usdc',
+]);
 
 export async function POST(req: Request) {
   // Lazy boot of the Solana watcher daemon on the first session create.
   // Idempotent — only starts once per Node process, gated by the
-  // acceptSolanaPayments() feature flag.
+  // acceptSolanaPayments() feature flag. TON / EVM watchers ship in
+  // a follow-up cycle; until then those chains produce a session but
+  // require redemption via the Telegram bot.
   ensureWatcherStarted();
 
   let body: SessionBody;

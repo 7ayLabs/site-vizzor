@@ -39,10 +39,22 @@ import { solanaTreasury } from './treasury';
 
 export type PaymentTier = 'pro' | 'elite';
 export type PaymentCadence = 'monthly' | 'annual' | 'lifetime';
-/** v0.2.0 ships Solana only. */
-export type PaymentChain = 'solana';
-/** v0.2.0 ships native SOL only. */
-export type PaymentToken = 'native';
+export type PaymentChain = 'solana' | 'ton' | 'base' | 'arbitrum';
+export type PaymentToken = 'native' | 'usdc';
+
+/** Combinations the checkout shell offers and the engine knows how to settle. */
+export const SUPPORTED_PAIRS = [
+  { chain: 'solana', token: 'native' },
+  { chain: 'ton', token: 'native' },
+  { chain: 'base', token: 'usdc' },
+  { chain: 'arbitrum', token: 'usdc' },
+] as const;
+
+export function isSupportedPair(chain: string, token: string): boolean {
+  return SUPPORTED_PAIRS.some(
+    (p) => p.chain === chain && p.token === token,
+  );
+}
 
 export interface CreateSessionInput {
   tier: PaymentTier;
@@ -84,6 +96,36 @@ export type SessionFailure =
   | 'invalid_input';
 
 const SOL_DECIMALS = 9;
+const TON_DECIMALS = 9;
+const USDC_DECIMALS = 6;
+
+function decimalsFor(chain: PaymentChain, token: PaymentToken): number {
+  if (token === 'usdc') return USDC_DECIMALS;
+  if (chain === 'ton') return TON_DECIMALS;
+  return SOL_DECIMALS;
+}
+
+function priceTokenFor(
+  chain: PaymentChain,
+  token: PaymentToken,
+): 'sol' | 'ton' | 'usdc' {
+  if (token === 'usdc') return 'usdc';
+  if (chain === 'ton') return 'ton';
+  return 'sol';
+}
+
+function destinationFor(chain: PaymentChain): string {
+  if (chain === 'ton') {
+    return process.env.VIZZOR_TON_TREASURY ?? 'UQ-PLACEHOLDER-TON';
+  }
+  if (chain === 'base') {
+    return process.env.VIZZOR_EVM_TREASURY_BASE ?? '0x0000000000000000000000000000000000000000';
+  }
+  if (chain === 'arbitrum') {
+    return process.env.VIZZOR_EVM_TREASURY_ARB ?? '0x0000000000000000000000000000000000000000';
+  }
+  return solanaTreasury();
+}
 
 function newSessionId(): string {
   // 16 random bytes → 22 chars base64url. Short, URL-safe, unique.
@@ -96,7 +138,7 @@ export async function createSession(
   // Input validation runs first so callers get a deterministic
   // `invalid_input` for malformed requests regardless of feature-flag
   // state. Feature gate is checked only once the shape is known good.
-  if (input.chain !== 'solana' || input.token !== 'native') {
+  if (!isSupportedPair(input.chain, input.token)) {
     return { ok: false, reason: 'invalid_input' };
   }
   if (!['pro', 'elite'].includes(input.tier)) {
@@ -123,16 +165,18 @@ export async function createSession(
     return { ok: false, reason: 'feature_disabled' };
   }
 
-  const rate = await getRate('sol');
+  const priceToken = priceTokenFor(input.chain, input.token);
+  const rate = await getRate(priceToken);
   if (!rate) return { ok: false, reason: 'rate_unavailable' };
 
   const sessionId = newSessionId();
   const usd = input.amountUsdCents / 100;
-  // SOL amount with 4-decimal precision (small enough to avoid rounding
-  // issues, large enough that wallet UIs render clean numbers).
+  // 4-decimal precision is small enough to avoid rounding issues yet
+  // large enough that wallet UIs render clean numbers.
   const amount = Math.round((usd / rate.usdPer) * 10000) / 10000;
+  const decimals = decimalsFor(input.chain, input.token);
 
-  const destAddress = solanaTreasury();
+  const destAddress = destinationFor(input.chain);
   const expiresAt = Date.now() + paymentRateLockSeconds() * 1000;
 
   insertSession({
@@ -143,7 +187,7 @@ export async function createSession(
     token: input.token,
     dest_address: destAddress,
     amount,
-    decimals: SOL_DECIMALS,
+    decimals,
     amount_usd_cents: input.amountUsdCents,
     discount_bps: input.discountBps,
     rate_locked: rate.usdPer,
@@ -158,7 +202,7 @@ export async function createSession(
       sessionId,
       destAddress,
       amount,
-      decimals: SOL_DECIMALS,
+      decimals,
       amountUsdCents: input.amountUsdCents,
       tier: input.tier,
       cadence: input.cadence,
