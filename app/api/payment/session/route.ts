@@ -17,8 +17,10 @@
  */
 
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import {
   createSession,
+  getSession,
   type PaymentCadence,
   type PaymentChain,
   type PaymentTier,
@@ -29,6 +31,15 @@ import {
   effectivePriceCents,
   isValidCombo,
 } from '@/lib/payment/pricing-table';
+import {
+  COOKIE_NAME,
+  COOKIE_TTL_MS,
+  DEFAULT_TTL_MS,
+  computeIdempotencyKey,
+  findRecentSessionByKey,
+  mintCookieSessionId,
+  recordIdempotencyKey,
+} from '@/lib/payment/idempotency';
 import { ensureWatcherStarted } from '@/lib/payment/watcher';
 import { ensureTonWatcherStarted } from '@/lib/payment/ton-watcher';
 import { ensureEvmWatchersStarted } from '@/lib/payment/evm-watcher';
@@ -96,6 +107,35 @@ export async function POST(req: Request) {
     );
   }
 
+  // Idempotency dedupe (plan §10.7 + scaffolding from b55d306):
+  // a 60-second window keyed by (tier, cadence, chain, token,
+  // cookieSessionId) collapses double-click / browser-retry into a
+  // single payment_sessions row so the polling UI doesn't show a
+  // misleading "expired" state on a parallel duplicate.
+  const jar = await cookies();
+  const existingCookie = jar.get(COOKIE_NAME)?.value;
+  const cookieSessionId = existingCookie ?? mintCookieSessionId();
+  const idempotencyKey = computeIdempotencyKey({
+    tier,
+    cadence,
+    chain,
+    token,
+    cookieSessionId,
+  });
+  const cachedSessionId = findRecentSessionByKey(idempotencyKey, DEFAULT_TTL_MS);
+  if (cachedSessionId) {
+    const cached = await getSession(cachedSessionId);
+    if (cached.ok) {
+      return NextResponse.json(
+        { ok: true, session: cached.session, idempotent: true },
+        attachSessionCookie(cookieSessionId, !existingCookie),
+      );
+    }
+    // Cache hit but the session is gone (expired sweep) — fall
+    // through and mint a fresh one. The cache row will get
+    // overwritten below.
+  }
+
   const result = await createSession({
     tier: tier as PaymentTier,
     cadence: cadence as PaymentCadence,
@@ -122,8 +162,24 @@ export async function POST(req: Request) {
       { status },
     );
   }
+  recordIdempotencyKey(idempotencyKey, result.session.sessionId);
   return NextResponse.json(
     { ok: true, session: result.session },
-    { headers: { 'Cache-Control': 'no-store' } },
+    attachSessionCookie(cookieSessionId, !existingCookie),
   );
+}
+
+function attachSessionCookie(
+  cookieSessionId: string,
+  setCookie: boolean,
+): ResponseInit {
+  const headers = new Headers({ 'Cache-Control': 'no-store' });
+  if (setCookie) {
+    const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+    headers.append(
+      'Set-Cookie',
+      `${COOKIE_NAME}=${cookieSessionId}; Path=/; Max-Age=${Math.floor(COOKIE_TTL_MS / 1000)}; HttpOnly; SameSite=Strict${secure}`,
+    );
+  }
+  return { headers };
 }
