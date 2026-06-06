@@ -161,9 +161,7 @@ export function ChainSelector({
             className="
               rounded-md px-1.5 py-0.5
               mono tabular text-[9.5px] uppercase tracking-[0.18em]
-              bg-[color:color-mix(in_oklab,var(--gold)_22%,transparent)]
-              text-[var(--gold)]
-              border border-[color:color-mix(in_oklab,var(--gold)_45%,transparent)]
+              border border-[var(--border)] bg-[var(--surface-2)] text-[var(--fg-2)]
             "
           >
             {networkBadgeLabel()}
@@ -199,13 +197,13 @@ export function ChainSelector({
                 onKeyDown={(e) => onKeyDown(e, idx)}
                 className={`
                   group w-full flex items-center gap-3
-                  px-3 py-2.5 rounded-xl
+                  px-4 py-3 rounded-xl
                   border transition-colors
-                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fg)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]
                   ${
                     active
-                      ? 'border-[var(--accent)] bg-[var(--surface-2)]'
-                      : 'border-transparent bg-[var(--surface)] hover:border-[var(--border)] hover:bg-[var(--surface-2)]'
+                      ? 'border-[var(--fg)] bg-[var(--surface-2)]'
+                      : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-2)]'
                   }
                 `}
               >
@@ -213,22 +211,22 @@ export function ChainSelector({
                   primary={c.primaryIcon}
                   networkBadge={c.networkBadge}
                   active={active}
-                  size={32}
+                  size={36}
                 />
 
-                <span className="flex-1 min-w-0 text-[13.5px] font-medium text-[var(--fg)] truncate">
+                <span className="flex-1 min-w-0 text-[14px] font-medium text-[var(--fg)] truncate">
                   {c.label}
                 </span>
 
                 {pct > 0 && (
                   <span
                     className={`
-                      mono tabular text-[9.5px] uppercase tracking-[0.16em]
-                      px-1.5 py-0.5 rounded-md shrink-0
+                      mono tabular text-[10px] uppercase tracking-[0.16em]
+                      px-2 py-0.5 rounded-md shrink-0
                       ${
                         active
-                          ? 'bg-[var(--accent)] text-[var(--accent-fg)]'
-                          : 'text-[var(--accent)]'
+                          ? 'bg-[var(--fg)] text-[var(--bg)]'
+                          : 'border border-[var(--border)] text-[var(--fg-2)]'
                       }
                     `}
                   >
@@ -239,11 +237,11 @@ export function ChainSelector({
                 <span
                   aria-hidden
                   className={`
-                    mono tabular text-[10px] uppercase tracking-[0.16em] shrink-0 transition-colors
-                    ${active ? 'text-[var(--accent)]' : 'text-[var(--fg-3)] group-hover:text-[var(--accent)]'}
+                    mono tabular text-[11px] uppercase tracking-[0.16em] shrink-0 transition-colors
+                    ${active ? 'text-[var(--fg)]' : 'text-[var(--fg-3)] group-hover:text-[var(--fg)]'}
                   `}
                 >
-                  {active ? <Check size={14} strokeWidth={2.4} /> : '→'}
+                  {active ? <Check size={15} strokeWidth={2.4} /> : '→'}
                 </span>
               </button>
             </li>

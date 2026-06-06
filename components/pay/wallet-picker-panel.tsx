@@ -143,14 +143,7 @@ export function WalletPickerPanel({ onReady }: WalletPickerPanelProps) {
           <span>{t('label')}</span>
         </p>
         <span
-          className={`
-            mono tabular text-[9.5px] uppercase tracking-[0.14em] px-2 py-0.5 rounded-md
-            ${
-              installedCount > 0
-                ? 'bg-[color:color-mix(in_oklab,var(--accent)_18%,transparent)] text-[var(--accent)]'
-                : 'border border-[var(--border)] text-[var(--fg-3)]'
-            }
-          `}
+          className="mono tabular text-[9.5px] uppercase tracking-[0.16em] px-2 py-0.5 rounded-md border border-[var(--border)] text-[var(--fg-2)]"
         >
           {installedCount > 0
             ? t('detected', { n: installedCount })
@@ -177,12 +170,12 @@ export function WalletPickerPanel({ onReady }: WalletPickerPanelProps) {
                   className={`
                     group/walletrow w-full flex items-center gap-3
                     px-3 py-2.5 rounded-lg
-                    border transition-[transform,border-color,background-color] duration-200 ease-out
+                    border transition-colors
                     ${
                       isSelected
-                        ? 'border-[var(--accent)] bg-[color:color-mix(in_oklab,var(--accent)_8%,var(--surface))]'
+                        ? 'border-[var(--fg)] bg-[var(--surface-2)]'
                         : ready
-                          ? 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-2)] motion-safe:hover:-translate-y-[1px]'
+                          ? 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-2)]'
                           : 'border-[var(--border)] bg-transparent opacity-55 cursor-not-allowed'
                     }
                   `}
@@ -220,12 +213,12 @@ export function WalletPickerPanel({ onReady }: WalletPickerPanelProps) {
                       <Check
                         size={14}
                         strokeWidth={2.5}
-                        className="text-[var(--accent)]"
+                        className="text-[var(--fg)]"
                       />
                     ) : (
                       <span
                         aria-hidden
-                        className="mono tabular text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)] transition-colors group-hover/walletrow:text-[var(--accent)]"
+                        className="mono tabular text-[10px] uppercase tracking-[0.16em] text-[var(--fg-3)] transition-colors group-hover/walletrow:text-[var(--fg)]"
                       >
                         {t('connect')}
                       </span>
@@ -324,10 +317,10 @@ function ConnectedStatus({
         </span>
         <span
           aria-hidden
-          className="mono tabular text-[9.5px] uppercase tracking-[0.14em] px-2 py-0.5 rounded-md bg-[color:color-mix(in_oklab,var(--accent)_18%,transparent)] text-[var(--accent)] inline-flex items-center gap-1"
+          className="mono tabular text-[9.5px] uppercase tracking-[0.16em] px-2 py-0.5 rounded-md border border-[var(--border)] bg-[var(--surface-2)] text-[var(--fg-2)] inline-flex items-center gap-1.5"
         >
           <span
-            className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] motion-safe:animate-[pulse-dot_1.6s_ease-in-out_infinite]"
+            className="h-1.5 w-1.5 rounded-full bg-[var(--fg)] motion-safe:animate-[pulse-dot_1.6s_ease-in-out_infinite]"
             aria-hidden
           />
           {t('connected')}

@@ -130,12 +130,12 @@ export function ConnectWalletAlert({
         <div className="flex items-start gap-3 px-5 pt-5 pb-3">
           <span
             aria-hidden
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[color:color-mix(in_oklab,var(--accent)_15%,transparent)] text-[var(--accent)]"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface-2)] text-[var(--fg)]"
           >
             <AlertCircle size={20} strokeWidth={2.2} />
           </span>
           <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-            <p className="mono tabular text-[9.5px] uppercase tracking-[0.18em] text-[var(--accent)]">
+            <p className="mono tabular text-[10px] uppercase tracking-[0.18em] text-[var(--fg-3)]">
               {t('eyebrow')}
             </p>
             <h2
@@ -168,10 +168,10 @@ export function ConnectWalletAlert({
             onClick={openWalletModal}
             className="
               group inline-flex h-11 items-center justify-center gap-2
-              rounded-xl bg-[var(--accent)] px-4
-              text-[12.5px] font-semibold tracking-tight text-[var(--accent-fg)]
+              rounded-xl bg-[var(--fg)] px-4
+              text-[13px] font-semibold tracking-tight text-[var(--bg)]
               transition-[transform,opacity] duration-200 ease-out
-              motion-safe:hover:-translate-y-[1px] hover:opacity-95
+              motion-safe:hover:-translate-y-[1px] hover:opacity-90
             "
           >
             <Wallet2 size={14} strokeWidth={2.2} />

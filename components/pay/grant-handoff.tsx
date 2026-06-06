@@ -103,18 +103,18 @@ export function GrantHandoff({ code }: GrantHandoffProps) {
       <header className="flex items-start gap-3">
         <span
           aria-hidden
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[color:color-mix(in_oklab,var(--accent)_15%,transparent)] text-[var(--accent)]"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface-2)] text-[var(--fg)]"
         >
           <CheckCircle2 size={18} strokeWidth={2.2} />
         </span>
-        <div className="flex flex-col gap-1.5 min-w-0">
-          <p className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--accent)]">
+        <div className="flex flex-col gap-2 min-w-0">
+          <p className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--fg-3)]">
             {t('label')}
           </p>
-          <h2 className="text-[20px] sm:text-[22px] font-semibold tracking-tight text-[var(--fg)] leading-tight">
+          <h2 className="display text-[28px] sm:text-[32px] lg:text-[36px] font-semibold tracking-tight text-[var(--fg)] leading-[1.1]">
             {t('title')}
           </h2>
-          <p className="text-[13px] leading-relaxed text-[var(--fg-2)] max-w-[52ch]">
+          <p className="text-[14px] leading-relaxed text-[var(--fg-2)] max-w-[52ch]">
             {t('body')}
           </p>
         </div>

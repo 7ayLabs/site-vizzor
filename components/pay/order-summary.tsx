@@ -154,7 +154,7 @@ export function OrderSummary({ tier, cadence, chain, token }: OrderSummaryProps)
       "
     >
       <div className="flex items-center justify-between">
-        <p className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--accent)]">
+        <p className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--fg-3)]">
           {t('label')}
         </p>
         {isNonProd() && (
@@ -162,9 +162,7 @@ export function OrderSummary({ tier, cadence, chain, token }: OrderSummaryProps)
             className="
               rounded-md px-1.5 py-0.5
               mono tabular text-[9.5px] uppercase tracking-[0.18em]
-              bg-[color:color-mix(in_oklab,var(--gold)_22%,transparent)]
-              text-[var(--gold)]
-              border border-[color:color-mix(in_oklab,var(--gold)_45%,transparent)]
+              border border-[var(--border)] bg-[var(--surface-2)] text-[var(--fg-2)]
             "
           >
             {networkBadgeLabel()}
@@ -176,32 +174,32 @@ export function OrderSummary({ tier, cadence, chain, token }: OrderSummaryProps)
         <ChainOptionIcon
           primary={iconConfig(chain, token).primary}
           networkBadge={iconConfig(chain, token).networkBadge}
-          size={40}
+          size={44}
         />
         <span className="flex flex-col min-w-0">
-          <span className="text-[14.5px] font-semibold tracking-tight text-[var(--fg)] truncate">
+          <span className="text-[16px] font-semibold tracking-tight text-[var(--fg)] truncate">
             {t(`tier.${tier}`)}
           </span>
-          <span className="mono tabular text-[10.5px] text-[var(--fg-3)] truncate">
+          <span className="mono tabular text-[11px] text-[var(--fg-3)] truncate">
             {networkLabel(chain)}
           </span>
         </span>
       </div>
 
-      <div className="flex items-end justify-between pt-4 border-t border-[var(--border)]">
+      <div className="flex items-end justify-between pt-5 border-t border-[var(--border)]">
         <div className="flex flex-col gap-1">
           <span className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--fg-3)]">
             {t('row.total')}
           </span>
           {hasDiscount && (
-            <span className="mono tabular text-[11.5px] text-[var(--fg-3)] line-through">
+            <span className="mono tabular text-[12px] text-[var(--fg-3)] line-through">
               {basePriceLabel}
             </span>
           )}
         </div>
         <span
           data-recalc
-          className="text-[32px] font-semibold tracking-tight mono tabular text-[var(--fg)] leading-none"
+          className="text-[40px] sm:text-[44px] font-semibold tracking-tight mono tabular text-[var(--fg)] leading-none"
         >
           {effectivePriceLabel}
         </span>
@@ -209,7 +207,7 @@ export function OrderSummary({ tier, cadence, chain, token }: OrderSummaryProps)
 
       <div
         data-recalc
-        className="flex items-baseline justify-between text-[12.5px]"
+        className="flex items-baseline justify-between text-[13px]"
       >
         <span className="text-[var(--fg-3)]">{symbol}</span>
         <span className="mono tabular text-[var(--fg)]">
@@ -221,16 +219,16 @@ export function OrderSummary({ tier, cadence, chain, token }: OrderSummaryProps)
         <p
           data-recalc
           className="
-            mono tabular text-[10.5px] uppercase tracking-[0.16em] text-[var(--accent)] text-center
-            bg-[color:color-mix(in_oklab,var(--accent)_10%,transparent)]
-            py-1.5 rounded-lg
+            mono tabular text-[10.5px] uppercase tracking-[0.16em] text-[var(--fg-2)] text-center
+            border border-[var(--border)] bg-[var(--surface-2)]
+            py-2 rounded-lg
           "
         >
           {t('row.savedWithChain', { amount: savedLabel, token: symbol })}
         </p>
       )}
 
-      <p className="mono tabular text-[9.5px] uppercase tracking-[0.16em] text-[var(--fg-3)] text-center">
+      <p className="mono tabular text-[10px] uppercase tracking-[0.16em] text-[var(--fg-3)] text-center">
         {t('footnote')}
       </p>
     </aside>

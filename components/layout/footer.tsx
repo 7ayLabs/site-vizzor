@@ -16,7 +16,22 @@
 import type { ComponentProps } from 'react';
 import { getTranslations } from 'next-intl/server';
 import Image from 'next/image';
-import { Github, Send, MessagesSquare, Twitter, AtSign } from 'lucide-react';
+import {
+  Activity,
+  AtSign,
+  BookOpen,
+  Code2,
+  FileText,
+  Github,
+  History,
+  MessagesSquare,
+  Receipt,
+  Scale,
+  Send,
+  Terminal,
+  Twitter,
+  Zap,
+} from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 
 type LinkHref = ComponentProps<typeof Link>['href'];
@@ -63,7 +78,23 @@ const RESOURCES: readonly FooterItem[] = [
 
 // Lucide doesn't export a dedicated Mastodon glyph; AtSign is the canonical
 // fallback used across the design system for fediverse identifiers.
-const COMMUNITY_ICONS: Record<string, React.ComponentType<{ size?: number; strokeWidth?: number }>> = {
+type LucideIcon = React.ComponentType<{ size?: number; strokeWidth?: number }>;
+
+const SURFACE_ICONS: Record<string, LucideIcon> = {
+  telegram: Send,
+  cli: Terminal,
+  api: Code2,
+  discord: MessagesSquare,
+};
+
+const PROJECT_ICONS: Record<string, LucideIcon> = {
+  manifesto: FileText,
+  pricing: Receipt,
+  changelog: History,
+  license: Scale,
+};
+
+const COMMUNITY_ICONS: Record<string, LucideIcon> = {
   telegramChannel: Send,
   discord: MessagesSquare,
   github: Github,
@@ -71,16 +102,17 @@ const COMMUNITY_ICONS: Record<string, React.ComponentType<{ size?: number; strok
   mastodon: AtSign,
 };
 
+const RESOURCE_ICONS: Record<string, LucideIcon> = {
+  quickstart: Zap,
+  chronovisor: Activity,
+  docsIndex: BookOpen,
+};
+
 export async function Footer() {
   const t = await getTranslations('footer');
 
   return (
     <footer className="relative border-t border-[var(--border)] bg-[var(--surface-2)] mt-24">
-      {/* Accent hairline */}
-      <div
-        aria-hidden
-        className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)]/20 to-transparent"
-      />
 
       <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8 py-14 md:py-20">
         <div className="grid grid-cols-2 gap-10 md:grid-cols-5">
@@ -105,7 +137,6 @@ export async function Footer() {
                 className="hidden dark:block h-6 w-auto"
               />
               <span>vizzor</span>
-              <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--fg-3)]">.ai</span>
             </Link>
             <p className="mt-3 text-[13px] leading-relaxed text-[var(--fg-2)] max-w-[260px]">
               {t('tagline')}
@@ -121,6 +152,7 @@ export async function Footer() {
               api: t('columns.surfaces.api'),
               discord: t('columns.surfaces.discord'),
             }}
+            icons={SURFACE_ICONS}
           />
           <FooterCol
             title={t('columns.project.title')}
@@ -131,6 +163,7 @@ export async function Footer() {
               changelog: t('columns.project.changelog'),
               license: t('columns.project.license'),
             }}
+            icons={PROJECT_ICONS}
           />
           <FooterCol
             title={t('columns.community.title')}
@@ -152,6 +185,7 @@ export async function Footer() {
               chronovisor: t('columns.resources.chronovisor'),
               docsIndex: t('columns.resources.docsIndex'),
             }}
+            icons={RESOURCE_ICONS}
           />
         </div>
 
@@ -178,8 +212,6 @@ export async function Footer() {
   );
 }
 
-type FooterIcon = React.ComponentType<{ size?: number; strokeWidth?: number }>;
-
 function FooterCol({
   title,
   items,
@@ -189,7 +221,7 @@ function FooterCol({
   title: string;
   items: readonly FooterItem[];
   labels: Record<string, string>;
-  icons?: Record<string, FooterIcon>;
+  icons?: Record<string, LucideIcon>;
 }) {
   return (
     <div>

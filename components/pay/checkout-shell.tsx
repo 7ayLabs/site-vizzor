@@ -337,17 +337,17 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
   })();
 
   const inner = (
-    <div className="mx-auto w-full max-w-[1040px] grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 pt-4 sm:pt-6">
-      <div className="flex flex-col gap-5">
-        <header
-          ref={headerRef}
-          className="flex items-baseline justify-between gap-3"
-        >
-          <h1 className="text-[26px] sm:text-[30px] leading-[1.1] tracking-tight font-semibold text-[var(--fg)]">
+    <div className="mx-auto w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8 pt-6 sm:pt-10">
+      <div className="flex flex-col gap-6">
+        <header ref={headerRef} className="flex flex-col gap-3">
+          <p className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--fg-3)]">
+            {t(`summary.cadence.${cadence}`)}
+          </p>
+          <h1 className="display text-[var(--fg)] text-[32px] sm:text-[40px] lg:text-[44px] leading-[1.05] tracking-tight font-semibold text-balance">
             {t('title', { tier: t(`summary.tier.${tier}`) })}
           </h1>
-          <p className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--fg-3)] whitespace-nowrap">
-            {t(`summary.cadence.${cadence}`)}
+          <p className="text-[14px] leading-relaxed text-[var(--fg-2)] max-w-[60ch]">
+            {t('sub')}
           </p>
         </header>
 
