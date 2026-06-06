@@ -98,6 +98,58 @@ export function buildSiwsMessage(opts: {
 }
 
 /**
+ * Build the canonical SIWS message for the v0.2.0 `link-wallet` action.
+ *
+ * Differs from `buildSiwsMessage` in exactly two semantic ways:
+ *   - The action statement reads "Link Solana wallet to Telegram
+ *     account <id>" instead of "Sign in to vizzor.ai", so the wallet
+ *     prompt the user sees describes the action they are authorising.
+ *   - A `Purpose: Link Telegram Account <id>` line is appended after
+ *     `Chain ID:`, binding the signature scope so a `link` signature
+ *     cannot be replayed as a `login` signature (and vice versa). The
+ *     login route MUST refuse a message that contains the `Purpose:
+ *     Link Telegram Account ...` line; the link route MUST refuse a
+ *     message that omits it. C4 (crypto-security) owns the negative
+ *     tests for these scope boundaries.
+ *
+ * The Telegram user id is interpolated as a base-10 integer. Callers
+ * must pass a positive integer; we throw on anything else because a
+ * malformed id would otherwise produce a parseable-but-wrong message
+ * that the wallet would happily sign.
+ */
+export function buildLinkWalletMessage(opts: {
+  wallet: string;
+  telegramUserId: number;
+  nonce: string;
+  issuedAt: Date;
+  expiresAt: Date;
+}): string {
+  if (
+    !Number.isFinite(opts.telegramUserId) ||
+    !Number.isInteger(opts.telegramUserId) ||
+    opts.telegramUserId <= 0
+  ) {
+    throw new Error(
+      'buildLinkWalletMessage: telegramUserId must be a positive integer',
+    );
+  }
+  return [
+    `${SIWS_DOMAIN} wants you to sign in with your Solana account:`,
+    opts.wallet,
+    '',
+    `Link Solana wallet to Telegram account ${opts.telegramUserId}`,
+    '',
+    `URI: https://${SIWS_DOMAIN}`,
+    'Version: 1',
+    `Chain ID: solana:mainnet`,
+    `Purpose: Link Telegram Account ${opts.telegramUserId}`,
+    `Nonce: ${opts.nonce}`,
+    `Issued At: ${opts.issuedAt.toISOString()}`,
+    `Expiration Time: ${opts.expiresAt.toISOString()}`,
+  ].join('\n');
+}
+
+/**
  * Verify an ed25519 signature over a SIWS message. `wallet` is the
  * base58-encoded Solana public key; `signature` is base58 or base64
  * (we try both). Returns true on success.
