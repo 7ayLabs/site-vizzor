@@ -22,6 +22,7 @@ import { CtaSecondary } from '@/components/ui/cta-secondary';
 import { CopyChip } from '@/components/ui/copy-chip';
 import { GsapHeadline } from '@/components/ui/gsap-headline';
 import { MotionReveal } from '@/components/ui/motion-reveal';
+import { LifetimePromoIsland } from '@/components/pricing/lifetime-promo-island';
 
 type Cadence = 'monthly' | 'annual' | 'lifetime';
 
@@ -95,6 +96,9 @@ export default async function PricingPage({
 
   return (
     <section className="relative">
+      {/* Lifetime promo modal — auto-opens once per visitor, 30d
+          suppress on dismiss, re-trigger via floating pill. */}
+      <LifetimePromoIsland />
       <div className="mx-auto w-full max-w-[1200px] px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
         {/* Heading */}
         <GsapHeadline

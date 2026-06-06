@@ -61,14 +61,26 @@ const PHASE_1: ReadonlyArray<Phase1Option> = [
     label: '$VIZZOR on Solana',
     sub: 'Pay with the project token · sub-second finality',
   },
+  {
+    id: 'base:usdc',
+    chain: 'base',
+    token: 'usdc',
+    label: 'USDC on Base',
+    sub: 'Circle USDC · 5-block finality · ~$0.01 gas',
+  },
+  {
+    id: 'arbitrum:usdc',
+    chain: 'arbitrum',
+    token: 'usdc',
+    label: 'USDC on Arbitrum',
+    sub: 'Circle USDC · 5-block finality · ~$0.01 gas',
+  },
 ];
 
 const PHASE_2: ReadonlyArray<{ id: string; label: string; sub: string }> = [
-  { id: 'polygon', label: 'Polygon', sub: 'USDC · 12-block finality' },
-  { id: 'base', label: 'Base', sub: 'USDC · 12-block finality' },
-  { id: 'arbitrum', label: 'Arbitrum', sub: 'USDC · 12-block finality' },
-  { id: 'solana-usdc', label: 'Solana', sub: 'USDC · 32-slot finality' },
-  { id: 'tron', label: 'TRON', sub: 'USDT · 20-block finality' },
+  { id: 'polygon', label: 'Polygon', sub: 'USDC · later cycle' },
+  { id: 'solana-usdc', label: 'Solana USDC', sub: 'USDC · later cycle' },
+  { id: 'tron', label: 'TRON', sub: 'USDT · later cycle' },
 ];
 
 export function ChainSelector({

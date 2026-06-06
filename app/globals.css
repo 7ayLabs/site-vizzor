@@ -200,6 +200,28 @@
       animation: none;
     }
   }
+
+  /*
+   * Promo modal entrance/exit. Paired keyframes so the close
+   * animation plays to completion before unmount. Reduced-motion
+   * users get the instant final state via the global media block
+   * below.
+   */
+  .promo-modal-fade-in  { animation: promo-modal-fade-in 140ms ease-out both; }
+  .promo-modal-fade-out { animation: promo-modal-fade-out 140ms ease-in both; }
+  .promo-modal-slide-in  { animation: promo-modal-slide-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .promo-modal-slide-out { animation: promo-modal-slide-out 160ms cubic-bezier(0.4, 0, 1, 1) both; }
+
+  @keyframes promo-modal-fade-in  { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes promo-modal-fade-out { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes promo-modal-slide-in {
+    from { transform: translateY(12px) scale(0.98); opacity: 0; }
+    to   { transform: translateY(0)    scale(1);    opacity: 1; }
+  }
+  @keyframes promo-modal-slide-out {
+    from { transform: translateY(0)   scale(1);    opacity: 1; }
+    to   { transform: translateY(8px) scale(0.98); opacity: 0; }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
