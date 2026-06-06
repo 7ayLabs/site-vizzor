@@ -28,11 +28,10 @@ const TEST_DB_PATH = `/tmp/vizzor-test-${process.pid}.db`;
 // it to 'test' without disabling strict mode anywhere else.
 (process.env as Record<string, string | undefined>).NODE_ENV = 'test';
 process.env.VIZZOR_SITE_DB = TEST_DB_PATH;
-// Feature flags must be on for createSession/watcher paths under test.
-process.env.NEXT_PUBLIC_ACCEPT_VIZZOR_PAYMENTS = 'true';
-process.env.NEXT_PUBLIC_ACCEPT_TON_PAYMENTS = 'true';
-// Mock $VIZZOR rate so rates.ts returns a stable value without network.
-process.env.NEXT_PUBLIC_VIZZOR_MOCK_USD = '0.10';
+// Feature flag must be on for createSession/watcher paths under test.
+process.env.NEXT_PUBLIC_ACCEPT_SOLANA_PAYMENTS = 'true';
+// Mock SOL rate so rates.ts returns a stable value without network.
+process.env.NEXT_PUBLIC_SOL_MOCK_USD = '150';
 
 mkdirSync(dirname(TEST_DB_PATH), { recursive: true });
 

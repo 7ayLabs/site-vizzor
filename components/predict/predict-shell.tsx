@@ -24,11 +24,9 @@
 
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
-import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import {
   useEffect,
-  useMemo,
   useRef,
   useState,
   type FormEvent,
@@ -50,20 +48,13 @@ import {
 } from 'lucide-react';
 import { ChatBubble } from '@/components/predict/chat-bubble';
 import { QuotaSidebar } from '@/components/sections/quota-sidebar';
-import { isTokenLive } from '@/lib/feature-flags';
 import { loadRecents, pushRecent, clearRecents } from './recents-store';
-
-const WalletAdapter = dynamic(
-  () => import('@/components/wallet/wallet-provider'),
-  { ssr: false, loading: () => null },
-);
 
 interface QuotaState {
   used: number;
   limit: number;
   remaining: number;
   exhausted: boolean;
-  isLive: boolean;
 }
 
 const quotaFetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -74,15 +65,8 @@ export function PredictShell() {
   const [input, setInput] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [burnSig, setBurnSig] = useState<string | null>(null);
   const [recents, setRecents] = useState<ReturnType<typeof loadRecents>>([]);
   const threadRef = useRef<HTMLDivElement | null>(null);
-
-  // The heavy wallet-adapter tree only mounts when the burn-to-predict
-  // flow is wired (`isTokenLive()`). Wallet sign-in lives in the navbar
-  // modal now, which mounts its own ephemeral adapter on demand — no
-  // URL-hint plumbing needed here.
-  const wantsWallet = isTokenLive();
 
   // Quota — shared SWR key with QuotaSidebar so the data dedupes.
   const { data: quota } = useSWR<QuotaState>('/api/quota', quotaFetcher, {
@@ -90,28 +74,11 @@ export function PredictShell() {
     keepPreviousData: true,
   });
 
-  // Burn-session handoff — chat-panel pattern preserved.
-  const burnSigRef = useRef<string | null>(burnSig);
-  useEffect(() => {
-    burnSigRef.current = burnSig;
-  }, [burnSig]);
-
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport({
-        api: '/api/predict',
-        headers: (): Record<string, string> => {
-          const sig = burnSigRef.current;
-          return sig ? { 'x-vizzor-burn-tx': sig } : {};
-        },
-      }),
-    [],
-  );
+  const transport = new DefaultChatTransport({ api: '/api/predict' });
 
   const { messages, sendMessage, status, error, setMessages } = useChat({
     transport,
     onFinish: () => {
-      if (burnSigRef.current) setBurnSig(null);
       setRefreshKey((k) => k + 1);
     },
   });
@@ -146,7 +113,7 @@ export function PredictShell() {
 
   const isStreaming = status === 'streaming' || status === 'submitted';
   const isErrored = status === 'error';
-  const composerLocked = !!quota?.exhausted && !burnSig;
+  const composerLocked = !!quota?.exhausted;
 
   const submitPrompt = (text: string) => {
     const trimmed = text.trim();
@@ -295,10 +262,7 @@ export function PredictShell() {
 
           {/* Footer: quota mini-card */}
           <div className="border-t border-[var(--border)] p-3">
-            <QuotaSidebar
-              refreshKey={refreshKey}
-              onBurnConfirmed={(sig) => setBurnSig(sig)}
-            />
+            <QuotaSidebar refreshKey={refreshKey} />
           </div>
         </aside>
       )}
@@ -427,14 +391,10 @@ export function PredictShell() {
     </div>
   );
 
-  // The wallet adapter is heavy (~300KB gzipped) and `dynamic({ ssr:
-  // false })` — wrapping the shell with it unconditionally would bail
-  // the whole route out of SSR (blank first-paint until the chunk
-  // loads). We only mount it when the burn-to-predict UI is wired
-  // (`isTokenLive()`). Wallet sign-in happens in the navbar modal
-  // which mounts its own adapter on demand and tears it down when the
-  // modal closes.
-  return wantsWallet ? <WalletAdapter>{inner}</WalletAdapter> : inner;
+  // Wallet sign-in lives in the navbar modal which mounts its own
+  // adapter on demand and tears it down when the modal closes — the
+  // predict shell stays light and SSR-friendly.
+  return inner;
 }
 
 /* ────────────── subcomponents ────────────── */

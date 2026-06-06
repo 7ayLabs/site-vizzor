@@ -59,7 +59,7 @@ const LazyConnectFlow = dynamic(
 
 /* ─────────────── option config ─────────────── */
 
-export type WalletProviderId = 'phantom' | 'solflare' | 'ton' | 'more';
+export type WalletProviderId = 'phantom' | 'solflare' | 'more';
 
 type IconKind =
   | { kind: 'asset'; src: string; alt: string }
@@ -89,13 +89,6 @@ const OPTIONS: WalletProviderOption[] = [
     captionKey: 'solflareCaption',
     action: { kind: 'solana', providerId: 'solflare' },
     icon: { kind: 'asset', src: '/wallets/solflare.svg', alt: 'Solflare' },
-  },
-  {
-    id: 'ton',
-    i18nKey: 'ton',
-    captionKey: 'tonCaption',
-    action: { kind: 'route', href: '/pricing#chain-ton' },
-    icon: { kind: 'asset', src: '/wallets/ton.svg', alt: 'TON Connect' },
   },
   {
     id: 'more',

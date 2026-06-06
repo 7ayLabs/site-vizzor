@@ -20,7 +20,7 @@
 
 import { NextResponse } from 'next/server';
 import { QUOTA_COOKIE } from '@/lib/quota';
-import { freePredictions, isTokenLive } from '@/lib/feature-flags';
+import { freePredictions } from '@/lib/feature-flags';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -52,7 +52,6 @@ export async function POST() {
     limit,
     remaining: limit,
     exhausted: false,
-    isLive: isTokenLive(),
   };
 
   const headers = new Headers({

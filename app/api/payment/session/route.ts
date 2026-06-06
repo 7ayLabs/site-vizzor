@@ -41,8 +41,6 @@ import {
   recordIdempotencyKey,
 } from '@/lib/payment/idempotency';
 import { ensureWatcherStarted } from '@/lib/payment/watcher';
-import { ensureTonWatcherStarted } from '@/lib/payment/ton-watcher';
-import { ensureEvmWatchersStarted } from '@/lib/payment/evm-watcher';
 import {
   PAYMENT_SESSION_ROUTE_REQUIREMENTS,
   assertRequiredEnv,
@@ -62,20 +60,13 @@ interface SessionBody {
   token?: unknown;
 }
 
-const VALID_PAIRS = new Set<string>([
-  'ton:native',
-  'solana:vizzor',
-  'base:usdc',
-  'arbitrum:usdc',
-]);
+const VALID_PAIRS = new Set<string>(['solana:native']);
 
 export async function POST(req: Request) {
-  // Lazy boot of every on-chain watcher daemon on the first session
-  // create. Each is idempotent — only starts once per Node process,
-  // gated by its own feature flag (accept*Payments).
+  // Lazy boot of the Solana watcher daemon on the first session create.
+  // Idempotent — only starts once per Node process, gated by the
+  // acceptSolanaPayments() feature flag.
   ensureWatcherStarted();
-  ensureTonWatcherStarted();
-  ensureEvmWatchersStarted();
 
   let body: SessionBody;
   try {
@@ -86,7 +77,7 @@ export async function POST(req: Request) {
 
   const tier = String(body.tier ?? '');
   const cadence = String(body.cadence ?? '');
-  const chain = String(body.chain ?? 'ton');
+  const chain = String(body.chain ?? 'solana');
   const token = String(body.token ?? 'native');
 
   if (!isValidCombo(tier, cadence)) {

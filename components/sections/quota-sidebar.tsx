@@ -4,27 +4,16 @@
  * QuotaSidebar — free-tier counter + paywall state.
  *
  * Polls `/api/quota` via SWR to stay in sync after each prediction.
- * Three visual states:
+ * Two visual states:
  *   1. Free tier active   — shows "Free: N/limit" counter
- *   2. Free exhausted, token NOT live — "$VIZZOR launching soon" panel
- *   3. Free exhausted, token live — wallet connect + burn flow
- *
- * The burn flow (state 3) is rendered by <PaidConnectPanel>, which
- * lives inside the WalletAdapter that PredictRoute mounted. We render
- * the wallet components statically here because by the time the
- * sidebar shows state 3, the wallet provider is already up the tree.
+ *   2. Free exhausted     — routes the user to /pricing to subscribe
  */
 
 import useSWR from 'swr';
 import { useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import { ConnectButton } from '@/components/wallet/wallet-connect';
-import { BurnButton } from '@/components/wallet/burn-button';
-import { burnAmount } from '@/lib/solana';
+import { Link } from '@/i18n/navigation';
 
-// Build-time constant. Next.js inlines `process.env.NODE_ENV` so any
-// production build dead-code-eliminates the reset affordance entirely
-// — it doesn't ship in the client bundle at all.
 const IS_DEV = process.env.NODE_ENV !== 'production';
 
 interface QuotaState {
@@ -32,27 +21,21 @@ interface QuotaState {
   limit: number;
   remaining: number;
   exhausted: boolean;
-  isLive: boolean;
 }
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface QuotaSidebarProps {
   refreshKey?: number;
-  onBurnConfirmed?: (signature: string) => void;
 }
 
-export function QuotaSidebar({
-  refreshKey = 0,
-  onBurnConfirmed,
-}: QuotaSidebarProps) {
+export function QuotaSidebar({ refreshKey = 0 }: QuotaSidebarProps) {
   const t = useTranslations('predict');
   const { data, mutate } = useSWR<QuotaState>('/api/quota', fetcher, {
     revalidateOnFocus: false,
     keepPreviousData: true,
   });
 
-  // Refetch quota whenever the parent signals a chat finish.
   useEffect(() => {
     if (refreshKey > 0) void mutate();
   }, [refreshKey, mutate]);
@@ -73,18 +56,11 @@ export function QuotaSidebar({
       credentials: 'same-origin',
     });
     if (!res.ok) return;
-    // Hard reload guarantees a clean cookie/SWR/UI state. The dev-only
-    // affordance gets dead-code-eliminated from production builds, so
-    // this reload only ever fires in development.
     window.location.reload();
   };
 
   const body = data.exhausted ? (
-    data.isLive ? (
-      <PaidConnectPanel onBurnConfirmed={onBurnConfirmed} />
-    ) : (
-      <WaitlistPanel />
-    )
+    <SubscribePanel />
   ) : (
     <FreeCounterPanel
       used={data.used}
@@ -163,66 +139,37 @@ function FreeCounterPanel({
   );
 }
 
-function WaitlistPanel() {
+function SubscribePanel() {
   const t = useTranslations('predict');
 
   return (
-    <div className="border border-[var(--border)] bg-[var(--surface)] p-4 flex flex-col gap-3">
+    <div className="border border-[var(--border)] bg-[var(--surface)] p-4 flex flex-col gap-4">
       <p className="mono tabular text-[10.5px] uppercase tracking-[0.16em] text-[var(--accent)]">
-        {t('waitlist.label')}
+        {t('subscribe.label')}
       </p>
+
       <h3 className="text-[16px] font-semibold tracking-tight text-[var(--fg)]">
-        {t('waitlist.title')}
+        {t('subscribe.title')}
       </h3>
+
       <p className="text-[12.5px] leading-relaxed text-[var(--fg-2)]">
-        {t('waitlist.body')}
+        {t('subscribe.body')}
       </p>
-      <a
-        href="https://t.me/vizzorai_bot"
-        target="_blank"
-        rel="noopener"
+
+      <Link
+        href="/pricing"
         className="
-          mt-2 inline-flex items-center justify-center
+          mt-1 inline-flex items-center justify-center
           mono tabular text-[10.5px] uppercase tracking-[0.16em]
           border border-[var(--fg)] bg-[var(--fg)] text-[var(--bg)]
           px-3 py-2 hover:opacity-90 transition-opacity
         "
       >
-        {t('waitlist.cta')}
-      </a>
-    </div>
-  );
-}
-
-function PaidConnectPanel({
-  onBurnConfirmed,
-}: {
-  onBurnConfirmed?: (signature: string) => void;
-}) {
-  const t = useTranslations('predict');
-  const amount = burnAmount();
-
-  return (
-    <div className="border border-[var(--border)] bg-[var(--surface)] p-4 flex flex-col gap-4">
-      <p className="mono tabular text-[10.5px] uppercase tracking-[0.16em] text-[var(--accent)]">
-        {t('paid.label')}
-      </p>
-
-      <h3 className="text-[16px] font-semibold tracking-tight text-[var(--fg)]">
-        {t('paid.title')}
-      </h3>
-
-      <p className="text-[12.5px] leading-relaxed text-[var(--fg-2)]">
-        {t('paid.body', { amount: String(amount) })}
-      </p>
-
-      <div className="flex flex-col gap-2">
-        <ConnectButton />
-        <BurnButton onConfirmed={(sig) => onBurnConfirmed?.(sig)} />
-      </div>
+        {t('subscribe.cta')}
+      </Link>
 
       <p className="mono tabular text-[9.5px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
-        {t('paid.legal')}
+        {t('subscribe.legal')}
       </p>
     </div>
   );

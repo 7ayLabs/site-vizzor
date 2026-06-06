@@ -35,7 +35,7 @@
  *   - app/api/payment/session/[id]/route.ts
  *   - lib/payment/session.ts (SessionFailure type)
  *   - components/pay/checkout-shell.tsx (client-side polling + wallet)
- *   - components/pay/vizzor-pay-button.tsx, ton-connect-button.tsx
+ *   - components/pay/solana-pay-button.tsx
  *   - lib/feature-flags.ts (off → 'feature_disabled')
  */
 export type PaymentReason =

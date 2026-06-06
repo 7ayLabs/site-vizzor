@@ -87,15 +87,8 @@ export const PAYMENT_SESSION_ROUTE_REQUIREMENTS: readonly EnvRequirement[] = [
   },
   {
     name: 'VIZZOR_SOLANA_TREASURY',
-    rationale: 'treasury wallet address; the watcher disambiguates payments by this',
-  },
-  {
-    name: 'VIZZOR_TON_TREASURY',
-    rationale: 'TON treasury address for TON-paying users',
-  },
-  {
-    name: 'NEXT_PUBLIC_VIZZOR_MINT',
-    rationale: '$VIZZOR mint pubkey; required for the watcher to match SPL transfers',
+    rationale:
+      'Solana treasury wallet address; the watcher disambiguates payments by memo at this address',
   },
   {
     name: 'SOLANA_RPC_URL',
