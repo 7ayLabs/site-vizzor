@@ -3,7 +3,8 @@
 /**
  * CheckoutShell — top-level client component for /pay/[tier]/[cadence].
  *
- * Orchestrates the payment state machine. Two Phase-1 chains live here:
+ * Orchestrates the payment state machine defined in `purchase-state.ts`.
+ * Two Phase-1 chains live here:
  *   (1) TON native via TON Connect (lazy-loaded chunk)
  *   (2) Solana-$VIZZOR via the existing Solana wallet adapter (shared
  *       chunk with /predict, zero new bundle cost)
@@ -12,27 +13,46 @@
  * which pay button renders. Either flag enables the route; both flags
  * off renders the "payment infrastructure pending" panel.
  *
- * State machine:
- *   idle → creating → awaiting_wallet → broadcasting → pending
- *        → confirming → confirmed (grant code) → handoff
- *   (any step can error/expire → user can retry)
+ * Every state mutation goes through the `next()` reducer — the
+ * component never assigns to the state setter directly. The reducer
+ * guarantees we cannot enter an invalid composition (e.g. a "done"
+ * state without a grant code, or a "paying" state with no session).
+ * The renderer's `switch (state.kind)` enforces exhaustiveness at
+ * compile time.
  */
 
 import dynamic from 'next/dynamic';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  type ReactNode,
+} from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { OrderSummary } from './order-summary';
 import { ChainSelector, type SelectorValue } from './chain-selector';
 import { PaymentStatus, type StatusValue } from './payment-status';
+import {
+  ctaHidden,
+  initial,
+  isRecoverable,
+  next,
+  sessionOf,
+  type PurchaseEvent,
+  type PurchaseState,
+} from './purchase-state';
 import type {
   PaymentCadence,
   PaymentSession,
   PaymentTier,
-  PaymentToken,
 } from '@/lib/payment/session';
 import {
   acceptTonPayments,
+  acceptUsdcArbPayments,
+  acceptUsdcBasePayments,
   acceptVizzorPayments,
 } from '@/lib/feature-flags';
 
@@ -46,8 +66,6 @@ const TonConnectButton = dynamic(
   { ssr: false, loading: () => null },
 );
 
-// Reuse the Solana wallet provider already shipped for /predict. Same
-// chunk → zero new dependencies for the $VIZZOR-pay path.
 const SolanaWalletAdapter = dynamic(
   () => import('@/components/wallet/wallet-provider'),
   { ssr: false, loading: () => null },
@@ -55,6 +73,11 @@ const SolanaWalletAdapter = dynamic(
 
 const VizzorPayButton = dynamic(
   () => import('./vizzor-pay-button').then((m) => m.VizzorPayButton),
+  { ssr: false, loading: () => null },
+);
+
+const EvmPayButton = dynamic(
+  () => import('./evm-pay-button').then((m) => m.EvmPayButton),
   { ssr: false, loading: () => null },
 );
 
@@ -75,19 +98,39 @@ const POLL_MAX_ATTEMPTS = 200; // ~10 min wall clock
 
 const DEFAULT_SELECTOR: SelectorValue = { chain: 'ton', token: 'native' };
 
+/**
+ * Maps the discriminated-union state.kind to the presentational
+ * `StatusValue` consumed by PaymentStatus. They are mostly the same
+ * but PaymentStatus stays presentational and re-usable independently
+ * of the reducer.
+ */
+function asStatusValue(kind: PurchaseState['kind']): StatusValue {
+  // Tail-end identity for: idle, connecting, signing, confirming,
+  // expired, error, done. The 'paying' state maps to 'paying'
+  // directly; 'wrong-network' maps 1:1.
+  return kind;
+}
+
 export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
   const t = useTranslations('pay');
   const router = useRouter();
-  const [status, setStatus] = useState<StatusValue>('idle');
-  const [reason, setReason] = useState<string | undefined>(undefined);
-  const [session, setSession] = useState<PaymentSession | null>(null);
-  const [selector, setSelector] = useState<SelectorValue>(DEFAULT_SELECTOR);
+  const [state, dispatch] = useReducer(reducer, undefined, initial);
+  const selectorRef = useRef<SelectorValue>(DEFAULT_SELECTOR);
   const pollAttempts = useRef(0);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Selector lives in a ref + effect-driven state so the reducer
+  // remains pure. The selector is presentational config — the
+  // reducer cares only about the session it produces.
+  const [selector, setSelector] = useReducerSelector(DEFAULT_SELECTOR);
+
   const tonOn = acceptTonPayments();
   const vizzorOn = acceptVizzorPayments();
-  const featureOn = tonOn || vizzorOn;
+  const usdcBaseOn = acceptUsdcBasePayments();
+  const usdcArbOn = acceptUsdcArbPayments();
+  const featureOn = tonOn || vizzorOn || usdcBaseOn || usdcArbOn;
+
+  selectorRef.current = selector;
 
   // Cleanup polling on unmount.
   useEffect(() => {
@@ -104,19 +147,27 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
     } else if (selector.chain === 'solana' && !vizzorOn && tonOn) {
       setSelector(DEFAULT_SELECTOR);
     }
-  }, [selector, tonOn, vizzorOn]);
+  }, [selector, tonOn, vizzorOn, setSelector]);
 
-  const onSelectorChange = (next: SelectorValue) => {
-    setSelector(next);
-    // Reset any in-flight session — new chain/token = new dest address.
-    setSession(null);
-    setStatus('idle');
-    setReason(undefined);
-  };
+  // Side-effect: on `done`, redirect to the success page so the grant
+  // handoff card renders with full SSR (and shareable URL).
+  useEffect(() => {
+    if (state.kind === 'done') {
+      router.push(`/pay/success?id=${state.session.sessionId}`);
+    }
+  }, [state, router]);
 
-  const createSession = async () => {
-    setStatus('creating');
-    setReason(undefined);
+  const onSelectorChange = useCallback(
+    (nextValue: SelectorValue) => {
+      setSelector(nextValue);
+      // New chain/token = new dest address. Drop any in-flight state.
+      dispatch({ type: 'reset' });
+    },
+    [setSelector],
+  );
+
+  const createSession = useCallback(async () => {
+    dispatch({ type: 'start' });
     try {
       const res = await fetch('/api/payment/session', {
         method: 'POST',
@@ -124,54 +175,51 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
         body: JSON.stringify({
           tier,
           cadence,
-          chain: selector.chain,
-          token: selector.token,
+          chain: selectorRef.current.chain,
+          token: selectorRef.current.token,
         }),
       });
       const data = (await res.json()) as SessionApiResponse;
       if (!data.ok || !data.session) {
-        setStatus('error');
-        setReason(data.reason ?? 'session_failed');
+        dispatch({
+          type: 'session-create-failed',
+          reason: data.reason ?? 'session_failed',
+        });
         return;
       }
-      setSession(data.session);
-      setStatus('awaiting_wallet');
+      dispatch({ type: 'session-created', session: data.session });
     } catch (e) {
-      setStatus('error');
-      setReason(stringifyError(e));
+      dispatch({
+        type: 'session-create-failed',
+        reason: stringifyError(e),
+      });
     }
-  };
+  }, [tier, cadence]);
 
-  const startPolling = (sessionId: string) => {
+  const startPolling = useCallback((sessionId: string) => {
     pollAttempts.current = 0;
     const tick = async () => {
       pollAttempts.current += 1;
       if (pollAttempts.current > POLL_MAX_ATTEMPTS) {
-        setStatus('expired');
+        dispatch({ type: 'poll-expired' });
         return;
       }
       try {
         const res = await fetch(`/api/payment/session/${sessionId}`);
         const data = (await res.json()) as SessionApiResponse;
         if (data.ok && data.session) {
-          setSession(data.session);
-          if (data.session.status === 'confirmed' && data.session.grantCode) {
-            setStatus('confirmed');
-            router.push(`/pay/success?id=${sessionId}`);
-            return;
-          }
-          if (data.session.status === 'confirmed') {
-            setStatus('confirming');
-          } else if (data.session.status === 'expired') {
-            setStatus('expired');
-            return;
-          } else if (data.session.status === 'failed') {
-            setStatus('error');
-            setReason('engine_marked_failed');
-            return;
-          } else {
-            setStatus('pending');
-          }
+          dispatch({ type: 'poll-update', session: data.session });
+          // The reducer decides whether to stop — done/expired/error
+          // are terminal. We always re-arm the timer; the next tick
+          // is a no-op against terminal state because dispatch will
+          // be ignored. But to avoid wasting requests, check kind.
+        } else if (!data.ok) {
+          // Hard failure on the poll path.
+          dispatch({
+            type: 'poll-error',
+            reason: data.reason ?? 'session_failed',
+          });
+          return;
         }
       } catch {
         // Transient — keep polling.
@@ -179,24 +227,39 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
       pollTimer.current = setTimeout(tick, POLL_INTERVAL_MS);
     };
     void tick();
-  };
+  }, []);
 
-  const onSent = (_signature: string) => {
-    if (!session) return;
-    setStatus('broadcasting');
-    startPolling(session.sessionId);
-  };
+  // Kick off polling when we enter `paying` (the wallet has signed).
+  useEffect(() => {
+    if (state.kind === 'paying') {
+      const session = state.session;
+      startPolling(session.sessionId);
+      return () => {
+        if (pollTimer.current) clearTimeout(pollTimer.current);
+      };
+    }
+    return undefined;
+  }, [state, startPolling]);
 
-  const onWalletError = (msg: string) => {
-    setStatus('error');
-    setReason(msg);
-  };
+  const onSent = useCallback((signature: string) => {
+    dispatch({ type: 'tx-signed', txSig: signature });
+  }, []);
 
-  const retry = () => {
-    setSession(null);
-    setStatus('idle');
-    setReason(undefined);
-  };
+  const onWalletError = useCallback((msg: string) => {
+    dispatch({ type: 'wallet-error', reason: msg });
+  }, []);
+
+  const retry = useCallback(() => {
+    if (pollTimer.current) clearTimeout(pollTimer.current);
+    dispatch({ type: 'reset' });
+  }, []);
+
+  const session = sessionOf(state);
+  const status: StatusValue = asStatusValue(state.kind);
+  const reasonForBanner = useMemo<string | undefined>(() => {
+    if (state.kind === 'error') return state.reason;
+    return undefined;
+  }, [state]);
 
   if (!featureOn) {
     return (
@@ -205,12 +268,14 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
   }
 
   const payButton: ReactNode = (() => {
-    if (!session || status === 'confirmed') {
+    // No session yet, or terminal state with a fresh retry available
+    // → show the primary "Start payment" CTA.
+    if (!session) {
       return (
         <button
           type="button"
           onClick={createSession}
-          disabled={status === 'creating'}
+          disabled={state.kind === 'connecting'}
           className="
             inline-flex items-center justify-center gap-2 h-12 px-5 w-full
             text-[13px] font-semibold tracking-tight
@@ -220,22 +285,37 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
           "
         >
           <span>
-            {status === 'creating' ? t('cta.creating') : t('cta.start')}
+            {state.kind === 'connecting' ? t('cta.creating') : t('cta.start')}
           </span>
           <span aria-hidden>→</span>
         </button>
       );
     }
+
     const disabled =
-      status === 'broadcasting' ||
-      status === 'pending' ||
-      status === 'confirming';
+      state.kind === 'paying' ||
+      state.kind === 'confirming' ||
+      state.kind === 'connecting';
+
     if (selector.token === 'vizzor') {
       return (
         <VizzorPayButton
           destAddress={session.destAddress}
           amount={session.amount}
           sessionId={session.sessionId}
+          onSent={onSent}
+          onError={onWalletError}
+          disabled={disabled}
+        />
+      );
+    }
+    if (selector.token === 'usdc') {
+      return (
+        <EvmPayButton
+          destAddress={session.destAddress}
+          amount={session.amount}
+          sessionId={session.sessionId}
+          chain={selector.chain === 'arbitrum' ? 'arbitrum' : 'base'}
           onSent={onSent}
           onError={onWalletError}
           disabled={disabled}
@@ -280,16 +360,14 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
 
         <PaymentStatus
           status={status}
-          reason={reason}
-          retry={status === 'error' || status === 'expired' ? retry : undefined}
+          reason={reasonForBanner}
+          retry={isRecoverable(state) ? retry : undefined}
           tier={tier}
           cadence={cadence}
         />
 
-        {/* Hide the primary CTA while an error/expired banner is visible
-            — the inline Retry button on the status panel is the right
-            action and the bottom button would just confuse users. */}
-        {status !== 'error' && status !== 'expired' && payButton}
+        {/* The status banner owns the CTA when it carries a Retry. */}
+        {!ctaHidden(state) && payButton}
 
         <p className="mono tabular text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)] text-center">
           {t('legalFootnote')}
@@ -305,14 +383,36 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
     </div>
   );
 
-  // Wrap in the correct provider tree based on selected token. Both
-  // providers lazy-load via next/dynamic({ ssr: false }), so only the
-  // chunks for the active chain ship.
   if (selector.token === 'vizzor') {
     return <SolanaWalletAdapter>{inner}</SolanaWalletAdapter>;
   }
+  if (selector.token === 'usdc') {
+    // EVM USDC payments use EIP-6963 wallet discovery directly via
+    // window.ethereum — no provider tree needed. Bundle stays light.
+    return inner;
+  }
   return <TonProvider>{inner}</TonProvider>;
 }
+
+/* ────────────── reducer thin wrapper ────────────── */
+
+function reducer(state: PurchaseState, event: PurchaseEvent): PurchaseState {
+  return next(state, event);
+}
+
+/* ────────────── selector mini-hook ────────────── */
+
+function useReducerSelector(
+  init: SelectorValue,
+): readonly [SelectorValue, (s: SelectorValue) => void] {
+  const [s, dispatch] = useReducer(
+    (_prev: SelectorValue, next: SelectorValue) => next,
+    init,
+  );
+  return [s, dispatch];
+}
+
+/* ────────────── infra-pending panel (unchanged) ────────────── */
 
 function PaymentInfraPending({
   tier,
@@ -359,6 +459,3 @@ function stringifyError(e: unknown): string {
   if (e instanceof Error) return e.message.slice(0, 160);
   return String(e).slice(0, 160);
 }
-
-const _suppressUnusedToken: PaymentToken | undefined = undefined;
-void _suppressUnusedToken;
