@@ -9,7 +9,7 @@
 
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
-import { buildSiwsMessage } from '@/lib/payment/siws';
+import { buildSiwsMessage, type SiwsAction } from '@/lib/payment/siws';
 
 export interface TestKeypair {
   publicKey: Uint8Array;
@@ -38,26 +38,31 @@ export interface SignedSiws {
   signature: string;
   message: string;
   nonce: string;
+  action: SiwsAction;
   issuedAt: Date;
   expiresAt: Date;
 }
 
 /**
  * Build and sign a canonical SIWS message in one call. Mirrors what
- * a real wallet would do given a /nonce response.
+ * a real wallet would do given a /nonce response. Defaults to the
+ * 'login' action; pass action explicitly for link-wallet flows.
  */
 export function buildSignedSiws(opts: {
   keypair: TestKeypair;
   nonce: string;
+  action?: SiwsAction;
   issuedAt?: Date;
   expiresAt?: Date;
 }): SignedSiws {
+  const action: SiwsAction = opts.action ?? 'login';
   const issuedAt = opts.issuedAt ?? new Date();
   const expiresAt =
     opts.expiresAt ?? new Date(issuedAt.getTime() + 5 * 60 * 1000);
   const message = buildSiwsMessage({
     wallet: opts.keypair.walletAddress,
     nonce: opts.nonce,
+    action,
     issuedAt,
     expiresAt,
   });
@@ -67,6 +72,7 @@ export function buildSignedSiws(opts: {
     signature,
     message,
     nonce: opts.nonce,
+    action,
     issuedAt,
     expiresAt,
   };
