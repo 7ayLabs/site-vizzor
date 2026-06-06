@@ -18,6 +18,7 @@
     "lifetime": "À vie",
     "expiresOn": "Expire le {date}",
     "signOut": "Déconnexion",
+    "viewProfile": "Voir le profil",
     "close": "Fermer",
     "modal": {
       "eyebrow": "Portefeuilles",
@@ -48,6 +49,79 @@
       "solflareCaption": "Solana · se connecter",
       "more": "Plus de portefeuilles",
       "moreCaption": "Autres adaptateurs Solana"
+    }
+  },
+  "account": {
+    "meta": {
+      "title": "Compte · Vizzor",
+      "description": "Votre identité portefeuille, abonnement, lien Telegram et paiements récents — tout au même endroit."
+    },
+    "eyebrow": "profil",
+    "title": "Compte",
+    "sub": "Tout ce que Vizzor sait de votre portefeuille — identité, abonnement, lien Telegram et historique on-chain. Rien ne sort de votre portefeuille sans votre signature.",
+    "tier": { "free": "Free", "pro": "Pro", "elite": "Elite" },
+    "cadence": { "monthly": "Mensuel", "annual": "Annuel", "lifetime": "À vie" },
+    "hero": { "manage": "Gérer le forfait" },
+    "stats": {
+      "plan": "Forfait",
+      "planNone": "Free",
+      "planSub": "Pas d'abonnement",
+      "renews": "Renouvelle",
+      "renewsNone": "—",
+      "renewsLifetime": "Accès à vie",
+      "telegram": "Telegram",
+      "tgLinkedSince": "Lié {date}",
+      "tgUnlinked": "Pas encore lié",
+      "activity": "Activité",
+      "activityEmpty": "Aucun paiement",
+      "lastSeen": "Dernier {rel}"
+    },
+    "identity": {
+      "eyebrow": "identité du portefeuille",
+      "title": "Connecté avec Solana",
+      "walletLabel": "Adresse du portefeuille",
+      "shortLabel": "Forme courte",
+      "sessionLabel": "Session",
+      "sessionExpires": "Expire {rel}",
+      "copy": "Copier",
+      "copied": "Copié",
+      "copyAria": "Copier l'adresse du portefeuille",
+      "signOut": "Déconnexion",
+      "signingOut": "Déconnexion…"
+    },
+    "subscription": {
+      "eyebrow": "abonnement",
+      "title": "Forfait actif",
+      "tier": "Tier",
+      "cadence": "Cadence",
+      "expires": "Renouvelle",
+      "lifetime": "Jamais · à vie",
+      "manage": "Gérer le forfait",
+      "openBot": "Ouvrir dans Telegram",
+      "emptyBody": "Vous n'avez pas d'abonnement actif. Choisissez un tier sur /pricing — payer en SOL sur Solana économise 15% instantanément.",
+      "emptyCta": "Voir les tarifs"
+    },
+    "telegram": {
+      "eyebrow": "lien telegram",
+      "title": "Telegram",
+      "statusLabel": "Statut",
+      "telegramIdLabel": "Id utilisateur Telegram",
+      "linkedAtLabel": "Lié",
+      "linked": "Lié",
+      "unlinkedBody": "Liez votre portefeuille à Telegram une fois et les paiements futurs s'auto-attribueront — sans codes, sans copier-coller. Le bot vous guide avec un défi de signature.",
+      "linkCta": "Lier dans Telegram"
+    },
+    "activity": {
+      "eyebrow": "activité",
+      "title": "Paiements récents",
+      "linkedTo": "Telegram #{id}",
+      "empty": "Aucune session de paiement encore pour ce portefeuille. Quand vous complétez un checkout sur /pay, ça apparaît ici comme un reçu.",
+      "status": {
+        "pending": "En attente",
+        "confirmed": "Confirmé",
+        "expired": "Expiré",
+        "failed": "Échec"
+      }
     }
   },
   "footer": {

@@ -25,7 +25,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import useSWR from 'swr';
-import { Wallet, LogOut, Check } from 'lucide-react';
+import { Wallet, LogOut, Check, UserCircle2 } from 'lucide-react';
+import { Link } from '@/i18n/navigation';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { WalletSelectorModal } from './wallet-selector-modal';
@@ -174,6 +175,17 @@ function SignedInBadge({
               )}
             </div>
           )}
+          <Link
+            href="/account"
+            className="
+              w-full flex items-center gap-2 px-4 py-2.5
+              text-[12px] text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]
+              transition-colors border-b border-[var(--border)]
+            "
+          >
+            <UserCircle2 size={13} strokeWidth={2} />
+            <span>{t('viewProfile')}</span>
+          </Link>
           <button
             type="button"
             onClick={onSignOut}

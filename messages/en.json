@@ -18,6 +18,7 @@
     "lifetime": "Lifetime",
     "expiresOn": "Expires {date}",
     "signOut": "Sign out",
+    "viewProfile": "View profile",
     "close": "Close",
     "modal": {
       "eyebrow": "Wallets",
@@ -48,6 +49,89 @@
       "solflareCaption": "Solana · sign in",
       "more": "More wallets",
       "moreCaption": "Other Solana adapters"
+    }
+  },
+  "account": {
+    "meta": {
+      "title": "Account · Vizzor",
+      "description": "Your wallet identity, subscription, Telegram link, and recent payments — all in one place."
+    },
+    "eyebrow": "profile",
+    "title": "Account",
+    "sub": "Everything Vizzor knows about your wallet — identity, subscription, Telegram link, and on-chain history. Nothing leaves your wallet without your signature.",
+    "tier": {
+      "free": "Free",
+      "pro": "Pro",
+      "elite": "Elite"
+    },
+    "cadence": {
+      "monthly": "Monthly",
+      "annual": "Annual",
+      "lifetime": "Lifetime"
+    },
+    "hero": {
+      "manage": "Manage plan"
+    },
+    "stats": {
+      "plan": "Plan",
+      "planNone": "Free",
+      "planSub": "No subscription",
+      "renews": "Renews",
+      "renewsNone": "—",
+      "renewsLifetime": "Lifetime access",
+      "telegram": "Telegram",
+      "tgLinkedSince": "Linked {date}",
+      "tgUnlinked": "Not linked yet",
+      "activity": "Activity",
+      "activityEmpty": "No payments yet",
+      "lastSeen": "Last {rel}"
+    },
+    "identity": {
+      "eyebrow": "wallet identity",
+      "title": "Signed in with Solana",
+      "walletLabel": "Wallet address",
+      "shortLabel": "Short form",
+      "sessionLabel": "Session",
+      "sessionExpires": "Expires {rel}",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyAria": "Copy wallet address",
+      "signOut": "Sign out",
+      "signingOut": "Signing out…"
+    },
+    "subscription": {
+      "eyebrow": "subscription",
+      "title": "Active plan",
+      "tier": "Tier",
+      "cadence": "Cadence",
+      "expires": "Renews",
+      "lifetime": "Never · lifetime",
+      "manage": "Manage plan",
+      "openBot": "Open in Telegram",
+      "emptyBody": "You don't have an active subscription yet. Pick a tier on /pricing — paying in SOL on Solana saves 15% instantly.",
+      "emptyCta": "See pricing"
+    },
+    "telegram": {
+      "eyebrow": "telegram link",
+      "title": "Telegram",
+      "statusLabel": "Status",
+      "telegramIdLabel": "Telegram user id",
+      "linkedAtLabel": "Linked",
+      "linked": "Linked",
+      "unlinkedBody": "Link your wallet to Telegram once and future payments auto-attribute — no grant codes, no copy-paste. The bot walks you through a signature challenge.",
+      "linkCta": "Link in Telegram"
+    },
+    "activity": {
+      "eyebrow": "activity",
+      "title": "Recent payments",
+      "linkedTo": "Telegram #{id}",
+      "empty": "No payment sessions yet for this wallet. When you complete a checkout on /pay, it shows up here as a receipt.",
+      "status": {
+        "pending": "Pending",
+        "confirmed": "Confirmed",
+        "expired": "Expired",
+        "failed": "Failed"
+      }
     }
   },
   "footer": {
