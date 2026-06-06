@@ -382,6 +382,21 @@
     "title": "Pricing",
     "sub": "Three tiers, two billing cadences, six chains accepted. Cancel anytime. Self-host if you'd rather not pay a subscription at all.",
     "mostPopular": "Most popular",
+    "promo": {
+      "lifetime": {
+        "eyebrow": "Lifetime offer",
+        "title": "Pay once. Get Vizzor Elite forever.",
+        "subtitle": "Lock in lifetime access at today's price. No renewals, no quota anxiety — every signal family, every horizon, for as long as Vizzor runs.",
+        "lifetimePriceLabel": "Lifetime",
+        "lifetimePriceCaption": "One-time payment",
+        "comparisonLabel": "Elite monthly · 10 yr",
+        "comparisonCaption": "What you'd pay otherwise",
+        "vzrFootnote": "Save 35% more when you pay in $VZR (soon)",
+        "cta": "See the lifetime offer",
+        "dismiss": "No thanks",
+        "retriggerPill": "Lifetime offer"
+      }
+    },
     "tiers": {
       "free": {
         "name": "Free",
@@ -585,57 +600,68 @@
       "signing": "Signing transaction…",
       "payNow": "Pay {amount} TON",
       "payNowVizzor": "Pay {amount} $VIZZOR",
+      "payNowUsdc": "Pay {amount} USDC on {chain}",
+      "noEvmWallet": "No EVM wallet detected",
+      "noEvmWalletHint": "Install MetaMask, Rainbow, or Coinbase Wallet to pay in USDC.",
+      "walletPicker": "Choose a wallet",
       "disconnect": "Disconnect"
     },
-    "status": {
-      "creating": {
-        "label": "Creating session",
-        "body": "Locking the USD-to-TON rate and deriving your destination address…"
+    "state": {
+      "idle": {
+        "label": "Ready",
+        "body": "Pick a payment method and start the session."
       },
-      "awaiting_wallet": {
+      "connecting": {
+        "label": "Creating session",
+        "body": "Locking the USD-to-token rate and deriving your destination address…"
+      },
+      "wrong-network": {
+        "label": "Wrong network",
+        "body": "Your wallet is on a different network than the one selected. Switch networks in your wallet and try again."
+      },
+      "signing": {
         "label": "Awaiting wallet",
         "body": "Open your wallet, review the amount, and sign the transaction."
       },
-      "broadcasting": {
+      "paying": {
         "label": "Broadcasting",
-        "body": "Wallet returned the transaction. Submitting to the TON network…"
-      },
-      "pending": {
-        "label": "Pending on-chain",
-        "body": "Waiting for the TON watcher to see your payment. Usually <30s."
+        "body": "Your wallet returned the transaction. Submitting to the network and waiting for it to land…"
       },
       "confirming": {
         "label": "Confirming",
         "body": "Payment detected. Finalizing subscription and minting grant code…"
       },
-      "confirmed": {
+      "done": {
         "label": "Confirmed",
         "body": "Payment confirmed. Redirecting to your grant code…"
       },
       "expired": {
         "label": "Session expired",
-        "body": "The 5-minute rate lock elapsed. Start a new session to try again. {reason}"
+        "body": "The 5-minute rate lock elapsed. Start a new session to try again."
       },
       "error": {
         "label": "Error",
-        "body": "Something went wrong: {reason}. You can retry."
+        "body": "Something went wrong. You can retry."
       },
-      "retry": "Retry",
-      "reasons": {
-        "infraPendingLabel": "infrastructure pending",
-        "payInTelegram": "Pay in Telegram",
-        "retryAnyway": "retry anyway",
-        "featureDisabled": "Payments aren't accepting on this chain yet. Try the other Phase-1 option, or open the Telegram bot.",
-        "engineOffline": "The Vizzor payment engine is temporarily unreachable. The site is online but can't create a session right now. Retry in a moment.",
-        "engineError": "Payment infrastructure pending: the Vizzor engine doesn't have payment endpoints deployed yet. Use the Telegram bot to pay for now — same tier, same price.",
-        "engineMarkedFailed": "The engine rejected this session. Retry, or contact support if it persists.",
-        "invalidInput": "The tier or cadence sent to the server isn't valid. Refresh and pick a tier from /pricing.",
-        "unsupportedChain": "This chain isn't supported yet. Switch to TON or $VIZZOR on Solana.",
-        "priceLookup": "Couldn't look up the tier price on the server. Refresh the page.",
-        "sessionFailed": "Session creation failed. Retry, or open the Telegram bot if it persists.",
-        "mintNotConfigured": "The $VIZZOR mint address isn't configured on this deploy. Switch to TON, or wait for the launch.",
-        "walletNotConnected": "Connect a wallet to continue."
-      }
+      "retry": "Retry"
+    },
+    "error": {
+      "infraPendingLabel": "infrastructure pending",
+      "payInTelegram": "Pay in Telegram",
+      "retryAnyway": "retry anyway",
+      "featureDisabled": "Payments aren't accepted on this chain yet. Try the other Phase-1 option, or open the Telegram bot.",
+      "engineOffline": "The Vizzor payment engine is temporarily unreachable. The site is online but can't create a session right now. Retry in a moment.",
+      "engineError": "Payment infrastructure pending: the Vizzor engine doesn't have payment endpoints deployed yet. Use the Telegram bot to pay for now — same tier, same price.",
+      "engineMarkedFailed": "The engine rejected this session. Retry, or contact support if it persists.",
+      "rateUnavailable": "We couldn't lock the exchange rate. Retry in a moment.",
+      "invalidInput": "The request shape we sent the server isn't valid. Refresh the page and pick a tier from /pricing.",
+      "unsupportedChain": "This chain isn't supported yet. Switch to TON or $VIZZOR on Solana.",
+      "priceLookup": "Couldn't look up the tier price on the server. Refresh the page.",
+      "sessionFailed": "Session creation failed. Retry, or open the Telegram bot if it persists.",
+      "mintNotConfigured": "The $VIZZOR mint address isn't configured on this deploy. Switch to TON, or wait for the launch.",
+      "walletNotConnected": "Connect a wallet to continue.",
+      "walletRejected": "You rejected the transaction in your wallet. Click Pay again when you're ready.",
+      "unknown": "Something went wrong. Retry, or use the Telegram bot if the problem persists."
     },
     "cta": {
       "start": "Start payment",
