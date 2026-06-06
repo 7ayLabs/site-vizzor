@@ -5,16 +5,35 @@
  * `NEXT_PUBLIC_*` prefix so they're inlined into the client bundle at
  * build time; private flags (none yet) would stay server-only.
  *
- * Phase 1 ships with `isTokenLive()` returning false — the paid path
- * exists in code but renders a "launching soon" panel until the
- * $VIZZOR contract is on-chain and `NEXT_PUBLIC_TOKEN_LIVE=true`.
+ * v0.2.0 renames the legacy `isTokenLive()` to `isVzrLive()` to match
+ * the upcoming $VZR token rebrand. The legacy name stays as a thin
+ * alias for one release cycle so external imports (and any cached
+ * deployments) keep working; new code should call `isVzrLive()`.
  */
 
 const DEFAULT_FREE_PREDICTIONS = 3;
 const DEFAULT_PAYMENT_RATE_LOCK_SECONDS = 5 * 60;
 
+/**
+ * Gates the burn-to-predict UI and the $VIZZOR/$VZR per-tier discount
+ * column in the order summary. False until the token contract goes
+ * live on Solana mainnet AND legal sign-off lands. Read both the new
+ * NEXT_PUBLIC_VZR_LIVE and the legacy NEXT_PUBLIC_TOKEN_LIVE so the
+ * env-var rename can be staged independently of code deploys.
+ */
+export function isVzrLive(): boolean {
+  return (
+    process.env.NEXT_PUBLIC_VZR_LIVE === 'true' ||
+    process.env.NEXT_PUBLIC_TOKEN_LIVE === 'true'
+  );
+}
+
+/**
+ * Deprecated — kept for one release so transitive imports don't
+ * break. Removes in v0.3.0. Call `isVzrLive()` instead.
+ */
 export function isTokenLive(): boolean {
-  return process.env.NEXT_PUBLIC_TOKEN_LIVE === 'true';
+  return isVzrLive();
 }
 
 export function freePredictions(): number {
@@ -41,6 +60,24 @@ export function acceptTonPayments(): boolean {
  */
 export function acceptVizzorPayments(): boolean {
   return process.env.NEXT_PUBLIC_ACCEPT_VIZZOR_PAYMENTS === 'true';
+}
+
+/**
+ * v0.2.0 — Base USDC plan payments (EVM L2 stablecoin, 5% flat
+ * discount). Requires VIZZOR_EVM_TREASURY_BASE to be configured
+ * server-side; the EVM watcher refuses to start otherwise.
+ */
+export function acceptUsdcBasePayments(): boolean {
+  return process.env.NEXT_PUBLIC_ACCEPT_USDC_BASE === 'true';
+}
+
+/**
+ * v0.2.0 — Arbitrum USDC plan payments (EVM L2 stablecoin, 5% flat
+ * discount). Same provisioning contract as Base; the EVM watcher
+ * runs one polling loop per enabled chain.
+ */
+export function acceptUsdcArbPayments(): boolean {
+  return process.env.NEXT_PUBLIC_ACCEPT_USDC_ARB === 'true';
 }
 
 /**
