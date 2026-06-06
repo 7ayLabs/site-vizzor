@@ -30,6 +30,7 @@ import {
   isValidCombo,
 } from '@/lib/payment/pricing-table';
 import { ensureWatcherStarted } from '@/lib/payment/watcher';
+import { ensureTonWatcherStarted } from '@/lib/payment/ton-watcher';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -47,9 +48,11 @@ const VALID_PAIRS = new Set<string>([
 ]);
 
 export async function POST(req: Request) {
-  // Lazy boot of the on-chain watcher daemon on the first session
-  // create. Idempotent — only starts once per Node process.
+  // Lazy boot of every on-chain watcher daemon on the first session
+  // create. Each is idempotent — only starts once per Node process,
+  // gated by its own feature flag (accept*Payments).
   ensureWatcherStarted();
+  ensureTonWatcherStarted();
 
   let body: SessionBody;
   try {
