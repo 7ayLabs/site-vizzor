@@ -1,14 +1,12 @@
 /**
- * On-chain payment watcher — boots once per Node process, polls each
- * supported chain for incoming transfers that match pending sessions,
+ * Solana payment watcher — boots once per Node process, polls Solana
+ * for incoming native SOL transfers that match pending sessions,
  * marks them confirmed, and creates the wallet-bound subscription row.
  *
- * Phase 1 chains:
- *   - Solana (for $VIZZOR-pay)
- *
- * TON watching needs a separate client (tonweb / @ton/ton) and is
- * deferred — the architecture is identical (poll, parse, match,
- * confirm) and can drop in later.
+ * v0.2.0 ships Solana-native-only. Each pending session locks a SOL
+ * amount + a memo carrying its session_id. The watcher walks recent
+ * signatures on the treasury, finds memo'd transfers with matching
+ * amounts (±0.5% slippage), and calls finalizeSession().
  *
  * Subscription duration mapping:
  *   monthly  → +30d
@@ -21,14 +19,14 @@
  */
 
 import { Connection, PublicKey } from '@solana/web3.js';
-import { acceptVizzorPayments } from '@/lib/feature-flags';
+import { acceptSolanaPayments } from '@/lib/feature-flags';
 import { listPendingSessions } from './db';
 import { finalizeSession } from './session';
 import { solanaTreasury } from './treasury';
-import { markStarted, markTick } from './watcher-liveness';
 
 const POLL_INTERVAL_MS = 5_000;
 const SLIPPAGE_TOLERANCE = 0.005; // ±0.5%
+const LAMPORTS_PER_SOL = 1_000_000_000;
 
 const KEY = Symbol.for('vizzor.payment.watcher');
 interface GlobalWithWatcher {
@@ -40,14 +38,12 @@ interface GlobalWithWatcher {
 const g = globalThis as unknown as GlobalWithWatcher;
 
 export function ensureWatcherStarted(): void {
-  if (!acceptVizzorPayments()) return;
+  if (!acceptSolanaPayments()) return;
   // Fail fast in production if the operator did not configure a dedicated
   // Solana RPC. The public mainnet-beta endpoint is rate-limited (100 req
   // per 10s per IP) and the watcher polls every 5s with up to N parsed-tx
   // round-trips per tick — it WILL hit 429 under any meaningful payment
-  // volume and silently stop confirming payments. Better to refuse to
-  // start the watcher than to limp along producing pending sessions
-  // past their TTL.
+  // volume and silently stop confirming payments.
   if (
     process.env.NODE_ENV === 'production' &&
     !process.env.SOLANA_RPC_URL &&
@@ -63,8 +59,6 @@ export function ensureWatcherStarted(): void {
   const state = (g[KEY] = g[KEY] ?? { started: false, lastSlot: null });
   if (state.started) return;
   state.started = true;
-  markStarted('solana');
-  // Fire-and-forget loop; tick() schedules its own next run.
   void tick(state);
 }
 
@@ -76,14 +70,9 @@ function solanaRpc(): string {
   );
 }
 
-function vizzorMint(): string | null {
-  return process.env.NEXT_PUBLIC_VIZZOR_MINT ?? null;
-}
-
 async function tick(state: { lastSlot: number | null }): Promise<void> {
   try {
     await pollOnce(state);
-    markTick('solana');
   } catch (e) {
     // Swallow — watcher must keep running. Log to stderr for ops.
     // eslint-disable-next-line no-console
@@ -95,19 +84,14 @@ async function tick(state: { lastSlot: number | null }): Promise<void> {
 
 async function pollOnce(state: { lastSlot: number | null }): Promise<void> {
   const pending = listPendingSessions(Date.now()).filter(
-    (s) => s.chain === 'solana' && s.token === 'vizzor',
+    (s) => s.chain === 'solana' && s.token === 'native',
   );
   if (pending.length === 0) return;
 
-  const mint = vizzorMint();
-  if (!mint) return; // can't verify without the mint
-
   const treasury = solanaTreasury();
   let treasuryPk: PublicKey;
-  let mintPk: PublicKey;
   try {
     treasuryPk = new PublicKey(treasury);
-    mintPk = new PublicKey(mint);
   } catch {
     return; // invalid config
   }
@@ -137,13 +121,13 @@ async function pollOnce(state: { lastSlot: number | null }): Promise<void> {
     const session = pending.find((s) => s.session_id === memo);
     if (!session) continue;
 
-    const transfer = extractSplTransfer(tx, treasury, mint);
+    const transfer = extractNativeTransfer(tx, treasury);
     if (!transfer) continue;
 
-    if (!amountMatches(transfer.amount, session.amount, session.decimals)) {
+    if (!amountMatches(transfer.amount, session.amount)) {
       // eslint-disable-next-line no-console
       console.warn(
-        `[vizzor-watcher] amount mismatch on ${memo}: paid ${transfer.amount}, expected ${session.amount}`,
+        `[vizzor-watcher] amount mismatch on ${memo}: paid ${transfer.amount} SOL, expected ${session.amount}`,
       );
       continue;
     }
@@ -176,10 +160,8 @@ function extractMemo(
     (g) => g.instructions,
   );
   for (const ix of [...top, ...inner]) {
-    const programId =
-      'programId' in ix ? ix.programId.toBase58() : null;
+    const programId = 'programId' in ix ? ix.programId.toBase58() : null;
     if (programId !== memoProgram) continue;
-    // Parsed memo instructions surface their text in `parsed`.
     if ('parsed' in ix && typeof ix.parsed === 'string') {
       return ix.parsed.trim();
     }
@@ -188,55 +170,57 @@ function extractMemo(
 }
 
 interface TransferDetails {
-  /** Human-units amount paid. */
+  /** Human-units (SOL) amount paid. */
   amount: number;
   /** Source wallet (payer) base58 address. */
   payer: string;
 }
 
-function extractSplTransfer(
+/**
+ * Native-SOL transfer detection.
+ *
+ * We diff pre/postBalances of the treasury account and find the payer
+ * as the account whose lamport balance dropped by approximately the
+ * same amount. This avoids parsing System Program instructions one by
+ * one and is robust to nonce/fee-payer arrangements.
+ */
+function extractNativeTransfer(
   tx: Awaited<ReturnType<Connection['getParsedTransaction']>>,
   treasuryOwner: string,
-  expectedMint: string,
 ): TransferDetails | null {
   if (!tx) return null;
-  const post = tx.meta?.postTokenBalances ?? [];
-  const pre = tx.meta?.preTokenBalances ?? [];
+  const pre = tx.meta?.preBalances ?? [];
+  const post = tx.meta?.postBalances ?? [];
+  const keys = tx.transaction.message.accountKeys ?? [];
 
-  for (const p of post) {
-    if (String(p.mint) !== expectedMint) continue;
-    if (String(p.owner ?? '') !== treasuryOwner) continue;
-    const preEntry = pre.find(
-      (x) => x.accountIndex === p.accountIndex && x.mint === expectedMint,
-    );
-    const preAmt = preEntry?.uiTokenAmount.uiAmount ?? 0;
-    const postAmt = p.uiTokenAmount.uiAmount ?? 0;
-    const delta = postAmt - preAmt;
-    if (delta <= 0) continue;
+  const treasuryIdx = keys.findIndex(
+    (k) => ('pubkey' in k ? k.pubkey.toBase58() : '') === treasuryOwner,
+  );
+  if (treasuryIdx < 0) return null;
 
-    // The payer is the wallet whose token balance decreased for the
-    // same mint. Useful for binding the subscription to a wallet.
-    let payer = '';
-    for (const candidate of pre) {
-      if (String(candidate.mint) !== expectedMint) continue;
-      if (String(candidate.owner ?? '') === treasuryOwner) continue;
-      const postCand = post.find(
-        (x) => x.accountIndex === candidate.accountIndex,
-      );
-      const dropped =
-        (candidate.uiTokenAmount.uiAmount ?? 0) -
-        (postCand?.uiTokenAmount.uiAmount ?? 0);
-      if (dropped >= delta * 0.99) {
-        payer = String(candidate.owner ?? '');
-        break;
+  const delta = (post[treasuryIdx] ?? 0) - (pre[treasuryIdx] ?? 0);
+  if (delta <= 0) return null;
+
+  const amountSol = delta / LAMPORTS_PER_SOL;
+
+  // Find the payer: the account whose lamport balance dropped by at
+  // least `delta` (accounting for tx fees) and that is NOT the treasury.
+  let payer = '';
+  for (let i = 0; i < keys.length; i++) {
+    if (i === treasuryIdx) continue;
+    const dropped = (pre[i] ?? 0) - (post[i] ?? 0);
+    if (dropped >= delta * 0.99) {
+      const k = keys[i];
+      if (k && 'pubkey' in k) {
+        payer = k.pubkey.toBase58();
       }
+      break;
     }
-    return { amount: delta, payer };
   }
-  return null;
+  return { amount: amountSol, payer };
 }
 
-function amountMatches(paid: number, expected: number, _decimals: number): boolean {
+function amountMatches(paid: number, expected: number): boolean {
   if (paid <= 0 || expected <= 0) return false;
   const ratio = paid / expected;
   return ratio >= 1 - SLIPPAGE_TOLERANCE && ratio <= 1 + SLIPPAGE_TOLERANCE;

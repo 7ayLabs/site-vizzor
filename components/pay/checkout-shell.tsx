@@ -3,22 +3,14 @@
 /**
  * CheckoutShell — top-level client component for /pay/[tier]/[cadence].
  *
- * Orchestrates the payment state machine defined in `purchase-state.ts`.
- * Two Phase-1 chains live here:
- *   (1) TON native via TON Connect (lazy-loaded chunk)
- *   (2) Solana-$VIZZOR via the existing Solana wallet adapter (shared
- *       chunk with /predict, zero new bundle cost)
- *
- * The selected (chain, token) pair drives which provider tree mounts +
- * which pay button renders. Either flag enables the route; both flags
- * off renders the "payment infrastructure pending" panel.
+ * v0.2.0 ships Solana-native-only. The selected chain/token is always
+ * `solana:native`; the ChainSelector shows the active option plus
+ * disabled placeholders for later cycles.
  *
  * Every state mutation goes through the `next()` reducer — the
  * component never assigns to the state setter directly. The reducer
  * guarantees we cannot enter an invalid composition (e.g. a "done"
  * state without a grant code, or a "paying" state with no session).
- * The renderer's `switch (state.kind)` enforces exhaustiveness at
- * compile time.
  */
 
 import dynamic from 'next/dynamic';
@@ -49,35 +41,15 @@ import type {
   PaymentSession,
   PaymentTier,
 } from '@/lib/payment/session';
-import {
-  acceptTonPayments,
-  acceptUsdcArbPayments,
-  acceptUsdcBasePayments,
-  acceptVizzorPayments,
-} from '@/lib/feature-flags';
-
-const TonProvider = dynamic(
-  () => import('./ton-provider').then((m) => m.TonProvider),
-  { ssr: false, loading: () => null },
-);
-
-const TonConnectButton = dynamic(
-  () => import('./ton-connect-button').then((m) => m.TonConnectButton),
-  { ssr: false, loading: () => null },
-);
+import { acceptSolanaPayments } from '@/lib/feature-flags';
 
 const SolanaWalletAdapter = dynamic(
   () => import('@/components/wallet/wallet-provider'),
   { ssr: false, loading: () => null },
 );
 
-const VizzorPayButton = dynamic(
-  () => import('./vizzor-pay-button').then((m) => m.VizzorPayButton),
-  { ssr: false, loading: () => null },
-);
-
-const EvmPayButton = dynamic(
-  () => import('./evm-pay-button').then((m) => m.EvmPayButton),
+const SolanaPayButton = dynamic(
+  () => import('./solana-pay-button').then((m) => m.SolanaPayButton),
   { ssr: false, loading: () => null },
 );
 
@@ -96,18 +68,9 @@ interface SessionApiResponse {
 const POLL_INTERVAL_MS = 3_000;
 const POLL_MAX_ATTEMPTS = 200; // ~10 min wall clock
 
-const DEFAULT_SELECTOR: SelectorValue = { chain: 'ton', token: 'native' };
+const DEFAULT_SELECTOR: SelectorValue = { chain: 'solana', token: 'native' };
 
-/**
- * Maps the discriminated-union state.kind to the presentational
- * `StatusValue` consumed by PaymentStatus. They are mostly the same
- * but PaymentStatus stays presentational and re-usable independently
- * of the reducer.
- */
 function asStatusValue(kind: PurchaseState['kind']): StatusValue {
-  // Tail-end identity for: idle, connecting, signing, confirming,
-  // expired, error, done. The 'paying' state maps to 'paying'
-  // directly; 'wrong-network' maps 1:1.
   return kind;
 }
 
@@ -119,38 +82,18 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
   const pollAttempts = useRef(0);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Selector lives in a ref + effect-driven state so the reducer
-  // remains pure. The selector is presentational config — the
-  // reducer cares only about the session it produces.
   const [selector, setSelector] = useReducerSelector(DEFAULT_SELECTOR);
 
-  const tonOn = acceptTonPayments();
-  const vizzorOn = acceptVizzorPayments();
-  const usdcBaseOn = acceptUsdcBasePayments();
-  const usdcArbOn = acceptUsdcArbPayments();
-  const featureOn = tonOn || vizzorOn || usdcBaseOn || usdcArbOn;
+  const featureOn = acceptSolanaPayments();
 
   selectorRef.current = selector;
 
-  // Cleanup polling on unmount.
   useEffect(() => {
     return () => {
       if (pollTimer.current) clearTimeout(pollTimer.current);
     };
   }, []);
 
-  // If the user picks a chain whose flag is off, snap back to a flag-on
-  // option to avoid a dead-end UI.
-  useEffect(() => {
-    if (selector.chain === 'ton' && !tonOn && vizzorOn) {
-      setSelector({ chain: 'solana', token: 'vizzor' });
-    } else if (selector.chain === 'solana' && !vizzorOn && tonOn) {
-      setSelector(DEFAULT_SELECTOR);
-    }
-  }, [selector, tonOn, vizzorOn, setSelector]);
-
-  // Side-effect: on `done`, redirect to the success page so the grant
-  // handoff card renders with full SSR (and shareable URL).
   useEffect(() => {
     if (state.kind === 'done') {
       router.push(`/pay/success?id=${state.session.sessionId}`);
@@ -160,7 +103,6 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
   const onSelectorChange = useCallback(
     (nextValue: SelectorValue) => {
       setSelector(nextValue);
-      // New chain/token = new dest address. Drop any in-flight state.
       dispatch({ type: 'reset' });
     },
     [setSelector],
@@ -209,12 +151,7 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
         const data = (await res.json()) as SessionApiResponse;
         if (data.ok && data.session) {
           dispatch({ type: 'poll-update', session: data.session });
-          // The reducer decides whether to stop — done/expired/error
-          // are terminal. We always re-arm the timer; the next tick
-          // is a no-op against terminal state because dispatch will
-          // be ignored. But to avoid wasting requests, check kind.
         } else if (!data.ok) {
-          // Hard failure on the poll path.
           dispatch({
             type: 'poll-error',
             reason: data.reason ?? 'session_failed',
@@ -229,7 +166,6 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
     void tick();
   }, []);
 
-  // Kick off polling when we enter `paying` (the wallet has signed).
   useEffect(() => {
     if (state.kind === 'paying') {
       const session = state.session;
@@ -268,8 +204,6 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
   }
 
   const payButton: ReactNode = (() => {
-    // No session yet, or terminal state with a fresh retry available
-    // → show the primary "Start payment" CTA.
     if (!session) {
       return (
         <button
@@ -297,35 +231,10 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
       state.kind === 'confirming' ||
       state.kind === 'connecting';
 
-    if (selector.token === 'vizzor') {
-      return (
-        <VizzorPayButton
-          destAddress={session.destAddress}
-          amount={session.amount}
-          sessionId={session.sessionId}
-          onSent={onSent}
-          onError={onWalletError}
-          disabled={disabled}
-        />
-      );
-    }
-    if (selector.token === 'usdc') {
-      return (
-        <EvmPayButton
-          destAddress={session.destAddress}
-          amount={session.amount}
-          sessionId={session.sessionId}
-          chain={selector.chain === 'arbitrum' ? 'arbitrum' : 'base'}
-          onSent={onSent}
-          onError={onWalletError}
-          disabled={disabled}
-        />
-      );
-    }
     return (
-      <TonConnectButton
+      <SolanaPayButton
         destAddress={session.destAddress}
-        amountTon={session.amount}
+        amount={session.amount}
         sessionId={session.sessionId}
         onSent={onSent}
         onError={onWalletError}
@@ -339,15 +248,13 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
       <div className="flex flex-col gap-6">
         <header className="flex flex-col gap-2">
           <p className="mono tabular text-[10px] uppercase tracking-[0.18em] text-[var(--accent)]">
-            {selector.token === 'vizzor'
-              ? t('eyebrowVizzor')
-              : t('eyebrow')}
+            {t('eyebrow')}
           </p>
           <h1 className="display text-[var(--fg)] text-[28px] sm:text-[34px] lg:text-[38px] leading-[1.1] tracking-tight font-semibold text-balance">
             {t('title', { tier: t(`summary.tier.${tier}`) })}
           </h1>
           <p className="text-[14px] leading-relaxed text-[var(--fg-2)] max-w-[60ch]">
-            {selector.token === 'vizzor' ? t('subVizzor') : t('sub')}
+            {t('sub')}
           </p>
         </header>
 
@@ -366,7 +273,6 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
           cadence={cadence}
         />
 
-        {/* The status banner owns the CTA when it carries a Retry. */}
         {!ctaHidden(state) && payButton}
 
         <p className="mono tabular text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)] text-center">
@@ -383,24 +289,12 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
     </div>
   );
 
-  if (selector.token === 'vizzor') {
-    return <SolanaWalletAdapter>{inner}</SolanaWalletAdapter>;
-  }
-  if (selector.token === 'usdc') {
-    // EVM USDC payments use EIP-6963 wallet discovery directly via
-    // window.ethereum — no provider tree needed. Bundle stays light.
-    return inner;
-  }
-  return <TonProvider>{inner}</TonProvider>;
+  return <SolanaWalletAdapter>{inner}</SolanaWalletAdapter>;
 }
-
-/* ────────────── reducer thin wrapper ────────────── */
 
 function reducer(state: PurchaseState, event: PurchaseEvent): PurchaseState {
   return next(state, event);
 }
-
-/* ────────────── selector mini-hook ────────────── */
 
 function useReducerSelector(
   init: SelectorValue,
@@ -411,8 +305,6 @@ function useReducerSelector(
   );
   return [s, dispatch];
 }
-
-/* ────────────── infra-pending panel (unchanged) ────────────── */
 
 function PaymentInfraPending({
   tier,
@@ -450,7 +342,12 @@ function PaymentInfraPending({
           <span aria-hidden>→</span>
         </a>
       </div>
-      <OrderSummary tier={tier} cadence={cadence} chain="ton" token="native" />
+      <OrderSummary
+        tier={tier}
+        cadence={cadence}
+        chain="solana"
+        token="native"
+      />
     </div>
   );
 }

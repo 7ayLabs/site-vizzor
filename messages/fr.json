@@ -46,8 +46,6 @@
       "phantomCaption": "Solana · se connecter",
       "solflare": "Solflare",
       "solflareCaption": "Solana · se connecter",
-      "ton": "TON Connect",
-      "tonCaption": "TON · payer un forfait",
       "more": "Plus de portefeuilles",
       "moreCaption": "Autres adaptateurs Solana"
     }
@@ -115,31 +113,18 @@
     "loading": "Chargement du quota…",
     "freeTier": {
       "label": "Prédictions gratuites",
-      "body": "Utilisées {used} sur {limit}. Réinitialisé au lancement du token $VIZZOR — chaque prédiction supplémentaire coûtera alors une petite combustion de tokens."
+      "body": "Utilisées {used} sur {limit}. Abonnez-vous pour continuer — payez en SOL sur Solana et économisez 10% instantanément."
     },
-    "waitlist": {
-      "label": "$VIZZOR · bientôt disponible",
-      "title": "Quota gratuit épuisé.",
-      "body": "Le mode payant s'active au lancement de $VIZZOR — chaque prédiction supplémentaire brûlera une petite quantité de tokens. En attendant, le bot Telegram n'a pas de plafond par utilisateur.",
-      "cta": "Ouvrir dans Telegram →"
-    },
-    "paid": {
-      "label": "$VIZZOR · mode payant",
-      "title": "Quota gratuit épuisé.",
-      "body": "Connectez un portefeuille Solana et brûlez {amount} $VIZZOR par prédiction. Chaque combustion est vérifiée on-chain avant le streaming de la prédiction suivante.",
-      "legal": "Les combustions sont irréversibles. Vérifiez le réseau et le montant avant de signer."
-    },
-    "wallet": {
-      "connect": "Connecter le portefeuille",
-      "connecting": "Connexion…",
-      "disconnect": "Déconnecter",
-      "burnCta": "Brûler {amount} $VIZZOR",
-      "burning": "Combustion…",
-      "mintNotConfigured": "Adresse de mint non configurée. Définissez NEXT_PUBLIC_VIZZOR_MINT pour activer les combustions."
+    "subscribe": {
+      "label": "Quota gratuit épuisé",
+      "title": "Abonnez-vous pour continuer",
+      "body": "Choisissez un forfait sur /pricing et payez on-chain en SOL. Les abonnés obtiennent des prédictions illimitées sur ce site et dans le bot Telegram.",
+      "cta": "Voir les forfaits →",
+      "legal": "Paiement on-chain · taux verrouillé 5 min · résiliable à tout moment"
     },
     "exhaustedBanner": {
       "label": "Quota gratuit épuisé",
-      "body": "Vous avez utilisé les trois prédictions gratuites. Le bot Telegram n'a pas de plafond par utilisateur, ou attendez le lancement du token $VIZZOR pour continuer ici.",
+      "body": "Vous avez utilisé les trois prédictions gratuites. Abonnez-vous pour continuer — ou poursuivez dans le bot Telegram.",
       "telegramCta": "Continuer dans Telegram →",
       "resetDev": "réinitialiser · dev seulement"
     },
@@ -380,7 +365,7 @@
   "pricing": {
     "eyebrow": "tiers · facturation honnête",
     "title": "Tarifs",
-    "sub": "Trois tiers, deux cadences de facturation, six chaînes acceptées. Annulez quand vous voulez. Auto-hébergez si vous préférez ne pas payer d'abonnement.",
+    "sub": "Trois tiers, deux cadences de facturation, payez en SOL sur Solana — économisez 10% instantanément. Annulez quand vous voulez. Auto-hébergez si vous préférez ne pas payer d'abonnement.",
     "mostPopular": "Plus populaire",
     "promo": {
       "lifetime": {
@@ -391,7 +376,7 @@
         "lifetimePriceCaption": "Paiement unique",
         "comparisonLabel": "Elite mensuel · 10 ans",
         "comparisonCaption": "Ce que vous payeriez sinon",
-        "vzrFootnote": "Économisez 35% de plus en payant en $VZR (bientôt)",
+        "solFootnote": "Payez en SOL sur Solana — économisez 10% instantanément",
         "cta": "Voir l'offre à vie",
         "dismiss": "Non merci",
         "retriggerPill": "Offre à vie"
@@ -470,45 +455,45 @@
     },
     "chains": {
       "eyebrow": "payez en crypto",
-      "title": "Six chaînes acceptées",
-      "sub": "TON Connect pour des confirmations instantanées en Phase 1. Watchers auto-hébergés EVM, Solana et TRON pour les paiements en stablecoin — pas d'intermédiaire, pas de Stripe, pas de données de carte.",
+      "title": "Solana natif — d'autres chaînes bientôt",
+      "sub": "SOL natif sur Solana avec des confirmations instantanées et des frais à ~$0.0001. TON, USDC EVM et USDT TRON arriveront dans des cycles ultérieurs.",
       "phase1Label": "Disponible",
-      "phase2Label": "Phase 2",
+      "phase2Label": "Cycle ultérieur",
       "items": {
+        "solana": {
+          "name": "Solana",
+          "token": "SOL natif",
+          "strategy": "Watcher SOL auto-hébergé · finalité sub-seconde · économisez 10%.",
+          "phase": "1"
+        },
         "ton": {
           "name": "TON",
           "token": "TON natif",
-          "strategy": "Deep-link TON Connect, confirmation instantanée.",
-          "phase": "1"
+          "strategy": "Deep-link TON Connect · cycle ultérieur.",
+          "phase": "2"
         },
         "polygon": {
           "name": "Polygon",
           "token": "USDC",
-          "strategy": "Watcher EVM auto-hébergé · finalité à 12 blocs.",
+          "strategy": "Watcher EVM auto-hébergé · cycle ultérieur.",
           "phase": "2"
         },
         "base": {
           "name": "Base",
           "token": "USDC",
-          "strategy": "Watcher EVM auto-hébergé · finalité à 12 blocs.",
+          "strategy": "Watcher EVM auto-hébergé · cycle ultérieur.",
           "phase": "2"
         },
         "arbitrum": {
           "name": "Arbitrum",
           "token": "USDC",
-          "strategy": "Watcher EVM auto-hébergé · finalité à 12 blocs.",
-          "phase": "2"
-        },
-        "solana": {
-          "name": "Solana",
-          "token": "USDC",
-          "strategy": "Watcher SOL auto-hébergé · finalité à 32 slots.",
+          "strategy": "Watcher EVM auto-hébergé · cycle ultérieur.",
           "phase": "2"
         },
         "tron": {
           "name": "TRON",
           "token": "USDT",
-          "strategy": "Watcher TRON auto-hébergé · finalité à 20 blocs.",
+          "strategy": "Watcher TRON auto-hébergé · cycle ultérieur.",
           "phase": "2"
         }
       }
@@ -527,7 +512,7 @@
         },
         "chains": {
           "q": "Depuis quelles chaînes puis-je payer ?",
-          "a": "Phase 1 (déjà disponible) : TON natif via TON Connect. Phase 2 : USDC sur Polygon, Base, Arbitrum, Solana, et USDT sur TRON. Chaque paiement est vérifié par un watcher auto-hébergé sur le bot — pas de Stripe, pas de Plaid, pas de données de carte, pas d'intermédiaire."
+          "a": "Disponible : SOL natif sur Solana — finalité sub-seconde, frais ~$0.0001, économisez 10% instantanément. TON Connect, USDC sur Polygon/Base/Arbitrum et USDT sur TRON sont prévus pour des cycles ultérieurs. Chaque paiement est vérifié par un watcher auto-hébergé — pas de Stripe, pas de Plaid, pas de données de carte, pas d'intermédiaire."
         },
         "selfHost": {
           "q": "Puis-je auto-héberger le moteur ?",
@@ -557,11 +542,9 @@
       "description": "Payez on-chain. Connectez un portefeuille, signez une fois, recevez un code d'accès unique pour le bot Telegram.",
       "successTitle": "Paiement confirmé · continuez dans Telegram"
     },
-    "eyebrow": "checkout · ton",
-    "eyebrowVizzor": "checkout · $vizzor sur solana",
+    "eyebrow": "checkout · sol sur solana",
     "title": "Activer {tier}",
-    "sub": "Payez on-chain en TON. Aucune carte demandée. Une fois confirmé, votre code d'accès se redeem dans le bot Telegram.",
-    "subVizzor": "Payez on-chain en $VIZZOR sur Solana — les détenteurs du token obtiennent la remise. Aucune carte demandée. Une fois confirmé, votre code d'accès se redeem dans le bot Telegram.",
+    "sub": "Payez on-chain en SOL sur Solana — économisez 10% instantanément. Aucune carte demandée. Une fois confirmé, votre code d'accès se redeem dans le bot Telegram.",
     "legalFootnote": "Paiement on-chain · taux figé 5 min · annulez quand vous voulez",
     "summary": {
       "label": "Résumé de la commande",
@@ -576,15 +559,13 @@
       },
       "row": {
         "subtotal": "Sous-total",
-        "discount": "Remise $VIZZOR ({pct}%)",
+        "discount": "Remise Solana ({pct}%)",
         "afterDiscount": "Après remise",
-        "tonQuote": "Cotation TON",
-        "vizzorQuote": "Cotation $VIZZOR",
+        "solQuote": "Cotation SOL",
         "tokenUnavailable": "cotation indisponible",
         "network": "Réseau",
-        "tonMainnet": "TON mainnet",
         "solanaMainnet": "Solana mainnet",
-        "savedWithVizzor": "Vous économisez {amount} en payant en $VIZZOR",
+        "savedWithSol": "Vous économisez {amount} en payant en SOL",
         "total": "Total"
       },
       "footnote": "Cotation rafraîchie toutes les 60s · verrouillage final à la création de session"
@@ -592,17 +573,13 @@
     "chain": {
       "label": "Payer avec",
       "phase1Label": "Disponible",
-      "phase2Label": "Phase 2",
+      "phase2Label": "Cycle ultérieur",
       "discountBadge": "Économisez {pct}%"
     },
     "wallet": {
       "connect": "Connecter portefeuille",
       "signing": "Signature de la transaction…",
-      "payNow": "Payer {amount} TON",
-      "payNowVizzor": "Payer {amount} $VIZZOR",
-      "payNowUsdc": "Payer {amount} USDC sur {chain}",
-      "noEvmWallet": "Aucun portefeuille EVM détecté",
-      "noEvmWalletHint": "Installe MetaMask, Rainbow ou Coinbase Wallet pour payer en USDC.",
+      "payNow": "Payer {amount} SOL",
       "walletPicker": "Choisis un portefeuille",
       "disconnect": "Déconnecter"
     },
@@ -649,21 +626,22 @@
         "engineError": "Infrastructure de paiement en attente : le moteur Vizzor n'a pas encore déployé les endpoints de paiement. Utilisez le bot Telegram pour payer pour l'instant — même tier, même prix.",
         "engineMarkedFailed": "Le moteur a rejeté cette session. Réessayez ou contactez le support si le problème persiste.",
         "invalidInput": "Le tier ou la cadence envoyés au serveur ne sont pas valides. Rafraîchissez et choisissez un tier depuis /pricing.",
-        "unsupportedChain": "Cette chaîne n'est pas encore prise en charge. Passez à TON ou $VIZZOR sur Solana.",
+        "unsupportedChain": "Seule Solana est prise en charge dans cette version. Passez à SOL sur Solana.",
         "priceLookup": "Impossible de récupérer le prix du tier sur le serveur. Rafraîchissez la page.",
         "sessionFailed": "Échec de la création de session. Réessayez, ou ouvrez le bot Telegram si le problème persiste.",
-        "mintNotConfigured": "L'adresse du mint $VIZZOR n'est pas configurée sur ce déploiement. Passez à TON ou attendez le lancement.",
         "walletNotConnected": "Connectez un portefeuille pour continuer."
       }
     },
     "cta": {
       "start": "Démarrer le paiement",
-      "creating": "Création…"
+      "creating": "Création…",
+      "payWithSol": "Payer avec SOL",
+      "connectAndPay": "Connecter le portefeuille et payer"
     },
     "pending": {
       "label": "infrastructure de paiement en attente",
       "title": "Le checkout crypto arrive bientôt",
-      "body": "Le flux on-site TON Connect est prêt mais en attente des endpoints de paiement du moteur. En attendant, vous pouvez payer directement via le bot Telegram — même tier, même prix, même accès.",
+      "body": "Le checkout SOL on-site est prêt mais la trésorerie n'a pas encore été activée. En attendant, vous pouvez payer directement via le bot Telegram — même tier, même prix, même accès.",
       "telegramCta": "Payer dans Telegram"
     },
     "grant": {

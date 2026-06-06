@@ -31,8 +31,6 @@
 
 import type { UIMessage } from 'ai';
 import { buildIncrementedQuotaCookie, readQuota } from '@/lib/quota';
-import { isTokenLive } from '@/lib/feature-flags';
-import { verifyBurnTx } from '@/lib/solana-server';
 import { parseIntent } from '@/lib/commands';
 import { getSubscriptionForActiveSession } from '@/lib/payment/auth-session';
 import {
@@ -80,9 +78,7 @@ export async function POST(req: Request) {
 
   /* --------------------- predict gate (quota) -------------------- */
 
-  const burnHeader = req.headers.get('x-vizzor-burn-tx');
   const quota = await readQuota();
-  let burnApproved = false;
 
   // Wallet-based subscription bypass — if the visitor signed in with
   // SIWS and that wallet has an active subscription on file, every
@@ -90,29 +86,12 @@ export async function POST(req: Request) {
   const subscription = await getSubscriptionForActiveSession();
   const subscribed = !!subscription;
 
-  if (burnHeader && isTokenLive()) {
-    const verify = await verifyBurnTx(burnHeader);
-    burnApproved = verify.ok;
-    if (!verify.ok) {
-      return Response.json(
-        {
-          error: 'burn_verification_failed',
-          message:
-            'The burn transaction could not be verified. Try again, or check the wallet panel.',
-          reason: verify.reason,
-        },
-        { status: 402, headers: { 'Cache-Control': 'no-store' } },
-      );
-    }
-  }
-
-  if (!burnApproved && !subscribed && quota.exhausted) {
+  if (!subscribed && quota.exhausted) {
     return Response.json(
       {
         error: 'free_quota_exhausted',
-        message: isTokenLive()
-          ? 'Free predictions exhausted. Subscribe at /pricing, or connect a wallet and burn $VIZZOR to continue.'
-          : 'Free predictions exhausted. Subscribe at /pricing — pay in TON or $VIZZOR on Solana.',
+        message:
+          'Free predictions exhausted. Subscribe at /pricing — pay in SOL on Solana.',
         quota,
       },
       { status: 402, headers: { 'Cache-Control': 'no-store' } },
@@ -120,16 +99,14 @@ export async function POST(req: Request) {
   }
 
   // The would-be cookie. Only attached when the upstream actually
-  // delivers a prediction. Burns AND subscribers don't increment the
-  // free counter — they're paying / paid via a different surface.
-  const cookieOnSuccess =
-    !burnApproved && !subscribed
-      ? buildIncrementedQuotaCookie(quota.used)
-      : null;
+  // delivers a prediction. Subscribers don't increment the free counter.
+  const cookieOnSuccess = !subscribed
+    ? buildIncrementedQuotaCookie(quota.used)
+    : null;
 
   /* --------------------- forward to vizzor engine ---------------- */
 
-  return forwardToVizzor(body.messages, cookieOnSuccess, burnHeader);
+  return forwardToVizzor(body.messages, cookieOnSuccess);
 }
 
 /* ------------------------------------------------------------------ *\
@@ -140,7 +117,6 @@ export async function POST(req: Request) {
 async function forwardToVizzor(
   messages: UIMessage[],
   cookieOnSuccess: string | null,
-  burnHeader: string | null,
 ): Promise<Response> {
   const base =
     process.env.VIZZOR_API_URL ??
@@ -176,7 +152,6 @@ async function forwardToVizzor(
       headers: {
         'content-type': 'application/json',
         accept: 'text/event-stream',
-        ...(burnHeader ? { 'x-vizzor-burn-tx': burnHeader } : {}),
       },
       body: JSON.stringify({ messages: vizzorMessages }),
       signal: controller.signal,

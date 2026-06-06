@@ -1,9 +1,8 @@
 /**
- * pricing-table.ts — chain-aware discount math.
+ * pricing-table.ts — Solana-only discount math.
  *
- * Pure logic; no DB, no network. Covers every published rail in the
- * v0.2.0 PRICING_MODEL.md matrix and asserts the per-chain discount
- * basis points + effective price.
+ * Pure logic; no DB, no network. v0.2.0 ships a single flat 10%
+ * discount on every Solana-native paid transaction.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -51,98 +50,48 @@ describe('isValidCombo', () => {
   });
 });
 
-describe('discountBps — VIZZOR tier-cadence table', () => {
-  it('applies 25% for pro × VIZZOR regardless of cadence', () => {
-    expect(discountBps('pro', 'monthly', 'solana', 'vizzor')).toBe(2500);
-    expect(discountBps('pro', 'annual', 'solana', 'vizzor')).toBe(2500);
-  });
-
-  it('applies 30% for elite monthly/annual × VIZZOR', () => {
-    expect(discountBps('elite', 'monthly', 'solana', 'vizzor')).toBe(3000);
-    expect(discountBps('elite', 'annual', 'solana', 'vizzor')).toBe(3000);
-  });
-
-  it('applies 35% for elite lifetime × VIZZOR (the highest tier)', () => {
-    expect(discountBps('elite', 'lifetime', 'solana', 'vizzor')).toBe(3500);
-  });
-});
-
-describe('discountBps — per-chain flat matrix', () => {
-  it('TON native is 15%', () => {
-    expect(discountBps('pro', 'monthly', 'ton', 'native')).toBe(1500);
-    expect(discountBps('elite', 'lifetime', 'ton', 'native')).toBe(1500);
-  });
-
-  it('Solana native (non-VIZZOR) is 10%', () => {
+describe('discountBps — Solana native flat 10%', () => {
+  it('applies 10% for every (tier, cadence) on solana:native', () => {
     expect(discountBps('pro', 'monthly', 'solana', 'native')).toBe(1000);
+    expect(discountBps('pro', 'annual', 'solana', 'native')).toBe(1000);
+    expect(discountBps('elite', 'monthly', 'solana', 'native')).toBe(1000);
     expect(discountBps('elite', 'annual', 'solana', 'native')).toBe(1000);
-  });
-
-  it('Base USDC is 5%', () => {
-    expect(discountBps('pro', 'monthly', 'base', 'usdc')).toBe(500);
-    expect(discountBps('elite', 'lifetime', 'base', 'usdc')).toBe(500);
-  });
-
-  it('Arbitrum USDC is 5%', () => {
-    expect(discountBps('pro', 'annual', 'arbitrum', 'usdc')).toBe(500);
-    expect(discountBps('elite', 'monthly', 'arbitrum', 'usdc')).toBe(500);
-  });
-
-  it('returns 0 for chain × token pairs not on the matrix', () => {
-    // EVM token on Solana, native on Base, etc. — silent reject.
-    expect(discountBps('pro', 'monthly', 'solana', 'usdc')).toBe(0);
-    expect(discountBps('pro', 'monthly', 'base', 'native')).toBe(0);
-    expect(discountBps('pro', 'monthly', 'ton', 'usdc')).toBe(0);
-  });
-});
-
-describe('discountBps — VIZZOR beats per-chain when both apply', () => {
-  it('Solana × VIZZOR uses the tier-cadence table, not the flat 10%', () => {
-    // Solana native is 10% (1000 bps), Solana VIZZOR is 25-35% — the
-    // higher always wins because we never stack.
-    const elite = discountBps('elite', 'lifetime', 'solana', 'vizzor');
-    expect(elite).toBe(3500);
-    expect(elite).toBeGreaterThan(1000);
+    expect(discountBps('elite', 'lifetime', 'solana', 'native')).toBe(1000);
   });
 });
 
 describe('effectivePriceCents', () => {
   it('applies the discount and rounds to integer cents', () => {
-    // Pro monthly $9.99 × 75% (25% off VIZZOR) = $7.4925 → 749.25 cents.
-    // Math.round * (10000 - 2500) / 10000 = 749.25 — the formula keeps
-    // a single-cent precision before rounding.
-    const cents = effectivePriceCents('pro', 'monthly', 'solana', 'vizzor');
-    expect(cents).toBeCloseTo(749.25, 2);
+    // Pro monthly $9.99 × 90% = $8.991 → 899.1 cents.
+    const cents = effectivePriceCents('pro', 'monthly', 'solana', 'native');
+    expect(cents).toBeCloseTo(899.1, 1);
   });
 
-  it('applies the 35% VIZZOR lifetime discount to $1,249', () => {
+  it('applies the 10% Solana lifetime discount to $1,249', () => {
     const cents = effectivePriceCents(
       'elite',
       'lifetime',
       'solana',
-      'vizzor',
+      'native',
     );
-    // 124900 * 0.65 = 81185 cents = $811.85
-    expect(cents).toBeCloseTo(81185, 0);
+    // 124900 * 0.90 = 112410 cents = $1,124.10
+    expect(cents).toBe(112410);
   });
 
   it('returns null for invalid tier-cadence combos', () => {
     expect(
-      effectivePriceCents('pro', 'lifetime', 'solana', 'vizzor'),
+      effectivePriceCents('pro', 'lifetime', 'solana', 'native'),
     ).toBeNull();
-  });
-
-  it('returns the base price when no discount applies', () => {
-    // EVM USDC on Solana doesn't exist in our matrix — 0 bps.
-    expect(effectivePriceCents('pro', 'monthly', 'solana', 'usdc')).toBe(999);
   });
 });
 
 describe('effectivePriceUsd — display formatting', () => {
   it('formats with two-decimal precision', () => {
-    expect(effectivePriceUsd('pro', 'monthly', 'ton', 'native')).toBe('$8.49');
-    expect(effectivePriceUsd('elite', 'lifetime', 'solana', 'vizzor')).toBe(
-      '$811.85',
+    expect(effectivePriceUsd('pro', 'monthly', 'solana', 'native')).toBe(
+      '$8.99',
+    );
+    expect(effectivePriceUsd('elite', 'lifetime', 'solana', 'native')).toBe(
+      '$1124.10',
     );
   });
 });

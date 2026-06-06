@@ -40,7 +40,7 @@ function insertPendingSession(overrides: Partial<SessionRow> = {}): SessionRow {
     tier: overrides.tier ?? 'pro',
     cadence: overrides.cadence ?? 'monthly',
     chain: overrides.chain ?? 'solana',
-    token: overrides.token ?? 'vizzor',
+    token: overrides.token ?? 'native',
     dest_address: overrides.dest_address ?? '11111111111111111111111111111111',
     amount: overrides.amount ?? 100,
     decimals: overrides.decimals ?? 9,
@@ -180,20 +180,20 @@ describe('createSession input validation', () => {
     const result = await createSession({
       tier: 'whale' as 'pro',
       cadence: 'monthly',
-      chain: 'ton',
+      chain: 'solana',
       token: 'native',
       amountUsdCents: 999,
       discountBps: 0,
     });
     expect(result.ok).toBe(false);
-    expect(result.ok || result.reason).toBe('invalid_input');
+    if (!result.ok) expect(result.reason).toBe('invalid_input');
   });
 
   it('rejects unknown cadence', async () => {
     const result = await createSession({
       tier: 'pro',
       cadence: 'weekly' as 'monthly',
-      chain: 'ton',
+      chain: 'solana',
       token: 'native',
       amountUsdCents: 999,
       discountBps: 0,
@@ -206,7 +206,7 @@ describe('createSession input validation', () => {
     const tooSmall = await createSession({
       tier: 'pro',
       cadence: 'monthly',
-      chain: 'ton',
+      chain: 'solana',
       token: 'native',
       amountUsdCents: 0,
       discountBps: 0,
@@ -217,25 +217,12 @@ describe('createSession input validation', () => {
     const tooLarge = await createSession({
       tier: 'pro',
       cadence: 'monthly',
-      chain: 'ton',
+      chain: 'solana',
       token: 'native',
       amountUsdCents: 10_000_000,
       discountBps: 0,
     });
     expect(tooLarge.ok).toBe(false);
     if (!tooLarge.ok) expect(tooLarge.reason).toBe('invalid_input');
-  });
-
-  it('rejects unsupported chain × token combos', async () => {
-    const result = await createSession({
-      tier: 'pro',
-      cadence: 'monthly',
-      chain: 'ton',
-      token: 'vizzor',
-      amountUsdCents: 999,
-      discountBps: 0,
-    });
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.reason).toBe('invalid_input');
   });
 });

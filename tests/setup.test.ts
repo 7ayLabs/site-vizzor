@@ -14,7 +14,7 @@ describe('test setup', () => {
     expect(process.env.NODE_ENV).toBe('test');
   });
 
-  it('enables vizzor payments feature flag for createSession paths', () => {
-    expect(process.env.NEXT_PUBLIC_ACCEPT_VIZZOR_PAYMENTS).toBe('true');
+  it('enables Solana payments feature flag for createSession paths', () => {
+    expect(process.env.NEXT_PUBLIC_ACCEPT_SOLANA_PAYMENTS).toBe('true');
   });
 });

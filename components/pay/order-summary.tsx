@@ -1,10 +1,8 @@
 /**
  * OrderSummary — left column of the checkout shell.
  *
- * Renders the effective price for the selected (tier, cadence, token)
- * triple. When token is $VIZZOR, shows the base price struck through,
- * the discounted price, and a "you save $X" line. The live rate quote
- * adapts to the selected token via `/api/payment/rate?token=…`.
+ * Renders the effective price (base − 10% Solana discount), the live
+ * SOL quote from /api/payment/rate, and a "you save $X" line.
  */
 
 'use client';
@@ -42,15 +40,11 @@ export function OrderSummary({ tier, cadence, chain, token }: OrderSummaryProps)
   const [rate, setRate] = useState<number | null>(null);
   const [rateLoading, setRateLoading] = useState(true);
 
-  const tokenParam = token === 'vizzor' ? 'vizzor' : 'ton';
-
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const res = await fetch(
-          `/api/payment/rate?token=${tokenParam}`,
-        );
+        const res = await fetch('/api/payment/rate');
         const data = (await res.json()) as RateResponse;
         if (!cancelled && data.ok && typeof data.usdPer === 'number') {
           setRate(data.usdPer);
@@ -70,7 +64,7 @@ export function OrderSummary({ tier, cadence, chain, token }: OrderSummaryProps)
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [tokenParam]);
+  }, []);
 
   const basePriceCents = priceCents(tier, cadence) ?? 0;
   const basePriceLabel = priceUsd(tier, cadence) ?? '$0';
@@ -80,13 +74,14 @@ export function OrderSummary({ tier, cadence, chain, token }: OrderSummaryProps)
   const discountPct = Math.round(
     discountBps(tier, cadence, chain, token) / 100,
   );
-  const savedCents = Math.round(basePriceCents - (effectivePriceUsdNumber * 100));
+  const savedCents = Math.round(basePriceCents - effectivePriceUsdNumber * 100);
   const savedLabel = `$${(savedCents / 100).toFixed(2)}`;
 
-  const tokenAmount =
+  const solAmount =
     rate !== null
-      ? Math.round((effectivePriceUsdNumber / rate) * 100) / 100
+      ? Math.round((effectivePriceUsdNumber / rate) * 10000) / 10000
       : null;
+  const hasDiscount = discountPct > 0;
 
   return (
     <aside className="border border-[var(--border)] bg-[var(--surface)] p-6 flex flex-col gap-5 h-full">
@@ -104,35 +99,29 @@ export function OrderSummary({ tier, cadence, chain, token }: OrderSummaryProps)
       </div>
 
       <div className="border-t border-[var(--border)] pt-4 flex flex-col gap-3">
-        <Row label={t('row.subtotal')} value={basePriceLabel} strike={token === 'vizzor'} />
-        {token === 'vizzor' && (
+        <Row label={t('row.subtotal')} value={basePriceLabel} strike={hasDiscount} />
+        {hasDiscount && (
           <>
             <Row
               label={t('row.discount', { pct: discountPct })}
               value={`−${savedLabel}`}
               tone="accent"
             />
-            <Row
-              label={t('row.afterDiscount')}
-              value={effectivePriceLabel}
-            />
+            <Row label={t('row.afterDiscount')} value={effectivePriceLabel} />
           </>
         )}
         <Row
-          label={t(token === 'vizzor' ? 'row.vizzorQuote' : 'row.tonQuote')}
+          label={t('row.solQuote')}
           value={
             rateLoading
               ? '…'
-              : tokenAmount !== null
-                ? `~${tokenAmount.toFixed(2)} ${token === 'vizzor' ? '$VIZZOR' : 'TON'}`
+              : solAmount !== null
+                ? `~${solAmount.toFixed(4)} SOL`
                 : t('row.tokenUnavailable')
           }
           mono
         />
-        <Row
-          label={t('row.network')}
-          value={t(token === 'vizzor' ? 'row.solanaMainnet' : 'row.tonMainnet')}
-        />
+        <Row label={t('row.network')} value={t('row.solanaMainnet')} />
       </div>
 
       <div className="border-t border-[var(--border)] pt-4 flex items-baseline justify-between">
@@ -144,9 +133,9 @@ export function OrderSummary({ tier, cadence, chain, token }: OrderSummaryProps)
         </span>
       </div>
 
-      {token === 'vizzor' && savedCents > 0 && (
+      {hasDiscount && savedCents > 0 && (
         <p className="mono tabular text-[10px] uppercase tracking-[0.16em] text-[var(--accent)]">
-          {t('row.savedWithVizzor', { amount: savedLabel })}
+          {t('row.savedWithSol', { amount: savedLabel })}
         </p>
       )}
 

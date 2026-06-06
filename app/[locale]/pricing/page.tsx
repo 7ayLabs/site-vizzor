@@ -82,7 +82,7 @@ const FEATURE_KEYS: Record<Tier['key'], readonly string[]> = {
   ],
 };
 
-const CHAINS = ['ton', 'polygon', 'base', 'arbitrum', 'solana', 'tron'] as const;
+const CHAINS = ['solana', 'ton', 'polygon', 'base', 'arbitrum', 'tron'] as const;
 const FAQ_KEYS = ['trial', 'cancel', 'chains', 'selfHost', 'difference', 'refund'] as const;
 
 export default async function PricingPage({

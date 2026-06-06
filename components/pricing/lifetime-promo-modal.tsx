@@ -103,18 +103,18 @@ export function LifetimePromoModal({ open, onDismiss }: LifetimePromoModalProps)
       />
 
       <div
-        className={`relative z-10 w-full sm:max-w-[480px] border border-[var(--border)] bg-[var(--surface)] rounded-t-2xl sm:rounded-2xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.45)] flex flex-col ${cardAnim}`}
+        className={`relative z-10 w-[calc(100%-1.5rem)] sm:max-w-[440px] border border-[var(--border)] bg-[var(--surface)] rounded-2xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.45)] flex flex-col ${cardAnim}`}
       >
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-3">
-          <div className="flex flex-col gap-1.5 min-w-0">
+        <div className="flex items-start justify-between gap-3 px-7 pt-6 pb-3">
+          <div className="flex flex-col gap-2 min-w-0">
             <p className="mono tabular text-[10px] uppercase tracking-[0.18em] text-[var(--accent)] inline-flex items-center gap-1.5">
               <Sparkles size={11} strokeWidth={2.4} />
               <span>{t('eyebrow')}</span>
             </p>
             <h2
               id="promo-lifetime-title"
-              className="display text-[22px] font-semibold tracking-tight text-[var(--fg)] leading-[1.15]"
+              className="text-[19px] sm:text-[21px] font-semibold tracking-tight text-[var(--fg)] leading-[1.25]"
             >
               {t('title')}
             </h2>
@@ -123,52 +123,53 @@ export function LifetimePromoModal({ open, onDismiss }: LifetimePromoModalProps)
             type="button"
             onClick={onDismiss}
             aria-label={t('dismiss')}
-            className="-mr-1 -mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)] transition-colors"
+            className="shrink-0 -mr-1.5 -mt-1.5 inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)] transition-colors"
           >
             <X size={16} strokeWidth={2} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="px-6 pb-5 flex flex-col gap-4">
-          <p className="text-[14px] leading-relaxed text-[var(--fg-2)]">
+        <div className="px-7 pb-5 flex flex-col gap-4">
+          <p className="text-[13px] leading-[1.55] text-[var(--fg-2)]">
             {t('subtitle')}
           </p>
 
-          {/* Savings panel */}
-          <div className="border border-[var(--border)] bg-[var(--bg)]/40 px-4 py-4 grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1">
+          {/* Savings panel — vertical stack so the prices breathe */}
+          <div className="border border-[var(--border)] bg-[var(--bg)]/40 px-4 py-4 flex flex-col gap-3 rounded-xl">
+            <div className="flex items-baseline justify-between gap-3">
               <p className="mono tabular text-[9.5px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
                 {t('lifetimePriceLabel')}
-              </p>
-              <p className="display text-[24px] font-semibold tracking-tight text-[var(--fg)] leading-none">
-                $1,249
               </p>
               <p className="mono tabular text-[10px] text-[var(--fg-3)]">
                 {t('lifetimePriceCaption')}
               </p>
             </div>
-            <div className="flex flex-col gap-1">
+            <p className="text-[28px] font-semibold tracking-tight text-[var(--fg)] leading-none">
+              $1,249
+            </p>
+            <div className="h-px bg-[var(--border)]" />
+            <div className="flex items-baseline justify-between gap-3">
               <p className="mono tabular text-[9.5px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
                 {t('comparisonLabel')}
-              </p>
-              <p className="display text-[24px] font-semibold tracking-tight text-[var(--fg-3)] leading-none line-through">
-                $5,988
               </p>
               <p className="mono tabular text-[10px] text-[var(--fg-3)]">
                 {t('comparisonCaption')}
               </p>
             </div>
+            <p className="text-[22px] font-medium tracking-tight text-[var(--fg-3)] leading-none line-through">
+              $5,988
+            </p>
           </div>
 
-          {/* VZR upsell footnote */}
+          {/* SOL discount footnote */}
           <p className="mono tabular text-[10.5px] uppercase tracking-[0.14em] text-[var(--accent)]">
-            {t('vzrFootnote')}
+            {t('solFootnote')}
           </p>
         </div>
 
         {/* CTAs */}
-        <div className="flex flex-col gap-2 px-6 pb-6">
+        <div className="flex flex-col gap-1.5 px-7 pb-6">
           <Link
             href="/pay/elite/lifetime"
             onClick={onDismiss}

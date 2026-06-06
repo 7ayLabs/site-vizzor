@@ -28,7 +28,6 @@
 
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/payment/db';
-import { snapshotLiveness } from '@/lib/payment/watcher-liveness';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -49,11 +48,7 @@ function probeSqlite(): SubsystemStatus {
 
 export async function GET() {
   const sqlite = probeSqlite();
-  const watchers = snapshotLiveness();
-  const anyStale = watchers.some((w) => w.stale);
-
-  const status: 'healthy' | 'degraded' =
-    sqlite.ok && !anyStale ? 'healthy' : 'degraded';
+  const status: 'healthy' | 'degraded' = sqlite.ok ? 'healthy' : 'degraded';
 
   return NextResponse.json(
     {
@@ -66,12 +61,6 @@ export async function GET() {
       timestamp: new Date().toISOString(),
       subsystems: {
         sqlite,
-        watchers: watchers.map((w) => ({
-          chain: w.chain,
-          started: w.started,
-          lastTickAgoMs: w.lastTickAgoMs,
-          stale: w.stale,
-        })),
       },
     },
     {
