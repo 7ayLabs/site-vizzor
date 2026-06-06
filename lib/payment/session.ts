@@ -21,10 +21,15 @@ import { randomBytes } from 'node:crypto';
 import { acceptTonPayments, acceptVizzorPayments, paymentRateLockSeconds } from '@/lib/feature-flags';
 import {
   attachGrantCodeToSession,
+  attachTelegramIdToSubscription,
   expireStaleSessions,
+  findWalletLinkByWallet,
+  getDb,
   getSessionRow,
   insertGrant,
   insertSession,
+  insertSubscription,
+  markSessionConfirmed,
   type SessionRow,
 } from './db';
 import { getRate } from './rates';
@@ -226,4 +231,113 @@ export async function issueGrantForSession(
   insertGrant({ code, session_id: sessionId, expires_at: expiresAt });
   attachGrantCodeToSession(sessionId, code);
   return { code };
+}
+
+/* ------------------------------------------------------------------ *\
+ * finalizeSession — the per-chain watcher's terminal step.
+ *
+ * Called by every chain watcher (Solana / TON / EVM) once an on-chain
+ * transfer has been matched to a pending session. Wraps the five
+ * post-confirm operations in a single SQLite transaction so a mid-flow
+ * crash rolls back cleanly:
+ *
+ *   1. Re-read the session and assert status === 'pending'. Defends
+ *      against duplicate confirmations from reorgs, watcher retries,
+ *      or two RPC providers both reporting the same tx.
+ *   2. markSessionConfirmed — flips status, attaches tx signature.
+ *   3. insertSubscription with cadence-derived expiry (monthly +30d,
+ *      annual +365d, lifetime null).
+ *   4. issueGrantForSession — mints a 24h single-use bot-handoff
+ *      grant code, attaches it to the session row.
+ *   5. Express lane — if the payer wallet is already in wallet_links,
+ *      eagerly back-fill subscriptions.telegram_user_id so the user
+ *      has bot access without a grant redemption round-trip. This is
+ *      the load-bearing seam between the wallet-telegram-binding
+ *      slice and the web3-purchase-flow slice (plan §10.3 step 5).
+ *
+ * Returns the subscription id + grant code so the caller can log /
+ * surface them. `confirmed: false` means the session was no longer
+ * pending — the caller should skip without warnings, since this is
+ * the expected branch under reorg/retry.
+\* ------------------------------------------------------------------ */
+
+export interface FinalizeResult {
+  confirmed: boolean;
+  subscriptionId?: number;
+  grantCode?: string;
+  walletLinkedTo?: number;
+}
+
+export function cadenceExpiry(cadence: string): number | null {
+  const now = Date.now();
+  switch (cadence) {
+    case 'monthly':
+      return now + 30 * 24 * 60 * 60 * 1000;
+    case 'annual':
+      return now + 365 * 24 * 60 * 60 * 1000;
+    case 'lifetime':
+      return null;
+    default:
+      return now + 30 * 24 * 60 * 60 * 1000;
+  }
+}
+
+export function finalizeSession(
+  session: SessionRow,
+  txSig: string,
+  payer: string,
+): FinalizeResult {
+  const db = getDb();
+  // better-sqlite3 transactions are synchronous and atomic. Either
+  // every statement commits or none of them do.
+  const run = db.transaction((): FinalizeResult => {
+    const fresh = getSessionRow(session.session_id);
+    if (!fresh || fresh.status !== 'pending') {
+      return { confirmed: false };
+    }
+
+    markSessionConfirmed(session.session_id, txSig, payer, Date.now());
+
+    // No payer (very rare — chain didn't yield a sender) still
+    // confirms the session but skips subscription minting. A manual
+    // operator query can backfill if needed.
+    if (!payer) {
+      return { confirmed: true };
+    }
+
+    const subscriptionId = insertSubscription({
+      wallet_address: payer,
+      tier: session.tier,
+      cadence: session.cadence,
+      expires_at: cadenceExpiry(session.cadence),
+      session_id: session.session_id,
+    });
+
+    const code = 'g_' + randomBytes(12).toString('base64url');
+    const grantExpiresAt = Date.now() + GRANT_TTL_MS;
+    insertGrant({
+      code,
+      session_id: session.session_id,
+      expires_at: grantExpiresAt,
+    });
+    attachGrantCodeToSession(session.session_id, code);
+
+    // Express lane: if the payer wallet was pre-linked to a TG user
+    // via /api/wallet-links, eagerly attach the TG id to the freshly
+    // minted subscription so the user has bot access without a grant
+    // redemption round-trip.
+    const link = findWalletLinkByWallet(payer);
+    if (link) {
+      attachTelegramIdToSubscription(subscriptionId, link.telegram_user_id);
+      return {
+        confirmed: true,
+        subscriptionId,
+        grantCode: code,
+        walletLinkedTo: link.telegram_user_id,
+      };
+    }
+
+    return { confirmed: true, subscriptionId, grantCode: code };
+  });
+  return run();
 }
