@@ -2,12 +2,15 @@
  * POST /api/auth/siws/verify — verify a SIWS signature and mint an
  * auth session.
  *
- * Body: { wallet, signature, message? }
+ * Body: { wallet, signature, action?, issuedAt, expiresAt }
  *
  * The server reads the nonce cookie (issued by /nonce), recomputes
- * the canonical SIWS message, and verifies the signature with ed25519.
- * On success, deletes the nonce, mints a 24h auth-session token,
- * persists it in `auth_sessions`, and returns it as an HttpOnly cookie.
+ * the canonical SIWS message with `action: 'login'`, and verifies the
+ * signature with ed25519. The cookie's embedded action MUST match the
+ * body's action AND equal the route's expected action (`login`),
+ * preventing cross-route replay (RFC §5.2). On success, deletes the
+ * nonce, mints a 24h auth-session token, persists it in
+ * `auth_sessions`, and returns it as an HttpOnly cookie.
  */
 
 import { NextResponse } from 'next/server';
@@ -18,16 +21,21 @@ import {
   buildSiwsMessage,
   generateAuthToken,
   isValidSolanaAddress,
+  parseSiwsAction,
   verifySiwsSignature,
+  type SiwsAction,
 } from '@/lib/payment/siws';
 import { insertAuthSession } from '@/lib/payment/db';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+const ROUTE_ACTION: SiwsAction = 'login';
+
 interface Body {
   wallet?: unknown;
   signature?: unknown;
+  action?: unknown;
   // The message the wallet actually signed; we recompute server-side
   // for safety but accept the client copy too for cross-check.
   issuedAt?: unknown;
@@ -55,10 +63,27 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  const [nonce, boundWallet] = nonceCookie.split('.');
+  // Cookie shape: `<nonce>.<wallet>.<action>`. Pre-patch cookies have
+  // only two segments; we treat that as `action: 'login'` for the
+  // brief deploy-window overlap and reject everything else.
+  const segments = nonceCookie.split('.');
+  const [nonce, boundWallet, boundActionRaw] = segments;
   if (!nonce || boundWallet !== wallet) {
     return NextResponse.json(
       { ok: false, reason: 'nonce_mismatch' },
+      { status: 400 },
+    );
+  }
+  const cookieAction: SiwsAction =
+    parseSiwsAction(boundActionRaw) ?? 'login';
+  // Body action defaults to the route's action for back-compat with
+  // clients that have not been updated yet. The cookie⇄body match
+  // below is the real defense.
+  const bodyAction: SiwsAction =
+    parseSiwsAction(body.action) ?? ROUTE_ACTION;
+  if (cookieAction !== bodyAction || cookieAction !== ROUTE_ACTION) {
+    return NextResponse.json(
+      { ok: false, reason: 'action_mismatch' },
       { status: 400 },
     );
   }
@@ -95,6 +120,7 @@ export async function POST(req: Request) {
   const message = buildSiwsMessage({
     wallet,
     nonce,
+    action: ROUTE_ACTION,
     issuedAt,
     expiresAt,
   });
@@ -119,15 +145,19 @@ export async function POST(req: Request) {
     'Cache-Control': 'no-store',
     'Content-Type': 'application/json',
   });
+  // `Secure` is added in production so cookies are never carried over
+  // plaintext HTTP (RFC §4.10 / B6). Staging without TLS keeps the
+  // pre-patch behavior.
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   // Delete the nonce cookie so it can't be replayed.
   headers.append(
     'Set-Cookie',
-    `vizzor.siws.nonce=; Path=/api/auth; Max-Age=0; HttpOnly; SameSite=Strict`,
+    `vizzor.siws.nonce=; Path=/api/auth; Max-Age=0; HttpOnly; SameSite=Strict${secure}`,
   );
   // Set the auth-session cookie.
   headers.append(
     'Set-Cookie',
-    `vizzor.auth=${token}; Path=/; Max-Age=${Math.floor(AUTH_TTL_MS / 1000)}; HttpOnly; SameSite=Lax`,
+    `vizzor.auth=${token}; Path=/; Max-Age=${Math.floor(AUTH_TTL_MS / 1000)}; HttpOnly; SameSite=Lax${secure}`,
   );
 
   return new NextResponse(

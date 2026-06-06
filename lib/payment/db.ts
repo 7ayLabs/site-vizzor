@@ -14,6 +14,17 @@
  *   - subscriptions     : the canonical "is wallet X subscribed?" record
  *   - grants            : single-use codes for binding TG users
  *   - auth_sessions     : SIWS-derived browser sessions (wallet-based login)
+ *   - wallet_links      : (v0.2.0) durable bindings of a Solana wallet to a
+ *                         Telegram user id. 1:1 in both directions enforced
+ *                         by UNIQUE indexes. Populated by grant redemption
+ *                         and by SIWS-signed pre-link from the bot flow.
+ *
+ * v0.2.0 migrations are additive only and idempotent. They run inside
+ * `init()` after the base DDL. SQLite has no `ADD COLUMN IF NOT EXISTS`,
+ * so each ALTER is guarded by an introspection check via the
+ * `addColumnIfMissing` helper. Rollback is a redeploy of the prior image
+ * tag with the unchanged on-disk DB; older code paths ignore the new
+ * columns and the new table because they never reference them.
  *
  * Connection is a singleton; safe under Next.js dev HMR because we
  * stash it on globalThis with a typed symbol.
@@ -92,7 +103,81 @@ function init(): DB {
     );
     CREATE INDEX IF NOT EXISTS idx_auth_wallet ON auth_sessions(wallet_address);
   `);
+  runV020Migrations(db);
   return db;
+}
+
+/* ------------------------------------------------------------------ *\
+ * v0.2.0 migrations — additive only. See RFC §3.
+\* ------------------------------------------------------------------ */
+
+/**
+ * Returns true if `table.column` exists, false otherwise. Uses the
+ * sqlite `PRAGMA table_info(...)` introspection. Tables that do not
+ * exist also return false (callers should never reach this with an
+ * unknown table because the base DDL above creates them first).
+ */
+function hasColumn(db: DB, table: string, column: string): boolean {
+  // PRAGMA arguments cannot be bound parameters; the table name must
+  // be interpolated. We restrict to the small known-static set of
+  // table names we own, so this is safe in practice.
+  const rows = db
+    .prepare(`PRAGMA table_info(${table})`)
+    .all() as { name: string }[];
+  return rows.some((r) => r.name === column);
+}
+
+/**
+ * Idempotent helper. Runs `ALTER TABLE <table> ADD COLUMN <column>
+ * <definition>` only when the column is not already present. Used to
+ * back-fill columns onto pre-v0.2.0 databases without a destructive
+ * migration. SQLite does not support `ADD COLUMN IF NOT EXISTS` so the
+ * guard lives in code.
+ */
+export function addColumnIfMissing(
+  db: DB,
+  table: string,
+  column: string,
+  definition: string,
+): void {
+  if (hasColumn(db, table, column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+
+function runV020Migrations(db: DB): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS wallet_links (
+      telegram_user_id  INTEGER NOT NULL,
+      wallet_address    TEXT    NOT NULL,
+      linked_at         INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000),
+      siws_token        TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_wallet_links_telegram
+      ON wallet_links(telegram_user_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_wallet_links_wallet
+      ON wallet_links(wallet_address);
+  `);
+  addColumnIfMissing(db, 'subscriptions', 'telegram_user_id', 'INTEGER');
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_subs_telegram ON subscriptions(telegram_user_id)`,
+  );
+  addColumnIfMissing(db, 'auth_sessions', 'telegram_user_id', 'INTEGER');
+
+  // Persistent burn-signature replay cache. Replaces the in-memory
+  // LRU previously held inside lib/solana.ts. Eviction policy is the
+  // same: cap at VIZZOR_REPLAY_CACHE_SIZE (default 4096) rows, drop
+  // the oldest 25% by `seen_at` when over the cap. See RFC
+  // docs/rfc/v0.2.0/crypto-security.md §6.1 for the threat model.
+  // The table is additive; a fresh deploy with no rows behaves
+  // identically to a fresh in-memory cache. (C4 owns this table.)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS signature_replay_cache (
+      signature  TEXT PRIMARY KEY,
+      seen_at    INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000)
+    );
+    CREATE INDEX IF NOT EXISTS idx_replay_seen_at
+      ON signature_replay_cache(seen_at);
+  `);
 }
 
 export function getDb(): DB {
@@ -134,6 +219,12 @@ export interface SubscriptionRow {
   expires_at: number | null;
   session_id: string | null;
   created_at: number;
+  /**
+   * Set when a grant binding the wallet's subscription to a Telegram
+   * user has been redeemed, or when the wallet was pre-linked before
+   * payment. v0.2.0+ column; null on legacy rows.
+   */
+  telegram_user_id: number | null;
 }
 
 export interface GrantRow {
@@ -150,6 +241,19 @@ export interface AuthSessionRow {
   wallet_address: string;
   created_at: number;
   expires_at: number;
+  /**
+   * Populated when the SIWS-authenticated wallet is bound to a
+   * Telegram user via `wallet_links`. v0.2.0+ column; null on legacy
+   * rows and for any wallet that has not been linked.
+   */
+  telegram_user_id: number | null;
+}
+
+export interface WalletLinkRow {
+  telegram_user_id: number;
+  wallet_address: string;
+  linked_at: number;
+  siws_token: string | null;
 }
 
 /* ------------------------------------------------------------------ *\
@@ -245,13 +349,34 @@ export function redeemGrant(code: string, telegramUserId: number): void {
     .run(telegramUserId, Date.now(), code);
 }
 
-export function insertSubscription(row: Omit<SubscriptionRow, 'id' | 'created_at'>): number {
+/**
+ * Insert a subscription row. The `telegram_user_id` field is optional
+ * at the API level — pre-v0.2.0 callers (the Solana watcher's
+ * `finalizeSession`) do not know the TG id at confirmation time. The
+ * column is back-filled later by `attachTelegramIdToSubscription` when
+ * the user redeems a grant, or eagerly populated when a wallet link
+ * already exists at payment time (the C1 watcher seam).
+ */
+export function insertSubscription(
+  row: Omit<SubscriptionRow, 'id' | 'created_at' | 'telegram_user_id'> & {
+    telegram_user_id?: number | null;
+  },
+): number {
   const r = getDb()
     .prepare(
-      `INSERT INTO subscriptions (wallet_address, tier, cadence, expires_at, session_id)
-       VALUES (@wallet_address, @tier, @cadence, @expires_at, @session_id)`,
+      `INSERT INTO subscriptions
+         (wallet_address, tier, cadence, expires_at, session_id, telegram_user_id)
+       VALUES
+         (@wallet_address, @tier, @cadence, @expires_at, @session_id, @telegram_user_id)`,
     )
-    .run(row);
+    .run({
+      wallet_address: row.wallet_address,
+      tier: row.tier,
+      cadence: row.cadence,
+      expires_at: row.expires_at,
+      session_id: row.session_id,
+      telegram_user_id: row.telegram_user_id ?? null,
+    });
   return r.lastInsertRowid as number;
 }
 
@@ -270,13 +395,29 @@ export function findActiveSubscriptionByWallet(
   return row ?? null;
 }
 
-export function insertAuthSession(row: Omit<AuthSessionRow, 'created_at'>): void {
+/**
+ * Insert an auth_sessions row. `telegram_user_id` is optional and
+ * defaults to null; the SIWS verify route may populate it eagerly when
+ * the signing wallet is already in `wallet_links`. Backward compatible
+ * with v0.1.0 callers that pass only `{ token, wallet_address,
+ * expires_at }`.
+ */
+export function insertAuthSession(
+  row: Omit<AuthSessionRow, 'created_at' | 'telegram_user_id'> & {
+    telegram_user_id?: number | null;
+  },
+): void {
   getDb()
     .prepare(
-      `INSERT INTO auth_sessions (token, wallet_address, expires_at)
-       VALUES (@token, @wallet_address, @expires_at)`,
+      `INSERT INTO auth_sessions (token, wallet_address, expires_at, telegram_user_id)
+       VALUES (@token, @wallet_address, @expires_at, @telegram_user_id)`,
     )
-    .run(row);
+    .run({
+      token: row.token,
+      wallet_address: row.wallet_address,
+      expires_at: row.expires_at,
+      telegram_user_id: row.telegram_user_id ?? null,
+    });
 }
 
 export function getAuthSession(token: string): AuthSessionRow | null {
@@ -288,4 +429,112 @@ export function getAuthSession(token: string): AuthSessionRow | null {
 
 export function deleteAuthSession(token: string): void {
   getDb().prepare(`DELETE FROM auth_sessions WHERE token = ?`).run(token);
+}
+
+/* ------------------------------------------------------------------ *\
+ * v0.2.0 — wallet_links + subscription/TG-id helpers (RFC §3, §5, §6).
+\* ------------------------------------------------------------------ */
+
+/**
+ * Insert a wallet_links row. Caller is responsible for handling the
+ * `UNIQUE` constraint violation on either `telegram_user_id` or
+ * `wallet_address`; the lower-level routes use `INSERT OR IGNORE` for
+ * idempotency, while the SIWS pre-link route uses a strict INSERT so
+ * the route can return `already_linked_elsewhere`.
+ *
+ * `strict=false` (default) is `INSERT OR IGNORE` — no-op on conflict.
+ * `strict=true` throws on conflict; the caller maps to a 409.
+ */
+export function insertWalletLink(
+  row: Omit<WalletLinkRow, 'linked_at'> & { linked_at?: number },
+  opts: { strict?: boolean } = {},
+): { inserted: boolean } {
+  const strict = opts.strict === true;
+  const sql = strict
+    ? `INSERT INTO wallet_links (telegram_user_id, wallet_address, siws_token, linked_at)
+       VALUES (@telegram_user_id, @wallet_address, @siws_token, COALESCE(@linked_at, CAST(strftime('%s','now') AS INTEGER) * 1000))`
+    : `INSERT OR IGNORE INTO wallet_links (telegram_user_id, wallet_address, siws_token, linked_at)
+       VALUES (@telegram_user_id, @wallet_address, @siws_token, COALESCE(@linked_at, CAST(strftime('%s','now') AS INTEGER) * 1000))`;
+  const r = getDb()
+    .prepare(sql)
+    .run({
+      telegram_user_id: row.telegram_user_id,
+      wallet_address: row.wallet_address,
+      siws_token: row.siws_token ?? null,
+      linked_at: row.linked_at ?? null,
+    });
+  return { inserted: r.changes > 0 };
+}
+
+export function findWalletLinkByTelegramId(
+  telegramUserId: number,
+): WalletLinkRow | null {
+  const row = getDb()
+    .prepare(`SELECT * FROM wallet_links WHERE telegram_user_id = ?`)
+    .get(telegramUserId) as WalletLinkRow | undefined;
+  return row ?? null;
+}
+
+export function findWalletLinkByWallet(
+  walletAddress: string,
+): WalletLinkRow | null {
+  const row = getDb()
+    .prepare(`SELECT * FROM wallet_links WHERE wallet_address = ?`)
+    .get(walletAddress) as WalletLinkRow | undefined;
+  return row ?? null;
+}
+
+/**
+ * Atomically attach a Telegram user id to a subscription row identified
+ * by its primary key. Only sets the column if it is currently NULL — a
+ * subscription already bound to a different TG id is left untouched and
+ * the caller is expected to detect the no-op via the returned `changed`
+ * flag and surface `already_redeemed`.
+ */
+export function attachTelegramIdToSubscription(
+  subscriptionId: number,
+  telegramUserId: number,
+): { changed: boolean } {
+  const r = getDb()
+    .prepare(
+      `UPDATE subscriptions
+       SET telegram_user_id = ?
+       WHERE id = ? AND telegram_user_id IS NULL`,
+    )
+    .run(telegramUserId, subscriptionId);
+  return { changed: r.changes > 0 };
+}
+
+export function findSubscriptionByTelegramId(
+  telegramUserId: number,
+  now: number,
+): SubscriptionRow | null {
+  const row = getDb()
+    .prepare(
+      `SELECT * FROM subscriptions
+       WHERE telegram_user_id = ?
+         AND (expires_at IS NULL OR expires_at > ?)
+       ORDER BY id DESC LIMIT 1`,
+    )
+    .get(telegramUserId, now) as SubscriptionRow | undefined;
+  return row ?? null;
+}
+
+/**
+ * Look up the subscription row attached to a confirmed payment session.
+ * Used by the grant-redeem route: the grant points at a session, the
+ * session has at most one confirmed subscription row, and that row is
+ * the target of `attachTelegramIdToSubscription`.
+ */
+export function findSubscriptionBySessionId(
+  sessionId: string,
+): SubscriptionRow | null {
+  const row = getDb()
+    .prepare(
+      `SELECT * FROM subscriptions
+       WHERE session_id = ?
+       ORDER BY id DESC LIMIT 1`,
+    )
+    .get(sessionId) as SubscriptionRow | undefined;
+  return row ?? null;
 }
