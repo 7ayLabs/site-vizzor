@@ -32,6 +32,7 @@ import type {
 import { discountBps } from '@/lib/payment/pricing-table';
 import type { ChainIconId } from './chain-icons';
 import { ChainOptionIcon } from './chain-option-icon';
+import { isTestnet } from '@/lib/payment/network';
 
 export interface SelectorValue {
   chain: PaymentChain;
@@ -157,9 +158,23 @@ export function ChainSelector({
     <div className="flex flex-col gap-3">
       <p
         id="pay-chain-label"
-        className="mono tabular text-[10px] uppercase tracking-[0.16em] text-[var(--fg-3)]"
+        className="mono tabular text-[10px] uppercase tracking-[0.16em] text-[var(--fg-3)] inline-flex items-center gap-2"
       >
-        {t('label')}
+        <span>{t('label')}</span>
+        {isTestnet() && (
+          <span
+            className="
+              rounded-md px-1.5 py-0.5
+              text-[9px] tracking-[0.18em]
+              bg-[color:color-mix(in_oklab,var(--gold)_22%,transparent)]
+              text-[var(--gold)]
+              border border-[color:color-mix(in_oklab,var(--gold)_45%,transparent)]
+            "
+            title="Payments target testnet in dev"
+          >
+            TESTNET
+          </span>
+        )}
       </p>
 
       <ul

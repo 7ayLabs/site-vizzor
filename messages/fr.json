@@ -583,14 +583,38 @@
       "walletPicker": "Choisis un portefeuille",
       "disconnect": "Déconnecter"
     },
+    "connectAlert": {
+      "eyebrow": "portefeuille requis",
+      "title": "Connectez un portefeuille Solana pour continuer",
+      "body": "Nous ne voyons jamais vos clés — votre portefeuille signe la transaction localement et nous ne recevons que la signature. Choisissez un portefeuille pour continuer.",
+      "primary": "Connecter le portefeuille",
+      "secondary": "Voir les portefeuilles installés",
+      "dismiss": "Annuler"
+    },
+    "walletPicker": {
+      "label": "Portefeuilles Solana",
+      "detected": "{n} détecté(s)",
+      "none": "Aucun détecté",
+      "installed": "Prêt",
+      "notInstalled": "Non installé",
+      "connecting": "Connexion…",
+      "connected": "Connecté",
+      "disconnect": "Déconnecter",
+      "use": "Utiliser",
+      "connect": "Connecter",
+      "install": "Installer",
+      "footer": "MetaMask n'est pas un portefeuille Solana — utilisez-le pour les rails USDC via le handoff Telegram.",
+      "emptyTitle": "Aucun portefeuille Solana détecté.",
+      "emptyHint": "Installez Phantom ou Solflare et rafraîchissez."
+    },
     "status": {
       "creating": {
         "label": "Création de la session",
         "body": "Verrouillage du taux USD-TON et dérivation de l'adresse de destination…"
       },
       "awaiting_wallet": {
-        "label": "En attente du portefeuille",
-        "body": "Ouvrez votre portefeuille, vérifiez le montant et signez la transaction."
+        "label": "Session prête",
+        "body": "Connectez votre portefeuille ci-dessous si ce n'est pas déjà fait, puis cliquez sur Payer pour signer."
       },
       "broadcasting": {
         "label": "Diffusion",
@@ -629,14 +653,15 @@
         "unsupportedChain": "Seule Solana est prise en charge dans cette version. Passez à SOL sur Solana.",
         "priceLookup": "Impossible de récupérer le prix du tier sur le serveur. Rafraîchissez la page.",
         "sessionFailed": "Échec de la création de session. Réessayez, ou ouvrez le bot Telegram si le problème persiste.",
+        "rpcUnavailable": "Le RPC Solana est rate-limited en ce moment. Réessayez sous peu, ou passez à TON / USDC.",
         "walletNotConnected": "Connectez un portefeuille pour continuer."
       }
     },
     "cta": {
       "start": "Démarrer le paiement",
       "creating": "Création…",
-      "payWithSol": "Payer avec SOL",
-      "connectAndPay": "Connecter le portefeuille et payer",
+      "payWithSol": "Payer avec SOL · {wallet}",
+      "connectAndPay": "Connecte un portefeuille pour continuer",
       "continueInTelegram": "Continuer le paiement {chain} dans Telegram"
     },
     "pending": {

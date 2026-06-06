@@ -20,7 +20,9 @@
 
 import { Connection, PublicKey } from '@solana/web3.js';
 import { acceptSolanaPayments } from '@/lib/feature-flags';
+import { solanaRpcUrl } from '@/lib/solana';
 import { listPendingSessions } from './db';
+import { paymentNetwork } from './network';
 import { finalizeSession } from './session';
 import { solanaTreasury } from './treasury';
 
@@ -39,21 +41,21 @@ const g = globalThis as unknown as GlobalWithWatcher;
 
 export function ensureWatcherStarted(): void {
   if (!acceptSolanaPayments()) return;
-  // Fail fast in production if the operator did not configure a dedicated
-  // Solana RPC. The public mainnet-beta endpoint is rate-limited (100 req
-  // per 10s per IP) and the watcher polls every 5s with up to N parsed-tx
-  // round-trips per tick — it WILL hit 429 under any meaningful payment
-  // volume and silently stop confirming payments.
+  // Fail fast in production mainnet if no dedicated RPC. Testnet is
+  // exempt — devnet's public endpoint is operator-acceptable. The
+  // mainnet public fallback is rate-limited (100 req per 10s per IP)
+  // and unsafe for the 5s-poll watcher under real volume.
   if (
     process.env.NODE_ENV === 'production' &&
+    paymentNetwork() === 'mainnet' &&
     !process.env.SOLANA_RPC_URL &&
-    !process.env.NEXT_PUBLIC_SOLANA_RPC_URL
+    !process.env.SOLANA_RPC_URL_MAINNET
   ) {
     throw new Error(
-      '[vizzor-watcher] refusing to start: SOLANA_RPC_URL is unset in production. ' +
-        'The public mainnet-beta default is rate-limited and unsafe for the 5s-poll watcher. ' +
+      '[vizzor-watcher] refusing to start: no mainnet Solana RPC configured. ' +
+        'The public fallback is rate-limited and unsafe for the 5s-poll watcher. ' +
         'Configure a dedicated provider (Helius, Triton, QuickNode, or equivalent) and set ' +
-        'SOLANA_RPC_URL on the site host. See docs/ops/secrets.md.',
+        'SOLANA_RPC_URL or SOLANA_RPC_URL_MAINNET on the site host. See docs/ops/secrets.md.',
     );
   }
   const state = (g[KEY] = g[KEY] ?? { started: false, lastSlot: null });
@@ -63,11 +65,7 @@ export function ensureWatcherStarted(): void {
 }
 
 function solanaRpc(): string {
-  return (
-    process.env.SOLANA_RPC_URL ??
-    process.env.NEXT_PUBLIC_SOLANA_RPC_URL ??
-    'https://api.mainnet-beta.solana.com'
-  );
+  return solanaRpcUrl();
 }
 
 async function tick(state: { lastSlot: number | null }): Promise<void> {

@@ -28,6 +28,10 @@ import {
 } from '@/lib/payment/pricing-table';
 import type { ChainIconId } from './chain-icons';
 import { ChainOptionIcon } from './chain-option-icon';
+import {
+  isTestnet,
+  networkLabel as networkLabelFor,
+} from '@/lib/payment/network';
 
 interface OrderSummaryProps {
   tier: PaymentTier;
@@ -49,16 +53,7 @@ function priceToken(chain: PaymentChain, token: PaymentToken): 'sol' | 'ton' | '
 }
 
 function networkLabel(chain: PaymentChain): string {
-  switch (chain) {
-    case 'solana':
-      return 'Solana mainnet';
-    case 'ton':
-      return 'TON mainnet';
-    case 'base':
-      return 'Base mainnet';
-    case 'arbitrum':
-      return 'Arbitrum One';
-  }
+  return networkLabelFor(chain);
 }
 
 function iconConfig(
@@ -151,8 +146,22 @@ export function OrderSummary({ tier, cadence, chain, token }: OrderSummaryProps)
       "
     >
       <div className="flex items-center justify-between">
-        <p className="mono tabular text-[10px] uppercase tracking-[0.18em] text-[var(--accent)]">
-          {t('label')}
+        <p className="mono tabular text-[10px] uppercase tracking-[0.18em] text-[var(--accent)] inline-flex items-center gap-2">
+          <span>{t('label')}</span>
+          {isTestnet() && (
+            <span
+              className="
+                rounded-md px-1.5 py-0.5
+                mono tabular text-[9px] tracking-[0.18em]
+                bg-[color:color-mix(in_oklab,var(--gold)_22%,transparent)]
+                text-[var(--gold)]
+                border border-[color:color-mix(in_oklab,var(--gold)_45%,transparent)]
+              "
+              title="Payments target testnet in dev. Set NEXT_PUBLIC_PAYMENT_NETWORK=mainnet to override."
+            >
+              TESTNET
+            </span>
+          )}
         </p>
         <ChainOptionIcon
           primary={iconConfig(chain, token).primary}

@@ -59,6 +59,7 @@ export type PaymentReason =
   | 'wallet_not_connected'
   | 'wallet_rejected'
   | 'mint_not_configured'
+  | 'rpc_unavailable'
   // Catch-all. Always last in chain so the UI shows a coherent fallback.
   | 'unknown_reason';
 
@@ -92,6 +93,7 @@ const REASON_TABLE: Readonly<Record<PaymentReason, ReasonDescriptor>> = {
     copyKey: 'engineMarkedFailed',
     klass: 'transient',
   },
+  rpc_unavailable: { copyKey: 'rpcUnavailable', klass: 'transient' },
 
   // Fatal: bad request shape — retry alone won't fix it.
   invalid_body: { copyKey: 'invalidInput', klass: 'fatal' },

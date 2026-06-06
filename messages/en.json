@@ -583,6 +583,30 @@
       "walletPicker": "Choose a wallet",
       "disconnect": "Disconnect"
     },
+    "connectAlert": {
+      "eyebrow": "wallet required",
+      "title": "Connect a Solana wallet to continue",
+      "body": "We never see your keys — your wallet signs the transaction locally and we only receive the signature. Pick a wallet to continue.",
+      "primary": "Connect wallet",
+      "secondary": "View installed wallets",
+      "dismiss": "Cancel"
+    },
+    "walletPicker": {
+      "label": "Solana wallets",
+      "detected": "{n} detected",
+      "none": "None detected",
+      "installed": "Ready",
+      "notInstalled": "Not installed",
+      "connecting": "Connecting…",
+      "connected": "Connected",
+      "disconnect": "Disconnect",
+      "use": "Use",
+      "connect": "Connect",
+      "install": "Install",
+      "footer": "MetaMask isn't a Solana wallet — use it for the USDC rails via the Telegram handoff.",
+      "emptyTitle": "No Solana wallets detected.",
+      "emptyHint": "Install Phantom or Solflare and refresh."
+    },
     "state": {
       "idle": {
         "label": "Ready",
@@ -597,8 +621,8 @@
         "body": "Your wallet is on a different network than the one selected. Switch networks in your wallet and try again."
       },
       "signing": {
-        "label": "Awaiting wallet",
-        "body": "Open your wallet, review the amount, and sign the transaction."
+        "label": "Session ready",
+        "body": "Connect your wallet below if you haven't already, then click Pay to sign."
       },
       "paying": {
         "label": "Broadcasting",
@@ -631,6 +655,7 @@
       "engineError": "Payment infrastructure pending: the Vizzor engine doesn't have payment endpoints deployed yet. Use the Telegram bot to pay for now — same tier, same price.",
       "engineMarkedFailed": "The engine rejected this session. Retry, or contact support if it persists.",
       "rateUnavailable": "We couldn't lock the exchange rate. Retry in a moment.",
+      "rpcUnavailable": "The Solana RPC is rate-limited right now. Retry in a moment, or switch to TON / USDC.",
       "invalidInput": "The request shape we sent the server isn't valid. Refresh the page and pick a tier from /pricing.",
       "unsupportedChain": "Only Solana is supported in this release. Switch to SOL on Solana.",
       "priceLookup": "Couldn't look up the tier price on the server. Refresh the page.",
@@ -642,8 +667,8 @@
     "cta": {
       "start": "Start payment",
       "creating": "Creating…",
-      "payWithSol": "Pay with SOL",
-      "connectAndPay": "Connect wallet & pay",
+      "payWithSol": "Pay with SOL · {wallet}",
+      "connectAndPay": "Connect wallet to continue",
       "continueInTelegram": "Continue {chain} payment in Telegram"
     },
     "pending": {

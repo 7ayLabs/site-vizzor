@@ -45,7 +45,6 @@ import {
   WalletProvider,
 } from '@solana/wallet-adapter-react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
-import { SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
 import { solanaRpcUrl } from '@/lib/solana';
 
 import '@solana/wallet-adapter-react-ui/styles.css';
@@ -98,7 +97,25 @@ export default function WalletAdapter({
   // `WalletConnectFlow` re-evaluates each entry's `readyState` until
   // either the requested wallet appears or a 1.5s timeout fires, so
   // a late-registering Phantom still resolves cleanly.
-  const wallets = useMemo(() => [new SolflareWalletAdapter()], []);
+  // Pure Wallet Standard discovery. Modern Phantom, Solflare, Backpack,
+  // Glow, and Brave Wallet all register themselves via
+  // `window.navigator.wallets` and `WalletProvider` keeps the discovered
+  // list reactive — emitting updates whenever a registration arrives.
+  // We pass an empty `wallets` array so:
+  //
+  //   * The picker reflects EXACTLY what's installed in the browser.
+  //     No phantom (pun intended) entries for extensions the user
+  //     doesn't have.
+  //   * Brave's `window.solana` spoof of `isPhantom: true` is bypassed —
+  //     the legacy injection path is disabled entirely; only
+  //     Wallet-Standard-registered wallets appear, and Brave registers
+  //     as its own canonical name "Brave Wallet" alongside (not as)
+  //     Phantom.
+  //
+  // The picker UI handles the case where no wallets are registered yet
+  // by polling the reactive list — entries appear within a tick of
+  // Phantom's late registration without us pre-registering anything.
+  const wallets = useMemo(() => [], []);
 
   return (
     <ConnectionProvider endpoint={endpoint}>

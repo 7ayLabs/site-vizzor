@@ -31,6 +31,7 @@ import {
   effectivePriceCents,
   isValidCombo,
 } from '@/lib/payment/pricing-table';
+import { paymentNetwork } from '@/lib/payment/network';
 import {
   COOKIE_NAME,
   COOKIE_TTL_MS,
@@ -133,7 +134,12 @@ export async function POST(req: Request) {
     const cached = await getSession(cachedSessionId);
     if (cached.ok) {
       return NextResponse.json(
-        { ok: true, session: cached.session, idempotent: true },
+        {
+          ok: true,
+          session: cached.session,
+          network: paymentNetwork(),
+          idempotent: true,
+        },
         attachSessionCookie(cookieSessionId, !existingCookie),
       );
     }
@@ -170,7 +176,7 @@ export async function POST(req: Request) {
   }
   recordIdempotencyKey(idempotencyKey, result.session.sessionId);
   return NextResponse.json(
-    { ok: true, session: result.session },
+    { ok: true, session: result.session, network: paymentNetwork() },
     attachSessionCookie(cookieSessionId, !existingCookie),
   );
 }
