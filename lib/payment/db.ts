@@ -102,6 +102,23 @@ function init(): DB {
       expires_at        INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_auth_wallet ON auth_sessions(wallet_address);
+
+    /* v0.2.0 — C1 web3-purchase-flow additions. Additive only. */
+    CREATE TABLE IF NOT EXISTS idempotency_keys (
+      key               TEXT PRIMARY KEY,
+      session_id        TEXT NOT NULL,
+      created_at        INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000),
+      FOREIGN KEY (session_id) REFERENCES payment_sessions(session_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_idempotency_created
+      ON idempotency_keys(created_at);
+
+    CREATE TABLE IF NOT EXISTS rate_cache (
+      token             TEXT PRIMARY KEY,
+      usd_per           REAL NOT NULL,
+      fetched_at        INTEGER NOT NULL,
+      source            TEXT NOT NULL
+    );
   `);
   runV020Migrations(db);
   return db;
@@ -254,6 +271,19 @@ export interface WalletLinkRow {
   wallet_address: string;
   linked_at: number;
   siws_token: string | null;
+}
+
+export interface IdempotencyKeyRow {
+  key: string;
+  session_id: string;
+  created_at: number;
+}
+
+export interface RateCacheRow {
+  token: string;
+  usd_per: number;
+  fetched_at: number;
+  source: string;
 }
 
 /* ------------------------------------------------------------------ *\
@@ -536,5 +566,61 @@ export function findSubscriptionBySessionId(
        ORDER BY id DESC LIMIT 1`,
     )
     .get(sessionId) as SubscriptionRow | undefined;
+  return row ?? null;
+}
+
+/* ------------------------------------------------------------------ *\
+ * v0.2.0 — idempotency helpers (POST /api/payment/session dedupe).
+\* ------------------------------------------------------------------ */
+
+export function insertIdempotencyKey(
+  row: Omit<IdempotencyKeyRow, 'created_at'>,
+): void {
+  getDb()
+    .prepare(
+      `INSERT INTO idempotency_keys (key, session_id) VALUES (@key, @session_id)`,
+    )
+    .run(row);
+}
+
+export function findIdempotencyKey(key: string): IdempotencyKeyRow | null {
+  const row = getDb()
+    .prepare(`SELECT * FROM idempotency_keys WHERE key = ?`)
+    .get(key) as IdempotencyKeyRow | undefined;
+  return row ?? null;
+}
+
+/**
+ * Purge idempotency rows older than `cutoff` millis. Returns the
+ * number of rows removed. Called from the watcher-tick sweeper.
+ */
+export function pruneIdempotencyKeys(cutoff: number): number {
+  const r = getDb()
+    .prepare(`DELETE FROM idempotency_keys WHERE created_at < ?`)
+    .run(cutoff);
+  return r.changes;
+}
+
+/* ------------------------------------------------------------------ *\
+ * v0.2.0 — persisted last-known-good rate cache.
+\* ------------------------------------------------------------------ */
+
+export function upsertRateCache(row: RateCacheRow): void {
+  getDb()
+    .prepare(
+      `INSERT INTO rate_cache (token, usd_per, fetched_at, source)
+       VALUES (@token, @usd_per, @fetched_at, @source)
+       ON CONFLICT(token) DO UPDATE SET
+         usd_per    = excluded.usd_per,
+         fetched_at = excluded.fetched_at,
+         source     = excluded.source`,
+    )
+    .run(row);
+}
+
+export function getRateCache(token: string): RateCacheRow | null {
+  const row = getDb()
+    .prepare(`SELECT * FROM rate_cache WHERE token = ?`)
+    .get(token) as RateCacheRow | undefined;
   return row ?? null;
 }
