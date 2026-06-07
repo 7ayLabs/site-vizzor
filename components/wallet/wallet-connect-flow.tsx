@@ -35,6 +35,7 @@ import {
   WalletReadyState,
   type WalletName,
 } from '@solana/wallet-adapter-base';
+import { isMobileWeb, universalLinkFor } from '@/lib/wallet/mobile';
 
 export type SolanaProviderId = 'phantom' | 'solflare' | 'more';
 
@@ -107,6 +108,30 @@ export function WalletConnectFlow({
     [disconnect, onError],
   );
 
+  // Mobile handoff helper. On iOS / Android in a regular mobile browser
+  // (Safari, Chrome, Brave, …) the wallet's browser extension does not
+  // exist, so the Wallet Standard registry is empty and select() will
+  // never resolve. Instead of dropping the user on a desktop install
+  // page, we navigate to the wallet's *universal link*: the OS opens
+  // the matching wallet app and its in-app browser reloads the current
+  // page with the wallet provider injected. The reloaded page then
+  // discovers the wallet through the normal path. Returns true if we
+  // initiated a handoff (caller should stop and not call fail()).
+  const tryMobileHandoff = useCallback(
+    (id: SolanaProviderId): boolean => {
+      if (id === 'more' || !isMobileWeb()) return false;
+      const url = universalLinkFor(id);
+      if (!url) return false;
+      // Same-window navigation — the OS interprets the URL as an
+      // app link and hands off to the wallet app. The "connecting"
+      // status persists in the modal until the user returns, at
+      // which point the reloaded page picks up the in-app wallet.
+      window.location.href = url;
+      return true;
+    },
+    [],
+  );
+
   // Step 1 — select the requested wallet.
   //
   // Both legacy direct-injection adapters and Wallet Standard
@@ -160,6 +185,11 @@ export function WalletConnectFlow({
       }
       if (state === WalletReadyState.NotDetected) {
         startedRef.current = true;
+        // On mobile, "not detected" means there's no extension to detect.
+        // Hand off to the wallet app via its universal link — when the
+        // user returns the page reloads inside the wallet's webview
+        // with the provider present.
+        if (tryMobileHandoff(providerId)) return;
         const url = INSTALL_URLS[providerId];
         if (url && typeof window !== 'undefined') {
           window.open(url, '_blank', 'noopener,noreferrer');
@@ -178,6 +208,10 @@ export function WalletConnectFlow({
     const timer = window.setTimeout(() => {
       if (startedRef.current) return;
       startedRef.current = true;
+      // Mobile path takes priority — if the user is on iOS/Android
+      // there is no extension to wait for, so the timeout is the
+      // canonical moment to hand off to the wallet's universal link.
+      if (tryMobileHandoff(providerId)) return;
       const url = INSTALL_URLS[providerId];
       if (url && typeof window !== 'undefined') {
         window.open(url, '_blank', 'noopener,noreferrer');
@@ -186,7 +220,7 @@ export function WalletConnectFlow({
     }, READY_TIMEOUT_MS);
 
     return () => window.clearTimeout(timer);
-  }, [providerId, wallets, select, setVisible, onStatus, fail]);
+  }, [providerId, wallets, select, setVisible, onStatus, fail, tryMobileHandoff]);
 
   // Step 2 — once `select()` has settled and `wallet` is non-null,
   // call `connect()` explicitly. The provider's `autoConnect` is OFF
