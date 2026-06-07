@@ -1,10 +1,15 @@
 /**
  * /docs/* — Fumadocs-rendered MDX page.
  *
- * Loads the matching page from the MDX source map, hydrates the body with
- * Vizzor's design-system MDX components (TerminalBlock, TierBadge, DataTile,
- * ChainPill, etc.) plus Fumadocs' built-ins, and shows the EN-only banner
- * at the top of every doc page (callable from MDX as <EnOnlyBanner />).
+ * The root slug (`/docs`) is special-cased to render a custom hero +
+ * category-grid landing page instead of the default prose layout — see
+ * `components/docs/docs-landing.tsx`. Inner doc pages still flow through
+ * the standard Fumadocs `DocsPage` shell with the sidebar + TOC.
+ *
+ * MDX bodies are hydrated with the Vizzor design-system components
+ * (TerminalBlock, TierBadge, DataTile, ChainPill, etc.) plus Fumadocs'
+ * built-ins. The EN-only banner sits above every inner doc page (the
+ * landing handles its own copy in the hero).
  */
 
 import type { Metadata } from 'next';
@@ -23,15 +28,34 @@ import {
   CopyChip,
 } from '@/components/docs/mdx-components';
 import { EnOnlyBanner } from '@/components/docs/en-only-banner';
+import { DocsLanding } from '@/components/docs/docs-landing';
+import { DocsAskPill } from '@/components/docs/docs-ask-pill';
 
 interface PageProps {
   params: Promise<{ slug?: string[] }>;
+}
+
+function isRootSlug(slug: string[] | undefined): boolean {
+  return !slug || slug.length === 0;
 }
 
 export default async function Page({ params }: PageProps) {
   const { slug } = await params;
   const page = source.getPage(slug);
   if (!page) notFound();
+
+  // Root slug bypasses the prose layout — render the custom landing
+  // with the hero, category grid, and floating Telegram pill. The
+  // index.mdx source remains the canonical content reference but its
+  // prose body is not visually rendered here.
+  if (isRootSlug(slug)) {
+    return (
+      <DocsPage toc={[]}>
+        <DocsLanding />
+        <DocsAskPill />
+      </DocsPage>
+    );
+  }
 
   const MDX = page.data.body;
   const toc = Array.isArray(page.data.toc) ? page.data.toc : undefined;
@@ -58,6 +82,7 @@ export default async function Page({ params }: PageProps) {
           }}
         />
       </DocsBody>
+      <DocsAskPill />
     </DocsPage>
   );
 }
