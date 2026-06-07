@@ -25,19 +25,70 @@ import { listPendingSessions } from './db';
 import { paymentNetwork } from './network';
 import { finalizeSession } from './session';
 import { solanaTreasury } from './treasury';
+import { checkSignature, recordSignature } from './replay-cache';
+import { shortenAddress } from './log-redact';
 
 const POLL_INTERVAL_MS = 5_000;
 const SLIPPAGE_TOLERANCE = 0.005; // ±0.5%
 const LAMPORTS_PER_SOL = 1_000_000_000;
 
+/**
+ * USD threshold above which we wait for Solana `finalized` commitment
+ * instead of `confirmed`. Confirmed is ~400 ms and has a small reorg
+ * window; finalized is ~13 s but reorg-proof in practice. Acceptable
+ * latency cost for high-value sessions ($100+); negligible for the
+ * $19 monthly Pro flow.
+ *
+ * Override via VIZZOR_FINALIZED_USD_THRESHOLD (raw USD cents).
+ */
+const FINALIZED_USD_CENTS_DEFAULT = 10_000;
+function finalizedUsdCentsThreshold(): number {
+  const raw = process.env.VIZZOR_FINALIZED_USD_THRESHOLD;
+  if (!raw) return FINALIZED_USD_CENTS_DEFAULT;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return FINALIZED_USD_CENTS_DEFAULT;
+  return Math.floor(n);
+}
+
+/**
+ * Resolve commitment level for a given session amount. Lifetime-tier
+ * payments ($1,499) are auto-finalized; monthly ($19) stays on the
+ * faster `confirmed` path.
+ */
+export function commitmentForAmount(
+  amountUsdCents: number,
+): 'confirmed' | 'finalized' {
+  return amountUsdCents >= finalizedUsdCentsThreshold()
+    ? 'finalized'
+    : 'confirmed';
+}
+
 const KEY = Symbol.for('vizzor.payment.watcher');
+interface WatcherState {
+  started: boolean;
+  lastSlot: number | null;
+  /** Epoch-ms of the most recent successful pollOnce() return. */
+  lastTickAt: number | null;
+}
 interface GlobalWithWatcher {
-  [KEY]?: {
-    started: boolean;
-    lastSlot: number | null;
-  };
+  [KEY]?: WatcherState;
 }
 const g = globalThis as unknown as GlobalWithWatcher;
+
+/**
+ * Last successful poll-tick timestamp (epoch ms). Read by `/api/health`
+ * to flag a stuck watcher in the `subsystems.watcher.stale` field.
+ * `null` if the watcher has never ticked successfully — either it
+ * never booted (no Solana payments accepted) or every tick has failed.
+ */
+export function getWatcherLastTickAt(): number | null {
+  return g[KEY]?.lastTickAt ?? null;
+}
+
+/** Whether the watcher has been booted in this Node process. */
+export function isWatcherStarted(): boolean {
+  return g[KEY]?.started ?? false;
+}
 
 export function ensureWatcherStarted(): void {
   if (!acceptSolanaPayments()) return;
@@ -58,7 +109,8 @@ export function ensureWatcherStarted(): void {
         'SOLANA_RPC_URL or SOLANA_RPC_URL_MAINNET on the site host. See docs/ops/secrets.md.',
     );
   }
-  const state = (g[KEY] = g[KEY] ?? { started: false, lastSlot: null });
+  const state = (g[KEY] =
+    g[KEY] ?? { started: false, lastSlot: null, lastTickAt: null });
   if (state.started) return;
   state.started = true;
   void tick(state);
@@ -68,9 +120,11 @@ function solanaRpc(): string {
   return solanaRpcUrl();
 }
 
-async function tick(state: { lastSlot: number | null }): Promise<void> {
+async function tick(state: WatcherState): Promise<void> {
   try {
     await pollOnce(state);
+    // Mark a successful tick so /api/health can flag stuck watchers.
+    state.lastTickAt = Date.now();
   } catch (e) {
     // Swallow — watcher must keep running. Log to stderr for ops.
     // eslint-disable-next-line no-console
@@ -107,6 +161,9 @@ async function pollOnce(state: { lastSlot: number | null }): Promise<void> {
     if (sig.err) continue;
     if (state.lastSlot !== null && sig.slot <= state.lastSlot) continue;
 
+    // First-pass parse at 'confirmed' commitment — fast, cheap,
+    // surfaces the memo so we can decide the right commitment level
+    // for the matched session before deciding finalize.
     const tx = await connection.getParsedTransaction(sig.signature, {
       maxSupportedTransactionVersion: 0,
       commitment: 'confirmed',
@@ -118,6 +175,30 @@ async function pollOnce(state: { lastSlot: number | null }): Promise<void> {
 
     const session = pending.find((s) => s.session_id === memo);
     if (!session) continue;
+
+    // For high-value sessions, re-fetch at 'finalized' so a reorg
+    // cannot retroactively reverse the payment. Adds ~13s of latency
+    // on a $1,499 lifetime; zero cost on a $19 Pro monthly.
+    const requiredCommitment = commitmentForAmount(session.amount_usd_cents);
+    if (requiredCommitment === 'finalized') {
+      const finalTx = await connection.getParsedTransaction(sig.signature, {
+        maxSupportedTransactionVersion: 0,
+        commitment: 'finalized',
+      });
+      if (!finalTx || finalTx.meta?.err) {
+        // Not yet finalized — leave for a future tick. The retention
+        // sweep eventually expires unmatched sessions; the watcher's
+        // outer loop will retry as long as the session is pending.
+        continue;
+      }
+    }
+
+    // Replay defense: a Solana reorg can re-surface the same tx_sig
+    // against a different slot's view of the chain. Without this
+    // guard we'd re-credit the payment. See lib/payment/replay-cache.ts.
+    if (checkSignature(sig.signature)) {
+      continue;
+    }
 
     const transfer = extractNativeTransfer(tx, treasury);
     if (!transfer) continue;
@@ -134,9 +215,15 @@ async function pollOnce(state: { lastSlot: number | null }): Promise<void> {
     // atomically via the shared finalizeSession helper.
     const result = finalizeSession(session, sig.signature, transfer.payer);
     if (result.confirmed) {
+      // Record signature AFTER successful finalize so a finalize-side
+      // crash doesn't suppress the retry on the next tick.
+      recordSignature(sig.signature);
       // eslint-disable-next-line no-console
       console.info(
-        `[vizzor-watcher] confirmed ${session.session_id} · ${session.tier}/${session.cadence} · payer=${transfer.payer || 'unknown'}${result.walletLinkedTo ? ` · tg=${result.walletLinkedTo}` : ''}`,
+        // Payer wallet is redacted to first-4 / last-4 — full address
+        // would land in container logs / log aggregators, which is a
+        // GDPR-controllable PII flow we don't accept. See log-redact.ts.
+        `[vizzor-watcher] confirmed ${session.session_id} · ${session.tier}/${session.cadence} · payer=${shortenAddress(transfer.payer)}${result.walletLinkedTo ? ' · tg=bound' : ''}`,
       );
     }
   }

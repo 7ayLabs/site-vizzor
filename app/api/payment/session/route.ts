@@ -42,6 +42,8 @@ import {
   recordIdempotencyKey,
 } from '@/lib/payment/idempotency';
 import { ensureWatcherStarted } from '@/lib/payment/watcher';
+import { enforceRateLimit } from '@/lib/payment/rate-limit';
+import { checkOrigin } from '@/lib/payment/origin-check';
 import {
   PAYMENT_SESSION_ROUTE_REQUIREMENTS,
   assertRequiredEnv,
@@ -69,6 +71,13 @@ const VALID_PAIRS = new Set<string>([
 ]);
 
 export async function POST(req: Request) {
+  const origin = checkOrigin(req);
+  if (!origin.ok) {
+    return NextResponse.json({ ok: false, reason: origin.reason }, { status: 403 });
+  }
+  const limited = enforceRateLimit(req, 'payment.session');
+  if (limited) return limited;
+
   // Lazy boot of the Solana watcher daemon on the first session create.
   // Idempotent — only starts once per Node process, gated by the
   // acceptSolanaPayments() feature flag. TON / EVM watchers ship in

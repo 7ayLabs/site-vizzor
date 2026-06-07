@@ -28,13 +28,22 @@
 
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/payment/db';
+import {
+  getWatcherLastTickAt,
+  isWatcherStarted,
+} from '@/lib/payment/watcher';
+import { acceptSolanaPayments } from '@/lib/feature-flags';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+const WATCHER_STALE_THRESHOLD_MS = 30_000;
+
 interface SubsystemStatus {
   ok: boolean;
   detail?: string;
+  lastTickAt?: number | null;
+  stale?: boolean;
 }
 
 function probeSqlite(): SubsystemStatus {
@@ -46,9 +55,36 @@ function probeSqlite(): SubsystemStatus {
   }
 }
 
+/**
+ * Watcher health: report `ok` only when the watcher has booted AND
+ * ticked at least once within the last 30s. A watcher that hasn't
+ * booted (because Solana payments are disabled at the feature flag)
+ * is reported as `ok: true, detail: 'disabled'` — its absence isn't
+ * a degradation, it's deliberate.
+ */
+function probeWatcher(): SubsystemStatus {
+  if (!acceptSolanaPayments()) {
+    return { ok: true, detail: 'disabled' };
+  }
+  const started = isWatcherStarted();
+  const lastTickAt = getWatcherLastTickAt();
+  if (!started) {
+    return { ok: true, detail: 'not_started', lastTickAt: null };
+  }
+  if (lastTickAt === null) {
+    // Booted but never returned a successful poll. Could be a slow
+    // first tick or a broken RPC; report stale so ops investigates.
+    return { ok: false, detail: 'no_ticks_yet', lastTickAt: null, stale: true };
+  }
+  const stale = Date.now() - lastTickAt > WATCHER_STALE_THRESHOLD_MS;
+  return { ok: !stale, lastTickAt, stale };
+}
+
 export async function GET() {
   const sqlite = probeSqlite();
-  const status: 'healthy' | 'degraded' = sqlite.ok ? 'healthy' : 'degraded';
+  const watcher = probeWatcher();
+  const allOk = sqlite.ok && watcher.ok;
+  const status: 'healthy' | 'degraded' = allOk ? 'healthy' : 'degraded';
 
   return NextResponse.json(
     {
@@ -61,6 +97,7 @@ export async function GET() {
       timestamp: new Date().toISOString(),
       subsystems: {
         sqlite,
+        watcher,
       },
     },
     {

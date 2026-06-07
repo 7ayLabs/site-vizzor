@@ -15,6 +15,7 @@ import {
   AUTH_COOKIE,
   getActiveSession,
   getSubscriptionForActiveSession,
+  hashAuthToken,
 } from '@/lib/payment/auth-session';
 import { deleteAuthSession } from '@/lib/payment/db';
 
@@ -51,8 +52,9 @@ export async function GET() {
 
 export async function DELETE() {
   const jar = await cookies();
-  const token = jar.get(AUTH_COOKIE)?.value;
-  if (token) deleteAuthSession(token);
+  const raw = jar.get(AUTH_COOKIE)?.value;
+  // Hash before the DB lookup so it matches the stored hex digest.
+  if (raw) deleteAuthSession(hashAuthToken(raw));
 
   const headers = new Headers({ 'Cache-Control': 'no-store' });
   headers.append(

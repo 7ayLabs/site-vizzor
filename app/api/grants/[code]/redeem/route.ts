@@ -50,6 +50,7 @@ import {
   type SubscriptionRow,
 } from '@/lib/payment/db';
 import { requireBotSecret } from '@/lib/payment/bot-auth';
+import { enforceRateLimit } from '@/lib/payment/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -88,6 +89,9 @@ export async function POST(
   req: Request,
   ctx: { params: Promise<{ code: string }> },
 ): Promise<NextResponse> {
+  const limited = enforceRateLimit(req, 'grants.redeem');
+  if (limited) return limited as unknown as NextResponse;
+
   const auth = requireBotSecret(req);
   if (!auth.ok) {
     return jsonNoStore({ ok: false, reason: 'unauthorized' }, 401);

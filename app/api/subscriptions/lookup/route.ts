@@ -34,6 +34,8 @@ import {
   type SubscriptionRow,
 } from '@/lib/payment/db';
 import { requireBotSecret } from '@/lib/payment/bot-auth';
+import { enforceRateLimit } from '@/lib/payment/rate-limit';
+import { recordAudit } from '@/lib/payment/audit';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -115,8 +117,17 @@ function cacheSet(
 }
 
 export async function GET(req: Request): Promise<NextResponse> {
+  const limited = enforceRateLimit(req, 'subscriptions.lookup');
+  if (limited) return limited as unknown as NextResponse;
+
   const auth = requireBotSecret(req);
   if (!auth.ok) {
+    recordAudit({
+      eventType: 'subscription.lookup',
+      actor: 'bot',
+      outcome: 'denied',
+      req,
+    });
     return jsonNoStore({ ok: false, reason: 'unauthorized' }, 401);
   }
 
@@ -140,6 +151,13 @@ export async function GET(req: Request): Promise<NextResponse> {
   if (ttlMs > 0) {
     const hit = cacheGet(telegramUserId, now);
     if (hit !== undefined) {
+      recordAudit({
+        eventType: 'subscription.lookup',
+        actor: 'bot',
+        subject: telegramUserId,
+        outcome: hit.value ? 'found' : 'not_found',
+        req,
+      });
       return jsonNoStore({ ok: true, subscription: hit.value }, 200);
     }
   }
@@ -150,6 +168,14 @@ export async function GET(req: Request): Promise<NextResponse> {
   if (ttlMs > 0) {
     cacheSet(telegramUserId, wire, ttlMs, now);
   }
+
+  recordAudit({
+    eventType: 'subscription.lookup',
+    actor: 'bot',
+    subject: telegramUserId,
+    outcome: wire ? 'found' : 'not_found',
+    req,
+  });
 
   return jsonNoStore({ ok: true, subscription: wire }, 200);
 }

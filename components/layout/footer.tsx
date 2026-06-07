@@ -24,6 +24,7 @@ import {
   FileText,
   Github,
   History,
+  Lock,
   MessagesSquare,
   Receipt,
   Scale,
@@ -52,6 +53,7 @@ const PROJECT: readonly FooterItem[] = [
   { href: '/manifesto', key: 'manifesto' },
   { href: '/pricing', key: 'pricing' },
   { href: '/changelog', key: 'changelog' },
+  { href: '/legal/privacy', key: 'privacy' },
   {
     href: 'https://github.com/7ayLabs/vizzor/blob/main/LICENSE.md',
     key: 'license',
@@ -92,6 +94,7 @@ const PROJECT_ICONS: Record<string, LucideIcon> = {
   manifesto: FileText,
   pricing: Receipt,
   changelog: History,
+  privacy: Lock,
   license: Scale,
 };
 
@@ -162,6 +165,7 @@ export async function Footer() {
               manifesto: t('columns.project.manifesto'),
               pricing: t('columns.project.pricing'),
               changelog: t('columns.project.changelog'),
+              privacy: t('columns.project.privacy'),
               license: t('columns.project.license'),
             }}
             icons={PROJECT_ICONS}
