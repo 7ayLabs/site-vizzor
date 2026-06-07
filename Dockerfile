@@ -11,6 +11,13 @@ WORKDIR /app
 # Dependencies — install only (deterministic, cacheable)
 # ──────────────────────────────────────────────────────────────────────
 FROM base AS deps
+# Native-build toolchain for `better-sqlite3` (load-bearing — the site's
+# entire payment state lives in it) and a few wallet-adapter peer
+# native modules. Alpine ships none of these by default, so without
+# them `pnpm install` fails the deps stage on `node-gyp rebuild`.
+# These layers stay in the deps stage only; the final runner image
+# uses Next.js' standalone bundle and never sees node-gyp.
+RUN apk add --no-cache python3 make g++ libc-dev linux-headers
 COPY package.json pnpm-lock.yaml .npmrc ./
 RUN pnpm install --frozen-lockfile --prefer-offline
 
