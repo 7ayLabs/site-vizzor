@@ -409,8 +409,9 @@ function ProviderlessConnect({ label }: { label: string }) {
         aria-haspopup="dialog"
         aria-expanded={open}
         className="
-          hidden sm:inline-flex h-8 items-center gap-1.5 rounded-full
-          border border-[var(--border)] bg-transparent px-3
+          inline-flex h-8 items-center gap-1.5 rounded-full
+          border border-[var(--border)] bg-transparent
+          px-2.5 sm:px-3
           text-[11.5px] font-medium text-[var(--fg-2)]
           hover:bg-[var(--surface-2)] hover:text-[var(--fg)]
           focus-visible:outline-none focus-visible:ring-2
