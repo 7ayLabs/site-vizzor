@@ -10,6 +10,14 @@ interface ThemeContextValue {
   resolved: Resolved;
   setTheme: (next: Theme | 'system') => void;
   toggle: () => void;
+  /**
+   * Cycle through the three modes: light → dark → system → light. The
+   * 'system' stop lets users on mobile (or anywhere) opt back into
+   * following the OS preference after they've manually switched.
+   * Without it, a single tap on the toggle would lock the theme
+   * forever — system-follow becomes a one-way door.
+   */
+  cycle: () => void;
 }
 
 const STORAGE_KEY = 'vizzor-theme';
@@ -81,8 +89,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setTheme(resolved === 'dark' ? 'light' : 'dark');
   }, [resolved, setTheme]);
 
+  const cycle = useCallback(() => {
+    // light → dark → system → light. The order keeps the binary
+    // light/dark flip on the first tap (matching every other site)
+    // and surfaces 'system' on the third tap as the explicit
+    // "follow my OS" stop.
+    const next: Theme | 'system' =
+      theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light';
+    setTheme(next);
+  }, [theme, setTheme]);
+
   return (
-    <ThemeContext.Provider value={{ theme, resolved, setTheme, toggle }}>
+    <ThemeContext.Provider value={{ theme, resolved, setTheme, toggle, cycle }}>
       {children}
     </ThemeContext.Provider>
   );

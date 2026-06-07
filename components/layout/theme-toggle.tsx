@@ -1,27 +1,59 @@
 'use client';
 
 /**
- * ThemeToggle — minimal chromeless icon button.
+ * ThemeToggle — minimal chromeless icon button cycling light → dark → system.
  *
- * Header design vocabulary: text + icon, no surface/border chrome.
- * Hover lifts the icon colour to full --fg, brief 1.06× scale for a
- * tactile feel without the rectangle. Active state collapses to .95×.
- * The sun/moon swap is a single tween (rotate + scale + opacity)
- * cross-faded over 260ms so the transition reads as one gesture.
+ * Why three states?
+ *   The default for first-time visitors is `'system'`, which means a
+ *   mobile user on iOS dark mode lands on dark and the site tracks
+ *   the OS in real time (Settings → Display → Dark, or Auto sundown
+ *   schedules). If the toggle only flipped between `light` and `dark`,
+ *   the first tap would lock the theme forever — `'system'` becomes a
+ *   one-way door. The third stop lets the user opt back into "follow
+ *   my phone" without clearing site data.
+ *
+ * Visual contract:
+ *   - Borderless icon button on the bar's chromeless vocabulary.
+ *   - Sun / Moon / Monitor — one is visible at a time, others scale-0
+ *     + opacity-0 so the swap reads as a single rotation tween over
+ *     260ms. Monitor icon signals "synced with OS" — clicking again
+ *     leaves system-follow mode and returns to a fixed `light`.
+ *   - The aria-label describes what the *next* tap will do, not the
+ *     current state, so screen readers announce the action.
  */
 
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Sun, MonitorSmartphone } from 'lucide-react';
 import { useTheme } from './theme-provider';
 
 export function ThemeToggle() {
-  const { resolved, toggle } = useTheme();
-  const isDark = resolved === 'dark';
+  const { theme, cycle } = useTheme();
+
+  const nextLabel =
+    theme === 'light'
+      ? 'Switch to dark mode'
+      : theme === 'dark'
+        ? 'Sync theme with system'
+        : 'Switch to light mode';
+
+  // Each icon: present when matching theme, otherwise scale-0 +
+  // opacity-0 with a slight rotation to give the swap directionality.
+  const iconClass = (active: boolean, rotateOut: string) =>
+    `absolute transition-all duration-260 ease-out ${
+      active
+        ? 'rotate-0 scale-100 opacity-100'
+        : `${rotateOut} scale-0 opacity-0`
+    }`;
 
   return (
     <button
       type="button"
-      onClick={toggle}
-      aria-label={`Switch to ${isDark ? 'light' : 'dark'} mode`}
+      onClick={cycle}
+      aria-label={nextLabel}
+      title={
+        theme === 'system'
+          ? 'Theme: system (tap to override)'
+          : `Theme: ${theme}`
+      }
       className="
         group relative inline-flex h-8 w-8 items-center justify-center
         text-[var(--fg-3)]
@@ -35,16 +67,17 @@ export function ThemeToggle() {
       <Sun
         size={16}
         strokeWidth={1.75}
-        className={`absolute transition-all duration-260 ease-out ${
-          isDark ? 'rotate-90 scale-0 opacity-0' : 'rotate-0 scale-100 opacity-100'
-        }`}
+        className={iconClass(theme === 'light', 'rotate-90')}
       />
       <Moon
         size={16}
         strokeWidth={1.75}
-        className={`absolute transition-all duration-260 ease-out ${
-          isDark ? 'rotate-0 scale-100 opacity-100' : '-rotate-90 scale-0 opacity-0'
-        }`}
+        className={iconClass(theme === 'dark', '-rotate-90')}
+      />
+      <MonitorSmartphone
+        size={16}
+        strokeWidth={1.75}
+        className={iconClass(theme === 'system', 'rotate-45')}
       />
     </button>
   );
