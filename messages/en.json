@@ -6,7 +6,14 @@
       "pricing": "Pricing",
       "docs": "Docs"
     },
-    "cta": "Open in Telegram"
+    "cta": "Open in Telegram",
+    "mobileMenu": {
+      "label": "Site navigation",
+      "eyebrow": "menu",
+      "openAria": "Open menu",
+      "closeAria": "Close menu",
+      "settings": "Preferences"
+    }
   },
   "auth": {
     "connect": "Connect wallet",

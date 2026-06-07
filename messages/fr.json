@@ -6,7 +6,14 @@
       "pricing": "Tarifs",
       "docs": "Docs"
     },
-    "cta": "Ouvrir dans Telegram"
+    "cta": "Ouvrir dans Telegram",
+    "mobileMenu": {
+      "label": "Navigation du site",
+      "eyebrow": "menu",
+      "openAria": "Ouvrir le menu",
+      "closeAria": "Fermer le menu",
+      "settings": "Préférences"
+    }
   },
   "auth": {
     "connect": "Connecter portefeuille",
