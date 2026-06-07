@@ -79,12 +79,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # Full history so the secret scan sees every commit on a
+          # protected branch, not just HEAD.
           fetch-depth: 0
 
-      - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
+      # The gitleaks GitHub Action wrapper (gitleaks/gitleaks-action@v2)
+      # now requires a paid licence for organisation repositories. The
+      # underlying gitleaks binary stays MIT-licensed and free, so we
+      # download it directly and skip the wrapper entirely.
+      - name: Install gitleaks
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Pre-existing .env.example placeholders are allowlisted in
-          # .gitleaks.toml so the scan focuses on accidental commits.
-          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_VERSION: "8.30.1"
+        run: |
+          set -euo pipefail
+          curl -sSfL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /tmp gitleaks
+          sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Scan repository for leaked secrets
+        # `detect` walks every commit in history (vs `protect` which
+        # only diffs the latest). The .gitleaks.toml allowlist scopes
+        # known placeholders (.env.example, fixtures) out of the scan
+        # so the failure surface is exclusively accidental commits.
+        run: gitleaks detect
+          --source .
+          --config .gitleaks.toml
+          --redact
+          --no-banner
+          --verbose
