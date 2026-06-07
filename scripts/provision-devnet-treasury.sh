@@ -47,7 +47,13 @@ fi
 
 if ! command -v solana &>/dev/null; then
   echo "▶ Installing solana CLI (one-time, ~30s)"
-  sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+  # /tmp is mounted noexec on hardened VPSes — the installer extracts
+  # agave-install-init to TMPDIR and runs it, so noexec /tmp blocks the
+  # install. Point TMPDIR at a root-owned, executable scratch dir.
+  INSTALL_TMP="/root/.solana-install-cache"
+  mkdir -p "$INSTALL_TMP"
+  chmod 700 "$INSTALL_TMP"
+  TMPDIR="$INSTALL_TMP" sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
   export PATH="/root/.local/share/solana/install/active_release/bin:$PATH"
 fi
 
