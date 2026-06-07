@@ -22,6 +22,8 @@ import {
   parseSiwsAction,
   type SiwsAction,
 } from '@/lib/payment/siws';
+import { enforceRateLimit } from '@/lib/payment/rate-limit';
+import { checkOrigin } from '@/lib/payment/origin-check';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -32,6 +34,14 @@ interface Body {
 }
 
 export async function POST(req: Request) {
+  // Origin defense-in-depth: reject cross-origin POSTs before parsing.
+  const origin = checkOrigin(req);
+  if (!origin.ok) {
+    return NextResponse.json({ ok: false, reason: origin.reason }, { status: 403 });
+  }
+  const limited = enforceRateLimit(req, 'auth.siws.nonce');
+  if (limited) return limited;
+
   let body: Body;
   try {
     body = (await req.json()) as Body;

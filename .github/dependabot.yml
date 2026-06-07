@@ -1,0 +1,48 @@
+version: 2
+updates:
+  # Application dependencies. Grouped patch/minor PRs land weekly so
+  # the review surface stays small. Major bumps come as individual PRs
+  # so they get the architectural review they need.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Europe/Madrid
+    groups:
+      patch-updates:
+        applies-to: version-updates
+        update-types:
+          - patch
+      minor-updates:
+        applies-to: version-updates
+        update-types:
+          - minor
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - automated
+
+  # CI / workflow actions. Pinned to a SHA is best practice; we accept
+  # tag bumps for now and tighten in a follow-up once the action set
+  # is stable.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - ci
+
+  # Docker base image. Triggers when a new node:20-alpine digest is
+  # tagged so the security pass against the runtime image stays fresh.
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - infra

@@ -195,6 +195,55 @@ function runV020Migrations(db: DB): void {
     CREATE INDEX IF NOT EXISTS idx_replay_seen_at
       ON signature_replay_cache(seen_at);
   `);
+
+  // v0.2.x security slice — auth-token-hash migration (Layer B1).
+  //
+  // The auth_sessions.token column flipped semantics: it now stores
+  // SHA-256(rawToken) in 64 hex chars instead of the raw base64url
+  // 43-char token. Any existing row written before this deploy has
+  // length 43 and is unusable for the new lookup path — the user is
+  // forced to re-sign in once. We sweep those rows here.
+  //
+  // Idempotent: after the first boot every remaining row has length
+  // 64, so subsequent boots delete zero rows.
+  db.exec(
+    `DELETE FROM auth_sessions WHERE length(token) <> 64 OR token GLOB '*[^0-9a-f]*'`,
+  );
+
+  // v0.2.x security slice — per-IP token-bucket rate-limit state.
+  // Keys are opaque "{routeKey}:{HMAC-hashed-ip}" strings; we never
+  // store the raw client IP. Rows expire via the retention sweep
+  // (lib/payment/retention.ts) once they go stale, but stale rows
+  // also self-reset on the next touch because the refill calculation
+  // is monotonic in elapsed time.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS rate_limit_buckets (
+      key             TEXT PRIMARY KEY,
+      tokens          REAL    NOT NULL,
+      last_refill_at  INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_rate_limit_last_refill
+      ON rate_limit_buckets(last_refill_at);
+  `);
+
+  // v0.2.x security slice — audit log for PII-touching reads/writes.
+  // Subjects are always SHA-256 hashed before persistence so the log
+  // itself is not a second PII store. Retained 1 year by the sweep.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      occurred_at   INTEGER NOT NULL,
+      event_type    TEXT NOT NULL,
+      actor         TEXT NOT NULL,
+      subject_hash  TEXT,
+      outcome       TEXT NOT NULL,
+      ip_hash       TEXT,
+      ua_hash       TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_audit_occurred ON audit_log(occurred_at);
+    CREATE INDEX IF NOT EXISTS idx_audit_event
+      ON audit_log(event_type, occurred_at);
+  `);
 }
 
 export function getDb(): DB {

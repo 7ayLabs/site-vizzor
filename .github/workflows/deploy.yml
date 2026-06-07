@@ -93,11 +93,20 @@ jobs:
       - name: Smoke test
         run: |
           set -e
+          # v0.2.x security pass — validate the subsystems map, not
+          # just the 200. A degraded watcher or broken SQLite must
+          # fail the deploy so we never advertise green when the
+          # payment surface is actually down.
           for i in 1 2 3 4 5 6 7 8; do
             sleep 5
-            STATUS=$(curl -sf -o /dev/null -w "%{http_code}" https://vizzor.ai/api/health || echo "down")
-            echo "attempt $i → $STATUS"
-            if [ "$STATUS" = "200" ]; then exit 0; fi
+            BODY=$(curl -sf https://vizzor.ai/api/health || echo "")
+            STATUS=$(echo "$BODY" | jq -r '.status // "down"')
+            DB=$(echo "$BODY" | jq -r '.subsystems.sqlite.ok // false')
+            WATCHER=$(echo "$BODY" | jq -r '.subsystems.watcher.ok // false')
+            echo "attempt $i → status=$STATUS sqlite=$DB watcher=$WATCHER"
+            if [ "$STATUS" = "healthy" ] && [ "$DB" = "true" ] && [ "$WATCHER" = "true" ]; then
+              exit 0
+            fi
           done
-          echo "Health check failed after 8 attempts" >&2
+          echo "Health check failed: subsystems unhealthy after 8 attempts" >&2
           exit 1

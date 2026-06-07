@@ -26,6 +26,9 @@ import {
   type SiwsAction,
 } from '@/lib/payment/siws';
 import { insertAuthSession } from '@/lib/payment/db';
+import { enforceRateLimit } from '@/lib/payment/rate-limit';
+import { checkOrigin } from '@/lib/payment/origin-check';
+import { hashAuthToken } from '@/lib/payment/auth-session';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -43,6 +46,13 @@ interface Body {
 }
 
 export async function POST(req: Request) {
+  const origin = checkOrigin(req);
+  if (!origin.ok) {
+    return NextResponse.json({ ok: false, reason: origin.reason }, { status: 403 });
+  }
+  const limited = enforceRateLimit(req, 'auth.siws.verify');
+  if (limited) return limited;
+
   let body: Body;
   try {
     body = (await req.json()) as Body;
@@ -132,11 +142,13 @@ export async function POST(req: Request) {
     );
   }
 
-  // Mint the auth session.
+  // Mint the auth session. The raw token is what the browser receives
+  // in the HttpOnly cookie; the DB stores SHA-256(rawToken) so a DB
+  // leak doesn't yield a usable credential. See auth-session.ts.
   const token = generateAuthToken();
   const authExpiresAt = Date.now() + AUTH_TTL_MS;
   insertAuthSession({
-    token,
+    token: hashAuthToken(token),
     wallet_address: wallet,
     expires_at: authExpiresAt,
   });

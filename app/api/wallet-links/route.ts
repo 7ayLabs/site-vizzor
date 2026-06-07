@@ -60,6 +60,7 @@ import {
   insertWalletLink,
 } from '@/lib/payment/db';
 import { requireBotSecret } from '@/lib/payment/bot-auth';
+import { enforceRateLimit } from '@/lib/payment/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -90,6 +91,9 @@ function parseIso(s: unknown): Date | null {
 }
 
 export async function POST(req: Request): Promise<NextResponse> {
+  const limited = enforceRateLimit(req, 'wallet-links.write');
+  if (limited) return limited as unknown as NextResponse;
+
   const auth = requireBotSecret(req);
   if (!auth.ok) {
     return jsonNoStore({ ok: false, reason: 'unauthorized' }, 401);

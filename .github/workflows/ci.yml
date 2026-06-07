@@ -23,6 +23,10 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history so gitleaks can scan the diff against the
+          # merge base, not just the latest commit.
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -42,8 +46,13 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # v0.2.x security pass — lint stays soft-fail until ESLint is
+      # configured. `next lint` is deprecated in Next 15 and currently
+      # prompts interactively (would hang CI). Tracked as a follow-up
+      # in docs/security/threat-model.md §G2 — migrate to the ESLint
+      # CLI, then flip this gate to blocking.
       - name: Lint
-        run: pnpm lint || echo "lint not configured yet"
+        run: pnpm lint || echo "lint not yet configured (see docs/security/threat-model.md G2)"
         continue-on-error: true
 
       - name: Test
@@ -56,6 +65,25 @@ jobs:
           GIT_SHA: ${{ github.sha }}
           BUILD_TIME: ${{ github.event.head_commit.timestamp || 'pr-build' }}
 
-      - name: Dependency audit (advisory)
-        run: pnpm audit --audit-level high --prod || echo "pnpm audit reported advisories — review manually"
-        continue-on-error: true
+      # v0.2.x security pass — pnpm audit is blocking at high-severity.
+      # Critical advisories cannot land on a protected branch without a
+      # human override (re-running with the flag flipped via the
+      # github-product-owner agent or a documented exemption).
+      - name: Dependency audit
+        run: pnpm audit --audit-level high --prod
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pre-existing .env.example placeholders are allowlisted in
+          # .gitleaks.toml so the scan focuses on accidental commits.
+          GITLEAKS_CONFIG: .gitleaks.toml
