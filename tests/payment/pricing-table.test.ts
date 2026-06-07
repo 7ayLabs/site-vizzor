@@ -17,12 +17,12 @@ import {
 
 describe('priceCents / priceUsd', () => {
   it('returns the canonical PRICING_MODEL.md values', () => {
-    expect(priceCents('pro', 'monthly')).toBe(999);
-    expect(priceCents('pro', 'annual')).toBe(9900);
-    expect(priceCents('elite', 'monthly')).toBe(4900);
-    expect(priceCents('elite', 'annual')).toBe(49900);
-    expect(priceCents('elite', 'lifetime')).toBe(124900);
-    expect(priceUsd('elite', 'lifetime')).toBe('$1249.00');
+    expect(priceCents('pro', 'monthly')).toBe(1900);
+    expect(priceCents('pro', 'annual')).toBe(19000);
+    expect(priceCents('elite', 'monthly')).toBe(9900);
+    expect(priceCents('elite', 'annual')).toBe(99000);
+    expect(priceCents('elite', 'lifetime')).toBe(149900);
+    expect(priceUsd('elite', 'lifetime')).toBe('$1499.00');
   });
 
   it('returns null for invalid tier-cadence combos', () => {
@@ -74,20 +74,20 @@ describe('discountBps — per-chain matrix', () => {
 
 describe('effectivePriceCents', () => {
   it('applies the SOL discount and rounds to integer cents', () => {
-    // Pro monthly $9.99 × 85% = $8.4915 → 849.15 cents.
+    // Pro monthly $19 × 85% = $16.15 → 1615 cents.
     const cents = effectivePriceCents('pro', 'monthly', 'solana', 'native');
-    expect(cents).toBeCloseTo(849.15, 1);
+    expect(cents).toBe(1615);
   });
 
-  it('applies the 15% SOL lifetime discount to $1,249', () => {
+  it('applies the 15% SOL lifetime discount to $1,499', () => {
     const cents = effectivePriceCents(
       'elite',
       'lifetime',
       'solana',
       'native',
     );
-    // 124900 * 0.85 = 106165 cents = $1,061.65
-    expect(cents).toBe(106165);
+    // 149900 * 0.85 = 127415 cents = $1,274.15
+    expect(cents).toBe(127415);
   });
 
   it('returns null for invalid tier-cadence combos', () => {
@@ -99,14 +99,15 @@ describe('effectivePriceCents', () => {
 
 describe('effectivePriceUsd — display formatting', () => {
   it('formats with two-decimal precision per rail', () => {
+    // Pro monthly $19 base — SOL 15% / TON 10% / USDC 5%
     expect(effectivePriceUsd('pro', 'monthly', 'solana', 'native')).toBe(
-      '$8.49',
+      '$16.15',
     );
     expect(effectivePriceUsd('pro', 'monthly', 'ton', 'native')).toBe(
-      '$8.99',
+      '$17.10',
     );
     expect(effectivePriceUsd('pro', 'monthly', 'base', 'usdc')).toBe(
-      '$9.49',
+      '$18.05',
     );
   });
 });

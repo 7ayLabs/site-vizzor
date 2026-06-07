@@ -22,14 +22,15 @@ import { MotionReveal } from '@/components/ui/motion-reveal';
 import { LifetimePromoIsland } from '@/components/pricing/lifetime-promo-island';
 
 type Cadence = 'monthly' | 'annual' | 'lifetime';
+type TierKey = 'free' | 'pro' | 'elite';
 
 interface Tier {
-  key: 'free' | 'pro' | 'elite';
-  highlighted?: boolean;
+  key: TierKey;
   ctaHref: string;
   ctaVariant: 'primary' | 'outline';
-  /** Alternative billing cycles, rendered as secondary links under the
-   *  primary CTA. Empty for Free. */
+  external?: boolean;
+  /** Alternative billing cycles, rendered as inline links under the
+   *  price. Empty for Free. */
   altCadences: ReadonlyArray<Cadence>;
 }
 
@@ -38,17 +39,17 @@ const BOT = 'https://t.me/vizzorai_bot';
 const TIERS: ReadonlyArray<Tier> = [
   {
     key: 'free',
-    // Free tier still deep-links Telegram — no payment to process.
+    // Free tier deep-links Telegram — no payment to process.
     ctaHref: BOT,
     ctaVariant: 'outline',
+    external: true,
     altCadences: [],
   },
   {
     key: 'pro',
-    highlighted: true,
-    // Cadence CTAs now route to the on-site checkout shell at
-    // /pay/[tier]/[cadence]. The shell handles wallet connect + payment
-    // session + grant-code handoff. Stay on-site (no target=_blank).
+    // Cadence CTAs route to the on-site checkout shell at
+    // /pay/[tier]/[cadence]. The shell handles wallet connect +
+    // payment session + grant-code handoff.
     ctaHref: '/pay/pro/monthly',
     ctaVariant: 'primary',
     altCadences: ['annual'],
@@ -61,22 +62,21 @@ const TIERS: ReadonlyArray<Tier> = [
   },
 ];
 
-function cadenceHref(tier: Tier['key'], cadence: Cadence): string {
+function cadenceHref(tier: TierKey, cadence: Cadence): string {
   return `/pay/${tier}/${cadence}`;
 }
 
-const FEATURE_KEYS: Record<Tier['key'], readonly string[]> = {
-  free: ['predictions', 'tiers', 'commands', 'cliApi', 'community'],
-  pro: ['predictions', 'allTiers', 'precisions', 'alerts', 'polymarketAlerts', 'priority'],
-  elite: [
-    'agents',
-    'agentWallets',
-    'polymarketAgent',
-    'circuitBreaker',
-    'restApi',
-    'privateChannel',
-    'headStart',
-  ],
+/**
+ * Feature groups per tier — each key resolves to a `{title, body}`
+ * pair in the messages JSON. Groups are intentionally consolidated so
+ * each tier card scans in a single glance: 5 on Free, 6 on Pro and
+ * Elite. Adding a key here means adding both `title` and `body` under
+ * the same path in en / es / fr.
+ */
+const FEATURE_KEYS: Record<TierKey, readonly string[]> = {
+  free: ['scanner', 'security', 'context', 'discovery', 'trial'],
+  pro: ['predictor', 'tiers', 'families', 'aiChat', 'diagnose', 'audit'],
+  elite: ['whaleTerminal', 'smartMoney', 'forensics', 'preNews', 'crossVenue', 'api'],
 };
 
 const CHAINS = ['solana', 'ton', 'base', 'arbitrum'] as const;
@@ -252,12 +252,12 @@ function TierCard({
       </div>
 
       {/* 5. Primary CTA — full-width pill button.
-          Free stays opening Telegram in a new tab; paid tiers route to
+          Free deep-links Telegram in a new tab; paid tiers route to
           the on-site /pay checkout shell. */}
       <div className="mt-7">
         <a
           href={tier.ctaHref}
-          {...(tier.key === 'free'
+          {...(tier.external
             ? { target: '_blank', rel: 'noopener' }
             : {})}
           className={`
@@ -284,22 +284,34 @@ function TierCard({
             {everythingIn}
           </p>
         )}
-        <ul className="flex flex-col gap-3">
+        <ul className="flex flex-col gap-4">
           {featureKeys.map((k) => (
-            <li
-              key={k}
-              className="flex items-start gap-2.5 text-[14px] leading-relaxed text-[var(--fg-2)]"
-            >
+            <li key={k} className="flex items-start gap-3">
               <Check
                 size={15}
-                strokeWidth={2}
-                className="mt-1 shrink-0 text-[var(--fg-3)]"
+                strokeWidth={2.2}
+                className="mt-[3px] shrink-0 text-[var(--fg)]"
                 aria-hidden
               />
-              <span>{t(`tiers.${tier.key}.features.${k}`)}</span>
+              <div className="flex flex-col gap-0.5">
+                <p className="text-[13.5px] font-semibold leading-snug text-[var(--fg)]">
+                  {t(`tiers.${tier.key}.features.${k}.title`)}
+                </p>
+                <p className="text-[12.5px] leading-relaxed text-[var(--fg-3)]">
+                  {t(`tiers.${tier.key}.features.${k}.body`)}
+                </p>
+              </div>
             </li>
           ))}
         </ul>
+        {/* Free tier shows the actual command surface as a footnote
+            line beneath the bullets — it's reference info, not a
+            sellable feature, so it doesn't earn a check bullet. */}
+        {tier.key === 'free' && (
+          <p className="mt-2 mono tabular text-[10.5px] leading-relaxed text-[var(--fg-3)] uppercase tracking-[0.08em]">
+            {safe(t, 'tiers.free.commandsLine')}
+          </p>
+        )}
       </div>
     </div>
   );

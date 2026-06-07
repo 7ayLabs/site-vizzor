@@ -445,19 +445,19 @@
   "pricing": {
     "eyebrow": "tiers · facturation honnête",
     "title": "Tarifs",
-    "sub": "Trois tiers, deux cadences de facturation, payez en SOL sur Solana — économisez 10% instantanément. Annulez quand vous voulez. Auto-hébergez si vous préférez ne pas payer d'abonnement.",
+    "sub": "Quatre tiers, facturation on-chain en SOL, TON et USDC. Chaque rail intègre sa remise. Pas de carte. Annulez quand vous voulez.",
     "mostPopular": "Plus populaire",
     "orPrefix": "ou",
     "promo": {
       "lifetime": {
         "eyebrow": "Offre à vie",
         "title": "Payez une fois. Vizzor Elite pour toujours.",
-        "subtitle": "Bloquez l'accès à vie au prix d'aujourd'hui. Pas de renouvellements, pas de stress de quota — toutes les familles de signaux, tous les horizons, tant que Vizzor existe.",
+        "subtitle": "Bloquez la stack d'intelligence complète au prix d'aujourd'hui. Pas de renouvellements, pas de stress de quota — tous les signaux, tous les horizons, tant que Vizzor existe.",
         "lifetimePriceLabel": "À vie",
         "lifetimePriceCaption": "Paiement unique",
         "comparisonLabel": "Elite mensuel · 10 ans",
         "comparisonCaption": "Ce que vous payeriez sinon",
-        "solFootnote": "Payez en SOL sur Solana — économisez 10% instantanément",
+        "solFootnote": "Payez en SOL sur Solana — économisez 15% instantanément",
         "cta": "Voir l'offre à vie",
         "dismiss": "Non merci",
         "retriggerPill": "Offre à vie"
@@ -466,65 +466,116 @@
     "tiers": {
       "free": {
         "name": "Free",
-        "sub": "Commencez à noter des appels sur Telegram",
+        "sub": "Scannez le marché depuis Telegram",
         "price": "0 $",
         "priceUnit": "",
         "cta": "Ouvrir Telegram",
+        "commandsLine": "/scan · /price · /trends · /sentiment · /whale-alert · /narrative · /presale · /help",
         "features": {
-          "predictions": "10 prédictions par mois",
-          "tiers": "Signaux ✅ tracked + ⚪ advisory de base (pas de 🌟 high-conviction)",
-          "commands": "/predict · /wr · /price · /trends · /help",
-          "cliApi": "Installation du CLI + auto-hébergement (BUSL-1.1)",
-          "community": "Canal Telegram public + issues GitHub"
+          "scanner": {
+            "title": "Token Scanner",
+            "body": "Sentiment, price action et top movers en direct, sur les majors et la long-tail"
+          },
+          "security": {
+            "title": "Checks de sécurité sur tout token",
+            "body": "Risque de rug · honeypot · logique de taxes · ownership renoncé · concentration de holders"
+          },
+          "context": {
+            "title": "Contexte de marché au quotidien",
+            "body": "Indice Fear & Greed · titres crypto en direct · Whale Alerts sur mouvements on-chain de 1 M$+"
+          },
+          "discovery": {
+            "title": "Feed de discovery",
+            "body": "Nouvelles paires DEX · flow de narrative · tokens trending · spikes de volume · tracker de presales"
+          },
+          "trial": {
+            "title": "Essai Pro de 7 jours au premier /start",
+            "body": "Sans carte, sans KYC, redescend tout seul en Free — zéro risque pour tester"
+          }
         }
       },
       "pro": {
         "name": "Pro",
-        "sub": "Signaux illimités pour le trader actif",
-        "price": "9,99 $",
+        "sub": "L'établi du trader actif",
+        "price": "19 $",
         "priceUnit": "/ mois",
         "cta": "Obtenir Pro",
         "cadences": {
           "annual": {
-            "label": "Payer annuellement · 99 $/an (économisez 20 $)",
-            "inline": "99 $/an facturé annuellement"
+            "label": "Payer annuellement · 190 $/an (économisez 38 $)",
+            "inline": "190 $/an facturé annuellement"
           }
         },
         "everythingIn": "Tout Free, plus :",
         "features": {
-          "predictions": "Prédictions illimitées par mois",
-          "allTiers": "Tous les badges (✅ tracked + 🐋 whale-confirmed + 🌟 high-conviction)",
-          "precisions": "/precisions + /wr ventilation complète · par horizon, par tier, par session",
-          "alerts": "/alerts illimitées · seuils TP/SL armés automatiquement",
-          "polymarketAlerts": "Alertes d'edge Polymarket quand ChronoVisor diverge du marché",
-          "priority": "Priorité en cas de surcharge — sautez la file"
+          "predictor": {
+            "title": "Predictor illimité",
+            "body": "Tous les horizons de 5m → 7j, plus durées arbitraires (13m, 2h30, 3j) avec WR par horizon"
+          },
+          "tiers": {
+            "title": "4 tiers de prédiction calibrés",
+            "body": "🌟 high-conviction · 🐋 whale-confirmed · ✅ tracked · ⚪ advisory — probabilités Platt-scaled (63 % veut dire 63 %)"
+          },
+          "families": {
+            "title": "6 familles de signaux fusionnées par call",
+            "body": "Whale flow on-chain · ensemble ML · prediction markets · social / narrative · pattern match SMC + ICT · 21 règles FOL"
+          },
+          "aiChat": {
+            "title": "Chat IA avec tool-use",
+            "body": "Décrivez un setup en langage naturel — plan de trade + alertes TP1 / TP2 / SL s'arment seuls. Multi-LLM (Claude · GPT · Gemini · Ollama local)"
+          },
+          "diagnose": {
+            "title": "Diagnose & manipulation guard",
+            "body": "/diagnose explique chaque prédiction et chaque abstention. Le moteur refuse de prédire pendant les pump-and-dump, stampedes de funding et spikes de liquidité fine"
+          },
+          "audit": {
+            "title": "Alertes, audit trail, watchlist",
+            "body": "/alerts illimitées · chaque call signé et stocké · ventilation /precisions + /wr · watchlist personnelle"
+          }
         }
       },
       "elite": {
         "name": "Elite",
-        "sub": "Agents autonomes tradant chaque signal",
-        "price": "49 $",
+        "sub": "La stack d'intelligence complète",
+        "price": "99 $",
         "priceUnit": "/ mois",
         "cta": "Obtenir Elite",
         "cadences": {
           "annual": {
-            "label": "Payer annuellement · 499 $/an (économisez 89 $)",
-            "inline": "499 $/an facturé annuellement"
+            "label": "Payer annuellement · 990 $/an (économisez 198 $)",
+            "inline": "990 $/an facturé annuellement"
           },
           "lifetime": {
-            "label": "Paiement unique · 1 249 $ à vie (rentable en année 3)",
-            "inline": "1 249 $ une fois · accès à vie"
+            "label": "Paiement unique · 1 499 $ à vie (rentable ~année 1,3)",
+            "inline": "1 499 $ une fois · accès à vie"
           }
         },
         "everythingIn": "Tout Pro, plus :",
         "features": {
-          "agents": "🤖 Agents de trading autonomes — exécutent les trades on-chain dès qu'un signal s'émet, sans clic manuel",
-          "agentWallets": "Wallets multi-chaînes chiffrées par agent · risque isolé, la clé chaude ne quitte jamais l'appareil",
-          "polymarketAgent": "Agent Polymarket — trade quand les cotes ChronoVisor battent le marché",
-          "circuitBreaker": "Limites de perte par agent + /emergency-stop global — arrêt instantané sur tous les agents actifs",
-          "restApi": "REST API (60 req/min) — interrogez les agents, forcez des trades, surchargez les décisions par programme",
-          "privateChannel": "Canaux privés Telegram + Discord avec l'équipe d'ingénierie",
-          "headStart": "5 minutes d'avance sur chaque émission + accès anticipé aux nouveaux agents et signaux"
+          "whaleTerminal": {
+            "title": "Whale Terminal",
+            "body": "Mouvements de baleines on-chain en temps réel, par token, avec breakdown des top-20 holders et labels smart-money (exchange · OTC · baleine · dev · contrat)"
+          },
+          "smartMoney": {
+            "title": "Smart Money Flow",
+            "body": "Net-flow d'exchanges · transferts cold → hot · vélocité de mint de stablecoins (USDT / USDC) · drift de concentration de holders"
+          },
+          "forensics": {
+            "title": "Suite de forensics",
+            "body": "Reconstruction du flow-graph (token → exchange → desk OTC) · rug detector · auditeur de contrats · disassembler de bytecode · étiqueteur d'adresses"
+          },
+          "preNews": {
+            "title": "Signaux pre-news",
+            "body": "Filings SEC EDGAR · calendrier d'unlocks · IV / skew / term structure d'options (Deribit + Hyperliquid) · classificateur de catalyseurs LLM"
+          },
+          "crossVenue": {
+            "title": "Intelligence cross-venue",
+            "body": "Spreads de premium · divergence funding-z · arbitrage de venue · heatmap de flux rafraîchi à chaque bloc"
+          },
+          "api": {
+            "title": "REST API + file prioritaire",
+            "body": "REST API (60 req/min) pour signaux, snapshots et Predictor · vos symboles watchlist émettent en premier · cards de signal partageables"
+          }
         }
       }
     },
@@ -581,8 +632,8 @@
           "a": "Quatre rails sont en direct : SOL sur Solana (économisez 15%), TON (économisez 10%), USDC sur Base (économisez 5%), USDC sur Arbitrum (économisez 5%). SOL se signe sur le site ; les trois autres passent au bot Telegram pour signer. Chaque paiement est vérifié on-chain — pas de Stripe, pas de Plaid, pas de données de carte, pas d'intermédiaire."
         },
         "difference": {
-          "q": "Quelle est la différence pratique entre Free et Pro ?",
-          "a": "Free vous montre la ligne de base calibrée de Vizzor (tiers ✅ tracked + ⚪ advisory). Pro débloque 🐋 whale-confirmed et 🌟 high-conviction — la cohorte à haut WR qui apporte la plupart du alpha. Si vous utilisez Vizzor sérieusement, Pro se rentabilise avec un seul bon signal."
+          "q": "Quelle est la différence pratique entre Free, Pro et Elite ?",
+          "a": "Free, c'est le Scanner — sentiment, charts, top movers. Pro ajoute le Predictor — signaux illimités sur toute l'échelle d'horizons avec alertes armées. Elite ajoute le Whale Terminal et le heatmap de flux — la surface de signal on-chain payée par les desks sérieux."
         },
         "refund": {
           "q": "Remboursements ?",
