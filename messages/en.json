@@ -255,7 +255,7 @@
   "hero": {
     "ribbon": "{version} · climbing toward {target}% on the record",
     "headline": "Predict. Resolve. Score.",
-    "sub": "Crypto AI that grades itself in public. Six lenses, one verdict.",
+    "sub": "Vizzor calls the move, shows the smart money behind it, and tracks every win rate in public. Receipts you can audit — not vibes.",
     "tryCta": "Try Vizzor",
     "orLabel": "or run it locally",
     "badges": {
@@ -266,34 +266,34 @@
   },
   "whatsInIt": {
     "eyebrow": "what you actually get",
-    "title": "One prediction. Full receipts.",
-    "sub": "Drop a ticker. Get a call, the targets, the signals behind it, and an alert that arms itself at the level the engine flagged. No screenshots, no shilling — every call hits the public ledger.",
+    "title": "One call. Full receipts.",
+    "sub": "Ask about any token. Get a direction, a confidence number that means what it says, and an alert that arms itself at the level the engine flagged. No screenshots. No shilling.",
     "bullets": {
-      "directional": "Direction + calibrated confidence — not a vibe",
-      "targets": "Bull / base / bear targets at your horizon",
-      "snapshot": "Every signal that fired — nothing hidden, nothing cherry-picked"
+      "directional": "Direction and confidence — calibrated, not vibes",
+      "targets": "Smart money flow — see what whales are doing, in the same call",
+      "snapshot": "Alerts that arm themselves at the level — no manual setup"
     },
     "learnMore": "See the math"
   },
   "howItWorks": {
     "eyebrow": "how it works",
-    "title": "Six angles. One honest call.",
-    "lede": "Most AI tools take one feed and dress it up. Vizzor reads six independent angles at once — and stays silent unless they line up. Signal over noise, every time.",
-    "footer": "Read the full ChronoVisor math →",
+    "title": "Most bots fire constantly. Vizzor stays quiet — until it's sure.",
+    "lede": "Six independent angles cross-check every setup. A call ships only when four of them agree. The rest of the time, you get silence — and the reason why.",
+    "footer": "See the full breakdown →",
     "steps": {
       "fetch": {
         "title": "Listen",
-        "description": "Twelve live feeds wired in: exchange prices, whale wallets on-chain, breaking news, prediction-market odds. Refreshed every few seconds — no delays, no caching tricks.",
+        "description": "Live feeds from exchanges, whale wallets, breaking news, prediction-market odds. Refreshed every few seconds — no delays, no cache tricks.",
         "ariaLabel": "Six input signals fanning into a single fusion node"
       },
       "fuse": {
         "title": "Cross-check",
-        "description": "Each feed casts a weighted vote. The engine remembers what worked: hits boost the family's voice, misses dampen it. The model keeps re-grading itself in public.",
+        "description": "Each angle casts a weighted vote. Strong signals carry weight, weak ones get dampened. The engine remembers what worked and adjusts itself.",
         "ariaLabel": "Two converging curves meeting at a pulsing intersection point"
       },
       "emit": {
-        "title": "Only ship when it lines up",
-        "description": "Most of the time, the signals disagree — and you hear nothing. A call only ships when at least four of six lenses agree. Fewer pings, sharper edge.",
+        "title": "Only ship the A+",
+        "description": "Most of the time, the angles disagree — and you hear nothing. When four of six line up, the call ships with the math behind it. Fewer pings. Sharper edge.",
         "ariaLabel": "Four gates of increasing height with a star marking the final A+ emission"
       }
     }
@@ -379,34 +379,34 @@
     }
   },
   "sixSignals": {
-    "eyebrow": "signal families",
-    "title": "Six lenses. One call.",
-    "lede": "No single signal carries a prediction. Each family has to chip in — and lenses that disagree cost the call confidence, they don't get to outvote the others.",
+    "eyebrow": "what we read",
+    "title": "Six angles on every chart.",
+    "lede": "No single angle can fire a call. Each one has to chip in — and angles that disagree dampen the verdict, they don't get to outvote the others.",
     "ariaLabel": "{family} signal family",
     "families": {
       "onChain": {
-        "description": "Whale wallets, smart-money flows, stablecoin mint/burn, exchange in/outflows, Coinbase premium.",
-        "reveal": "Multi-chain. Free-tier RPCs only. Tracks $250k+ moves on a 30-second loop."
+        "description": "What the smart money is doing — whale wallets, exchange flows, stablecoin prints. Built on free data feeds, so no $1,200/mo subscription gets baked into your price.",
+        "reveal": "Tracks $250k+ moves on a 30-second loop."
       },
       "mlEnsemble": {
-        "description": "Python ML stack (XGBoost + LightGBM, isotonic-calibrated) with a JS fallback (RSI, MACD, Bollinger, EMA, volume, funding).",
-        "reveal": "If Python is offline, the JS path takes over silently — same calibration, no downtime."
+        "description": "The math models cross-checked against the indicators every trader watches — funding, volume, momentum. One signal, no spreadsheet.",
+        "reveal": "Runs anywhere — no Python, no GPU, no dependencies."
       },
       "predictionMarkets": {
-        "description": "Polymarket and Gamma odds, with built-in edge detection.",
-        "reveal": "Trades the spread when ChronoVisor disagrees with the crowd."
+        "description": "Polymarket odds and prediction-market spreads. When the crowd disagrees with our engine, that's an edge worth taking.",
+        "reveal": "Trades the spread when our verdict and the crowd diverge."
       },
       "socialNarrative": {
-        "description": "News NLP (CryptoPanic, CoinGecko) plus an LLM catalyst classifier — prompt-cached and budget-gated.",
-        "reveal": "Sentiment is a calibrated number, not a vibe — and we show the headline that moved it."
+        "description": "Breaking news and headlines, classified for actual impact. Not a vibe score — a number you can act on.",
+        "reveal": "Names the headline that moved the call, so you can see why."
       },
       "patternMatch": {
-        "description": "Smart Money Concepts (BOS, CHoCH, liquidity sweeps) plus ICT kill-zone timing.",
-        "reveal": "Pattern library rebuilds itself from every resolved trade."
+        "description": "The chart patterns the pros actually trade — liquidity sweeps, breakouts, kill-zones. The setups algos hunt before retail sees them.",
+        "reveal": "The pattern library rebuilds itself from every resolved trade."
       },
       "logicRules": {
-        "description": "14 core rules + 7 scalping rules. First-order logic over derivatives, macro, and on-chain features.",
-        "reveal": "Each rule's accuracy is tracked live. Losing rules get their weight halved; winning rules get +20%."
+        "description": "Hand-coded rules from professional-trader playbooks. Derivatives, macro, and on-chain — all checked at once.",
+        "reveal": "Each rule's hit rate is tracked live. Losing rules lose weight. Winners get a boost."
       }
     }
   },
@@ -415,30 +415,30 @@
     "title": "Our win rate is public. Decisively scored.",
     "ringLabel": "tracked win rate",
     "ringCaption": "all horizons · last 90 days · everything counted",
-    "ladderEyebrow": "four-tier emission ladder",
+    "ladderEyebrow": "four-tier ladder",
     "tiers": {
       "highConviction": {
         "name": "high-conviction",
-        "description": "At least 4 of 6 signals agree. Composite confidence ≥75. Horizon already proven by the calibrator."
+        "description": "At least four of six angles agree. Highest confidence the engine offers — and the most likely to land."
       },
       "whaleConfirmed": {
         "name": "whale-confirmed",
-        "description": "High-conviction AND whale wallets are moving the same direction. The rarest tier — and the highest hit rate."
+        "description": "High-conviction AND the smart money is moving the same direction. The rarest tier — and the highest hit rate."
       },
       "tracked": {
         "name": "tracked",
-        "description": "Clears every gate, just shy of the top tiers. Still inside the strict cohort that decides the public WR."
+        "description": "Clears every gate, just shy of the top tiers. Still inside the strict pool that decides the public win rate."
       },
       "advisory": {
         "name": "advisory",
-        "description": "Passes the soft gates only. Not in the strict cohort — but still resolved, still graded, still feeds the calibrator."
+        "description": "Passes the soft gates only. Not in the strict pool — but still resolved, still graded, still teaches the engine."
       }
     }
   },
   "ctaBlock": {
-    "eyebrow": "start with one prediction",
-    "title": "Predictions you can actually grade.",
-    "body": "Open the bot, ask about any token, and watch the call resolve. If it misses, the next one is sharper — the calibrator absorbs every outcome. Receipts compound.",
+    "eyebrow": "start with one call",
+    "title": "See the trade before it happens.",
+    "body": "Open the bot, ask about any token, and watch the call resolve. If it misses, the next one is sharper. Receipts compound.",
     "ctaTelegram": "Open in Telegram",
     "ctaCli": "Install the CLI",
     "manifesto": "Read the manifesto →"
@@ -457,6 +457,7 @@
     "title": "Pricing",
     "sub": "Three tiers, two billing cadences, pay in SOL on Solana — save 10% instantly. Cancel anytime. Self-host if you'd rather not pay a subscription at all.",
     "mostPopular": "Most popular",
+    "orPrefix": "or",
     "promo": {
       "lifetime": {
         "eyebrow": "Lifetime offer",
@@ -475,10 +476,10 @@
     "tiers": {
       "free": {
         "name": "Free",
-        "sub": "Get started with Vizzor on Telegram",
+        "sub": "Start grading calls on Telegram",
         "price": "$0",
-        "priceUnit": "/ mo",
-        "cta": "Start free",
+        "priceUnit": "",
+        "cta": "Open Telegram",
         "features": {
           "predictions": "10 predictions per month",
           "tiers": "Basic ✅ tracked + ⚪ advisory signals (no 🌟 high-conviction)",
@@ -489,15 +490,14 @@
       },
       "pro": {
         "name": "Pro",
-        "sub": "Unlimited signals for the active manual trader",
+        "sub": "Unlimited signals for the active trader",
         "price": "$9.99",
         "priceUnit": "/ mo",
-        "annualPrice": "$99",
-        "annualSub": "Save 17% billed annually",
-        "cta": "Get Pro · $9.99/mo",
+        "cta": "Get Pro",
         "cadences": {
           "annual": {
-            "label": "Pay annually · $99/yr (save $20)"
+            "label": "Pay annually · $99/yr (save $20)",
+            "inline": "$99/yr billed annually"
           }
         },
         "everythingIn": "Everything in Free, plus:",
@@ -512,18 +512,18 @@
       },
       "elite": {
         "name": "Elite",
-        "sub": "Autonomous on-chain trading agents acting on Vizzor signals",
+        "sub": "Autonomous agents trading every signal",
         "price": "$49",
         "priceUnit": "/ mo",
-        "annualPrice": "$499",
-        "annualSub": "Save 15% billed annually",
-        "cta": "Get Elite · $49/mo",
+        "cta": "Get Elite",
         "cadences": {
           "annual": {
-            "label": "Pay annually · $499/yr (save $89)"
+            "label": "Pay annually · $499/yr (save $89)",
+            "inline": "$499/yr billed annually"
           },
           "lifetime": {
-            "label": "Pay once · $1,249 lifetime (break-even year 3)"
+            "label": "Pay once · $1,249 lifetime (break-even year 3)",
+            "inline": "$1,249 paid once · lifetime"
           }
         },
         "everythingIn": "Everything in Pro, plus:",
@@ -545,46 +545,32 @@
     },
     "chains": {
       "eyebrow": "pay with crypto",
-      "title": "Solana native — more chains soon",
-      "sub": "Native SOL on Solana for instant confirms and ~$0.0001 fees. TON, EVM USDC, and TRON USDT are on the roadmap for later cycles.",
-      "phase1Label": "Live now",
-      "phase2Label": "Later cycle",
+      "title": "Four ways to pay. One subscription.",
+      "sub": "Pick the rail that matches your wallet. Each one has its own built-in discount. No Stripe, no card data, no middleman.",
       "items": {
         "solana": {
           "name": "Solana",
           "token": "SOL native",
-          "strategy": "Self-hosted SOL watcher · sub-second finality · save 10%.",
-          "phase": "1"
+          "discount": "save 15%",
+          "strategy": "Sub-second finality. Sign once on the site and you're done."
         },
         "ton": {
           "name": "TON",
           "token": "TON native",
-          "strategy": "TON Connect deep-link · later cycle.",
-          "phase": "2"
-        },
-        "polygon": {
-          "name": "Polygon",
-          "token": "USDC",
-          "strategy": "Self-hosted EVM watcher · later cycle.",
-          "phase": "2"
+          "discount": "save 10%",
+          "strategy": "Pay from your in-Telegram wallet. Instant confirm."
         },
         "base": {
           "name": "Base",
-          "token": "USDC",
-          "strategy": "Self-hosted EVM watcher · later cycle.",
-          "phase": "2"
+          "token": "USDC on Base",
+          "discount": "save 5%",
+          "strategy": "Circle USDC on Coinbase's L2. ~$0.01 gas."
         },
         "arbitrum": {
           "name": "Arbitrum",
-          "token": "USDC",
-          "strategy": "Self-hosted EVM watcher · later cycle.",
-          "phase": "2"
-        },
-        "tron": {
-          "name": "TRON",
-          "token": "USDT",
-          "strategy": "Self-hosted TRON watcher · later cycle.",
-          "phase": "2"
+          "token": "USDC on Arbitrum",
+          "discount": "save 5%",
+          "strategy": "Circle USDC on Arbitrum One. ~$0.01 gas."
         }
       }
     },
@@ -602,11 +588,7 @@
         },
         "chains": {
           "q": "Which chains can I pay from?",
-          "a": "Live now: native SOL on Solana — sub-second finality, ~$0.0001 fees, save 10% instantly. TON Connect, USDC on Polygon/Base/Arbitrum, and USDT on TRON are on the roadmap for later cycles. Each payment is verified by a self-hosted watcher — no Stripe, no Plaid, no card data, no middleman."
-        },
-        "selfHost": {
-          "q": "Can I self-host the engine?",
-          "a": "Yes. The CLI, Telegram bot, ChronoVisor engine, and dashboard ship under BUSL-1.1. Clone github.com/7ayLabs/vizzor, run `docker compose up -d`, and you have the same engine the hosted bot uses — no subscription required."
+          "a": "Four rails are live: SOL on Solana (save 15%), TON (save 10%), USDC on Base (save 5%), USDC on Arbitrum (save 5%). SOL is signed on-site; the other three hand off to the Telegram bot to sign. Every payment is verified on-chain — no Stripe, no Plaid, no card data, no middleman."
         },
         "difference": {
           "q": "What's the practical difference between Free and Pro?",
@@ -617,13 +599,6 @@
           "a": "Within 48 hours of payment, message the bot with /refund and we'll send back the on-chain amount (minus network fees). After 48 hours, no refunds — but you can still cancel for the next period at any time."
         }
       }
-    },
-    "selfHost": {
-      "eyebrow": "BUSL-1.1 · free to self-host",
-      "title": "Or run the engine yourself",
-      "sub": "Vizzor is BUSL-1.1 licensed. Self-host the bot, point /start at your own Telegram instance, and skip the subscription entirely. The math is identical, the receipts are identical, your data stays on your VPS.",
-      "primary": "Read the quickstart",
-      "secondary": "View on GitHub"
     }
   },
   "pay": {
