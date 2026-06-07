@@ -20,6 +20,7 @@ import { source } from '@/lib/source';
 import { sans, mono } from '../fonts';
 import { ThemeProvider, themeBootScript } from '@/components/layout/theme-provider';
 import { PageTransition } from '@/components/layout/page-transition';
+import { DocsAskPill } from '@/components/docs/docs-ask-pill';
 
 // docs.css is self-contained — it imports Tailwind, source-scans Fumadocs,
 // declares the design tokens, and brings the Fumadocs preset in. The
@@ -61,6 +62,14 @@ export default function DocsRootLayout({ children }: { children: ReactNode }) {
             >
               <PageTransition>{children}</PageTransition>
             </DocsLayout>
+            {/*
+              Floating Ask-Vizzor pill — mounted at the layout level,
+              outside <PageTransition>, so its `position: fixed`
+              anchors to the viewport rather than the transformed
+              page-transition wrapper. The pill stays put across
+              every navigation; only the docs page body animates.
+            */}
+            <DocsAskPill />
           </RootProvider>
         </ThemeProvider>
       </body>
