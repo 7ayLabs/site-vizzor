@@ -98,16 +98,16 @@ export function MobileMenu() {
         aria-expanded={phase === 'open' || phase === 'opening'}
         aria-label={t('mobileMenu.openAria')}
         className="
-          md:hidden inline-flex h-9 w-9 items-center justify-center
-          rounded-md border border-[var(--border)] bg-[var(--surface)]
-          text-[var(--fg)]
-          hover:bg-[var(--surface-2)] transition-colors
+          md:hidden inline-flex h-8 w-8 items-center justify-center
+          text-[var(--fg-3)]
+          transition-[color,transform] duration-200 ease-out
+          hover:text-[var(--fg)] hover:scale-[1.06]
+          active:scale-[0.94]
           focus-visible:outline-none focus-visible:ring-2
-          focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2
-          focus-visible:ring-offset-[var(--bg)]
+          focus-visible:ring-[var(--accent)] focus-visible:rounded-md
         "
       >
-        <Menu size={16} strokeWidth={2} />
+        <Menu size={18} strokeWidth={1.75} />
       </button>
 
       {mounted && phase !== 'closed' && (
@@ -242,7 +242,9 @@ function MobilePanel({ phase, onClose, nav, cta }: PanelProps) {
               {t('mobileMenu.sections.preferences')}
             </span>
             <div className="flex items-center gap-2">
-              <LanguageSwitch />
+              {/* placement='up' so the locale menu opens above the
+                  switch instead of dropping off the drawer footer. */}
+              <LanguageSwitch placement="up" />
               <ThemeToggle />
             </div>
           </div>
