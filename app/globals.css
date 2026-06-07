@@ -307,6 +307,30 @@
     from { transform: translateY(0)    scale(1);    opacity: 1; }
     to   { transform: translateY(16px) scale(0.96); opacity: 0; }
   }
+
+  /*
+   * Page transition — applied by components/layout/page-transition.tsx
+   * which re-keys on usePathname() so every intra-site navigation
+   * triggers a fresh mount of this wrapper. Calm fade + 6px slide up;
+   * the will-change hint helps Safari composite the layer without a
+   * paint flash. Reduced-motion users get the final state instantly
+   * via the global media block below.
+   */
+  .page-transition-enter {
+    animation: page-transition-enter 220ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    will-change: opacity, transform;
+  }
+
+  @keyframes page-transition-enter {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -19,6 +19,7 @@ import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 import { source } from '@/lib/source';
 import { sans, mono } from '../fonts';
 import { ThemeProvider, themeBootScript } from '@/components/layout/theme-provider';
+import { PageTransition } from '@/components/layout/page-transition';
 
 // docs.css is self-contained — it imports Tailwind, source-scans Fumadocs,
 // declares the design tokens, and brings the Fumadocs preset in. The
@@ -58,7 +59,7 @@ export default function DocsRootLayout({ children }: { children: ReactNode }) {
                 defaultOpenLevel: 1,
               }}
             >
-              {children}
+              <PageTransition>{children}</PageTransition>
             </DocsLayout>
           </RootProvider>
         </ThemeProvider>
