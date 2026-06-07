@@ -17,6 +17,7 @@ import Image from 'next/image';
 import { Link } from '@/i18n/navigation';
 import { ThemeToggle } from './theme-toggle';
 import { LanguageSwitch } from './language-switch';
+import { MobileMenu } from './mobile-menu';
 import { NavLinks } from './nav-links';
 import { WalletAuthButton } from '@/components/auth/wallet-auth-button';
 
@@ -32,8 +33,8 @@ export async function Header() {
         supports-[backdrop-filter]:bg-[var(--bg)]/75
       "
     >
-      <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between gap-6 px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-7">
+      <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between gap-4 sm:gap-6 px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center gap-7 min-w-0">
           <Link
             href="/"
             aria-label="Vizzor home"
@@ -72,23 +73,28 @@ export async function Header() {
 
         <div className="flex items-center gap-2">
           <WalletAuthButton hasProvider={false} />
-          <LanguageSwitch />
-          <ThemeToggle />
-          <a
-            href="https://t.me/vizzorai_bot"
-            target="_blank"
-            rel="noopener"
-            className="
-              hidden sm:inline-flex h-8 items-center gap-1.5 rounded-full
-              bg-[var(--accent)] px-3.5 text-[11.5px] font-semibold
-              text-[var(--accent-fg)]
-              transition-[transform,box-shadow] duration-150
-              hover:scale-[1.02] hover:shadow-[0_0_0_4px_color-mix(in_oklab,var(--accent)_20%,transparent)]
-            "
-          >
-            {t('cta')}
-            <span aria-hidden>→</span>
-          </a>
+          {/* Desktop-only chrome — the mobile drawer carries equivalent
+              affordances at md and below. */}
+          <span className="hidden md:flex items-center gap-2">
+            <LanguageSwitch />
+            <ThemeToggle />
+            <a
+              href="https://t.me/vizzorai_bot"
+              target="_blank"
+              rel="noopener"
+              className="
+                inline-flex h-8 items-center gap-1.5 rounded-full
+                bg-[var(--fg)] px-3.5 text-[11.5px] font-semibold
+                text-[var(--bg)]
+                transition-transform duration-150
+                hover:scale-[1.02]
+              "
+            >
+              {t('cta')}
+              <span aria-hidden>→</span>
+            </a>
+          </span>
+          <MobileMenu />
         </div>
       </div>
     </header>

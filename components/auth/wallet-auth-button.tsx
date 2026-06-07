@@ -22,7 +22,7 @@
  * a wallet-provider-bearing route.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import useSWR from 'swr';
 import { Wallet, LogOut, Check, UserCircle2 } from 'lucide-react';
@@ -108,6 +108,35 @@ function SignedInBadge({
 }) {
   const t = useTranslations('auth');
   const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  // Click-outside + Escape — the dropdown dismisses cleanly without
+  // disappearing on incidental hover-out. The listener attaches only
+  // while open so the navbar pays nothing in idle.
+  useEffect(() => {
+    if (!open) return;
+
+    const onPointerDown = (e: MouseEvent) => {
+      if (!wrapperRef.current) return;
+      if (wrapperRef.current.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
   if (!state.wallet) return null;
 
   const short = `${state.wallet.slice(0, 4)}…${state.wallet.slice(-4)}`;
@@ -119,14 +148,13 @@ function SignedInBadge({
     : null;
 
   return (
-    <div
-      className="relative"
-      onMouseLeave={() => setOpen(false)}
-    >
+    <div ref={wrapperRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        onMouseEnter={() => setOpen(true)}
+        aria-haspopup="menu"
+        aria-expanded={open}
         className="
           inline-flex h-8 items-center gap-1.5 rounded-full
           border border-[var(--border)] bg-[var(--surface-2)] px-3
@@ -149,7 +177,10 @@ function SignedInBadge({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 min-w-[220px] border border-[var(--border)] bg-[var(--surface)] shadow-lg">
+        <div
+          role="menu"
+          className="absolute right-0 top-full mt-1 z-50 min-w-[220px] border border-[var(--border)] bg-[var(--surface)] shadow-lg"
+        >
           <div className="px-4 py-3 border-b border-[var(--border)]">
             <p className="mono tabular text-[9.5px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
               {t('signedInAs')}
@@ -177,6 +208,8 @@ function SignedInBadge({
           )}
           <Link
             href="/account"
+            role="menuitem"
+            onClick={() => setOpen(false)}
             className="
               w-full flex items-center gap-2 px-4 py-2.5
               text-[12px] text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]
@@ -188,7 +221,11 @@ function SignedInBadge({
           </Link>
           <button
             type="button"
-            onClick={onSignOut}
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              void onSignOut();
+            }}
             className="
               w-full flex items-center gap-2 px-4 py-2.5
               text-[12px] text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]
