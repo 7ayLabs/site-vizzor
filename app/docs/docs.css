@@ -413,6 +413,30 @@
       transform: translateY(0);
     }
   }
+
+  /*
+   * VizzorLoader animations — mirror of the same utilities in
+   * app/globals.css so the route loader has visual parity in the
+   * docs zone.
+   */
+  .vizzor-loader-spin {
+    animation: vizzor-loader-spin 2.6s linear infinite;
+  }
+  .vizzor-loader-spin-fast {
+    animation: vizzor-loader-spin 1.1s linear infinite;
+  }
+  .vizzor-loader-pulse {
+    animation: vizzor-loader-pulse 1.4s ease-in-out infinite;
+  }
+
+  @keyframes vizzor-loader-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  @keyframes vizzor-loader-pulse {
+    0%, 100% { transform: scale(0.92); opacity: 0.65; }
+    50%      { transform: scale(1.04); opacity: 1; }
+  }
 }
 
 /* ---- KaTeX --- prevent block math overflow on narrow viewports ------- */
