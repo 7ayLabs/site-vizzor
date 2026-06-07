@@ -7,6 +7,7 @@ import { ThemeProvider, themeBootScript } from '@/components/layout/theme-provid
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { TickerCarouselServer } from '@/components/layout/ticker-carousel-server';
+import { PageTransition } from '@/components/layout/page-transition';
 import { routing } from '@/i18n/routing';
 import '../globals.css';
 
@@ -104,7 +105,9 @@ export default async function LocaleLayout({
           <ThemeProvider>
             <TickerCarouselServer />
             <Header />
-            <main>{children}</main>
+            <main>
+              <PageTransition>{children}</PageTransition>
+            </main>
             <Footer />
           </ThemeProvider>
         </NextIntlClientProvider>
