@@ -46,8 +46,17 @@ export const metadata: Metadata = {
       'Calibrated crypto forecasts. Six signal families. Tracked win rate on every horizon.',
   },
   icons: {
-    icon: '/favicon.ico',
+    // SVG is the primary — its embedded <style> swaps to a white mark
+    // under `prefers-color-scheme: dark`. Chrome and Firefox honour it
+    // directly; Safari falls back to the .ico.
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon-96x96.png', sizes: '96x96', type: 'image/png' },
+      { url: '/favicon.ico', sizes: 'any' },
+    ],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180' }],
   },
+  manifest: '/site.webmanifest',
 };
 
 export const viewport: Viewport = {
