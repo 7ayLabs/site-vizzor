@@ -331,6 +331,33 @@
       transform: translateY(0);
     }
   }
+
+  /*
+   * VizzorLoader — paired animations for the route-transition loader
+   * in components/layout/vizzor-loader.tsx. The outer ring rotates
+   * slowly (2.6s), the inner accented ring rotates faster (1.1s) in
+   * the same direction so the eye gets a clear sense of motion
+   * without dizziness. The brand mark inside pulses (scale + opacity)
+   * on a 1.4s loop independent of the rings.
+   */
+  .vizzor-loader-spin {
+    animation: vizzor-loader-spin 2.6s linear infinite;
+  }
+  .vizzor-loader-spin-fast {
+    animation: vizzor-loader-spin 1.1s linear infinite;
+  }
+  .vizzor-loader-pulse {
+    animation: vizzor-loader-pulse 1.4s ease-in-out infinite;
+  }
+
+  @keyframes vizzor-loader-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  @keyframes vizzor-loader-pulse {
+    0%, 100% { transform: scale(0.92); opacity: 0.65; }
+    50%      { transform: scale(1.04); opacity: 1; }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
