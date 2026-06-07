@@ -80,6 +80,16 @@
   --gold: var(--fg-2);
   --whale: var(--fg-2);
 
+  /* Direction tokens — the one scoped exception to strict monochrome.
+   * Price-change direction is a functional signal, not decoration; an
+   * up arrow that reads identical to a down arrow fails colorblind
+   * users and breaks the at-a-glance scan a ticker is built for. We
+   * pair these with ▲/▼ glyphs so the signal is still legible without
+   * color (AA). Tones are deep-saturated rather than retail-bright so
+   * they sit naturally next to the neutral palette. */
+  --up: #15803d;
+  --down: #b91c1c;
+
   --code-bg: #0a0a0a;
   --code-fg: #e8e8e8;
 
@@ -100,6 +110,12 @@
   --danger: var(--fg);
   --gold: var(--fg-2);
   --whale: var(--fg-2);
+
+  /* Direction tokens — lifted in dark mode for legible contrast on
+   * the near-black surface, still muted enough to read as financial
+   * data rather than retail bling. */
+  --up: #4ade80;
+  --down: #f87171;
 
   --code-bg: #000000;
   --code-fg: #e8e8e8;

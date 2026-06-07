@@ -2,9 +2,13 @@
  * Header — Ollama-style minimalist top bar.
  *
  * Layout: logo + 3-item inline nav (Surfaces, Pricing, Docs) on the left,
- * LanguageSwitch + ThemeToggle + Telegram CTA on the right. The CTA is
- * intentionally reduced to h-8 so the bar reads as "calm chrome", not as
- * the page's loudest object. Border is a thin var(--border) hairline.
+ * ThemeToggle + Telegram CTA on the right. The CTA is intentionally
+ * reduced to h-8 so the bar reads as "calm chrome", not as the page's
+ * loudest object. Border is a thin var(--border) hairline.
+ *
+ * Language picker lives in the footer (Stripe / Cloudflare / Anthropic
+ * pattern): it's a set-once preference, doesn't earn a top-bar slot.
+ * Theme stays in the navbar — high-frequency toggle, can't bury it.
  *
  * The "Surfaces" nav item is an anchor to the SurfaceCompare section on
  * the Docs page (`/docs#surfaces`) — the nav surfaces the comparison, not
@@ -16,7 +20,6 @@ import { getTranslations } from 'next-intl/server';
 import Image from 'next/image';
 import { Link } from '@/i18n/navigation';
 import { ThemeToggle } from './theme-toggle';
-import { LanguageSwitch } from './language-switch';
 import { MobileMenu } from './mobile-menu';
 import { NavLinks } from './nav-links';
 import { WalletAuthButton } from '@/components/auth/wallet-auth-button';
@@ -76,7 +79,6 @@ export async function Header() {
           {/* Desktop-only chrome — the mobile drawer carries equivalent
               affordances at md and below. */}
           <span className="hidden md:flex items-center gap-2">
-            <LanguageSwitch />
             <ThemeToggle />
             <a
               href="https://t.me/vizzorai_bot"

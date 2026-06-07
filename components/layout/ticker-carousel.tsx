@@ -65,9 +65,14 @@ function TickerPill({ entry }: { entry: TickerEntry }) {
           <AnimatedNumber value={entry.price} format="usd" duration={500} />
         </span>
         <span
-          className="mono tabular text-[11px]"
-          style={{ color: positive ? 'var(--accent)' : 'var(--danger)' }}
+          className="mono tabular text-[11px] inline-flex items-center gap-1"
+          style={{ color: positive ? 'var(--up)' : 'var(--down)' }}
         >
+          {/* ▲ / ▼ glyph — direction redundancy for colorblind users
+              and high-contrast modes where the up/down tint flattens. */}
+          <span aria-hidden className="text-[8px] leading-none">
+            {positive ? '▲' : '▼'}
+          </span>
           <AnimatedNumber
             value={entry.changePct * 100}
             format="pct"
