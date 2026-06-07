@@ -20,7 +20,21 @@ import { createHash } from 'node:crypto';
 import { getAuthSession, deleteAuthSession } from './db';
 import { findActiveSubscriptionByWallet, type SubscriptionRow } from './db';
 
+/**
+ * The canonical (legacy) auth-cookie name. New deployments under HTTPS
+ * also accept and prefer `__Host-vizzor.auth` per RFC 6265bis §4.1.3.2:
+ * the prefix is browser-enforced as Path=/ + Secure + no Domain, so a
+ * subdomain cannot forge or shadow the cookie. Local dev (NODE_ENV !==
+ * 'production') still uses the plain name because `__Host-` requires
+ * Secure, which a localhost HTTP origin cannot satisfy.
+ */
 export const AUTH_COOKIE = 'vizzor.auth';
+export const AUTH_COOKIE_HOST = '__Host-vizzor.auth';
+
+/** Pick the right cookie name to emit on Set-Cookie based on environment. */
+export function authCookieName(): string {
+  return process.env.NODE_ENV === 'production' ? AUTH_COOKIE_HOST : AUTH_COOKIE;
+}
 
 export interface ActiveSession {
   wallet: string;
@@ -39,7 +53,11 @@ export function hashAuthToken(raw: string): string {
 
 export async function getActiveSession(): Promise<ActiveSession | null> {
   const jar = await cookies();
-  const raw = jar.get(AUTH_COOKIE)?.value;
+  // Prefer the hardened `__Host-` cookie if present, fall back to the
+  // legacy name. Browsers that received the new cookie pre-rotation
+  // continue to send the legacy one until it expires; we honour both
+  // until the legacy 24h TTL has rolled over for every active session.
+  const raw = jar.get(AUTH_COOKIE_HOST)?.value ?? jar.get(AUTH_COOKIE)?.value;
   if (!raw) return null;
   const hashed = hashAuthToken(raw);
   const row = getAuthSession(hashed);

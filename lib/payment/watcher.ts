@@ -21,12 +21,14 @@
 import { Connection, PublicKey } from '@solana/web3.js';
 import { acceptSolanaPayments } from '@/lib/feature-flags';
 import { solanaRpcUrl } from '@/lib/solana';
-import { listPendingSessions } from './db';
+import { getDb, listPendingSessions } from './db';
 import { paymentNetwork } from './network';
 import { finalizeSession } from './session';
 import { solanaTreasury } from './treasury';
 import { checkSignature, recordSignature } from './replay-cache';
 import { shortenAddress } from './log-redact';
+import { screenPayer } from './sanctions';
+import { recordAudit, actorFromWallet } from './audit';
 
 const POLL_INTERVAL_MS = 5_000;
 const SLIPPAGE_TOLERANCE = 0.005; // ±0.5%
@@ -208,6 +210,37 @@ async function pollOnce(state: { lastSlot: number | null }): Promise<void> {
       console.warn(
         `[vizzor-watcher] amount mismatch on ${memo}: paid ${transfer.amount} SOL, expected ${session.amount}`,
       );
+      continue;
+    }
+
+    // v0.2.x compliance — OFAC payer screen. A sanctioned payer means
+    // we hard-stop the session at 'failed' (operator unblocks manually
+    // after refund review) and burn the signature so subsequent ticks
+    // skip the same tx. Never finalize and never expose the failure
+    // mode to the public API — it lands in `audit_log` only.
+    const screen = screenPayer(transfer.payer, 'solana');
+    if (!screen.ok) {
+      try {
+        getDb()
+          .prepare(`UPDATE payment_sessions SET status='failed' WHERE session_id=? AND status='pending'`)
+          .run(session.session_id);
+      } catch {
+        // Best effort — even if the DB update fails, recording the
+        // signature below prevents re-finalization on the next tick.
+      }
+      recordAudit({
+        eventType: 'grant.redeem', // closest existing event type; OFAC
+        // events get their own type when v0.3.x extends the AuditEventType
+        // union. For now we co-opt this with a clear outcome value below.
+        actor: actorFromWallet(transfer.payer),
+        subject: session.session_id,
+        outcome: 'denied',
+      });
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[vizzor-watcher] BLOCKED sanctioned payer ${shortenAddress(transfer.payer)} on session ${session.session_id}`,
+      );
+      recordSignature(sig.signature);
       continue;
     }
 

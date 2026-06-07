@@ -28,7 +28,7 @@ import {
 import { insertAuthSession } from '@/lib/payment/db';
 import { enforceRateLimit } from '@/lib/payment/rate-limit';
 import { checkOrigin } from '@/lib/payment/origin-check';
-import { hashAuthToken } from '@/lib/payment/auth-session';
+import { authCookieName, hashAuthToken } from '@/lib/payment/auth-session';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -160,16 +160,23 @@ export async function POST(req: Request) {
   // `Secure` is added in production so cookies are never carried over
   // plaintext HTTP (RFC §4.10 / B6). Staging without TLS keeps the
   // pre-patch behavior.
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  const isProd = process.env.NODE_ENV === 'production';
+  const secure = isProd ? '; Secure' : '';
+  // SameSite=Strict in production to block cross-site CSRF on the auth
+  // cookie; Lax in dev so localhost reloads from a tooling tab still
+  // present the session. The `__Host-` prefix in prod requires Secure +
+  // Path=/ + no Domain — all three are satisfied below.
+  const sameSite = isProd ? 'Strict' : 'Lax';
+  const cookieName = authCookieName();
   // Delete the nonce cookie so it can't be replayed.
   headers.append(
     'Set-Cookie',
     `vizzor.siws.nonce=; Path=/api/auth; Max-Age=0; HttpOnly; SameSite=Strict${secure}`,
   );
-  // Set the auth-session cookie.
+  // Set the auth-session cookie under the env-appropriate name.
   headers.append(
     'Set-Cookie',
-    `vizzor.auth=${token}; Path=/; Max-Age=${Math.floor(AUTH_TTL_MS / 1000)}; HttpOnly; SameSite=Lax${secure}`,
+    `${cookieName}=${token}; Path=/; Max-Age=${Math.floor(AUTH_TTL_MS / 1000)}; HttpOnly; SameSite=${sameSite}${secure}`,
   );
 
   return new NextResponse(
