@@ -244,6 +244,25 @@ function runV020Migrations(db: DB): void {
     CREATE INDEX IF NOT EXISTS idx_audit_event
       ON audit_log(event_type, occurred_at);
   `);
+
+  // v0.2.x security slice — OFAC / sanctions denylist for payer wallets.
+  // Sourced from a community OFAC list (US Treasury SDN export + the
+  // well-known Tornado Cash deposit addresses) on first boot via
+  // lib/payment/sanctions.ts. Cached locally so the watcher's hot path
+  // never hits the network. The `chain` column lets us key the same
+  // address across chains (a sanctioned ETH address has a corresponding
+  // representation on Solana via wrapped contracts).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sanctioned_addresses (
+      address     TEXT NOT NULL,
+      chain       TEXT NOT NULL,
+      source      TEXT NOT NULL,
+      added_at    INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000),
+      removed_at  INTEGER,
+      PRIMARY KEY (address, chain)
+    );
+    CREATE INDEX IF NOT EXISTS idx_sanctioned_address ON sanctioned_addresses(address);
+  `);
 }
 
 export function getDb(): DB {
@@ -653,6 +672,71 @@ export function pruneIdempotencyKeys(cutoff: number): number {
 /* ------------------------------------------------------------------ *\
  * v0.2.0 — persisted last-known-good rate cache.
 \* ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------ *\
+ * v0.2.x — OFAC / sanctions denylist helpers.
+ *
+ * The hot path (`isSanctionedAddress`) is a single primary-key lookup
+ * on `(address, chain)` and runs every time the watcher matches a
+ * payer to a session. The seed list is loaded once at startup via
+ * lib/payment/sanctions.ts; subsequent additions go through
+ * `insertSanctionedAddress` (operator-driven, no auto-fetch in v1).
+\* ------------------------------------------------------------------ */
+
+export interface SanctionedAddressRow {
+  address: string;
+  chain: string;
+  source: string;
+  added_at: number;
+  removed_at: number | null;
+}
+
+export function insertSanctionedAddress(
+  row: Omit<SanctionedAddressRow, 'added_at' | 'removed_at'> & {
+    added_at?: number;
+  },
+): void {
+  getDb()
+    .prepare(
+      `INSERT OR IGNORE INTO sanctioned_addresses (address, chain, source, added_at)
+       VALUES (@address, @chain, @source, @added_at)`,
+    )
+    .run({
+      address: row.address,
+      chain: row.chain,
+      source: row.source,
+      added_at: row.added_at ?? Date.now(),
+    });
+}
+
+export function isSanctionedAddress(address: string, chain?: string): boolean {
+  const db = getDb();
+  if (chain) {
+    const row = db
+      .prepare(
+        `SELECT 1 FROM sanctioned_addresses
+         WHERE address = ? AND chain = ? AND removed_at IS NULL`,
+      )
+      .get(address, chain) as { 1: number } | undefined;
+    return row !== undefined;
+  }
+  // Chain-agnostic lookup — defends a Solana payment from a sanctioned
+  // EVM address that funded the bridge if the same string happens to be
+  // a valid Solana address. Cheap insurance.
+  const row = db
+    .prepare(
+      `SELECT 1 FROM sanctioned_addresses WHERE address = ? AND removed_at IS NULL LIMIT 1`,
+    )
+    .get(address) as { 1: number } | undefined;
+  return row !== undefined;
+}
+
+export function countSanctionedAddresses(): number {
+  const row = getDb()
+    .prepare(`SELECT COUNT(*) AS n FROM sanctioned_addresses WHERE removed_at IS NULL`)
+    .get() as { n: number };
+  return row.n;
+}
 
 export function upsertRateCache(row: RateCacheRow): void {
   getDb()

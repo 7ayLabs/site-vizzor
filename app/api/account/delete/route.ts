@@ -132,10 +132,18 @@ export async function POST(req: Request): Promise<NextResponse> {
   // Sign the user out — their session was just deleted from the DB
   // but the cookie still holds the raw token until the browser drops
   // it. Send the explicit clear so the page reloads as signed-out.
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  // Clear BOTH possible cookie names (legacy + __Host-) so a user who
+  // signed in pre-rotation has both purged.
+  const isProd = process.env.NODE_ENV === 'production';
+  const secure = isProd ? '; Secure' : '';
+  const sameSite = isProd ? 'Strict' : 'Lax';
   headers.append(
     'Set-Cookie',
-    `vizzor.auth=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secure}`,
+    `vizzor.auth=; Path=/; Max-Age=0; HttpOnly; SameSite=${sameSite}${secure}`,
+  );
+  headers.append(
+    'Set-Cookie',
+    `__Host-vizzor.auth=; Path=/; Max-Age=0; HttpOnly; SameSite=${sameSite}${secure}`,
   );
 
   const body: DeletionReport = {

@@ -51,6 +51,7 @@ import {
 } from '@/lib/payment/db';
 import { requireBotSecret } from '@/lib/payment/bot-auth';
 import { enforceRateLimit } from '@/lib/payment/rate-limit';
+import { recordAudit } from '@/lib/payment/audit';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -240,6 +241,18 @@ export async function POST(
   if (!attachedRow) {
     return jsonNoStore({ ok: false, reason: 'internal_error' }, 500);
   }
+
+  // Successful redemption — log to audit_log so an operator can
+  // reconstruct "who redeemed grant X from where" during incident
+  // response. The grant code itself is the subject (hashed before
+  // persistence by recordAudit).
+  recordAudit({
+    eventType: 'grant.redeem',
+    actor: 'bot',
+    subject: code,
+    outcome: 'ok',
+    req,
+  });
 
   return jsonNoStore(
     { ok: true, subscription: toWireSubscription(attachedRow) },
