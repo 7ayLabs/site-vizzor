@@ -19,6 +19,12 @@ FROM base AS deps
 # uses Next.js' standalone bundle and never sees node-gyp.
 RUN apk add --no-cache python3 make g++ libc-dev linux-headers eudev-dev
 COPY package.json pnpm-lock.yaml .npmrc ./
+# fumadocs-mdx runs as a postinstall hook and hashes source.config.ts —
+# the deps stage has no source tree, so without this copy the install
+# throws "Cannot find config file". The file is self-contained (only
+# imports from npm packages) so this doesn't bust the layer cache
+# unless the MDX config itself changes.
+COPY source.config.ts ./
 RUN pnpm install --frozen-lockfile --prefer-offline
 
 # ──────────────────────────────────────────────────────────────────────
