@@ -1,0 +1,110 @@
+# site-vizzor compose entry — staging (test.vizzor.ai)
+#
+# Sibling to docs/ops/site-vizzor-compose-snippet.yml — that one is the
+# production block for the site-vizzor service on vizzor.ai; this one is
+# the staging block that backs https://test.vizzor.ai.
+#
+# Both run on the same VPS. Caddy terminates TLS for both domains and
+# reverse-proxies them to different loopback ports (7120 for prod, 7121
+# for staging). They share neither secrets nor the SQLite volume.
+#
+# Like the prod snippet, this file is committed in the site-vizzor repo
+# for review (under `infra: branch-driven staging deploys`) but the
+# operator-facing edit happens in the adjacent `7ayLabs/vizzor` product
+# repo's `docker-compose.staging.yml`. To apply:
+#
+#   1. Copy the `site-vizzor-staging:` block below into the `services:`
+#      map of the product repo's `docker-compose.staging.yml`.
+#   2. Copy the `site-vizzor-staging-db:` block into the `volumes:` map
+#      at the bottom of the same file.
+#   3. On the VPS, render the staging env file from 1Password:
+#        op inject -i /opt/7aylabs/.env.staging.template \
+#                  -o /opt/7aylabs/.env.staging
+#        chmod 600 /opt/7aylabs/.env.staging
+#   4. Bring the service up the first time:
+#        cd /opt/7aylabs
+#        docker compose -f docker-compose.yml -f docker-compose.staging.yml \
+#          up -d site-vizzor-staging
+#   5. Verify: `curl -s https://test.vizzor.ai/api/health | jq`
+#
+# Subsequent deploys are automatic — every push to the `testing` branch
+# triggers `.github/workflows/deploy.yml`, which resolves `target=staging`,
+# rebuilds the image with NEXT_PUBLIC_VIZZOR_API_URL=https://api.vizzor.ai
+# (shared engine), pushes it as `:testing`, then SSHes to the VPS to
+# pull + force-recreate this service.
+#
+# Port 7121 is reserved for site-vizzor-staging in the 71xx block; do not
+# change it without coordinating with the platform port allocation
+# (see project memory `reference_ports`).
+
+services:
+  site-vizzor-staging:
+    image: ghcr.io/7aylabs/site-vizzor:testing
+    container_name: site-vizzor-staging
+    restart: always
+    # ──────────────────────────────────────────────────────────────────
+    # Persistent state
+    # ──────────────────────────────────────────────────────────────────
+    # Distinct named volume from prod (`site-vizzor-db`). The staging
+    # SQLite contains test predictions, test payment sessions, and the
+    # devnet treasury's transfers — none of which should ever leak into
+    # the production DB or vice versa.
+    volumes:
+      - site-vizzor-staging-db:/app/.vizzor
+    # ──────────────────────────────────────────────────────────────────
+    # Environment
+    # ──────────────────────────────────────────────────────────────────
+    # All values come from /opt/7aylabs/.env.staging on the VPS, which
+    # is rendered by `op inject` from the 1Password vault item
+    # `site-vizzor-staging`. The block below documents the contract.
+    env_file:
+      - /opt/7aylabs/.env.staging
+    environment:
+      # Always production runtime so the security middleware
+      # (HSTS, __Host- cookies, fail-closed env checks) behaves
+      # identically to prod. The `staging` distinction comes from the
+      # *values*, not the runtime mode.
+      NODE_ENV: production
+    # ──────────────────────────────────────────────────────────────────
+    # Networking
+    # ──────────────────────────────────────────────────────────────────
+    # Bind to loopback only; Caddy reverse-proxies test.vizzor.ai to
+    # 127.0.0.1:7121. Never expose 7121 to the public internet.
+    ports:
+      - "127.0.0.1:7121:3000"
+    networks:
+      - 7aylabs_net
+    # ──────────────────────────────────────────────────────────────────
+    # Healthcheck — mirrors the Dockerfile, repeated here for explicit
+    # compose-level visibility. The deploy workflow's smoke test polls
+    # https://test.vizzor.ai/api/health and fails the deploy if the
+    # subsystems map is degraded.
+    # ──────────────────────────────────────────────────────────────────
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --tries=1
+        - --spider
+        - http://127.0.0.1:3000/api/health
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  site-vizzor-staging-db:
+    # Named volume; survives container recreations. Operator backups
+    # may run via the `vizzor-backup` sidecar service (see product repo)
+    # at a different cadence than prod — staging snapshots aren't
+    # disaster-recovery, they're test fixtures.
+
+networks:
+  7aylabs_net:
+    external: true

@@ -2,10 +2,11 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, develop, release/**]
+    branches: [main, testing, develop, release/**]
   push:
     branches:
       - main
+      - testing
       - develop
       - feat/**
       - fix/**

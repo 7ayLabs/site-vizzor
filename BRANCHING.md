@@ -144,3 +144,29 @@ Procedure:
 3. Open a PR against `main` with the full nine-section PR body. The rollback plan must specify the image tag to redeploy if the hotfix itself regresses.
 4. After merge to `main`, immediately open back-merge PRs from `main` into the active `release/v0.2.0` and into `develop`. Both back-merges use the same commit set and must merge before the next deploy.
 5. Tag the hotfix commit on `main` with a patch SemVer bump (for example, `v0.1.1` if `v0.1.0` is the last release tag in production).
+
+## 10. Environments and branch → deploy mapping
+
+Two long-lived branches map directly to deployed environments. `.github/workflows/deploy.yml` reads `github.ref` and resolves the right target — service name, image tag, host URL, compose overlay, build-time API URL — so a merge to either branch ships automatically without a manual step.
+
+| Branch    | Environment | URL                          | Solana network | Image tag | Service name             | Auto-deploy        |
+|-----------|-------------|------------------------------|----------------|-----------|--------------------------|--------------------|
+| `main`    | Production  | `https://vizzor.ai`          | mainnet        | `:latest` | `site-vizzor`            | yes (on push)      |
+| `testing` | Staging     | `https://test.vizzor.ai`     | devnet         | `:testing`| `site-vizzor-staging`    | yes (on push)      |
+| `develop` | —           | —                            | —              | —         | —                        | CI only (no deploy)|
+
+Both environments share one VPS. Caddy terminates TLS for each domain and reverse-proxies to a different loopback port (`vizzor.ai` → `127.0.0.1:7120`, `test.vizzor.ai` → `127.0.0.1:7121`). The containers share no secrets, no SQLite volume, no bot — staging payment flows run against Solana devnet with a separate treasury and a separate Telegram bot username so a staging redemption can never land in the production DB.
+
+Inter-release flow lands here:
+
+```
+feat/<scope>/<name>  ──►  develop  ──►  testing  ──►  main
+                                          │              │
+                                          ▼              ▼
+                                  test.vizzor.ai     vizzor.ai
+                                  (auto-deploy)      (auto-deploy)
+```
+
+Cycle-scoped flow during an active release cycle stays the same as §2 — a merge to `release/vX.Y.Z` does not auto-deploy anywhere; only the final merge of the release branch into `main` ships to production. If a release-cycle slice needs staging validation before the cycle PR opens, merge `release/vX.Y.Z` into `testing` to exercise it at `test.vizzor.ai`, then revert the integration on `testing` if the cycle is later rebased.
+
+Reverting a bad deploy: the build workflow tags every image with both the env tag (`:latest` / `:testing`) and an immutable `<branch>-<sha>` tag, so a roll-back is `docker compose up -d` with the prior immutable tag pinned in the compose overlay. The full rollback runbook lives in `docs/ops/runbook-security-incident.md`.
