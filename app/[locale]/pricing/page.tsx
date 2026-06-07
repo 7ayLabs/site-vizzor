@@ -17,9 +17,6 @@
 
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Check } from 'lucide-react';
-import { CtaPrimary } from '@/components/ui/cta-primary';
-import { CtaSecondary } from '@/components/ui/cta-secondary';
-import { CopyChip } from '@/components/ui/copy-chip';
 import { GsapHeadline } from '@/components/ui/gsap-headline';
 import { MotionReveal } from '@/components/ui/motion-reveal';
 import { LifetimePromoIsland } from '@/components/pricing/lifetime-promo-island';
@@ -82,8 +79,8 @@ const FEATURE_KEYS: Record<Tier['key'], readonly string[]> = {
   ],
 };
 
-const CHAINS = ['solana', 'ton', 'polygon', 'base', 'arbitrum', 'tron'] as const;
-const FAQ_KEYS = ['trial', 'cancel', 'chains', 'selfHost', 'difference', 'refund'] as const;
+const CHAINS = ['solana', 'ton', 'base', 'arbitrum'] as const;
+const FAQ_KEYS = ['trial', 'cancel', 'chains', 'difference', 'refund'] as const;
 
 export default async function PricingPage({
   params,
@@ -99,24 +96,18 @@ export default async function PricingPage({
       {/* Lifetime promo modal — auto-opens once per visitor, 30d
           suppress on dismiss, re-trigger via floating pill. */}
       <LifetimePromoIsland />
-      <div className="mx-auto w-full max-w-[1200px] px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
-        {/* Heading */}
+      <div className="mx-auto w-full max-w-[1180px] px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
+        {/* Heading — single centered display word, no eyebrow / sub.
+            Ollama-style: the cards do the talking. */}
         <GsapHeadline
           as="h1"
           className="flex flex-col gap-3 text-center items-center"
-          eyebrow={
-            <span className="mono tabular text-[10px] uppercase tracking-[0.18em] text-[var(--accent)]">
-              {t('eyebrow')}
-            </span>
-          }
           title={t('title')}
-          sub={t('sub')}
-          titleClassName="display text-[var(--fg)] text-balance text-[36px] sm:text-[44px] lg:text-[52px] leading-[1.05] tracking-tight font-semibold"
-          subClassName="mt-4 text-[15px] leading-relaxed text-[var(--fg-2)] max-w-[60ch] mx-auto"
+          titleClassName="display text-[var(--fg)] text-balance text-[48px] sm:text-[60px] lg:text-[72px] leading-[1.0] tracking-tight font-semibold"
         />
 
         {/* Tier cards */}
-        <div className="mt-14 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
           {TIERS.map((tier, idx) => (
             <MotionReveal key={tier.key} delay={idx * 80}>
               <TierCard tier={tier} t={t} featureKeys={FEATURE_KEYS[tier.key]} />
@@ -189,31 +180,6 @@ export default async function PricingPage({
           </div>
         </section>
 
-        {/* Self-host CTA */}
-        <MotionReveal delay={120}>
-          <div className="mt-20 border border-[var(--border)] bg-[var(--surface)] p-8 sm:p-10 flex flex-col gap-5 items-start">
-            <div className="flex flex-col gap-2">
-              <p className="mono tabular text-[10px] uppercase tracking-[0.18em] text-[var(--accent)]">
-                {t('selfHost.eyebrow')}
-              </p>
-              <h3 className="display text-[var(--fg)] text-balance text-[24px] sm:text-[28px] leading-[1.1] tracking-tight font-semibold">
-                {t('selfHost.title')}
-              </h3>
-              <p className="max-w-[60ch] text-[14.5px] leading-relaxed text-[var(--fg-2)]">
-                {t('selfHost.sub')}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <CtaPrimary href="/docs/quickstart">
-                {t('selfHost.primary')}
-              </CtaPrimary>
-              <CtaSecondary href="https://github.com/7ayLabs/vizzor" external>
-                {t('selfHost.secondary')}
-              </CtaSecondary>
-              <CopyChip command="docker compose up -d" />
-            </div>
-          </div>
-        </MotionReveal>
       </div>
     </section>
   );
@@ -230,135 +196,104 @@ function TierCard({
   t: Awaited<ReturnType<typeof getTranslations<'pricing'>>>;
   featureKeys: readonly string[];
 }) {
-  const highlighted = tier.highlighted;
   const tierT = (k: string) => t(`tiers.${tier.key}.${k}`);
-  const annualSub = safe(t, `tiers.${tier.key}.annualSub`);
   const everythingIn = safe(t, `tiers.${tier.key}.everythingIn`);
+  const hasAnnual = tier.altCadences.includes('annual');
+  const hasLifetime = tier.altCadences.includes('lifetime');
 
   return (
-    <div
-      className={`
-        relative flex h-full flex-col border bg-[var(--surface)] p-6 sm:p-7
-        ${
-          highlighted
-            ? 'border-[var(--accent)] shadow-[0_0_0_1px_var(--accent)]'
-            : 'border-[var(--border)]'
-        }
-      `}
-    >
-      {highlighted && (
-        <span
-          className="
-            absolute -top-2.5 left-6
-            mono tabular text-[9.5px] uppercase tracking-[0.16em]
-            bg-[var(--accent)] text-[var(--accent-fg)]
-            px-2 py-0.5
-          "
-        >
-          {t('mostPopular')}
-        </span>
-      )}
+    <div className="relative flex h-full flex-col rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-7 sm:p-8">
+      {/* 1. Tier name */}
+      <h2 className="display text-[32px] sm:text-[36px] leading-none tracking-tight font-semibold text-[var(--fg)]">
+        {tierT('name')}
+      </h2>
 
-      {/* Name + sub */}
-      <div className="flex flex-col gap-1.5">
-        <h3 className="text-[22px] font-semibold tracking-tight text-[var(--fg)]">
-          {tierT('name')}
-        </h3>
-        <p className="text-[13px] leading-relaxed text-[var(--fg-2)]">
-          {tierT('sub')}
-        </p>
-      </div>
+      {/* 2. One-line tagline */}
+      <p className="mt-3 text-[15px] leading-relaxed text-[var(--fg-2)]">
+        {tierT('sub')}
+      </p>
 
-      {/* Price */}
-      <div className="mt-6 flex flex-col gap-1">
+      {/* 3. Price */}
+      <div className="mt-7 flex flex-col gap-1.5">
         <div className="flex items-baseline gap-1.5">
-          <span className="display text-[var(--fg)] text-[40px] sm:text-[44px] leading-none font-semibold mono tabular">
+          <span className="text-[var(--fg)] text-[34px] sm:text-[38px] leading-none font-semibold mono tabular">
             {tierT('price')}
           </span>
-          <span className="text-[13px] text-[var(--fg-3)]">
+          <span className="text-[15px] text-[var(--fg-3)]">
             {tierT('priceUnit')}
           </span>
         </div>
-        {annualSub && (
-          <p className="mono tabular text-[10.5px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
-            {annualSub}
+
+        {/* 4. Inline annual / lifetime sub-line — Ollama pattern:
+            "or $99/yr billed annually" with the cadence word underlined
+            as a real link to the checkout shell. */}
+        {hasAnnual && (
+          <p className="text-[13.5px] text-[var(--fg-3)]">
+            {t('orPrefix')}{' '}
+            <a
+              href={cadenceHref(tier.key, 'annual')}
+              className="text-[var(--fg-2)] underline underline-offset-4 hover:text-[var(--fg)] transition-colors"
+            >
+              {t(`tiers.${tier.key}.cadences.annual.inline`)}
+            </a>
+          </p>
+        )}
+        {hasLifetime && (
+          <p className="text-[13.5px] text-[var(--fg-3)]">
+            {t('orPrefix')}{' '}
+            <a
+              href={cadenceHref(tier.key, 'lifetime')}
+              className="text-[var(--fg-2)] underline underline-offset-4 hover:text-[var(--fg)] transition-colors"
+            >
+              {t(`tiers.${tier.key}.cadences.lifetime.inline`)}
+            </a>
           </p>
         )}
       </div>
 
-      {/* Primary CTA (monthly) — Free stays opening Telegram in a new
-          tab; paid tiers route to the on-site /pay checkout shell. */}
-      <div className="mt-6">
+      {/* 5. Primary CTA — full-width pill button.
+          Free stays opening Telegram in a new tab; paid tiers route to
+          the on-site /pay checkout shell. */}
+      <div className="mt-7">
         <a
           href={tier.ctaHref}
           {...(tier.key === 'free'
             ? { target: '_blank', rel: 'noopener' }
             : {})}
           className={`
-            inline-flex w-full items-center justify-center gap-2
-            text-[13px] font-semibold tracking-tight
-            transition-colors h-11 px-4
+            inline-flex w-full items-center justify-center
+            h-12 rounded-full px-5
+            text-[14px] font-semibold tracking-tight
+            transition-[transform,opacity] duration-150
             ${
               tier.ctaVariant === 'primary'
-                ? 'bg-[var(--fg)] text-[var(--bg)] hover:opacity-90'
-                : 'border border-[var(--border)] text-[var(--fg)] hover:bg-[var(--surface-2)]'
+                ? 'bg-[var(--fg)] text-[var(--bg)] hover:opacity-90 motion-safe:hover:scale-[1.01]'
+                : 'border border-[var(--fg)] text-[var(--fg)] hover:bg-[var(--surface-2)]'
             }
           `}
         >
           <span>{tierT('cta')}</span>
-          <span aria-hidden>→</span>
         </a>
       </div>
 
-      {/* Secondary cadence CTAs — annual + lifetime when applicable.
-          Each is a real deep-link to the bot with its own payment
-          payload, so the lifetime $1,249 is actually purchasable. */}
-      {tier.altCadences.length > 0 && (
-        <ul className="mt-3 flex flex-col gap-1.5">
-          {tier.altCadences.map((cadence) => (
-            <li key={cadence}>
-              <a
-                href={cadenceHref(tier.key, cadence)}
-                className="
-                  group flex items-center justify-between gap-2
-                  border border-[var(--border)] bg-transparent
-                  px-3 py-2 text-[12px] text-[var(--fg-2)]
-                  hover:bg-[var(--surface-2)] hover:text-[var(--fg)]
-                  transition-colors
-                "
-              >
-                <span className="truncate">
-                  {t(`tiers.${tier.key}.cadences.${cadence}.label`)}
-                </span>
-                <span
-                  aria-hidden
-                  className="text-[var(--fg-3)] group-hover:text-[var(--fg)] transition-colors"
-                >
-                  →
-                </span>
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* Feature list */}
-      <div className="mt-6 flex flex-col gap-3">
+      {/* 6. "Everything in Free, plus:" label + check-bulleted feature
+          list. The label is bolder so the eye lands on it first. */}
+      <div className="mt-8 flex flex-col gap-4">
         {everythingIn && (
-          <p className="text-[12px] text-[var(--fg-2)] font-medium">
+          <p className="text-[14px] font-semibold text-[var(--fg)]">
             {everythingIn}
           </p>
         )}
-        <ul className="flex flex-col gap-2.5">
+        <ul className="flex flex-col gap-3">
           {featureKeys.map((k) => (
             <li
               key={k}
-              className="flex items-start gap-2 text-[13px] leading-relaxed text-[var(--fg-2)]"
+              className="flex items-start gap-2.5 text-[14px] leading-relaxed text-[var(--fg-2)]"
             >
               <Check
-                size={13}
-                strokeWidth={2.2}
-                className="mt-1 shrink-0 text-[var(--accent)]"
+                size={15}
+                strokeWidth={2}
+                className="mt-1 shrink-0 text-[var(--fg-3)]"
                 aria-hidden
               />
               <span>{t(`tiers.${tier.key}.features.${k}`)}</span>
@@ -379,31 +314,20 @@ function ChainCard({
   chain: string;
   t: Awaited<ReturnType<typeof getTranslations<'pricing'>>>;
 }) {
-  const phase = t(`chains.items.${chain}.phase`);
-  const isPhase1 = phase === '1';
   return (
-    <div className="border border-[var(--border)] bg-[var(--surface)] p-4 flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-[15px] font-semibold tracking-tight text-[var(--fg)]">
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-[16px] font-semibold tracking-tight text-[var(--fg)]">
           {t(`chains.items.${chain}.name`)}
         </h3>
-        <span
-          className={`
-            mono tabular text-[9.5px] uppercase tracking-[0.14em] px-2 py-0.5
-            ${
-              isPhase1
-                ? 'bg-[var(--accent)] text-[var(--accent-fg)]'
-                : 'border border-[var(--border)] text-[var(--fg-3)]'
-            }
-          `}
-        >
-          {isPhase1 ? t('chains.phase1Label') : t('chains.phase2Label')}
+        <span className="mono tabular text-[10px] uppercase tracking-[0.16em] px-2 py-0.5 rounded-md bg-[var(--fg)] text-[var(--bg)]">
+          {t(`chains.items.${chain}.discount`)}
         </span>
       </div>
-      <p className="mono tabular text-[10.5px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+      <p className="mono tabular text-[10.5px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
         {t(`chains.items.${chain}.token`)}
       </p>
-      <p className="text-[12.5px] leading-relaxed text-[var(--fg-2)]">
+      <p className="text-[13px] leading-relaxed text-[var(--fg-2)]">
         {t(`chains.items.${chain}.strategy`)}
       </p>
     </div>
