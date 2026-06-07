@@ -13,9 +13,10 @@
  *   - suppresses re-opens for 30 days after dismissal via localStorage
  *   - exposes openManually() for the floating re-trigger pill
  *
- * Content emphasises the lifetime tier ($1,249 once) framed against
- * the 10-year monthly equivalent ($5,988) to anchor the savings.
- * Primary CTA routes to /pay/elite/lifetime; secondary just dismisses.
+ * Content emphasises the lifetime tier ($1,499 once) framed against
+ * the 10-year monthly equivalent ($11,880 = $99 × 120) to anchor the
+ * savings. Primary CTA routes to /pay/elite/lifetime; secondary just
+ * dismisses.
  */
 
 import { useEffect, useState } from 'react';
@@ -146,7 +147,7 @@ export function LifetimePromoModal({ open, onDismiss }: LifetimePromoModalProps)
               </p>
             </div>
             <p className="text-[28px] font-semibold tracking-tight text-[var(--fg)] leading-none">
-              $1,249
+              $1,499
             </p>
             <div className="h-px bg-[var(--border)]" />
             <div className="flex items-baseline justify-between gap-3">
@@ -158,7 +159,7 @@ export function LifetimePromoModal({ open, onDismiss }: LifetimePromoModalProps)
               </p>
             </div>
             <p className="text-[22px] font-medium tracking-tight text-[var(--fg-3)] leading-none line-through">
-              $5,988
+              $11,880
             </p>
           </div>
 

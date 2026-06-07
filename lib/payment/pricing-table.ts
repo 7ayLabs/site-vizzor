@@ -18,17 +18,33 @@ import type {
   PaymentToken,
 } from './session';
 
+/**
+ * Tier × cadence price ladder, in USD cents.
+ *
+ * Repriced from the original Vega ladder ($9.99 / $49 / $1,249) to
+ * match the "category-defining crypto intelligence AI" positioning.
+ * Pricing signals quality — sub-$10/mo screams "Telegram scam bot,"
+ * while $19 / $99 puts Vizzor in the "real product" range that
+ * serious traders trust. The new lifetime anchor at $1,499 makes
+ * Pro Annual feel cheaper and rewards the highest-trust buyer
+ * segment without trapping the engine value at "side-project bet."
+ *
+ * Institutional ($999-$2,999/mo) is handled outside this table — the
+ * /pay route validates monthly/annual/lifetime only, and the
+ * institutional card on /pricing routes to a sales contact, not the
+ * on-site checkout.
+ */
 export const TIER_PRICES_USD_CENTS: Readonly<
   Record<PaymentTier, Partial<Record<PaymentCadence, number>>>
 > = {
   pro: {
-    monthly: 999, // $9.99
-    annual: 9900, // $99.00
+    monthly: 1900, // $19
+    annual: 19000, // $190
   },
   elite: {
-    monthly: 4900, // $49.00
-    annual: 49900, // $499.00
-    lifetime: 124900, // $1,249.00
+    monthly: 9900, // $99
+    annual: 99000, // $990
+    lifetime: 149900, // $1,499
   },
 };
 

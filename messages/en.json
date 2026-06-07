@@ -455,19 +455,19 @@
   "pricing": {
     "eyebrow": "tiers · honest billing",
     "title": "Pricing",
-    "sub": "Three tiers, two billing cadences, pay in SOL on Solana — save 10% instantly. Cancel anytime. Self-host if you'd rather not pay a subscription at all.",
+    "sub": "Four tiers, on-chain billing across SOL, TON, and USDC. Each rail prices the discount in. No cards. Cancel anytime.",
     "mostPopular": "Most popular",
     "orPrefix": "or",
     "promo": {
       "lifetime": {
         "eyebrow": "Lifetime offer",
         "title": "Pay once. Get Vizzor Elite forever.",
-        "subtitle": "Lock in lifetime access at today's price. No renewals, no quota anxiety — every signal family, every horizon, for as long as Vizzor runs.",
+        "subtitle": "Lock the full intelligence stack at today's price. No renewals, no quota anxiety — every signal, every horizon, for as long as Vizzor runs.",
         "lifetimePriceLabel": "Lifetime",
         "lifetimePriceCaption": "One-time payment",
         "comparisonLabel": "Elite monthly · 10 yr",
         "comparisonCaption": "What you'd pay otherwise",
-        "solFootnote": "Pay in SOL on Solana — save 10% instantly",
+        "solFootnote": "Pay in SOL on Solana — save 15% instantly",
         "cta": "See the lifetime offer",
         "dismiss": "No thanks",
         "retriggerPill": "Lifetime offer"
@@ -476,65 +476,116 @@
     "tiers": {
       "free": {
         "name": "Free",
-        "sub": "Start grading calls on Telegram",
+        "sub": "Scan the market in Telegram",
         "price": "$0",
         "priceUnit": "",
         "cta": "Open Telegram",
+        "commandsLine": "/scan · /price · /trends · /sentiment · /whale-alert · /narrative · /presale · /help",
         "features": {
-          "predictions": "10 predictions per month",
-          "tiers": "Basic ✅ tracked + ⚪ advisory signals (no 🌟 high-conviction)",
-          "commands": "/predict · /wr · /price · /trends · /help",
-          "cliApi": "CLI install + self-host option (BUSL-1.1)",
-          "community": "Public Telegram channel + GitHub issues"
+          "scanner": {
+            "title": "Token Scanner",
+            "body": "Live sentiment, price action, and top movers across majors and long-tail tokens"
+          },
+          "security": {
+            "title": "Security checks on any token",
+            "body": "Rug risk · honeypot · tax logic · ownership renouncement · holder concentration"
+          },
+          "context": {
+            "title": "Daily market context",
+            "body": "Fear & Greed index · breaking crypto headlines · Whale Alerts on $1M+ on-chain moves"
+          },
+          "discovery": {
+            "title": "Discovery feed",
+            "body": "New DEX pairs · narrative flow · trending tokens · volume spikes · presale tracker"
+          },
+          "trial": {
+            "title": "7-day Pro trial on first /start",
+            "body": "No card, no KYC, auto-downgrades back to Free — zero risk to try"
+          }
         }
       },
       "pro": {
         "name": "Pro",
-        "sub": "Unlimited signals for the active trader",
-        "price": "$9.99",
+        "sub": "The work bench for the active trader",
+        "price": "$19",
         "priceUnit": "/ mo",
         "cta": "Get Pro",
         "cadences": {
           "annual": {
-            "label": "Pay annually · $99/yr (save $20)",
-            "inline": "$99/yr billed annually"
+            "label": "Pay annually · $190/yr (save $38)",
+            "inline": "$190/yr billed annually"
           }
         },
         "everythingIn": "Everything in Free, plus:",
         "features": {
-          "predictions": "Unlimited predictions per month",
-          "allTiers": "All tier badges (✅ tracked + 🐋 whale-confirmed + 🌟 high-conviction)",
-          "precisions": "/precisions + /wr full breakdown · per-horizon, per-tier, per-session",
-          "alerts": "Unlimited /alerts · TP/SL price thresholds armed automatically",
-          "polymarketAlerts": "Polymarket edge alerts when ChronoVisor disagrees with the market",
-          "priority": "Priority during overload — skip the queue"
+          "predictor": {
+            "title": "Unlimited Predictor",
+            "body": "Every horizon from 5m → 7d, plus arbitrary durations (13m, 2h30m, 3d) with per-horizon WR"
+          },
+          "tiers": {
+            "title": "4 calibrated prediction tiers",
+            "body": "🌟 high-conviction · 🐋 whale-confirmed · ✅ tracked · ⚪ advisory — Platt-scaled probabilities (63% means 63%)"
+          },
+          "families": {
+            "title": "6 signal families fused per call",
+            "body": "On-chain whale flow · ML ensemble · prediction markets · social / narrative · SMC + ICT patterns · 21 FOL logic rules"
+          },
+          "aiChat": {
+            "title": "AI chat with tool-use",
+            "body": "Describe a setup in plain English — trade plan + TP1 / TP2 / SL arm automatically. Multi-LLM (Claude · GPT · Gemini · local Ollama)"
+          },
+          "diagnose": {
+            "title": "Diagnose & manipulation guard",
+            "body": "/diagnose explains every prediction and every abstention. Engine refuses to predict during pump-and-dumps, funding stampedes, thin-liquidity spikes"
+          },
+          "audit": {
+            "title": "Alerts, audit trail, watchlist",
+            "body": "Unlimited /alerts · every call signed and stored · /precisions + /wr breakdown · personal watchlist"
+          }
         }
       },
       "elite": {
         "name": "Elite",
-        "sub": "Autonomous agents trading every signal",
-        "price": "$49",
+        "sub": "The full intelligence stack",
+        "price": "$99",
         "priceUnit": "/ mo",
         "cta": "Get Elite",
         "cadences": {
           "annual": {
-            "label": "Pay annually · $499/yr (save $89)",
-            "inline": "$499/yr billed annually"
+            "label": "Pay annually · $990/yr (save $198)",
+            "inline": "$990/yr billed annually"
           },
           "lifetime": {
-            "label": "Pay once · $1,249 lifetime (break-even year 3)",
-            "inline": "$1,249 paid once · lifetime"
+            "label": "Pay once · $1,499 lifetime (break-even ~year 1.3)",
+            "inline": "$1,499 paid once · lifetime"
           }
         },
         "everythingIn": "Everything in Pro, plus:",
         "features": {
-          "agents": "🤖 Autonomous trading agents — execute trades on-chain the moment a signal fires, no manual click",
-          "agentWallets": "Per-agent encrypted multi-chain wallets · isolated risk, hot-key never leaves the device",
-          "polymarketAgent": "Polymarket trading agent — places trades when ChronoVisor odds beat the market",
-          "circuitBreaker": "Per-agent loss limits + global /emergency-stop — instant kill across every running agent",
-          "restApi": "REST API (60 req/min) — query agents, force trades, override decisions programmatically",
-          "privateChannel": "Private Telegram + Discord channels with the engineering team",
-          "headStart": "5-minute head start on every signal emission + early access to new agents and signals"
+          "whaleTerminal": {
+            "title": "Whale Terminal",
+            "body": "Real-time on-chain whale moves, scoped per token, with top-20 holder smart-money labels (exchange · OTC · whale · dev · contract)"
+          },
+          "smartMoney": {
+            "title": "Smart Money Flow",
+            "body": "Exchange net-flow · cold → hot transfers · stablecoin mint velocity (USDT / USDC) · holder-concentration drift"
+          },
+          "forensics": {
+            "title": "Forensics suite",
+            "body": "Flow-graph reconstruction (token → exchange → OTC desk) · rug detector · contract auditor · bytecode disassembler · address labeler"
+          },
+          "preNews": {
+            "title": "Pre-news signals",
+            "body": "SEC EDGAR filings · token unlock calendar · options IV / skew / term structure (Deribit + Hyperliquid) · LLM catalyst classifier"
+          },
+          "crossVenue": {
+            "title": "Cross-venue intelligence",
+            "body": "Premium spreads · funding-z divergence · venue arbitrage · flow heatmap refreshed every block"
+          },
+          "api": {
+            "title": "REST API + priority queue",
+            "body": "REST API (60 req/min) for signals, snapshots, and Predictor · your watchlist symbols emit first · shareable signal cards"
+          }
         }
       }
     },
@@ -591,8 +642,8 @@
           "a": "Four rails are live: SOL on Solana (save 15%), TON (save 10%), USDC on Base (save 5%), USDC on Arbitrum (save 5%). SOL is signed on-site; the other three hand off to the Telegram bot to sign. Every payment is verified on-chain — no Stripe, no Plaid, no card data, no middleman."
         },
         "difference": {
-          "q": "What's the practical difference between Free and Pro?",
-          "a": "Free shows you Vizzor's calibrated baseline (✅ tracked + ⚪ advisory tiers). Pro unlocks 🐋 whale-confirmed and 🌟 high-conviction tiers — the high-WR cohort that drives most of the alpha. If you're using Vizzor seriously, Pro pays for itself in one good signal."
+          "q": "What's the practical difference between Free, Pro, and Elite?",
+          "a": "Free is the Scanner — sentiment, charts, top movers. Pro adds the Predictor — unlimited signals across the full horizon ladder with armed alerts. Elite adds the Whale Terminal and flow heatmap — the on-chain signal surface serious desks pay for."
         },
         "refund": {
           "q": "Refunds?",
