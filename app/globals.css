@@ -309,27 +309,48 @@
   }
 
   /*
-   * Page transition — applied by components/layout/page-transition.tsx
-   * which re-keys on usePathname() so every intra-site navigation
-   * triggers a fresh mount of this wrapper. Calm fade + 6px slide up;
-   * the will-change hint helps Safari composite the layer without a
-   * paint flash. Reduced-motion users get the final state instantly
-   * via the global media block below.
+   * Page transition choreography — paired with PageTransition + the
+   * VizzorLoader. The two classes (`-loading` and `-active`) hand the
+   * `<div key={pathname}>` wrapper between phases:
+   *
+   *   - During the loading phase the content sits at opacity 0 with
+   *     a small downward offset, fully hidden behind the loader veil.
+   *   - When PageTransition flips to `revealing` the wrapper gets
+   *     `page-reveal-active`, which animates back to (opacity: 1,
+   *     translateY: 0) over LOADER_FADE_MS — synchronised with the
+   *     loader's own fade-out so the eye reads one "veil lifting"
+   *     gesture instead of two stacked transitions.
    */
-  .page-transition-enter {
-    animation: page-transition-enter 220ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  .page-reveal-loading {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  .page-reveal-active {
+    animation: page-reveal-active 420ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
     will-change: opacity, transform;
   }
 
-  @keyframes page-transition-enter {
+  @keyframes page-reveal-active {
     from {
       opacity: 0;
-      transform: translateY(6px);
+      transform: translateY(8px);
     }
     to {
       opacity: 1;
       transform: translateY(0);
     }
+  }
+
+  /* Loader leaving — fades the brand veil out over the same window
+     the content is revealing in, so the cross-fade lands clean. */
+  .vizzor-loader-leaving {
+    animation: vizzor-loader-leaving 420ms ease-out forwards;
+    pointer-events: none;
+  }
+
+  @keyframes vizzor-loader-leaving {
+    from { opacity: 1; }
+    to   { opacity: 0; }
   }
 
   /*

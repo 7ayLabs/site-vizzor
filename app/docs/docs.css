@@ -398,20 +398,34 @@
    * so navigations into / out of the docs zone get parity with the
    * marketing pages.
    */
-  .page-transition-enter {
-    animation: page-transition-enter 220ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  .page-reveal-loading {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  .page-reveal-active {
+    animation: page-reveal-active 420ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
     will-change: opacity, transform;
   }
 
-  @keyframes page-transition-enter {
+  @keyframes page-reveal-active {
     from {
       opacity: 0;
-      transform: translateY(6px);
+      transform: translateY(8px);
     }
     to {
       opacity: 1;
       transform: translateY(0);
     }
+  }
+
+  .vizzor-loader-leaving {
+    animation: vizzor-loader-leaving 420ms ease-out forwards;
+    pointer-events: none;
+  }
+
+  @keyframes vizzor-loader-leaving {
+    from { opacity: 1; }
+    to   { opacity: 0; }
   }
 
   /*
