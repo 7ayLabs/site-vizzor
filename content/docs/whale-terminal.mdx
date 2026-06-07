@@ -1,0 +1,88 @@
+---
+title: Whale Terminal
+description: Real-time on-chain whale moves, scoped per token, with top-20 holder labeling and Smart Money Flow detection. Capital-deployment reconstruction for accumulation, distribution, and rotation patterns.
+---
+
+The Whale Terminal turns the on-chain firehose into a per-token feed of moves that actually matter. It tracks the wallets that historically front-run price action, labels them, and renders their net activity as a structured flow you can read in seconds.
+
+Three independent signals power it: **Whale moves** (large transfers on a chain), **Smart Money Flow** (the wallets that have a track record on this token), and **top-20 holder labels** (who actually holds the supply, by category).
+
+## Whale moves
+
+Every transfer above the chain-aware whale threshold lands on the per-token feed. Thresholds are auto-tuned: BTC moves cross at >$5M, ETH at >$2M, a long-tail altcoin at >$50K — calibrated against the token's median trade size so the feed surfaces noise above the symbol's normal baseline, not a global one.
+
+<TerminalBlock
+  lang="text"
+  code={`Whale moves · ETH · last 1h
+
+12:38:42  +1,250 ETH ($2.68M)  to  binance-cold-1     (deposit)
+12:31:09  −800 ETH ($1.71M)    from binance-cold-2    (withdrawal)
+12:18:55  +2,100 ETH ($4.50M)  to  coinbase-cold      (deposit)
+12:04:17  +480 ETH  ($1.03M)   to  jump-trading-wb1   (deposit, recurring)`}
+/>
+
+Each row is labeled at the time of the move — the labeler resolves wallet → entity (exchange · OTC · whale · dev · contract) against the persistent label graph maintained in `whale_store`. New labels are minted continuously as patterns emerge; the label assignment is part of the row, not a post-hoc lookup.
+
+## Smart Money Flow
+
+Whale moves at the chain level are loud. Smart Money Flow is the filter that asks: **of the wallets moving now, which ones have a track record on this exact symbol?**
+
+The score is computed per-token from the rolling cohort of wallets whose past entries on the token historically led price by ≥ 1 day. Their current direction (net buying / net selling / rotating) is the leading signal:
+
+- **Exchange net-flow** — inflows = capitulation pressure, outflows = accumulation / distribution to private
+- **Cold → hot transfers** — funds leaving cold storage typically precede a sell-side move; the reverse precedes accumulation
+- **Stablecoin mint velocity** — Tether / Circle mint events correlate with imminent buy pressure when destination wallets are exchange-tagged
+- **Holder-concentration drift** — top-20 share rising = distribution into fewer hands; falling = retail or smart-money pickup
+
+The Whale Terminal renders the composite as a directional badge with the contributing signals expanded inline:
+
+<TerminalBlock
+  lang="text"
+  code={`Smart Money Flow · SOL · last 4h
+
+Direction:           ↑ ACCUMULATING (cf 0.61)
+Exchange net-flow:   −18.4M SOL  (large outflows from binance, okx)
+Cold → hot:          +3.2M SOL  (3 wallets activated from 90d+ cold storage)
+Stablecoin mint:     +$420M USDC last 6h (Circle, partial destination SOL pairs)
+Holder drift:        Top-20 share rising +0.8% (24h) — distribution pattern`}
+/>
+
+The cohort is per-token. A wallet that's "smart money" on SOL isn't automatically smart on SHIB; the score is rebuilt independently for each symbol against that symbol's own historical lead.
+
+## Top-20 holders, labeled
+
+The classic "top holders" page on a block explorer is useless without labels — knowing a wallet holds 7% of supply means nothing unless you know whether it's an exchange cold wallet (boring), a developer wallet (risk), or smart money (interesting).
+
+The Whale Terminal labels every entry on the top-20 list, with a confidence score on each label:
+
+| Rank | Address | Holdings | % Supply | Label | Confidence |
+|---|---|---|---|---|---|
+| 1 | `0x5a52…9c14` | 18.2M | 7.1% | binance-cold-1 | 0.99 |
+| 2 | `0x80e1…2af3` | 12.7M | 4.9% | smart-money · 4y track | 0.84 |
+| 3 | `0xff10…b5e2` | 9.3M | 3.6% | dev (vested → renounced) | 0.91 |
+| 4 | `0x2cef…3917` | 8.1M | 3.2% | otc-desk · cumberland | 0.78 |
+| 5 | `0xabcd…7770` | 7.5M | 2.9% | retail-cluster (≥1k addrs) | 0.65 |
+| … | | | | | |
+
+The five labels — `exchange` · `otc` · `whale` · `dev` · `contract` (plus `retail-cluster` for sets of small wallets) — collapse the noise into a single readable picture: "the top 20 is 32% exchange-cold, 11% smart-money, 14% dev, the rest retail." Concentration risk and exit-liquidity risk become diagnosable, not just visible.
+
+## Where it surfaces
+
+| Surface | Command | Notes |
+|---|---|---|
+| Telegram | `/whale-alert <symbol>` · `/track <wallet>` | Free tier sees lite; Elite gets the full feed |
+| CLI / TUI | `vizzor whales <symbol>` | Inline cursor + live ticker |
+| REST | `GET /v1/market/whales?symbol=…&window=1h` | Streams via SSE; WS push variant on `/ws` |
+| Web | Dashboard "Whale Terminal" panel | Auto-refresh per chain |
+
+## Tier gating
+
+- **Free** — Whale Alerts (lite): $1M+ on-chain transactions on majors, near-real-time, no per-token feed
+- **Pro** — Whale Alerts at any threshold, scoped to your watchlist
+- **Elite** — Full Whale Terminal per token: Smart Money Flow, top-20 labeling, recurring-counterparty detection, accumulation / distribution reconstruction
+
+## Adjacent reading
+
+- [Forensics](/docs/forensics) — flow-graph reconstruction, address labeler, contract auditor
+- [Scanner](/docs/scanner) — pre-buy security audit; pairs with Whale Terminal for post-buy monitoring
+- [Signal families](/docs/signals) — `onChain` is the family powering this surface inside the Predictor
