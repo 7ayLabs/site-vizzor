@@ -409,18 +409,34 @@ function ProviderlessConnect({ label }: { label: string }) {
         aria-haspopup="dialog"
         aria-expanded={open}
         className="
-          inline-flex h-8 items-center gap-1.5 rounded-full
-          border border-[var(--border)] bg-transparent
-          px-2.5 sm:px-3
-          text-[11.5px] font-medium text-[var(--fg-2)]
-          hover:bg-[var(--surface-2)] hover:text-[var(--fg)]
+          group relative inline-flex h-8 items-center gap-1.5
+          px-1
+          text-[12px] font-medium text-[var(--fg-3)]
+          transition-[color,transform] duration-200 ease-out
+          hover:text-[var(--fg)] hover:scale-[1.03]
+          active:scale-[0.97]
           focus-visible:outline-none focus-visible:ring-2
-          focus-visible:ring-[var(--accent)]
-          transition-colors
+          focus-visible:ring-[var(--accent)] focus-visible:rounded-md
         "
       >
-        <Wallet size={13} strokeWidth={2} />
+        <Wallet
+          size={14}
+          strokeWidth={1.75}
+          className="transition-transform duration-200 ease-out group-hover:-rotate-6"
+        />
         <span>{label}</span>
+        {/* Hover underline grows from left — a Linear-style affordance
+            without taking up an idle pixel. */}
+        <span
+          aria-hidden
+          className="
+            pointer-events-none absolute left-1 right-1 -bottom-0.5
+            h-px origin-left scale-x-0
+            bg-[var(--fg)]
+            transition-transform duration-300 ease-out
+            group-hover:scale-x-100
+          "
+        />
       </button>
       <WalletSelectorModal open={open} onClose={() => setOpen(false)} />
     </>

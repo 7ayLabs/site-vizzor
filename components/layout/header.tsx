@@ -78,22 +78,30 @@ export async function Header() {
           <WalletAuthButton hasProvider={false} />
           {/* Desktop-only chrome — the mobile drawer carries equivalent
               affordances at md and below. */}
-          <span className="hidden md:flex items-center gap-2">
+          <span className="hidden md:flex items-center gap-3">
             <ThemeToggle />
             <a
               href="https://t.me/vizzorai_bot"
               target="_blank"
               rel="noopener"
               className="
-                inline-flex h-8 items-center gap-1.5 rounded-full
+                group inline-flex h-8 items-center gap-1.5 rounded-full
                 bg-[var(--fg)] px-3.5 text-[11.5px] font-semibold
                 text-[var(--bg)]
-                transition-transform duration-150
-                hover:scale-[1.02]
+                transition-[transform,opacity] duration-200 ease-out
+                hover:scale-[1.02] hover:opacity-95
+                focus-visible:outline-none focus-visible:ring-2
+                focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2
+                focus-visible:ring-offset-[var(--bg)]
               "
             >
               {t('cta')}
-              <span aria-hidden>→</span>
+              <span
+                aria-hidden
+                className="transition-transform duration-200 ease-out group-hover:translate-x-0.5"
+              >
+                →
+              </span>
             </a>
           </span>
           <MobileMenu />

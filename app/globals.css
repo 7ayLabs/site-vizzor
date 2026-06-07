@@ -334,6 +334,16 @@
     to   { opacity: 1; transform: translateY(0); }
   }
 
+  /*
+   * LanguageSwitch dropdown — small pop-in so the menu reads as
+   * anchored to the trigger instead of floating in. Mirrors the
+   * curve the WalletSelectorModal card uses for consistency.
+   */
+  @keyframes locale-menu-in {
+    from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0)    scale(1);    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .marquee-track {
       animation: none;

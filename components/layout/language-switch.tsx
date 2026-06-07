@@ -144,24 +144,25 @@ export function LanguageSwitch({
         aria-expanded={open}
         aria-label={t('label')}
         className={cn(
-          'inline-flex h-9 items-center gap-1.5 rounded-full',
-          'border border-[var(--border)] bg-[var(--surface)]',
-          'px-2.5 text-[var(--fg-2)]',
-          'transition-[background,color,transform] duration-200',
-          'hover:text-[var(--fg)] hover:bg-[var(--surface-2)]',
-          'active:scale-[0.97]',
+          'group inline-flex h-8 items-center gap-1.5',
+          'text-[var(--fg-3)]',
+          'transition-[color,transform] duration-200 ease-out',
+          'hover:text-[var(--fg)] hover:scale-[1.04]',
+          'active:scale-[0.96]',
+          'focus-visible:outline-none focus-visible:ring-2',
+          'focus-visible:ring-[var(--accent)] focus-visible:rounded-md',
         )}
       >
-        <Languages size={15} strokeWidth={1.5} aria-hidden />
+        <Languages size={15} strokeWidth={1.6} aria-hidden />
         <span className="mono tabular text-[11px] font-semibold tracking-[0.08em]">
           {LOCALE_ABBR[active]}
         </span>
         <ChevronDown
-          size={12}
+          size={11}
           strokeWidth={1.75}
           aria-hidden
           className={cn(
-            'transition-transform duration-150',
+            'transition-transform duration-200 ease-out',
             open && 'rotate-180',
           )}
         />
@@ -179,6 +180,9 @@ export function LanguageSwitch({
             'rounded-xl border border-[var(--border)] bg-[var(--surface)]',
             'shadow-[0_8px_24px_-12px_color-mix(in_oklab,var(--fg)_25%,transparent)]',
             'p-1',
+            // Subtle pop-in so the dropdown feels anchored to the
+            // trigger, not floating in from nowhere.
+            'motion-safe:animate-[locale-menu-in_180ms_cubic-bezier(0.16,1,0.3,1)_both]',
           )}
         >
           {routing.locales.map((locale, index) => {
