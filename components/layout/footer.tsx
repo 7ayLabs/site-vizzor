@@ -33,6 +33,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
+import { LanguageSwitch } from './language-switch';
 
 type LinkHref = ComponentProps<typeof Link>['href'];
 
@@ -189,7 +190,7 @@ export async function Footer() {
           />
         </div>
 
-        <div className="mt-14 flex flex-col gap-3 border-t border-[var(--border)] pt-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-14 flex flex-col gap-4 border-t border-[var(--border)] pt-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3 text-[12px] text-[var(--fg-3)]">
             <span className="rounded border border-[var(--border)] px-2 py-0.5 mono tabular text-[10px]">
               {t('license')}
@@ -206,6 +207,9 @@ export async function Footer() {
               </a>
             </span>
           </div>
+          {/* Language picker — Stripe / Cloudflare pattern. `placement=up`
+              flips the dropdown so it doesn't drop off the page bottom. */}
+          <LanguageSwitch placement="up" />
         </div>
       </div>
     </footer>

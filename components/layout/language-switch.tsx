@@ -1,12 +1,16 @@
 'use client';
 
 /**
- * LanguageSwitch — discreet locale picker for the header.
+ * LanguageSwitch — discreet locale picker for header / footer use.
  *
  * Renders an icon + locale abbreviation button (e.g. `EN ▾`). Click opens a
  * tiny dropdown with the three supported locales; the active locale shows a
  * check. Selection swaps locales via `useRouter().replace` so the URL prefix
  * updates without losing the current path or query string.
+ *
+ * `placement` controls dropdown direction — default `down` for nav contexts,
+ * `up` when the switch lives near a page bottom (the footer) so the menu
+ * doesn't drop off the viewport edge.
  *
  * Keyboard model:
  *  - Tab / Shift-Tab: standard focus traversal in/out
@@ -32,7 +36,11 @@ const LOCALE_ABBR: Record<Locale, string> = {
   fr: 'FR',
 };
 
-export function LanguageSwitch() {
+export function LanguageSwitch({
+  placement = 'down',
+}: {
+  placement?: 'down' | 'up';
+} = {}) {
   const t = useTranslations('languageSwitch');
   const router = useRouter();
   const pathname = usePathname();
@@ -166,7 +174,8 @@ export function LanguageSwitch() {
           aria-label={t('label')}
           onKeyDown={onMenuKey}
           className={cn(
-            'absolute right-0 top-full mt-2 z-50 min-w-[180px]',
+            'absolute right-0 z-50 min-w-[180px]',
+            placement === 'up' ? 'bottom-full mb-2' : 'top-full mt-2',
             'rounded-xl border border-[var(--border)] bg-[var(--surface)]',
             'shadow-[0_8px_24px_-12px_color-mix(in_oklab,var(--fg)_25%,transparent)]',
             'p-1',
