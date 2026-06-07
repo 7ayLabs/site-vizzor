@@ -570,7 +570,7 @@
           },
           "crossVenue": {
             "title": "Inteligencia cross-venue",
-            "body": "Spreads de premium · divergencia funding-z · arbitraje de venue · heatmap de flujo refrescado en cada bloque"
+            "body": "Spreads de premium · divergencia funding-z · arbitraje de venue · heatmap de flujo refrescado cada 30 segundos"
           },
           "api": {
             "title": "REST API + cola prioritaria",

@@ -580,7 +580,7 @@
           },
           "crossVenue": {
             "title": "Cross-venue intelligence",
-            "body": "Premium spreads · funding-z divergence · venue arbitrage · flow heatmap refreshed every block"
+            "body": "Premium spreads · funding-z divergence · venue arbitrage · flow heatmap refreshed every 30 seconds"
           },
           "api": {
             "title": "REST API + priority queue",
