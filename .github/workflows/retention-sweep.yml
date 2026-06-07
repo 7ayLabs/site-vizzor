@@ -1,0 +1,43 @@
+name: Retention sweep
+
+# Daily POST to /api/internal/retention-sweep — prunes expired
+# payment sessions, grants, idempotency keys, rate-limit buckets,
+# audit-log rows past their retention windows. Authenticated with the
+# bot shared secret (same trust boundary as the grants-redeem route).
+#
+# Failures are non-blocking: a failed sweep doesn't break the site,
+# but the deploy runbook tracks consecutive failures so a chronic
+# problem surfaces in the operator dashboard.
+
+on:
+  schedule:
+    # 03:42 UTC daily — off-peak for both EU and US.
+    - cron: '42 3 * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: retention-sweep
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: POST to retention sweep
+        env:
+          BOT_SECRET: ${{ secrets.VIZZOR_BOT_SHARED_SECRET }}
+        run: |
+          set -e
+          if [ -z "$BOT_SECRET" ]; then
+            echo "VIZZOR_BOT_SHARED_SECRET not configured; skipping" >&2
+            exit 0
+          fi
+          RESPONSE=$(curl -sS -o body.json -w "%{http_code}" \
+            -X POST https://vizzor.ai/api/internal/retention-sweep \
+            -H "x-vizzor-bot-token: $BOT_SECRET" \
+            -H "content-type: application/json" \
+            -d '{}')
+          echo "HTTP $RESPONSE"
+          cat body.json | jq .
+          test "$RESPONSE" = "200"

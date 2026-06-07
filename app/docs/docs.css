@@ -55,6 +55,13 @@
 
 /* ---- Vizzor design tokens (mirror of app/globals.css :root + .dark) -- */
 
+/*
+ * Token strategy mirrors app/globals.css — strict B&W with two scoped
+ * exceptions (--up / --down) for financial-direction signals. The
+ * historical token names (--accent, --gold, --whale, --danger) are
+ * preserved because Fumadocs reads them through the color bridge
+ * further down; each one collapses to the neutral scale here.
+ */
 :root {
   --bg: #fafaf7;
   --surface: #ffffff;
@@ -63,11 +70,13 @@
   --fg: #0a0a0a;
   --fg-2: #52525b;
   --fg-3: #737373;
-  --accent: #10b981;
-  --accent-fg: #022c20;
-  --danger: #dc2626;
-  --gold: #f59e0b;
-  --whale: #3b82f6;
+  --accent: var(--fg);
+  --accent-fg: var(--bg);
+  --danger: var(--fg);
+  --gold: var(--fg-2);
+  --whale: var(--fg-2);
+  --up: #15803d;
+  --down: #b91c1c;
   --code-bg: #0a0a0a;
   --code-fg: #e8e8e8;
   color-scheme: light;
@@ -82,11 +91,13 @@
   --fg: #f5f5f2;
   --fg-2: #a1a1aa;
   --fg-3: #71717a;
-  --accent: #34d399;
-  --accent-fg: #022c20;
-  --danger: #f87171;
-  --gold: #fbbf24;
-  --whale: #60a5fa;
+  --accent: var(--fg);
+  --accent-fg: var(--bg);
+  --danger: var(--fg);
+  --gold: var(--fg-2);
+  --whale: var(--fg-2);
+  --up: #4ade80;
+  --down: #f87171;
   --code-bg: #000000;
   --code-fg: #e8e8e8;
   color-scheme: dark;
@@ -174,6 +185,14 @@
   font-family: var(--font-mono);
 }
 
+/*
+ * Heading polish — only the letter-spacing tweak that mirrors the
+ * site's existing `.display` discipline. We deliberately do NOT
+ * override font-size, font-weight, or font-family — those come from
+ * Fumadocs' preset (which already reads our `--font-sans` token via
+ * the color/font bridge above) so the typography stays identical to
+ * the rest of the site (Inter Variable, weight inherited from prose).
+ */
 #nd-docs-layout h1,
 #nd-docs-layout h2,
 #nd-docs-layout h3,
@@ -183,6 +202,255 @@
 #nd-page h3,
 #nd-page h4 {
   letter-spacing: -0.02em;
+}
+
+/* ---- Display + mono utilities — mirror exactly what app/globals.css
+   defines for the rest of the site so docs typography is identical
+   to /pricing, /predict, the home hero, etc. Inter Variable for the
+   display, JetBrains Mono Variable for code-y bits. -------------- */
+
+.display {
+  font-size: clamp(2.5rem, 5vw + 1rem, 4rem);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  font-weight: 700;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/* ---- Landing-page hero grain ----------------------------------------- */
+
+/*
+ * SVG-based fractal-noise grain. Tiny, deterministic, no image asset.
+ * Opacity is themed so the texture darkens slightly in dark mode for
+ * the same perceived density.
+ */
+.docs-hero {
+  background: var(--bg);
+}
+
+.docs-hero-grain {
+  background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.45 0'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>");
+  background-size: 200px 200px;
+  mix-blend-mode: multiply;
+  opacity: 0.07;
+}
+
+[data-theme='dark'] .docs-hero-grain,
+.dark .docs-hero-grain {
+  mix-blend-mode: screen;
+  opacity: 0.05;
+}
+
+/* On the landing page we hide Fumadocs' default H1 — the hero owns it. */
+.docs-landing :global(#nd-page > h1:first-of-type),
+.docs-landing :global(#nd-page > [data-description]:first-of-type) {
+  display: none;
+}
+
+/* ---- Sidebar polish -------------------------------------------------- */
+
+/*
+ * Fumadocs renders the sidebar inside `#nd-sidebar`. We override only
+ * what's needed to bring it onto the project's typography + spacing
+ * grid; the structure, links, and behaviour come from Fumadocs.
+ */
+
+#nd-sidebar {
+  border-color: var(--border);
+}
+
+/* Inner scroll area — keep a tight content gutter and tabular-num
+   feel; pad the bottom so the last group breathes above the viewport
+   edge on long lists. */
+#nd-sidebar [data-radix-scroll-area-viewport] > div {
+  padding-top: 0.5rem !important;
+  padding-bottom: 1.5rem !important;
+}
+
+/*
+ * `---Section---` markers in content/docs/meta.json render as section
+ * headers via Fumadocs' `<h3>` inside the page tree. Style them as
+ * mono / uppercase eyebrows so the sidebar reads as an organized
+ * atlas instead of a flat link list.
+ */
+#nd-sidebar h3,
+#nd-sidebar p[role='presentation'] {
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum';
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  padding-inline: 0.5rem;
+}
+
+#nd-sidebar h3:first-of-type,
+#nd-sidebar p[role='presentation']:first-of-type {
+  margin-top: 0.5rem;
+}
+
+/*
+ * Link rows — flatter idle state, calmer hover, distinct active
+ * indicator without depending on the legacy accent green.
+ */
+#nd-sidebar a {
+  border-radius: 8px;
+  padding-inline: 0.625rem;
+  padding-block: 0.4rem;
+  font-size: 13.5px;
+  color: var(--fg-2);
+  transition: background 100ms ease, color 100ms ease;
+}
+
+#nd-sidebar a:hover {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+/* Fumadocs marks the active page with data-active. Use the project's
+   B&W discipline: bold-fg text + tinted surface + left-edge bar. */
+#nd-sidebar a[data-active='true'] {
+  background: var(--surface-2);
+  color: var(--fg);
+  font-weight: 600;
+  position: relative;
+}
+
+#nd-sidebar a[data-active='true']::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: 30%;
+  bottom: 30%;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--fg);
+}
+
+/* Folder / collapsible group buttons — same idle treatment as plain
+   links but distinguishable by the chevron Fumadocs renders. */
+#nd-sidebar button {
+  border-radius: 8px;
+  padding-inline: 0.625rem;
+  padding-block: 0.4rem;
+  font-size: 13.5px;
+  color: var(--fg-2);
+  transition: background 100ms ease, color 100ms ease;
+}
+
+#nd-sidebar button:hover {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+/* Nested subgroup indentation — tighter than Fumadocs' default so
+   the visual hierarchy is felt without taking up the gutter. */
+#nd-sidebar [data-radix-collapsible-content] > * {
+  padding-inline-start: 0.625rem;
+}
+
+/* ---- Top nav (the `#nd-nav` bar above the docs) ---------------------- */
+
+#nd-nav {
+  border-color: var(--border);
+  backdrop-filter: blur(10px);
+}
+
+#nd-nav a {
+  font-size: 13.5px;
+}
+
+/* ---- Modal animation utilities — mirror app/globals.css so the
+   Ask-Vizzor modal in the docs zone uses the same enter/exit feel
+   as the lifetime-promo modal on /pricing. ------------------------------ */
+
+@layer utilities {
+  .promo-modal-fade-in  { animation: promo-modal-fade-in 180ms ease-out both; }
+  .promo-modal-fade-out { animation: promo-modal-fade-out 160ms ease-in both; }
+  .promo-modal-slide-in  { animation: promo-modal-slide-in 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+  .promo-modal-slide-out { animation: promo-modal-slide-out 200ms cubic-bezier(0.55, 0, 0.68, 0) both; }
+
+  @keyframes promo-modal-fade-in  { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes promo-modal-fade-out { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes promo-modal-slide-in {
+    0%   { transform: translateY(24px) scale(0.92); opacity: 0; }
+    55%  { transform: translateY(-6px) scale(1.02); opacity: 1; }
+    100% { transform: translateY(0)    scale(1);    opacity: 1; }
+  }
+  @keyframes promo-modal-slide-out {
+    from { transform: translateY(0)    scale(1);    opacity: 1; }
+    to   { transform: translateY(16px) scale(0.96); opacity: 0; }
+  }
+
+  /*
+   * Page transition — mirror of the same utility in app/globals.css
+   * so navigations into / out of the docs zone get parity with the
+   * marketing pages.
+   */
+  .page-reveal-loading {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  .page-reveal-active {
+    animation: page-reveal-active 420ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    will-change: opacity, transform;
+  }
+
+  @keyframes page-reveal-active {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .vizzor-loader-leaving {
+    animation: vizzor-loader-leaving 420ms ease-out forwards;
+    pointer-events: none;
+  }
+
+  @keyframes vizzor-loader-leaving {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+  }
+
+  /*
+   * VizzorLoader animations — mirror of the same utilities in
+   * app/globals.css so the route loader has visual parity in the
+   * docs zone.
+   */
+  .vizzor-loader-spin {
+    animation: vizzor-loader-spin 2.6s linear infinite;
+  }
+  .vizzor-loader-spin-fast {
+    animation: vizzor-loader-spin 1.1s linear infinite;
+  }
+  .vizzor-loader-pulse {
+    animation: vizzor-loader-pulse 1.4s ease-in-out infinite;
+  }
+
+  @keyframes vizzor-loader-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  @keyframes vizzor-loader-pulse {
+    0%, 100% { transform: scale(0.92); opacity: 0.65; }
+    50%      { transform: scale(1.04); opacity: 1; }
+  }
 }
 
 /* ---- KaTeX --- prevent block math overflow on narrow viewports ------- */

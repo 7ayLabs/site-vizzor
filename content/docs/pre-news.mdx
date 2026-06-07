@@ -1,0 +1,104 @@
+---
+title: Pre-news signals
+description: SEC EDGAR filings, token unlock calendar, options IV/skew/term structure (Deribit + Hyperliquid), and the LLM catalyst classifier — the signals that fire before price moves.
+---
+
+Most market signals are **reactive** — they describe what just happened. Pre-news signals are the opposite: they fire before the headline lands, when the catalyst is already on-chain or on file but the broader market hasn't priced it in yet.
+
+Four streams feed the pre-news surface. They run continuously and contribute to the `onChain` and `socialNarrative` families inside the Predictor.
+
+## SEC EDGAR filings
+
+Public-company filings frequently telegraph crypto-impact catalysts hours or days before the news cycle:
+
+- A spot ETF issuer's `8-K` filing on a creation/redemption update
+- A MicroStrategy `Form 4` insider transaction
+- A miner's `10-Q` ahead of an earnings call
+- A SPAC's `S-1` with a crypto-themed sponsor
+
+The EDGAR adapter polls the SEC RSS feed continuously, parses filings against a watchlist of crypto-correlated tickers (BTC ETFs, miners, treasury holders, stablecoin issuers), and emits structured `{ filer, form, timestamp, summary, polarity }` events.
+
+Polarity is set by the LLM catalyst classifier (below); the timestamp is captured at EDGAR-publish time, not at the operator-pickup time, so back-tests against historical filings preserve the real lead.
+
+## Token unlock calendar
+
+Vesting unlocks are scheduled, on-chain, and publicly known — but the market often forgets which date is coming next.
+
+The unlock calendar tracks every public unlock event on the supported chains: cliff dates, linear-vesting milestones, treasury releases, foundation tranches. Each entry includes the wallet that will receive the unlock, the token amount, and the share of circulating supply the event represents.
+
+Unlocks that cross a **5% of circulating supply** threshold flag automatically:
+
+<TerminalBlock
+  lang="text"
+  code={`Upcoming unlocks · next 30 days
+
+ETH+5d   ARB     92.6M ARB    7.4% of supply   → Arbitrum Foundation
+ETH+12d  WLD    37.5M WLD    3.1% of supply   → Worldcoin Treasury
+ETH+18d  AVAX    9.5M AVAX    2.6% of supply   → A16Z (linear vest)
+ETH+24d  SUI    64.0M SUI    3.7% of supply   → Sui Foundation`}
+/>
+
+The Predictor reads the calendar as a prior on the `onChain` family — symbols with a large near-term unlock get a bearish prior that gradually unwinds over the post-unlock window as the actual selling pressure resolves.
+
+## Options IV, skew, term structure
+
+The options surface is the closest thing to a market-implied probability distribution. The Pre-news layer pulls live snapshots from two venues:
+
+- **Deribit** — the dominant BTC and ETH options venue; full chain (strikes × expiries) refreshed every minute
+- **Hyperliquid** — on-chain perpetuals + options; growing share of long-tail token coverage
+
+For each underlying, the adapter computes:
+
+| Metric | What it measures | Used as |
+|---|---|---|
+| **ATM IV** | Implied volatility at the at-the-money strike | Vol-regime baseline |
+| **25Δ skew** | Difference between 25-delta call and put IV | Directional pressure (positive skew = put-side panic) |
+| **Term inversion** | Front-month IV minus 3-month IV | Event clustering (positive inversion = imminent event priced) |
+| **Put-call ratio** | Open interest weighted by side | Aggregate positioning |
+
+Inside the Predictor, these flow into the `logicRules` family (the Polaris v0.15.5+ FOL pack includes funding-z, options-skew, and IV-term-inversion rules) and into the `predictionMarkets` family (Gamma's implied-probability extraction reads the same chain).
+
+## LLM catalyst classifier
+
+The narrative-side counterpart to the on-chain feeds. The classifier reads every crypto headline that lands on the news adapters (CryptoPanic, CoinGecko, Reddit, 4chan), and emits a structured catalyst object per article:
+
+<TerminalBlock
+  lang="json"
+  code={`{
+  "headline": "Coinbase to list Polygon's POL token at 12:00 UTC tomorrow",
+  "catalyst": "exchange-listing",
+  "polarity": 0.78,
+  "confidence": 0.91,
+  "subject": "POL",
+  "expectedHorizon": "1d"
+}`}
+/>
+
+The classifier runs **Claude** by default, with GPT-4 and Gemini as fallbacks. Each article is **prompt-cached per day** so re-reads cost nothing; the daily article budget is operator-configurable (default 50 articles / day for the free tier of the news adapters, raised by the operator on the paid tier).
+
+The catalyst types span the universe of crypto-impact events:
+`exchange-listing` · `unlock` · `partnership` · `regulatory` · `protocol-upgrade` · `hack` · `delisting` · `etf-flow` · `macro-event` · `legal` · `unclassified`
+
+Each type carries its own expected-horizon prior — a listing news pulse fades within ~24h, a regulatory headline can grind for weeks. The Predictor reads both `polarity` and `expectedHorizon` when sizing the catalyst's contribution to a forecast.
+
+## How the Predictor uses pre-news
+
+Pre-news signals don't compete with the directional engine — they shape its priors:
+
+- **Bayesian update** uses recent catalyst polarity as a family prior on `socialNarrative`
+- **Manipulation guard** vetoes directional emissions within 3 hours of a high-impact macro catalyst (FOMC, CPI, fed-speak) — see the [Predictor abstention rules](/docs/predictor#when-the-engine-refuses-to-predict)
+- **Horizon selection** — when a near-term catalyst is detected, the Predictor biases toward longer horizons (post-event) rather than scalp horizons that the catalyst would invalidate
+
+The pre-news feed itself is rendered on the Web Dashboard and via the `/v1/market/news` REST endpoint. Operators can subscribe to per-symbol catalyst alerts on Telegram via `/alert news <symbol>`.
+
+## Tier gating
+
+- **Free** — recent headlines on every scanned symbol; trending news feed
+- **Pro** — full LLM catalyst classifier on every prediction; unlock alerts on watchlist symbols
+- **Elite** — SEC EDGAR live feed; Deribit + Hyperliquid options IV / skew; pre-news signal trigger snapshots embedded in every prediction record
+
+## Adjacent reading
+
+- [Cross-venue intelligence](/docs/cross-venue) — premium spreads + funding-z divergence
+- [Signal families](/docs/signals) — how pre-news contributes to `onChain` + `socialNarrative`
+- [Predictor](/docs/predictor) — how the priors shape the directional emission

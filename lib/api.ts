@@ -75,8 +75,11 @@ function withFallback<T>(
  * ----------------------------------------------------------------------- */
 
 export function useTicker(refreshIntervalMs = 30_000): LiveResult<TickerEntry[]> {
+  // Internal proxy to CoinGecko (see `app/api/ticker/route.ts`). The proxy
+  // already falls back to the snapshot on upstream failure, so the SWR
+  // call here just needs the snapshot as a no-flicker SSR fallback.
   const swr = useSWR<TickerEntry[]>(
-    `${API_BASE}/v1/site/ticker`,
+    '/api/ticker',
     fetcher,
     { ...SWR_DEFAULTS, refreshInterval: refreshIntervalMs },
   );

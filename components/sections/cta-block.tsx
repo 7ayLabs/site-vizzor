@@ -38,7 +38,7 @@ export async function CtaBlock() {
 
           <div className="mt-10 flex flex-col items-center gap-4">
             <a
-              href="https://t.me/VizzorBot"
+              href="https://t.me/vizzorai_bot"
               target="_blank"
               rel="noopener"
               className="inline-flex items-center justify-center whitespace-nowrap rounded-full bg-[var(--fg)] text-[var(--bg)] h-12 px-8 text-[15px] font-semibold tracking-tight transition-transform duration-150 ease-out hover:scale-[1.02] active:scale-[0.99]"

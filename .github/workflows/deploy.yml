@@ -1,8 +1,18 @@
 name: Deploy
 
+# Branch-driven deploy with two environments:
+#
+#   testing  →  test.vizzor.ai  (staging, Solana devnet)
+#   main     →  vizzor.ai       (production, Solana mainnet)
+#
+# Both targets share one VPS host (per the `deploy.md` runbook).
+# The `resolve` job below maps `github.ref` → an env block that every
+# downstream step reads. Adding a third target later is a one-block
+# extension; no copy-paste of build / push / deploy / smoke.
+
 on:
   push:
-    branches: [main]
+    branches: [main, testing]
     paths-ignore:
       - '**.md'
       - '.github/**'
@@ -10,12 +20,15 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Git ref to deploy'
+        description: 'Git ref to deploy (defaults to the workflow branch)'
         required: false
-        default: 'main'
+        default: ''
 
 concurrency:
-  group: deploy-main
+  # Per-target concurrency so a fast follow-up merge to `main` cancels a
+  # mid-flight prod deploy from a previous merge, but a `testing` deploy
+  # is never cancelled by a `main` deploy (or vice-versa).
+  group: deploy-${{ github.ref_name }}
   cancel-in-progress: false
 
 env:
@@ -23,19 +36,71 @@ env:
   IMAGE_NAME: 7aylabs/site-vizzor
 
 jobs:
+  # ────────────────────────────────────────────────────────────────────
+  # resolve — map github.ref to the staging-vs-prod parameter bundle.
+  # Every downstream job reads from `needs.resolve.outputs.*` so the
+  # build / push / deploy / smoke steps are written once.
+  # ────────────────────────────────────────────────────────────────────
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      target:          ${{ steps.r.outputs.target }}
+      image_tag:       ${{ steps.r.outputs.image_tag }}
+      host_url:        ${{ steps.r.outputs.host_url }}
+      service_name:    ${{ steps.r.outputs.service_name }}
+      compose_overlay: ${{ steps.r.outputs.compose_overlay }}
+      build_api_url:   ${{ steps.r.outputs.build_api_url }}
+      checkout_ref:    ${{ steps.r.outputs.checkout_ref }}
+    steps:
+      - id: r
+        run: |
+          set -euo pipefail
+          REF="${{ inputs.ref }}"
+          if [ -z "$REF" ]; then REF="${{ github.ref }}"; fi
+          # Resolve canonical branch name regardless of trigger shape.
+          case "$REF" in
+            main|refs/heads/main)
+              echo "target=prod"                                        >> "$GITHUB_OUTPUT"
+              echo "image_tag=latest"                                   >> "$GITHUB_OUTPUT"
+              echo "host_url=https://vizzor.ai"                         >> "$GITHUB_OUTPUT"
+              echo "service_name=site-vizzor"                           >> "$GITHUB_OUTPUT"
+              echo "compose_overlay=docker-compose.prod.yml"            >> "$GITHUB_OUTPUT"
+              echo "build_api_url=https://api.vizzor.ai"                >> "$GITHUB_OUTPUT"
+              echo "checkout_ref=main"                                  >> "$GITHUB_OUTPUT"
+              ;;
+            testing|refs/heads/testing)
+              echo "target=staging"                                     >> "$GITHUB_OUTPUT"
+              echo "image_tag=testing"                                  >> "$GITHUB_OUTPUT"
+              echo "host_url=https://test.vizzor.ai"                    >> "$GITHUB_OUTPUT"
+              echo "service_name=site-vizzor-staging"                   >> "$GITHUB_OUTPUT"
+              echo "compose_overlay=docker-compose.staging.yml"         >> "$GITHUB_OUTPUT"
+              # Staging shares the prod engine — there is no
+              # `api.test.vizzor.ai`. If/when the engine deploys a
+              # staging surface, flip this URL here and rebuild.
+              echo "build_api_url=https://api.vizzor.ai"                >> "$GITHUB_OUTPUT"
+              echo "checkout_ref=testing"                               >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::Unsupported deploy ref: $REF (only main and testing trigger deploys)"
+              exit 1
+              ;;
+          esac
+
+  # ────────────────────────────────────────────────────────────────────
+  # build-and-push — one image per target, two tags (the env tag and a
+  # `<branch>-<short-sha>` traceability tag).
+  # ────────────────────────────────────────────────────────────────────
   build-and-push:
     runs-on: ubuntu-latest
+    needs: resolve
     timeout-minutes: 20
     permissions:
       contents: read
       packages: write
-    outputs:
-      image: ${{ steps.meta.outputs.tags }}
-      sha: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || 'main' }}
+          ref: ${{ needs.resolve.outputs.checkout_ref }}
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -52,10 +117,14 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Tags produced:
+          #   - `<env-tag>`               (latest or testing — what compose tracks)
+          #   - `<branch>-<short-sha>`    (immutable traceability tag)
+          #   - `<short-sha>`             (raw sha for backstop reverts)
           tags: |
-            type=ref,event=branch
+            type=raw,value=${{ needs.resolve.outputs.image_tag }}
+            type=raw,value=${{ github.ref_name }}-${{ github.sha }},enable=true
             type=sha,prefix=,format=short
-            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -66,14 +135,23 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # NEXT_PUBLIC_VIZZOR_API_URL is baked at build into the JS
+          # bundle, so the per-env value MUST come from the resolve job —
+          # not hardcoded. The same Dockerfile builds both images.
           build-args: |
             GIT_SHA=${{ github.sha }}
             BUILD_TIME=${{ github.event.head_commit.timestamp }}
-            NEXT_PUBLIC_VIZZOR_API_URL=https://api.vizzor.ai
+            NEXT_PUBLIC_VIZZOR_API_URL=${{ needs.resolve.outputs.build_api_url }}
 
+  # ────────────────────────────────────────────────────────────────────
+  # deploy-vps — SSH into the (single) VPS, pull the just-pushed image
+  # for the right service, force-recreate the matching container, prune
+  # old images. Same host secrets for both targets; the service name and
+  # compose overlay carry the env distinction.
+  # ────────────────────────────────────────────────────────────────────
   deploy-vps:
     runs-on: ubuntu-latest
-    needs: build-and-push
+    needs: [resolve, build-and-push]
     timeout-minutes: 10
     if: ${{ !github.event.act }}
     steps:
@@ -84,20 +162,35 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
+          envs: TARGET,SERVICE,OVERLAY
+          script_stop: true
           script: |
+            set -euo pipefail
+            export TARGET="${{ needs.resolve.outputs.target }}"
+            export SERVICE="${{ needs.resolve.outputs.service_name }}"
+            export OVERLAY="${{ needs.resolve.outputs.compose_overlay }}"
             cd /opt/7aylabs
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull site-vizzor
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps --force-recreate site-vizzor
+            echo "▶  Deploying $SERVICE ($TARGET) via $OVERLAY"
+            docker compose -f docker-compose.yml -f "$OVERLAY" pull "$SERVICE"
+            docker compose -f docker-compose.yml -f "$OVERLAY" up -d --no-deps --force-recreate "$SERVICE"
             docker image prune -af --filter "until=72h"
 
       - name: Smoke test
         run: |
-          set -e
+          set -euo pipefail
+          HOST_URL="${{ needs.resolve.outputs.host_url }}"
+          TARGET="${{ needs.resolve.outputs.target }}"
+          echo "▶  Smoke-testing $TARGET at $HOST_URL/api/health"
           for i in 1 2 3 4 5 6 7 8; do
             sleep 5
-            STATUS=$(curl -sf -o /dev/null -w "%{http_code}" https://vizzor.ai/api/health || echo "down")
-            echo "attempt $i → $STATUS"
-            if [ "$STATUS" = "200" ]; then exit 0; fi
+            BODY=$(curl -sf "$HOST_URL/api/health" || echo "")
+            STATUS=$(echo "$BODY"  | jq -r '.status               // "down"')
+            DB=$(echo     "$BODY"  | jq -r '.subsystems.sqlite.ok  // false')
+            WATCHER=$(echo "$BODY" | jq -r '.subsystems.watcher.ok // false')
+            echo "attempt $i → status=$STATUS sqlite=$DB watcher=$WATCHER"
+            if [ "$STATUS" = "healthy" ] && [ "$DB" = "true" ] && [ "$WATCHER" = "true" ]; then
+              exit 0
+            fi
           done
-          echo "Health check failed after 8 attempts" >&2
+          echo "::error::Health check failed at $HOST_URL after 8 attempts" >&2
           exit 1

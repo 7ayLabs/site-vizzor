@@ -1,0 +1,126 @@
+---
+title: Billing & plans
+description: Vega — the on-chain billing engine. Tier ladder, payment chains, HD-wallet per-user derivation, exchange-rate oracle, auto-trial, rotation knobs. Everything the operator needs to run paid Vizzor.
+---
+
+Vega is the billing engine that powers Vizzor's paid tiers. It handles tier state, payment sessions, on-chain confirmation, HD-wallet derivation for per-user receive addresses, and the exchange-rate oracle that locks USD prices to the on-chain quote at session creation.
+
+It is **on-chain by default** — there's no Stripe, no card vault, no recurring-charge token. Every period is a fresh on-chain transaction or a cryptographically-bound lifetime grant.
+
+## The tier ladder
+
+| Tier | Monthly | Annual | Lifetime | Surfaces |
+|---|---|---|---|---|
+| **free** | — | — | — | Scanner, sentiment, watchlist; 0 LLM calls/day |
+| **trial** | — | — | — | Full Pro for 7 days, auto-downgrades; 10 LLM calls/day |
+| **pro** | $19 / $9.99 (legacy) | $190 / $99 (legacy) | — | Full Predictor, unlimited alerts, audit trail; 200 LLM calls/day |
+| **elite** | $99 / $29.99 (legacy) | $990 / $299 (legacy) | $1,499 / $499 (legacy) | Pro + Whale Terminal + Forensics + Pre-news + Cross-venue; unlimited LLM |
+
+The site-vizzor surface and the bot surface run independent ladders during the v0.2.x transition window — the bot still honors the legacy Vega numbers while the site has repositioned to the new $19 / $99 / $1,499 anchor. Both engines read from the same `subscriptions` row by `wallet_address`, so a paid subscription on one side surfaces on the other.
+
+## Auto-trial on first contact
+
+New users get **Pro for 7 days** automatically on their first `/start` to the Telegram bot. No card on file, no expiry surprise — after 7 days the bot transitions them back to Free silently.
+
+The trial is implemented as a `subscriptions` row with `tier='trial'` and a `trial_started_at` timestamp. The downgrade is event-driven: the bot's middleware checks the timestamp on every command and rewrites the effective tier when the 7-day window elapses. No background sweep required; if a user never returns, no row mutation happens.
+
+## Payment flow (site-vizzor)
+
+The site surface uses Solana-native SOL payments through a session-based state machine:
+
+```text
+1. User picks tier × cadence on /pricing
+2. POST /api/payment/session  → { session_id, dest_address, amount, expires_at }
+3. User signs the on-chain transfer with their wallet
+   memo: session_id (so the watcher can match)
+4. Watcher (lib/payment/watcher.ts) polls treasury, matches memo + amount
+5. Confirmation:
+   - markSessionConfirmed
+   - insertSubscription (wallet → tier × cadence × expiry)
+   - issueGrantForSession (24h single-use code for bot binding)
+6. /pay/success renders the grant code + Telegram deep-link
+7. User clicks the link, bot redeems → wallet ↔ Telegram bound forever
+```
+
+The watcher waits for **finalized** commitment on lifetime-tier payments (≥ $100 USD threshold, configurable via `VIZZOR_FINALIZED_USD_THRESHOLD`); smaller sessions confirm at `confirmed` for sub-second latency.
+
+The pre-link path bypasses the grant step entirely — if the user has signed `Action: Link Wallet` in the bot at any point in the past, payment from that wallet auto-attributes to their Telegram account at confirmation. No copy-paste, no second touch.
+
+## Payment flow (Vega — TON-primary)
+
+The Vega engine, as shipped in the bot binary, uses **TON as the primary payment rail** with Telegram Stars integration for the most-frictionless flow. EVM (Base + Arbitrum USDC) and Solana variants ship alongside the site flow during v0.2.x.
+
+The HD-wallet model is what makes per-user receive addresses safe:
+
+- One operator-supplied **mnemonic** lives encrypted (AES-256-GCM, scrypt-derived key, N=2^18)
+- Per-user, per-chain receive addresses are **derived** at session creation (`m/44'/coin'/user_id'/0/0`)
+- Operator never sees raw private keys after generation; the encrypted mnemonic is the only persistent material
+- Per-session amount uniqueness (last 4 cents salt for EVM where the chain has no memo equivalent) lets the watcher demux concurrent sessions
+
+## The exchange-rate oracle
+
+USD prices are operator-facing; on-chain payments happen in native units (SOL, TON, USDC). The oracle is the bridge:
+
+- At session creation, the live mid-market rate is fetched (CoinGecko + a venue blend)
+- The rate is **locked** on the `payment_sessions.rate_locked` column at write time
+- The session's `amount` (in token units) is computed from the locked rate × USD price × (1 − discount_bps)
+- Watchers never re-quote; the locked rate is the contract
+
+The rate lock window is configurable (default 5 minutes — long enough for a wallet popup, short enough to stay tight against volatility).
+
+## Per-chain promotional discounts
+
+| Chain | Token | Discount | Rationale |
+|---|---|---|---|
+| Solana | SOL native | **15% off** | Sub-second finality; primary rail |
+| TON | TON native | **10% off** | In-Telegram wallet UX |
+| Base | USDC | **5% off** | EVM credibility play |
+| Arbitrum | USDC | **5% off** | Stablecoin payers on a single L2 |
+
+The discount is encoded as a basis-points value on every session row; the locked rate is **post-discount** so the watcher matches the post-discount amount, not the pre-discount sticker.
+
+## Runtime knobs (no YAML edits)
+
+The Vega engine exposes admin-only Telegram commands for hot-tuning without redeploys:
+
+<TerminalBlock
+  lang="text"
+  code={`/plans price pro-monthly 12.99       # override sticker price live
+/plans tier elite-lifetime extend 30  # extend an existing lifetime by 30 days
+/allow <telegram_id>                  # grant access without YAML
+/deny <telegram_id>                   # revoke
+/access                               # show current allowlist + expiry TTL`}
+/>
+
+Price overrides are stored in the `billing_state` table; existing in-flight sessions stay locked to their original sticker. New sessions read the live override.
+
+## Subscription state machine
+
+```text
+free  ──/start──►  trial (7d)  ──auto──►  free
+free  ──pay────►  pro          ──renew──►  pro
+pro   ──pay────►  elite        ──renew──►  elite
+elite ──pay────►  elite (lifetime)
+```
+
+Cancellation is the absence of a renewal. There's no card on file to charge — stop paying = automatic downgrade at the period boundary.
+
+Refunds are bot-level: `/refund` within 48h of a payment returns the on-chain amount minus network fees. After 48h, no refunds — but the subscription continues to its expiry regardless.
+
+## Schema (the rows that matter)
+
+| Table | Purpose |
+|---|---|
+| `payment_sessions` | One per checkout attempt; tracks status, locked rate, dest address, expiry, payer |
+| `subscriptions` | Canonical "is this wallet subscribed?" record; tier × cadence × expires_at × wallet × tg-id |
+| `grants` | Single-use 24h codes that bind a subscription to a Telegram account |
+| `wallet_links` | Durable 1:1 wallet ↔ telegram_user_id binding (pre-link path) |
+| `billing_state` | Runtime price overrides, allowlist, admin bypass markers |
+
+Migrations are additive and idempotent — rolling back to a prior image is safe; the database stays on the same schema, older code ignores the new columns.
+
+## Adjacent reading
+
+- [Configuration](/docs/configuration) — env vars for the Vega engine, mnemonic encryption, rate-oracle providers
+- [Deployment](/docs/deployment) — operator runbook for the payment surfaces
+- [Telegram bot](/docs/telegram) — the runtime `/plans` admin commands
