@@ -17,7 +17,7 @@ FROM base AS deps
 # them `pnpm install` fails the deps stage on `node-gyp rebuild`.
 # These layers stay in the deps stage only; the final runner image
 # uses Next.js' standalone bundle and never sees node-gyp.
-RUN apk add --no-cache python3 make g++ libc-dev linux-headers
+RUN apk add --no-cache python3 make g++ libc-dev linux-headers eudev-dev
 COPY package.json pnpm-lock.yaml .npmrc ./
 RUN pnpm install --frozen-lockfile --prefer-offline
 
