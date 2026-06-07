@@ -1,23 +1,70 @@
 ---
 title: Vizzor Docs
-description: AI-powered crypto chronovisor — CLI, bots, REST API, ChronoVisor math, signal families, and deployment.
+description: AI-powered crypto intelligence — Predictor, Scanner, Whale Terminal, Forensics, multi-LLM chat, autonomous agents, and 11 chains. The full ecosystem in one place.
 ---
 
-Vizzor turns raw market data into actionable crypto predictions. It pulls live feeds from 15+ exchanges, runs technical analysis on real candles, reads derivatives positioning, tracks on-chain activity, and synthesizes everything into price predictions with actual dollar targets — from 5-minute scalps to 3-month outlooks.
+Vizzor is a crypto intelligence stack, not a chat wrapper. The **Predictor** turns six independent signal families into calibrated directional forecasts with tracked win-rates. The **Scanner** runs structural security audits on any token. The **Whale Terminal** renders per-token smart-money flow. **Forensics** reconstructs the on-chain graph the rest of the surface reads from. Everything is callable from Telegram, the CLI, the REST API, the web dashboard, and a multi-LLM chat that knows how to call them as tools.
 
-Ask about any coin, any token, any chain. Vizzor fetches the data, computes the signals, and gives you numbers — not opinions.
+This documentation is the operator's reference — every primitive, every command, every knob.
 
-## Where to start
+## Start here
 
 <Cards>
-  <Card title="Quickstart" href="/docs/quickstart" description="Install, configure, and run your first prediction in 60 seconds." />
-  <Card title="CLI reference" href="/docs/cli" description="Every command in the terminal UI, organized by surface." />
-  <Card title="Telegram bot" href="/docs/telegram" description="32 user + admin commands, runtime knobs, role-scoped menus." />
-  <Card title="Discord bot" href="/docs/discord" description="Slash-command setup and the @mention chat surface." />
+  <Card title="Quickstart" href="/docs/quickstart" description="Install, configure, and run your first prediction in 60 seconds. Four install paths." />
+  <Card title="The Predictor" href="/docs/predictor" description="Four calibrated tiers, every horizon from 5m to 7d, transparent abstention when the data isn't there." />
+  <Card title="Telegram bot" href="/docs/telegram" description="32 user + admin commands, runtime knobs, role-scoped menus — the primary surface." />
+  <Card title="REST API" href="/docs/api" description="40+ endpoints, API-key auth, WebSocket push, streaming chat." />
+</Cards>
+
+## Surfaces
+
+How you reach Vizzor — the user-facing layer over the engine.
+
+<Cards>
+  <Card title="Telegram bot" href="/docs/telegram" description="Full command suite, AI chat, runtime allowlist, role-based menus." />
+  <Card title="Discord bot" href="/docs/discord" description="Slash commands + @mention chat. Same engine, different envelope." />
+  <Card title="CLI" href="/docs/cli" description="Every command in the terminal UI, plus the interactive Ink-based chat." />
+  <Card title="REST API" href="/docs/api" description="Swagger / OpenAPI, SSE-streamed chat, WebSocket push." />
+</Cards>
+
+## Predictor
+
+The directional layer — calibrated probabilities, tier-tagged emissions, closed-loop calibration.
+
+<Cards>
+  <Card title="Predictor overview" href="/docs/predictor" description="Tiers, horizons, abstention rules, what /predict returns." />
   <Card title="ChronoVisor engine" href="/docs/chronovisor" description="The math layer — CF algebra, Bayesian update, FOL rules, Platt calibration." />
   <Card title="Signal families" href="/docs/signals" description="The six independent signal types fused into every forecast." />
-  <Card title="Autonomous agents" href="/docs/agents" description="Paper/live trading agents, 5 built-in strategies, 7-step safety pipeline." />
-  <Card title="REST API" href="/docs/api" description="40+ endpoints, API-key auth, WebSocket push." />
+</Cards>
+
+## Intelligence
+
+The pre-trade and forensic surfaces. Where the engine gets its inputs and the operator gets the receipts.
+
+<Cards>
+  <Card title="Token Scanner" href="/docs/scanner" description="Pre-buy security audit. Rug, honeypot, tax logic, ownership, holders. Free tier." />
+  <Card title="Whale Terminal" href="/docs/whale-terminal" description="Per-token feed of whale moves, Smart Money Flow, labeled top-20 holders." />
+  <Card title="Forensics" href="/docs/forensics" description="Flow-graph reconstruction, rug detector, contract auditor, bytecode disassembler, labeler." />
+  <Card title="Pre-news" href="/docs/pre-news" description="SEC EDGAR, token unlock calendar, options IV / skew, LLM catalyst classifier." />
+  <Card title="Cross-venue" href="/docs/cross-venue" description="Premium spreads, funding-z divergence, Polymarket edge scanner." />
+  <Card title="AI chat" href="/docs/ai-chat" description="Multi-LLM with tool-use. Claude / GPT / Gemini / local Ollama." />
+</Cards>
+
+## Automation
+
+<Cards>
+  <Card title="Autonomous agents" href="/docs/agents" description="Paper / live trading agents, five built-in strategies, seven-step safety pipeline." />
+</Cards>
+
+## Plans
+
+<Cards>
+  <Card title="Billing & plans" href="/docs/billing" description="Vega billing engine. On-chain payments, HD-wallet derivation, exchange-rate oracle, tier ladder." />
+</Cards>
+
+## Reference
+
+<Cards>
   <Card title="Supported chains" href="/docs/chains" description="11 chains live today; add a new chain via the ChainAdapter interface." />
   <Card title="Configuration" href="/docs/configuration" description="~/.vizzor/config.yaml, env vars, runtime knobs over Telegram." />
   <Card title="Deployment" href="/docs/deployment" description="Docker compose, production overlay, backup + restore scripts." />
@@ -25,7 +72,8 @@ Ask about any coin, any token, any chain. Vizzor fetches the data, computes the 
 
 ## What makes Vizzor different
 
-- **Not a chart tool** — a prediction engine that fuses six independent signal types into one composite forecast.
-- **Not a news aggregator** — sentiment, derivatives, on-chain data, and TA are processed simultaneously.
-- **Not a chatbot wrapper** — every prediction is backed by real market data from 15 exchanges, with traceable reasoning and confidence scores.
-- **Works with everything** — BTC, ETH, SOL, meme coins, new DEX launches, tokens by contract address. If it has a price, Vizzor can predict it.
+- **Not a chart tool** — a prediction engine that fuses six independent signal types into one composite forecast, with tracked win-rate on every horizon.
+- **Not a news aggregator** — sentiment, derivatives positioning, on-chain flow, and TA are processed simultaneously and contribute to the same emission.
+- **Not a chatbot wrapper** — every prediction is backed by real market data from 15 exchanges, with a traceable trigger snapshot showing which signal families fired.
+- **Not a black box** — abstention is a feature: the engine refuses to predict under manipulation patterns, low data coverage, or pre-event windows. `/diagnose` shows exactly why.
+- **Works with everything** — BTC, ETH, SOL, meme coins, new DEX launches, tokens by contract address. If it has a price on one of the 11 supported chains, Vizzor can predict it.
