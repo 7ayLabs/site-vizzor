@@ -12,7 +12,12 @@
       "eyebrow": "menú",
       "openAria": "Abrir menú",
       "closeAria": "Cerrar menú",
-      "settings": "Preferencias"
+      "settings": "Preferencias",
+      "sections": {
+        "navigate": "navegar",
+        "account": "cuenta",
+        "preferences": "preferencias"
+      }
     }
   },
   "auth": {

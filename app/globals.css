@@ -273,6 +273,67 @@
     to   { transform: translateY(8px)  scale(0.98); opacity: 0; }
   }
 
+  /*
+   * Mobile drawer — right-anchored slide that mirrors the docs sidebar
+   * gesture (smooth cubic-bezier with no overshoot, faster exit). The
+   * dedicated transform keeps it independent from wallet-modal, which
+   * uses a vertical lift; using the same class on a horizontal drawer
+   * read as "panel hopping into place" instead of "panel sliding in".
+   */
+  .mobile-drawer-slide-in {
+    animation: mobile-drawer-slide-in 260ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+
+  .mobile-drawer-slide-out {
+    animation: mobile-drawer-slide-out 200ms cubic-bezier(0.4, 0, 1, 1) both;
+  }
+
+  .mobile-drawer-fade-in {
+    animation: mobile-drawer-fade-in 220ms ease-out both;
+  }
+
+  .mobile-drawer-fade-out {
+    animation: mobile-drawer-fade-out 180ms ease-in both;
+  }
+
+  @keyframes mobile-drawer-slide-in {
+    from { transform: translate3d(100%, 0, 0); }
+    to   { transform: translate3d(0, 0, 0); }
+  }
+
+  @keyframes mobile-drawer-slide-out {
+    from { transform: translate3d(0, 0, 0); }
+    to   { transform: translate3d(100%, 0, 0); }
+  }
+
+  @keyframes mobile-drawer-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  @keyframes mobile-drawer-fade-out {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+  }
+
+  /*
+   * Drawer row reveal — staggered fade-up on the first paint after the
+   * drawer settles. Items pick up their delay via inline style so the
+   * stagger is data-driven and survives reordering. The same eased curve
+   * the docs sidebar uses for hover transitions.
+   */
+  .mobile-drawer-row-in {
+    opacity: 0;
+    transform: translateY(6px);
+    animation: mobile-drawer-row-in 320ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    animation-delay: var(--row-delay, 0ms);
+  }
+
+  @keyframes mobile-drawer-row-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .marquee-track {
       animation: none;
