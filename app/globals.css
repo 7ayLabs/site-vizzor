@@ -50,6 +50,20 @@
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, .dark, .dark *));
 
+/*
+ * Vizzor goes strict black-and-white. We keep the historical color
+ * token names — `--accent`, `--gold`, `--whale`, `--danger` — because
+ * every component reads them, but every one now resolves to a value
+ * inside the neutral scale that flips correctly between light and
+ * dark mode. No green, no orange, no blue, no red. The only emphasis
+ * comes from inversion (`bg-fg / text-bg`) or contrast steps inside
+ * the fg / fg-2 / fg-3 ramp.
+ *
+ * Why redefine instead of search-and-replace every callsite: every
+ * future component that reaches for the token gets the right value
+ * automatically. There is one source of truth.
+ */
+
 :root {
   --bg: #fafaf7;
   --surface: #ffffff;
@@ -58,11 +72,24 @@
   --fg: #0a0a0a;
   --fg-2: #52525b;
   --fg-3: #737373;
-  --accent: #10b981;
-  --accent-fg: #022c20;
-  --danger: #dc2626;
-  --gold: #f59e0b;
-  --whale: #3b82f6;
+
+  /* Token aliases — all collapsed to the neutral scale. */
+  --accent: var(--fg);
+  --accent-fg: var(--bg);
+  --danger: var(--fg);
+  --gold: var(--fg-2);
+  --whale: var(--fg-2);
+
+  /* Direction tokens — the one scoped exception to strict monochrome.
+   * Price-change direction is a functional signal, not decoration; an
+   * up arrow that reads identical to a down arrow fails colorblind
+   * users and breaks the at-a-glance scan a ticker is built for. We
+   * pair these with ▲/▼ glyphs so the signal is still legible without
+   * color (AA). Tones are deep-saturated rather than retail-bright so
+   * they sit naturally next to the neutral palette. */
+  --up: #15803d;
+  --down: #b91c1c;
+
   --code-bg: #0a0a0a;
   --code-fg: #e8e8e8;
 
@@ -77,11 +104,19 @@
   --fg: #f5f5f2;
   --fg-2: #a1a1aa;
   --fg-3: #71717a;
-  --accent: #34d399;
-  --accent-fg: #022c20;
-  --danger: #f87171;
-  --gold: #fbbf24;
-  --whale: #60a5fa;
+
+  --accent: var(--fg);
+  --accent-fg: var(--bg);
+  --danger: var(--fg);
+  --gold: var(--fg-2);
+  --whale: var(--fg-2);
+
+  /* Direction tokens — lifted in dark mode for legible contrast on
+   * the near-black surface, still muted enough to read as financial
+   * data rather than retail bling. */
+  --up: #4ade80;
+  --down: #f87171;
+
   --code-bg: #000000;
   --code-fg: #e8e8e8;
 
@@ -195,10 +230,154 @@
     to { transform: translate3d(-50%, 0, 0); }
   }
 
+  /*
+   * WalletSelectorModal. Enter/exit symmetry: backdrop fades, card
+   * slides + fades. `animation-fill-mode: forwards` keeps the end state
+   * pinned so the exit animation does not snap before unmount.
+   * Reduced-motion users get the instant final state via the global
+   * `prefers-reduced-motion: reduce` media block below.
+   */
+  .wallet-modal-fade-in {
+    animation: wallet-modal-fade-in 140ms ease-out both;
+  }
+
+  .wallet-modal-fade-out {
+    animation: wallet-modal-fade-out 140ms ease-in both;
+  }
+
+  .wallet-modal-slide-in {
+    animation: wallet-modal-slide-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .wallet-modal-slide-out {
+    animation: wallet-modal-slide-out 160ms cubic-bezier(0.4, 0, 1, 1) both;
+  }
+
+  @keyframes wallet-modal-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  @keyframes wallet-modal-fade-out {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+  }
+
+  @keyframes wallet-modal-slide-in {
+    from { transform: translateY(12px) scale(0.98); opacity: 0; }
+    to   { transform: translateY(0)   scale(1);    opacity: 1; }
+  }
+
+  @keyframes wallet-modal-slide-out {
+    from { transform: translateY(0)    scale(1);    opacity: 1; }
+    to   { transform: translateY(8px)  scale(0.98); opacity: 0; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .marquee-track {
       animation: none;
     }
+  }
+
+  /*
+   * Promo modal entrance/exit. Paired keyframes so the close
+   * animation plays to completion before unmount. Reduced-motion
+   * users get the instant final state via the global media block
+   * below.
+   */
+  .promo-modal-fade-in  { animation: promo-modal-fade-in 180ms ease-out both; }
+  .promo-modal-fade-out { animation: promo-modal-fade-out 160ms ease-in both; }
+  /*
+   * Bouncy enter — three-step keyframe ramps from below the resting
+   * position, slightly overshoots (1.04 scale + lifted Y), then settles
+   * back down. The classic "back-out with overshoot" Apple-modal feel.
+   * Exit drops back down with a tight ease-in.
+   */
+  .promo-modal-slide-in  { animation: promo-modal-slide-in 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+  .promo-modal-slide-out { animation: promo-modal-slide-out 200ms cubic-bezier(0.55, 0, 0.68, 0) both; }
+
+  @keyframes promo-modal-fade-in  { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes promo-modal-fade-out { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes promo-modal-slide-in {
+    0%   { transform: translateY(24px) scale(0.92); opacity: 0; }
+    55%  { transform: translateY(-6px) scale(1.02); opacity: 1; }
+    100% { transform: translateY(0)    scale(1);    opacity: 1; }
+  }
+  @keyframes promo-modal-slide-out {
+    from { transform: translateY(0)    scale(1);    opacity: 1; }
+    to   { transform: translateY(16px) scale(0.96); opacity: 0; }
+  }
+
+  /*
+   * Page transition choreography — paired with PageTransition + the
+   * VizzorLoader. The two classes (`-loading` and `-active`) hand the
+   * `<div key={pathname}>` wrapper between phases:
+   *
+   *   - During the loading phase the content sits at opacity 0 with
+   *     a small downward offset, fully hidden behind the loader veil.
+   *   - When PageTransition flips to `revealing` the wrapper gets
+   *     `page-reveal-active`, which animates back to (opacity: 1,
+   *     translateY: 0) over LOADER_FADE_MS — synchronised with the
+   *     loader's own fade-out so the eye reads one "veil lifting"
+   *     gesture instead of two stacked transitions.
+   */
+  .page-reveal-loading {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  .page-reveal-active {
+    animation: page-reveal-active 420ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    will-change: opacity, transform;
+  }
+
+  @keyframes page-reveal-active {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Loader leaving — fades the brand veil out over the same window
+     the content is revealing in, so the cross-fade lands clean. */
+  .vizzor-loader-leaving {
+    animation: vizzor-loader-leaving 420ms ease-out forwards;
+    pointer-events: none;
+  }
+
+  @keyframes vizzor-loader-leaving {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+  }
+
+  /*
+   * VizzorLoader — paired animations for the route-transition loader
+   * in components/layout/vizzor-loader.tsx. The outer ring rotates
+   * slowly (2.6s), the inner accented ring rotates faster (1.1s) in
+   * the same direction so the eye gets a clear sense of motion
+   * without dizziness. The brand mark inside pulses (scale + opacity)
+   * on a 1.4s loop independent of the rings.
+   */
+  .vizzor-loader-spin {
+    animation: vizzor-loader-spin 2.6s linear infinite;
+  }
+  .vizzor-loader-spin-fast {
+    animation: vizzor-loader-spin 1.1s linear infinite;
+  }
+  .vizzor-loader-pulse {
+    animation: vizzor-loader-pulse 1.4s ease-in-out infinite;
+  }
+
+  @keyframes vizzor-loader-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  @keyframes vizzor-loader-pulse {
+    0%, 100% { transform: scale(0.92); opacity: 0.65; }
+    50%      { transform: scale(1.04); opacity: 1; }
   }
 }
 

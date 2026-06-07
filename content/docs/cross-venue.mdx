@@ -1,0 +1,91 @@
+---
+title: Cross-venue intelligence
+description: Premium spreads, funding-z divergence, venue arbitrage, Polymarket edge detection. The multi-venue layer that surfaces signals from disagreements between markets.
+---
+
+Crypto has **many markets for the same asset**: Coinbase spot, Binance perpetuals, Deribit options, Hyperliquid perps, Polymarket prediction markets, the on-chain DEX surface. When they agree, there's not much to say. When they disagree, that disagreement is the signal.
+
+Cross-venue intelligence is the layer that watches all of them simultaneously, computes the disagreements as structured deltas, and surfaces the actionable ones.
+
+## Premium spreads
+
+The most-tracked premium in crypto is the **Coinbase premium** — the price of BTC on Coinbase (a US-tilted spot venue) versus the price on Binance perpetuals (the global derivatives venue).
+
+| Premium sign | What it usually means |
+|---|---|
+| Positive (Coinbase > Binance) | US institutional bid; ETF flows; spot accumulation |
+| Negative (Coinbase < Binance) | Retail capitulation, US sell pressure, or ETF outflow |
+
+Vizzor tracks the spread continuously and surfaces:
+
+- **Persistent premium** — Coinbase trading at +0.5% to +2% for hours → spot demand outpacing leverage
+- **Premium flip** — sign change after a sustained period → regime shift
+- **Premium spike** — sudden divergence (often coincident with macro catalysts)
+
+The same logic generalizes to other venue pairs: Korean exchange premium (Kimchi), CME-vs-spot basis for institutional flow, ETF NAV-vs-market deviation. Each pair has its own historical baseline and its own signal envelope.
+
+## Funding-z divergence
+
+Funding rates are the cost of holding leverage; they're set by each derivatives venue independently. When all venues funding at the same rate, leverage is balanced. When one venue's funding diverges meaningfully from peers, something is happening that the others haven't priced.
+
+The **funding-z signal** computes a z-score across funding rates from the major venues (Binance, Bybit, OKX, Deribit, Hyperliquid):
+
+<TerminalBlock
+  lang="text"
+  code={`Funding-z snapshot · BTC · 8h funding window
+
+Binance       0.0042%   z = +0.4
+Bybit         0.0051%   z = +0.6
+OKX           0.0038%   z = +0.3
+Deribit       0.0095%   z = +2.8  ←  outlier
+Hyperliquid   0.0044%   z = +0.5
+
+Composite:    z = +0.92  · normal range
+Outliers:     Deribit (+2.8)  →  options-side hedging
+Manipulation: no   ·   confluence: 4/5`}
+/>
+
+The composite z is one of the inputs to the manipulation guard: a z over `+3.0` in either direction with high cross-venue confluence flags a funding stampede and aborts the directional emission. A single-venue outlier with the others in range (the example above) is usually a venue-specific hedging artifact, not a leveraged-positioning signal.
+
+## Venue arbitrage
+
+Across spot venues, durable price divergences are rare in the majors (BTC, ETH) but persist longer in the long tail. Across spot vs. derivatives, basis arbitrage is a structured position; across exchanges, the divergences live for seconds. Vizzor reports them as informational, not as trade triggers.
+
+The actionable cross-venue surface is **prediction-market arbitrage**, where the divergence between a directional prediction and an event-market quote can be exploited if the gap is wide enough:
+
+- **ChronoVisor's calibrated probability** on a horizon (e.g., "ETH closes above $2,200 on Friday → 64%")
+- **Polymarket's CLOB midpoint** on the same event (e.g., 51 ¢ implied = 51%)
+
+When the gap exceeds the configured edge threshold (default 8 percentage points, accounting for fees + slippage), Vizzor surfaces an **edge opportunity** on the `/polymarket` slash command and the Web Dashboard scanner.
+
+The Polymarket-Arbitrage agent strategy reads the same signal: when an edge opens AND the position size fits, the agent can execute on Polymarket's CLOB API in paper or live mode.
+
+## Where the surface lives
+
+| Surface | Entry point | Notes |
+|---|---|---|
+| Telegram | `/polymarket <symbol>` — edge scanner | Elite tier |
+| CLI / TUI | `vizzor polymarket <symbol>` · `vizzor premium <symbol>` | Live tickers |
+| REST | `GET /v1/polymarket/opportunities/:symbol` · `GET /v1/market/premium?venue=…` | Streams via SSE |
+| Web | Dashboard "Cross-venue" panel | Renders Polymarket edges, premium charts, funding-z grid |
+
+## How the Predictor uses it
+
+The cross-venue surface flows into multiple Predictor layers:
+
+- **`predictionMarkets` family** — Polymarket midpoints + Gamma implied probabilities, with edge detection
+- **`logicRules` family** — the funding-z multi-venue rule, the options-skew rule, the macro-beta cross-asset rule (all part of the Polaris v0.15.5+ FOL pack)
+- **Manipulation guard** — funding stampede detection abort if composite z > 3.0 with 4+ venues confluent
+- **Trigger snapshot** — every emission with a `predictionMarkets` contribution carries the Polymarket reference data inline; the operator can verify the edge against the live midpoint
+
+## Tier gating
+
+- **Free** — Coinbase premium snapshot on majors
+- **Pro** — full venue premium grid; funding-z snapshots on watchlist symbols
+- **Elite** — Polymarket edge scanner; per-symbol funding-z stream; cross-venue manipulation alerts
+
+## Adjacent reading
+
+- [Pre-news](/docs/pre-news) — options IV, term inversion, EDGAR filings (a sibling input)
+- [Signal families](/docs/signals) — `predictionMarkets` + `logicRules` deep-dive
+- [Agents](/docs/agents) — the Polymarket-Arbitrage strategy that operationalizes detected edges

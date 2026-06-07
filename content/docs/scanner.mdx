@@ -1,0 +1,112 @@
+---
+title: Token Scanner
+description: Security audit on any token, any chain — rug risk, honeypot detection, tax logic, ownership renouncement, holder concentration. Free tier; available on Telegram, CLI, and REST.
+---
+
+The Scanner is Vizzor's pre-buy due-diligence surface. Point it at a token contract on any of the 11 supported chains and it runs a security audit in seconds: rug risk, honeypot detection, tax / transfer logic, ownership state, and holder concentration.
+
+The output isn't a vague risk score — it's a checklist of concrete findings, each tied to the on-chain primitive that produced it.
+
+## Calling the scanner
+
+<TerminalBlock
+  lang="text"
+  showPrompt
+  code={`# Telegram
+/scan 0xABCD1234… --chain base
+
+# CLI
+vizzor scan 0xABCD1234… --chain base
+
+# REST
+POST /scan  {"address": "0xABCD…", "chain": "base"}`}
+/>
+
+The same audit primitives serve every surface. The REST endpoint streams checks via SSE so the dashboard can render rows as they land; the CLI prints a table; Telegram returns a single structured reply.
+
+## What it checks
+
+### Security primitives
+
+| Check | What we look for | Why it matters |
+|---|---|---|
+| **Honeypot** | Pause / blacklist / max-tx functions that block sell | The most common rug pattern — buy works, sell reverts |
+| **Tax logic** | Buy / sell tax rates, ability to update them post-deploy | Adjustable taxes let a deployer set 99% on sells anytime |
+| **Mint capability** | Owner-controlled `mint()` after launch | Infinite inflation risk if owner not renounced |
+| **Blacklist function** | Per-address transfer block | Selective rug — the deployer can freeze any holder |
+| **Ownership renouncement** | Owner role transferred to a burn address | Strong signal nobody can change rules |
+| **Liquidity lock** | LP tokens locked via Unicrypt / Team.finance / etc. | Confirms the LP can't be pulled without a public unlock |
+| **Holder concentration** | Top-20 holder % of supply, contract / EOA breakdown | High concentration = exit-liquidity risk |
+
+### Sentiment + narrative overlay (free tier)
+
+- **Bull / bear sentiment score** — composite over CryptoPanic + CoinGecko + Reddit + 4chan (per-symbol)
+- **Recent headlines** — 24h news feed for the token, with source attribution
+- **Narrative tags** — the token's primary narrative (memecoin · DeFi · AI · L1 · L2 · GameFi · RWA)
+- **Trending velocity** — rank change across DexScreener and CoinGecko trending lists
+
+## What it doesn't do
+
+The Scanner is **due-diligence**, not financial advice. It surfaces structural risks that historically correlate with rugs and honeypots. A clean scan doesn't mean a token will go up — it means nothing obvious is rigged.
+
+A failing scan is the opposite: a high-confidence "do not engage" verdict. Honeypots are detected with near-zero false positives because the test simulates a sell-side trade against the contract's actual logic.
+
+## How the scanner runs each check
+
+- **Bytecode analysis** — every check operates against the deployed contract's bytecode, not its claimed source. A "verified" contract on Etherscan that doesn't match what's live is treated as unverified.
+- **Owner trace** — the labeler resolves `owner()` / `getOwner()` / equivalent across token standards, then walks the role tree (Ownable / AccessControl) to find the effective admin.
+- **Top-holder enumeration** — paginated `holders` queries (Etherscan-family for EVM, RPC scans for Solana / Sui / Aptos / TON) feed the concentration calculation.
+- **Liquidity probe** — for each known DEX router on the chain, the scanner reads the pool reserves and checks whether the LP token supply is burnt or locked.
+
+## A clean scan, anatomy
+
+<TerminalBlock
+  lang="text"
+  code={`Token: SHIB · 0xCF0C…6F4d · Ethereum
+Verdict: ✅ Low risk
+
+Honeypot:       PASS — sell simulation succeeded
+Tax logic:      0% buy · 0% sell · not updatable
+Mint:           PASS — mint() unreachable
+Blacklist:      PASS — no blacklist function found
+Ownership:      RENOUNCED — owner = 0x0000…dEaD
+Liquidity:      LOCKED — 100% LP burned at deployment
+Holders:        Top-1: 7.2% (binance-cold-1) · Top-20: 31.4%
+
+Sentiment:      +0.24 bullish · 14 headlines · 24h
+Narrative:      memecoin · trending #4 dexscreener`}
+/>
+
+## A failing scan, anatomy
+
+<TerminalBlock
+  lang="text"
+  code={`Token: SCAM · 0xBAD0…CAFE · BSC
+Verdict: 🚨 HIGH RISK — DO NOT ENGAGE
+
+Honeypot:       FAIL — sell reverts with "Pausable: paused"
+Tax logic:      5% buy · 99% sell · taxes are UPDATABLE
+Mint:           FAIL — owner can mint unlimited
+Blacklist:      FAIL — blacklist() callable by deployer
+Ownership:      NOT RENOUNCED — owner = 0xBAD1… (EOA)
+Liquidity:      NOT LOCKED — LP tokens held by 0xBAD1…
+Holders:        Top-1: 87.3% (deployer)
+
+Recommendation: classic rug structure (pausable + adjustable tax +
+  unrenounced + concentrated LP). Engage at your own risk.`}
+/>
+
+## Free vs Pro
+
+The Scanner is **free tier** on Vizzor. Every user — paid or not — gets the full security checklist, the sentiment overlay, and access to the same primitives the paid surfaces use.
+
+What Pro / Elite layer on top:
+
+- **Pro**: Unlimited `/scan` calls (free tier rate-limits to ~50 / day), Predictor unlock + horizon ladder, alerts
+- **Elite**: Whale Terminal + Smart Money Flow on the scanned token, forensics suite (flow-graph reconstruction, contract auditor deep-dive, bytecode disassembler), pre-news signals on the symbol
+
+## Adjacent reading
+
+- [Forensics](/docs/forensics) — flow-graph reconstruction, contract auditor, bytecode disassembler, address labeler
+- [Whale Terminal](/docs/whale-terminal) — Smart Money Flow + top-20 holder smart-money labeling
+- [Supported chains](/docs/chains) — 11 chains live; every one supports the full scanner

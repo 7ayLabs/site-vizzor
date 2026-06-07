@@ -1,11 +1,135 @@
 {
   "header": {
     "nav": {
+      "predict": "Prédire",
       "surfaces": "Surfaces",
       "pricing": "Tarifs",
       "docs": "Docs"
     },
-    "cta": "Ouvrir dans Telegram"
+    "cta": "Ouvrir dans Telegram",
+    "mobileMenu": {
+      "label": "Navigation du site",
+      "eyebrow": "menu",
+      "openAria": "Ouvrir le menu",
+      "closeAria": "Fermer le menu",
+      "settings": "Préférences"
+    }
+  },
+  "auth": {
+    "connect": "Connecter portefeuille",
+    "connecting": "Connexion…",
+    "sign": "Se connecter",
+    "signing": "Signature…",
+    "signedInAs": "Connecté en tant que",
+    "subscription": "Abonnement",
+    "lifetime": "À vie",
+    "expiresOn": "Expire le {date}",
+    "signOut": "Déconnexion",
+    "viewProfile": "Voir le profil",
+    "close": "Fermer",
+    "modal": {
+      "eyebrow": "Portefeuilles",
+      "eyebrowConnecting": "Connexion",
+      "title": "Connecter un portefeuille",
+      "titleConnecting": "{wallet}",
+      "footer": "Les portefeuilles Solana se connectent via SIWS. Les portefeuilles TON paient directement les forfaits. Vous pouvez changer de chaîne à tout moment.",
+      "connecting": "Ouvre {wallet} pour approuver",
+      "connectingSubtitle": "En attente de ton portefeuille…",
+      "signing": "Connexion à vizzor.ai",
+      "signingSubtitle": "Confirme le message dans {wallet}",
+      "success": "Portefeuille connecté",
+      "successSubtitle": "Tu es connecté",
+      "retry": "Réessayer",
+      "installAction": "Installer le portefeuille",
+      "error": {
+        "wallet_not_installed": "{wallet} n'est pas installé",
+        "user_rejected": "Connexion annulée",
+        "nonce_failed": "Impossible de démarrer la connexion",
+        "verify_failed": "Signature refusée",
+        "unknown": "Une erreur est survenue"
+      }
+    },
+    "wallets": {
+      "phantom": "Phantom",
+      "phantomCaption": "Solana · se connecter",
+      "solflare": "Solflare",
+      "solflareCaption": "Solana · se connecter",
+      "more": "Plus de portefeuilles",
+      "moreCaption": "Autres adaptateurs Solana"
+    }
+  },
+  "account": {
+    "meta": {
+      "title": "Compte · Vizzor",
+      "description": "Votre identité portefeuille, abonnement, lien Telegram et paiements récents — tout au même endroit."
+    },
+    "eyebrow": "profil",
+    "title": "Compte",
+    "sub": "Tout ce que Vizzor sait de votre portefeuille — identité, abonnement, lien Telegram et historique on-chain. Rien ne sort de votre portefeuille sans votre signature.",
+    "tier": { "free": "Free", "pro": "Pro", "elite": "Elite" },
+    "cadence": { "monthly": "Mensuel", "annual": "Annuel", "lifetime": "À vie" },
+    "hero": { "manage": "Gérer le forfait" },
+    "stats": {
+      "plan": "Forfait",
+      "planNone": "Free",
+      "planSub": "Pas d'abonnement",
+      "renews": "Renouvelle",
+      "renewsNone": "—",
+      "renewsLifetime": "Accès à vie",
+      "telegram": "Telegram",
+      "tgLinkedSince": "Lié {date}",
+      "tgUnlinked": "Pas encore lié",
+      "activity": "Activité",
+      "activityEmpty": "Aucun paiement",
+      "lastSeen": "Dernier {rel}"
+    },
+    "identity": {
+      "eyebrow": "identité du portefeuille",
+      "title": "Connecté avec Solana",
+      "walletLabel": "Adresse du portefeuille",
+      "shortLabel": "Forme courte",
+      "sessionLabel": "Session",
+      "sessionExpires": "Expire {rel}",
+      "copy": "Copier",
+      "copied": "Copié",
+      "copyAria": "Copier l'adresse du portefeuille",
+      "signOut": "Déconnexion",
+      "signingOut": "Déconnexion…"
+    },
+    "subscription": {
+      "eyebrow": "abonnement",
+      "title": "Forfait actif",
+      "tier": "Tier",
+      "cadence": "Cadence",
+      "expires": "Renouvelle",
+      "lifetime": "Jamais · à vie",
+      "manage": "Gérer le forfait",
+      "openBot": "Ouvrir dans Telegram",
+      "emptyBody": "Vous n'avez pas d'abonnement actif. Choisissez un tier sur /pricing — payer en SOL sur Solana économise 15% instantanément.",
+      "emptyCta": "Voir les tarifs"
+    },
+    "telegram": {
+      "eyebrow": "lien telegram",
+      "title": "Telegram",
+      "statusLabel": "Statut",
+      "telegramIdLabel": "Id utilisateur Telegram",
+      "linkedAtLabel": "Lié",
+      "linked": "Lié",
+      "unlinkedBody": "Liez votre portefeuille à Telegram une fois et les paiements futurs s'auto-attribueront — sans codes, sans copier-coller. Le bot vous guide avec un défi de signature.",
+      "linkCta": "Lier dans Telegram"
+    },
+    "activity": {
+      "eyebrow": "activité",
+      "title": "Paiements récents",
+      "linkedTo": "Telegram #{id}",
+      "empty": "Aucune session de paiement encore pour ce portefeuille. Quand vous complétez un checkout sur /pay, ça apparaît ici comme un reçu.",
+      "status": {
+        "pending": "En attente",
+        "confirmed": "Confirmé",
+        "expired": "Expiré",
+        "failed": "Échec"
+      }
+    }
   },
   "footer": {
     "tagline": "Prédictions avec reçus. Prévisions crypto calibrées sur chaque chaîne, chaque token et chaque horizon.",
@@ -22,6 +146,7 @@
         "manifesto": "Manifeste",
         "pricing": "Tarifs",
         "changelog": "Journal des modifications",
+        "privacy": "Confidentialité",
         "license": "Licence · BUSL-1.1"
       },
       "community": {
@@ -50,50 +175,116 @@
   },
   "ticker": {
     "ariaLabel": "Ticker du marché en direct",
-    "live": "EN DIRECT"
+    "live": "EN DIRECT",
+    "predict": "Prédire {symbol}",
+    "autoTrade": "Auto-trader {symbol}",
+    "comingSoon": "Bientôt disponible"
+  },
+  "predict": {
+    "meta": {
+      "title": "Prédire — Vizzor",
+      "description": "Demandez à Vizzor une prédiction crypto calibrée. Trois prédictions gratuites par navigateur. Propulsé par le même moteur que le bot Telegram."
+    },
+    "eyebrow": "en direct · sur le site",
+    "title": "Prédictions, sur la page.",
+    "sub": "Tapez un symbole et un horizon — par exemple \"ETH 4h\" ou \"SOL 1d\" — et recevez la même prédiction calibrée et adossée à des reçus que produit le bot Telegram. Les trois premières sont offertes.",
+    "emptyState": "Demandez une prédiction (\"BTC 4h\", \"ETH 1d\", \"SOL 15m\") ou tapez /help pour les commandes.",
+    "inputPlaceholder": "Symbole + horizon (BTC 4h) ou /help",
+    "send": "Envoyer",
+    "streaming": "Prédiction en cours…",
+    "loading": "Chargement du quota…",
+    "freeTier": {
+      "label": "Prédictions gratuites",
+      "body": "Utilisées {used} sur {limit}. Abonnez-vous pour continuer — payez en SOL sur Solana et économisez 10% instantanément."
+    },
+    "subscribe": {
+      "label": "Quota gratuit épuisé",
+      "title": "Abonnez-vous pour continuer",
+      "body": "Choisissez un forfait sur /pricing et payez on-chain en SOL. Les abonnés obtiennent des prédictions illimitées sur ce site et dans le bot Telegram.",
+      "cta": "Voir les forfaits →",
+      "legal": "Paiement on-chain · taux verrouillé 5 min · résiliable à tout moment"
+    },
+    "exhaustedBanner": {
+      "label": "Quota gratuit épuisé",
+      "body": "Vous avez utilisé les trois prédictions gratuites. Abonnez-vous pour continuer — ou poursuivez dans le bot Telegram.",
+      "telegramCta": "Continuer dans Telegram →",
+      "resetDev": "réinitialiser · dev seulement"
+    },
+    "shell": {
+      "model": "Vizzor",
+      "modelVersion": "v0.15.5 Helios",
+      "newChat": "Nouveau chat",
+      "collapseSidebar": "Réduire la barre latérale",
+      "openSidebar": "Ouvrir la barre latérale",
+      "searchPlaceholder": "Symbole ou prédiction…",
+      "quotaLine": "Gratuit {used}/{limit}",
+      "nav": {
+        "chat": "Chat",
+        "library": "Reçus",
+        "libraryHint": "/precisions",
+        "tools": "Outils",
+        "toolsHint": "/help"
+      },
+      "recents": {
+        "label": "Récents",
+        "clear": "Effacer les récents",
+        "empty": "Aucun prompt récent."
+      },
+      "welcome": {
+        "eyebrow": "en direct · sur le site",
+        "title": "Que doit prédire Vizzor ?",
+        "sub": "Tapez symbole + horizon — \"BTC 4h\" — ou utilisez un outil comme /wr, /precisions, /price. Trois prédictions gratuites par navigateur."
+      },
+      "composer": {
+        "placeholder": "Demandez à Vizzor… (ex. BTC 4h, /help)",
+        "toolHelp": "Lister les commandes",
+        "toolWr": "Afficher le win-rate",
+        "footer": "Vizzor peut se tromper. Vérifiez on-chain. Pas un conseil financier."
+      }
+    }
   },
   "hero": {
-    "ribbon": "{version} · en route vers {target}%+ tracked WR",
-    "headline": "Prédictions avec reçus.",
-    "sub": "Prédictions crypto par IA sur chaque chaîne et horizon de temps. Des chiffres, pas des opinions.",
-    "primaryCta": "Ouvrir dans Telegram",
-    "secondary": "ou installer le CLI",
+    "ribbon": "{version} · en route vers {target}% sur le tableau public",
+    "headline": "Prédit. Résout. Note.",
+    "sub": "Vizzor appelle le mouvement, montre le smart money derrière, et trace chaque taux de réussite en public. Des reçus que vous pouvez auditer — pas des vibes.",
+    "tryCta": "Essayer Vizzor",
+    "orLabel": "ou en local",
     "badges": {
-      "chains": "11 chaînes",
+      "chains": "11 chaînes en direct",
       "signals": "6 familles de signaux",
-      "license": "BUSL-1.1 licensed"
+      "license": "BUSL-1.1 · auto-hébergeable"
     }
   },
   "whatsInIt": {
-    "eyebrow": "ce que vous obtenez",
-    "title": "Une prédiction. Reçus complets.",
-    "sub": "Demandez à Vizzor sur n'importe quel token. Vous recevez un appel directionnel, des prix cibles, une décomposition des signaux et une alerte auto-armée au niveau que le moteur juge décisif.",
+    "eyebrow": "ce que vous obtenez vraiment",
+    "title": "Un appel. Reçus complets.",
+    "sub": "Demandez sur n'importe quel token. Vous recevez une direction, un score de confiance qui veut dire ce qu'il dit, et une alerte qui s'arme toute seule au niveau marqué par le moteur. Pas de captures. Pas de shilling.",
     "bullets": {
-      "directional": "Appel directionnel avec confiance calibrée",
-      "targets": "Cibles bull / base / bear sur l'horizon demandé",
-      "snapshot": "Trigger snapshot — chaque signal qui a tiré, sans contributeur caché"
+      "directional": "Direction et confiance — calibrées, pas des vibes",
+      "targets": "Smart money flow — voyez ce que font les whales, dans le même appel",
+      "snapshot": "Alertes qui s'arment toutes seules au bon niveau — zéro config"
     },
     "learnMore": "Voir la math"
   },
   "howItWorks": {
     "eyebrow": "comment ça marche",
-    "title": "Six perspectives. Un appel honnête.",
-    "lede": "Vizzor lit le marché sous six angles à la fois. Quand la majorité s'accorde, vous recevez une prédiction. Sinon, on se tait.",
-    "footer": "Lire toute la math de ChronoVisor →",
+    "title": "La plupart des bots tirent sans arrêt. Vizzor reste silencieux — jusqu'à être sûr.",
+    "lede": "Six angles indépendants recoupent chaque setup. Un appel ne part que quand quatre s'accordent. Le reste du temps, vous avez le silence — et la raison pour laquelle.",
+    "footer": "Voir le détail complet →",
     "steps": {
       "fetch": {
         "title": "Écouter",
-        "description": "Douze flux de données en direct — prix sur chaque exchange, wallets whale qui bougent on-chain, news de dernière minute, paris en cours sur les prediction markets. Rafraîchi toutes les quelques secondes.",
+        "description": "Flux en direct depuis les exchanges, les wallets whale, les news de dernière minute, les odds des prediction markets. Rafraîchi toutes les quelques secondes — sans délai, sans tricks de cache.",
         "ariaLabel": "Six signaux d'entrée convergeant vers un seul nœud de fusion"
       },
       "fuse": {
         "title": "Recouper",
-        "description": "Chaque flux vote. Les signaux forts pèsent ; les faibles sont amortis. Le moteur apprend de chaque appel passé — les bons coups remontent le vote de leur famille, les ratés le font baisser.",
+        "description": "Chaque angle vote, pondéré. Les signaux forts pèsent, les faibles sont amortis. Le moteur retient ce qui a marché et s'ajuste tout seul.",
         "ariaLabel": "Deux courbes convergeant en un point d'intersection pulsant"
       },
       "emit": {
-        "title": "Attendre un setup A+",
-        "description": "La plupart du temps, les signaux ne s'accordent pas — et Vizzor reste silencieux. Une prédiction n'est envoyée que lorsqu'au moins quatre des six perspectives s'alignent. La qualité avant le volume.",
+        "title": "Ne lâcher que les A+",
+        "description": "La plupart du temps, les angles divergent — et vous n'entendez rien. Quand quatre sur six s'alignent, l'appel part avec la math derrière. Moins de pings. Plus d'edge.",
         "ariaLabel": "Quatre filtres de hauteur croissante, avec une étoile marquant l'émission finale A+"
       }
     }
@@ -134,37 +325,37 @@
     "viewAll": "tout voir →"
   },
   "surfaceCompare": {
-    "eyebrow": "surfaces",
-    "title": "Un moteur. Trois surfaces.",
-    "lede": "Vizzor ne t'enferme pas dans un seul endroit. Choisis la surface qui colle à ta façon de vivre — toutes partagent les mêmes prédictions et le même trigger snapshot.",
+    "eyebrow": "comment vous l'utilisez",
+    "title": "Un moteur. Trois portes d'entrée.",
+    "lede": "Choisissez votre façon de vivre. Même moteur, mêmes reçus — rejoignez-le sur Telegram, dans votre terminal ou sur un dashboard. Changez quand vous voulez.",
     "telegram": {
-      "pill": "recommandé",
+      "pill": "le plus utilisé",
       "title": "Bot Telegram",
-      "sub": "Zéro install. 32 commandes. C'est là que Vizzor vit au quotidien.",
+      "sub": "Zéro install. 32 commandes. C'est là que Vizzor vit la plupart du temps.",
       "features": {
-        "alerts": "Alertes de prix armées automatiquement sur chaque trade plan",
-        "session": "WR par session · sensible au fuseau horaire",
-        "runtime": "Réglages en runtime · pas de YAML à éditer"
+        "alerts": "Les alertes s'arment toutes seules au niveau marqué par le moteur",
+        "session": "Win rate par session, dans votre fuseau horaire",
+        "runtime": "Ajustez le moteur depuis le chat — pas de fichier de config"
       },
       "cta": "Ouvrir Telegram"
     },
     "cli": {
       "title": "Ligne de commande",
-      "sub": "Indie quant chic. 18 commandes. S'intègre proprement dans ton flux terminal.",
+      "sub": "Pour les nerds de terminal. 18 commandes. Se branche à tout via pipe.",
       "features": {
-        "offline": "État SQLite local · marche hors-ligne avec Ollama",
-        "json": "Sortie JSON pour le scripting",
-        "engine": "Même moteur, mêmes reçus"
+        "offline": "Tourne hors-ligne avec Ollama · état SQLite local",
+        "json": "Sortie JSON — à coller dans scripts et notebooks",
+        "engine": "Même moteur, mêmes reçus, même calibration"
       },
       "cta": "Docs du CLI"
     },
     "dashboard": {
       "title": "Dashboard web",
-      "sub": "Visuel. Temps réel. Pour quand tu veux regarder les reçus, pas seulement les lire.",
+      "sub": "Visuel. Temps réel. Pour quand lire ne suffit plus — vous voulez le voir bouger.",
       "features": {
-        "websocket": "Mises à jour en direct par websocket",
-        "polymarket": "Scanner d'edge sur Polymarket",
-        "paperTrading": "Agents en paper-trading"
+        "websocket": "Streaming en websocket — sans rafraîchir",
+        "polymarket": "Attrape les edges où Polymarket diverge",
+        "paperTrading": "Agents paper-trade qui suivent les signaux"
       },
       "cta": "Docs du dashboard",
       "mockup": {
@@ -179,66 +370,66 @@
     }
   },
   "sixSignals": {
-    "eyebrow": "familles de signaux",
-    "title": "Six lentilles indépendantes. Un verdict.",
-    "lede": "Aucun signal ne porte seul une prédiction. Chaque famille doit contribuer — et les signaux en désaccord prennent une pénalité, pas un vote.",
+    "eyebrow": "ce qu'on lit",
+    "title": "Six angles sur chaque chart.",
+    "lede": "Aucun angle ne déclenche un appel à lui seul. Chacun doit contribuer — et les angles en désaccord amortissent le verdict, ils ne peuvent pas l'emporter au vote.",
     "ariaLabel": "Famille de signaux {family}",
     "families": {
       "onChain": {
-        "description": "Flux whale, accumulation smart-money, vélocité de mint/burn des stablecoins, déséquilibre des flux sur les exchanges, Coinbase premium.",
-        "reveal": "Multi-chain, APIs gratuites uniquement. Événements $250k+ à cadence 30s."
+        "description": "Ce que fait le smart money — wallets whale, flux sur les exchanges, prints de stablecoins. Construit sur des feeds gratuits, donc aucun abonnement à 1 200 $/mois cuit dans votre prix.",
+        "reveal": "Suit les mouvements de 250k$ et plus en boucle de 30 secondes."
       },
       "mlEnsemble": {
-        "description": "Sidecar Python (XGBoost + LightGBM + isotonique) OU fallback JS-natif (RSI/MACD/Bollinger/EMA/volume/funding).",
-        "reveal": "Aucune dégradation silencieuse quand Python est absent."
+        "description": "Les modèles mathématiques recoupés avec les indicateurs que tous les traders regardent — funding, volume, momentum. Un signal, sans tableurs.",
+        "reveal": "Tourne partout — sans Python, sans GPU, sans dépendances."
       },
       "predictionMarkets": {
-        "description": "Probabilités implicites Gamma + Polymarket avec détection d'edge.",
-        "reveal": "Trade le spread quand ChronoVisor diverge du marché."
+        "description": "Les odds Polymarket et les spreads des prediction markets. Quand la foule diverge de notre moteur, voilà un edge à prendre.",
+        "reveal": "Trade le spread quand notre verdict et la foule divergent."
       },
       "socialNarrative": {
-        "description": "NLP d'actualités (CryptoPanic + CoinGecko) + classifieur de catalyseurs en LLM (prompt-cached, budget-gated).",
-        "reveal": "Titres normalisés en un CF de sentiment calibré, pas un vibe score."
+        "description": "Les news de dernière minute et les titres, classés par impact réel. Pas un vibe score — un chiffre sur lequel agir.",
+        "reveal": "Nomme le titre qui a fait bouger l'appel, pour que vous voyiez pourquoi."
       },
       "patternMatch": {
-        "description": "Smart Money Concepts (BOS / CHoCH / liquidity sweeps) + timing ICT (kill-zones).",
-        "reveal": "Bibliothèque de patterns auto-alimentée par les backtests résolus."
+        "description": "Les patterns de chart que les pros tradent vraiment — liquidity sweeps, breakouts, kill-zones. Les setups que les algos chassent avant que le retail les voie.",
+        "reveal": "La bibliothèque de patterns se reconstruit à chaque trade résolu."
       },
       "logicRules": {
-        "description": "14 règles de base + 7 règles de scalping FOL sur les dérivés, la macro et les features on-chain.",
-        "reveal": "Précision par règle suivie ; les mauvaises voient leur CF divisé par deux, les bonnes prennent +20%."
+        "description": "Des règles écrites à la main depuis des playbooks de traders pros. Dérivés, macro et on-chain — tout vérifié en même temps.",
+        "reveal": "Le hit rate de chaque règle est suivi en direct. Les perdantes perdent du poids. Les gagnantes prennent un boost."
       }
     }
   },
   "trustBecauseTracked": {
     "eyebrow": "des reçus, pas des promesses",
-    "title": "On suit notre propre win rate. De manière décisive.",
-    "ringLabel": "tracked WR",
-    "ringCaption": "agrégé · tous horizons · 90 derniers jours",
-    "ladderEyebrow": "échelle d'émission à quatre tiers",
+    "title": "Notre win rate est public. Noté de manière décisive.",
+    "ringLabel": "win rate tracked",
+    "ringCaption": "tous horizons · 90 derniers jours · tout compte",
+    "ladderEyebrow": "échelle à quatre tiers",
     "tiers": {
       "highConviction": {
         "name": "high-conviction",
-        "description": "≥4-sur-6 signaux d'accord + confiance composite ≥75 + horizon validé par le calibrateur."
+        "description": "Au moins quatre angles sur six s'accordent. Le plus haut niveau de confiance — et le plus susceptible de toucher."
       },
       "whaleConfirmed": {
         "name": "whale-confirmed",
-        "description": "High-conviction ET le flux whale confirme la direction. Bâtie sur une analyse de flux multi-chain en APIs gratuites."
+        "description": "High-conviction ET le smart money bouge dans la même direction. Le tier le plus rare — et le hit rate le plus haut."
       },
       "tracked": {
         "name": "tracked",
-        "description": "Passe tous les filtres mais n'atteint pas les barres supérieures. Reste comptée dans la cohorte stricte de WR."
+        "description": "Passe tous les filtres, juste sous les tiers du haut. Reste dans le pool strict qui décide du win rate public."
       },
       "advisory": {
         "name": "advisory",
-        "description": "Ne passe que les filtres légers. Exclue de la cohorte stricte mais résolue et utilisée pour nourrir le calibrateur."
+        "description": "Ne passe que les filtres légers. Hors du pool strict — mais quand même résolue, notée, et nourrit le moteur."
       }
     }
   },
   "ctaBlock": {
-    "eyebrow": "commence par une prédiction",
-    "title": "Des prédictions que tu peux vraiment noter.",
-    "body": "Ouvre le bot Telegram, demande une prédiction sur n'importe quel token et regarde-la se résoudre. Si elle rate, la suivante alimente le calibrateur. Les reçus s'accumulent.",
+    "eyebrow": "commencez avec un appel",
+    "title": "Voyez le trade avant qu'il n'arrive.",
+    "body": "Ouvrez le bot, demandez sur n'importe quel token, regardez l'appel se résoudre. S'il rate, le suivant est plus tranchant. Les reçus s'accumulent.",
     "ctaTelegram": "Ouvrir dans Telegram",
     "ctaCli": "Installer le CLI",
     "manifesto": "Lire le manifeste →"
@@ -253,64 +444,384 @@
     }
   },
   "pricing": {
-    "pricingEyebrow": "transparence, pas tarification",
-    "pricingTitle": "Vizzor est gratuit. Voici exactement ce qu'il coûte à faire tourner.",
-    "pricingSub": "Nous ne facturons pas les prédictions. Notre CLI, notre bot Telegram, notre bot Discord et notre tableau de bord web sont ouverts et gratuits. Cette page explique quels coûts existent, qui les paie et pourquoi le modèle est honnête.",
-    "block1": {
-      "title": "Ce que nous ne facturons pas",
-      "items": {
-        "cli": "Installation du CLI + ses 18 commandes",
-        "bot": "Bot Telegram + 32 commandes",
-        "discord": "Bot Discord + commandes slash",
-        "dashboard": "Tableau de bord web",
-        "predictions": "Chaque prédiction + son snapshot de signaux",
-        "docs": "Documentation complète + mathématique ChronoVisor"
+    "eyebrow": "tiers · facturation honnête",
+    "title": "Tarifs",
+    "sub": "Quatre tiers, facturation on-chain en SOL, TON et USDC. Chaque rail intègre sa remise. Pas de carte. Annulez quand vous voulez.",
+    "mostPopular": "Plus populaire",
+    "orPrefix": "ou",
+    "promo": {
+      "lifetime": {
+        "eyebrow": "Offre à vie",
+        "title": "Payez une fois. Vizzor Elite pour toujours.",
+        "subtitle": "Bloquez la stack d'intelligence complète au prix d'aujourd'hui. Pas de renouvellements, pas de stress de quota — tous les signaux, tous les horizons, tant que Vizzor existe.",
+        "lifetimePriceLabel": "À vie",
+        "lifetimePriceCaption": "Paiement unique",
+        "comparisonLabel": "Elite mensuel · 10 ans",
+        "comparisonCaption": "Ce que vous payeriez sinon",
+        "solFootnote": "Payez en SOL sur Solana — économisez 15% instantanément",
+        "cta": "Voir l'offre à vie",
+        "dismiss": "Non merci",
+        "retriggerPill": "Offre à vie"
       }
     },
-    "block2": {
-      "title": "Ce que vous apportez",
-      "items": {
-        "llmKey": "Votre clé Anthropic / OpenAI / Gemini (ou utilisez Ollama gratuit)",
-        "rpcKey": "Votre clé Etherscan / RPC (le palier gratuit suffit)",
-        "dataKey": "Vos clés CoinGecko / CryptoPanic (les paliers gratuits suffisent)",
-        "botTokens": "Vos jetons de bot Telegram / Discord (gratuits)",
-        "host": "Un VPS ou votre portable si vous auto-hébergez"
-      }
-    },
-    "block3": {
-      "title": "Ce que 7ayLabs paie",
-      "items": {
-        "telegram": "Infrastructure du bot Telegram hébergé",
-        "chronovisor": "Hébergement du moteur ChronoVisor",
-        "sharedLlm": "Clé Anthropic partagée (avec quota quotidien par utilisateur)",
-        "domain": "Domaine + TLS + supervision"
-      }
-    },
-    "costRow": {
-      "eyebrow": "les vrais chiffres",
-      "dailyCost": {
-        "label": "$/utilisateur actif/jour",
-        "hint": "Telegram hébergé"
+    "tiers": {
+      "free": {
+        "name": "Free",
+        "sub": "Scannez le marché depuis Telegram",
+        "price": "0 $",
+        "priceUnit": "",
+        "cta": "Ouvrir Telegram",
+        "commandsLine": "/scan · /price · /trends · /sentiment · /whale-alert · /narrative · /presale · /help",
+        "features": {
+          "scanner": {
+            "title": "Token Scanner",
+            "body": "Sentiment, price action et top movers en direct, sur les majors et la long-tail"
+          },
+          "security": {
+            "title": "Checks de sécurité sur tout token",
+            "body": "Risque de rug · honeypot · logique de taxes · ownership renoncé · concentration de holders"
+          },
+          "context": {
+            "title": "Contexte de marché au quotidien",
+            "body": "Indice Fear & Greed · titres crypto en direct · Whale Alerts sur mouvements on-chain de 1 M$+"
+          },
+          "discovery": {
+            "title": "Feed de discovery",
+            "body": "Nouvelles paires DEX · flow de narrative · tokens trending · spikes de volume · tracker de presales"
+          },
+          "trial": {
+            "title": "Essai Pro de 7 jours au premier /start",
+            "body": "Sans carte, sans KYC, redescend tout seul en Free — zéro risque pour tester"
+          }
+        }
       },
-      "dailyQuota": {
-        "label": "messages LLM/utilisateur/jour",
-        "hint": "quota gratuit"
+      "pro": {
+        "name": "Pro",
+        "sub": "L'établi du trader actif",
+        "price": "19 $",
+        "priceUnit": "/ mois",
+        "cta": "Obtenir Pro",
+        "cadences": {
+          "annual": {
+            "label": "Payer annuellement · 190 $/an (économisez 38 $)",
+            "inline": "190 $/an facturé annuellement"
+          }
+        },
+        "everythingIn": "Tout Free, plus :",
+        "features": {
+          "predictor": {
+            "title": "Predictor illimité",
+            "body": "Tous les horizons de 5m → 7j, plus durées arbitraires (13m, 2h30, 3j) avec WR par horizon"
+          },
+          "tiers": {
+            "title": "4 tiers de prédiction calibrés",
+            "body": "🌟 high-conviction · 🐋 whale-confirmed · ✅ tracked · ⚪ advisory — probabilités Platt-scaled (63 % veut dire 63 %)"
+          },
+          "families": {
+            "title": "6 familles de signaux fusionnées par call",
+            "body": "Whale flow on-chain · ensemble ML · prediction markets · social / narrative · pattern match SMC + ICT · 21 règles FOL"
+          },
+          "aiChat": {
+            "title": "Chat IA avec tool-use",
+            "body": "Décrivez un setup en langage naturel — plan de trade + alertes TP1 / TP2 / SL s'arment seuls. Multi-LLM (Claude · GPT · Gemini · Ollama local)"
+          },
+          "diagnose": {
+            "title": "Diagnose & manipulation guard",
+            "body": "/diagnose explique chaque prédiction et chaque abstention. Le moteur refuse de prédire pendant les pump-and-dump, stampedes de funding et spikes de liquidité fine"
+          },
+          "audit": {
+            "title": "Alertes, audit trail, watchlist",
+            "body": "/alerts illimitées · chaque call signé et stocké · ventilation /precisions + /wr · watchlist personnelle"
+          }
+        }
       },
-      "hostedUsers": {
-        "label": "utilisateurs sur bot hébergé",
-        "hint": "au {date}"
-      },
-      "selfHosted": {
-        "label": "opérateurs auto-hébergés",
-        "hint": "en croissance chaque semaine"
+      "elite": {
+        "name": "Elite",
+        "sub": "La stack d'intelligence complète",
+        "price": "99 $",
+        "priceUnit": "/ mois",
+        "cta": "Obtenir Elite",
+        "cadences": {
+          "annual": {
+            "label": "Payer annuellement · 990 $/an (économisez 198 $)",
+            "inline": "990 $/an facturé annuellement"
+          },
+          "lifetime": {
+            "label": "Paiement unique · 1 499 $ à vie (rentable ~année 1,3)",
+            "inline": "1 499 $ une fois · accès à vie"
+          }
+        },
+        "everythingIn": "Tout Pro, plus :",
+        "features": {
+          "whaleTerminal": {
+            "title": "Whale Terminal",
+            "body": "Mouvements de baleines on-chain en temps réel, par token, avec breakdown des top-20 holders et labels smart-money (exchange · OTC · baleine · dev · contrat)"
+          },
+          "smartMoney": {
+            "title": "Smart Money Flow",
+            "body": "Net-flow d'exchanges · transferts cold → hot · vélocité de mint de stablecoins (USDT / USDC) · drift de concentration de holders"
+          },
+          "forensics": {
+            "title": "Suite de forensics",
+            "body": "Reconstruction du flow-graph (token → exchange → desk OTC) · rug detector · auditeur de contrats · disassembler de bytecode · étiqueteur d'adresses"
+          },
+          "preNews": {
+            "title": "Signaux pre-news",
+            "body": "Filings SEC EDGAR · calendrier d'unlocks · IV / skew / term structure d'options (Deribit + Hyperliquid) · classificateur de catalyseurs LLM"
+          },
+          "crossVenue": {
+            "title": "Intelligence cross-venue",
+            "body": "Spreads de premium · divergence funding-z · arbitrage de venue · heatmap de flux rafraîchi toutes les 30 secondes"
+          },
+          "api": {
+            "title": "REST API + file prioritaire",
+            "body": "REST API (60 req/min) pour signaux, snapshots et Predictor · vos symboles watchlist émettent en premier · cards de signal partageables"
+          }
+        }
       }
     },
-    "philosophy": "Nous avons essayé la voie SaaS. Nous avons construit un palier payant, l'avons dessiné au tableau, simulé le parcours d'upgrade. Puis nous l'avons supprimé.\n\nLa raison est simple. Un moteur de prédiction qui monétise les prédictions a intérêt à en émettre davantage — plus fort, plus souvent, dans plus d'endroits. C'est exactement l'inverse de ce qui fait fonctionner Vizzor. Le moteur ne gagne la confiance qu'en se taisant quand les signaux ne s'accordent pas, et un paywall punit le silence.\n\nAlors nous avons laissé le moteur gratuit. Le CLI, le bot Telegram, le bot Discord et le tableau de bord sont distribués sous BUSL-1.1 et ne coûtent rien à exécuter sur votre propre machine. 7ayLabs paie l'infrastructure du bot hébergé, le moteur ChronoVisor et une clé Anthropic partagée avec un quota quotidien par utilisateur — parce qu'il faut bien que quelqu'un le fasse, et nous préférons que ce soit nous plutôt qu'un coût par appel qui déformerait le produit.\n\nSi vous dépassez le quota partagé, vous apportez vos propres clés. Si vous voulez le contrôle total, vous vous auto-hébergez. Dans tous les cas, la mathématique est la même et les reçus sont les mêmes. Une tarification honnête signifie que la page qui l'explique tient sur un seul écran.",
+    "trial": {
+      "label": "Essai 7 jours",
+      "title": "Chaque nouvel utilisateur reçoit Pro pendant 7 jours",
+      "body": "À votre premier /start, l'accès Pro complet s'active automatiquement. Après 7 jours, le bot redescend en Free — pas de carte enregistrée, pas de surprise d'expiration, pas de prélèvement."
+    },
+    "chains": {
+      "eyebrow": "payez en crypto",
+      "title": "Quatre façons de payer. Un abonnement.",
+      "sub": "Choisissez le rail qui colle à votre portefeuille. Chacun a sa propre remise intégrée. Pas de Stripe, pas de données de carte, pas d'intermédiaire.",
+      "items": {
+        "solana": {
+          "name": "Solana",
+          "token": "SOL natif",
+          "discount": "économisez 15%",
+          "strategy": "Finalité sub-seconde. Signez une fois sur le site et c'est fait."
+        },
+        "ton": {
+          "name": "TON",
+          "token": "TON natif",
+          "discount": "économisez 10%",
+          "strategy": "Payez depuis votre portefeuille dans Telegram. Confirmation instantanée."
+        },
+        "base": {
+          "name": "Base",
+          "token": "USDC sur Base",
+          "discount": "économisez 5%",
+          "strategy": "USDC de Circle sur la L2 de Coinbase. ~$0.01 de gas."
+        },
+        "arbitrum": {
+          "name": "Arbitrum",
+          "token": "USDC sur Arbitrum",
+          "discount": "économisez 5%",
+          "strategy": "USDC de Circle sur Arbitrum One. ~$0.01 de gas."
+        }
+      }
+    },
+    "faq": {
+      "eyebrow": "réponses",
+      "title": "Questions fréquentes",
+      "items": {
+        "trial": {
+          "q": "Comment fonctionne l'essai Pro de 7 jours ?",
+          "a": "Envoyez /start au bot. L'accès Pro complet s'active automatiquement — prédictions illimitées, tous les badges, /alerts. Après 7 jours, le bot redescend en Free. Pas de carte enregistrée, rien à annuler."
+        },
+        "cancel": {
+          "q": "Puis-je annuler à tout moment ?",
+          "a": "Oui. Les abonnements sont par période (mensuel ou annuel). À la fin de la période en cours, le bot vous repasse en Free. Aucune carte enregistrée à prélever — vous payez chaque période par une nouvelle transaction on-chain. Arrêtez de payer = downgrade automatique."
+        },
+        "chains": {
+          "q": "Depuis quelles chaînes puis-je payer ?",
+          "a": "Quatre rails sont en direct : SOL sur Solana (économisez 15%), TON (économisez 10%), USDC sur Base (économisez 5%), USDC sur Arbitrum (économisez 5%). SOL se signe sur le site ; les trois autres passent au bot Telegram pour signer. Chaque paiement est vérifié on-chain — pas de Stripe, pas de Plaid, pas de données de carte, pas d'intermédiaire."
+        },
+        "difference": {
+          "q": "Quelle est la différence pratique entre Free, Pro et Elite ?",
+          "a": "Free, c'est le Scanner — sentiment, charts, top movers. Pro ajoute le Predictor — signaux illimités sur toute l'échelle d'horizons avec alertes armées. Elite ajoute le Whale Terminal et le heatmap de flux — la surface de signal on-chain payée par les desks sérieux."
+        },
+        "refund": {
+          "q": "Remboursements ?",
+          "a": "Dans les 48h suivant le paiement, écrivez au bot avec /refund et nous renvoyons le montant on-chain (moins les frais réseau). Après 48h, pas de remboursement — mais vous pouvez annuler pour la prochaine période à tout moment."
+        }
+      }
+    }
+  },
+  "pay": {
+    "meta": {
+      "title": "Paiement · {tier} {cadence} · Vizzor",
+      "description": "Payez on-chain. Connectez un portefeuille, signez une fois, recevez un code d'accès unique pour le bot Telegram.",
+      "successTitle": "Paiement confirmé · continuez dans Telegram"
+    },
+    "eyebrow": "checkout · choisissez votre rail",
+    "title": "Activer {tier}",
+    "sub": "Payez on-chain en SOL, TON ou USDC — chaque rail a sa propre remise intégrée. Aucune carte demandée. Une fois confirmé, votre code d'accès se redeem dans le bot Telegram.",
+    "legalFootnote": "Paiement on-chain · taux figé 5 min · annulez quand vous voulez",
+    "summary": {
+      "label": "Résumé de la commande",
+      "tier": {
+        "pro": "Pro",
+        "elite": "Elite"
+      },
+      "cadence": {
+        "monthly": "Abonnement mensuel",
+        "annual": "Abonnement annuel",
+        "lifetime": "Accès à vie"
+      },
+      "row": {
+        "subtotal": "Sous-total",
+        "discount": "Remise chaîne ({pct}%)",
+        "afterDiscount": "Après remise",
+        "tokenQuote": "Cotation {token}",
+        "tokenUnavailable": "cotation indisponible",
+        "network": "Réseau",
+        "solanaMainnet": "Solana mainnet",
+        "savedWithChain": "Vous économisez {amount} en payant en {token}",
+        "total": "Total"
+      },
+      "footnote": "Cotation rafraîchie toutes les 60s · verrouillage final à la création de session"
+    },
+    "chain": {
+      "label": "Payer avec",
+      "phase1Label": "Disponible",
+      "phase2Label": "Cycle ultérieur",
+      "discountBadge": "Économisez {pct}%"
+    },
+    "wallet": {
+      "connect": "Connecter portefeuille",
+      "signing": "Signature de la transaction…",
+      "payNow": "Payer {amount} SOL",
+      "walletPicker": "Choisis un portefeuille",
+      "disconnect": "Déconnecter"
+    },
+    "connectAlert": {
+      "eyebrow": "portefeuille requis",
+      "title": "Connectez un portefeuille Solana pour continuer",
+      "body": "Nous ne voyons jamais vos clés — votre portefeuille signe la transaction localement et nous ne recevons que la signature. Choisissez un portefeuille pour continuer.",
+      "primary": "Connecter le portefeuille",
+      "secondary": "Voir les portefeuilles installés",
+      "dismiss": "Annuler"
+    },
+    "walletPicker": {
+      "label": "Portefeuilles Solana",
+      "detected": "{n} détecté(s)",
+      "none": "Aucun détecté",
+      "installed": "Prêt",
+      "notInstalled": "Non installé",
+      "connecting": "Connexion…",
+      "connected": "Connecté",
+      "disconnect": "Déconnecter",
+      "use": "Utiliser",
+      "connect": "Connecter",
+      "install": "Installer",
+      "footer": "MetaMask n'est pas un portefeuille Solana — utilisez-le pour les rails USDC via le handoff Telegram.",
+      "emptyTitle": "Aucun portefeuille Solana détecté.",
+      "emptyHint": "Installez Phantom ou Solflare et rafraîchissez.",
+      "devnet": {
+        "label": "Fonds devnet",
+        "airdrop": "Airdrop 1 SOL",
+        "airdropPending": "Envoi…",
+        "airdropOk": "Fait · vérifiez Phantom",
+        "airdropFail": "Faucet saturé — essayez la version web",
+        "webFaucet": "Ouvrir le faucet web"
+      }
+    },
+    "status": {
+      "creating": {
+        "label": "Création de la session",
+        "body": "Verrouillage du taux USD-TON et dérivation de l'adresse de destination…"
+      },
+      "awaiting_wallet": {
+        "label": "Session prête",
+        "body": "Connectez votre portefeuille ci-dessous si ce n'est pas déjà fait, puis cliquez sur Payer pour signer."
+      },
+      "broadcasting": {
+        "label": "Diffusion",
+        "body": "Le portefeuille a renvoyé la transaction. Envoi sur le réseau TON…"
+      },
+      "pending": {
+        "label": "En attente on-chain",
+        "body": "En attendant que le watcher TON détecte votre paiement. Habituellement <30s."
+      },
+      "confirming": {
+        "label": "Confirmation",
+        "body": "Paiement détecté. Finalisation de l'abonnement et émission du code d'accès…"
+      },
+      "confirmed": {
+        "label": "Confirmé",
+        "body": "Paiement confirmé. Redirection vers votre code d'accès…"
+      },
+      "expired": {
+        "label": "Session expirée",
+        "body": "Le verrou de 5 minutes a expiré. Démarrez une nouvelle session pour réessayer. {reason}"
+      },
+      "error": {
+        "label": "Erreur",
+        "body": "Une erreur est survenue : {reason}. Vous pouvez réessayer."
+      },
+      "retry": "Réessayer",
+      "reasons": {
+        "infraPendingLabel": "infrastructure en attente",
+        "payInTelegram": "Payer dans Telegram",
+        "retryAnyway": "réessayer quand même",
+        "featureDisabled": "Les paiements ne sont pas encore acceptés sur cette chaîne. Essayez l'autre option Phase 1, ou ouvrez le bot Telegram.",
+        "engineOffline": "Le moteur de paiement Vizzor est temporairement injoignable. Le site est en ligne mais ne peut pas créer de session pour le moment. Réessayez sous peu.",
+        "engineError": "Infrastructure de paiement en attente : le moteur Vizzor n'a pas encore déployé les endpoints de paiement. Utilisez le bot Telegram pour payer pour l'instant — même tier, même prix.",
+        "engineMarkedFailed": "Le moteur a rejeté cette session. Réessayez ou contactez le support si le problème persiste.",
+        "invalidInput": "Le tier ou la cadence envoyés au serveur ne sont pas valides. Rafraîchissez et choisissez un tier depuis /pricing.",
+        "unsupportedChain": "Seule Solana est prise en charge dans cette version. Passez à SOL sur Solana.",
+        "priceLookup": "Impossible de récupérer le prix du tier sur le serveur. Rafraîchissez la page.",
+        "sessionFailed": "Échec de la création de session. Réessayez, ou ouvrez le bot Telegram si le problème persiste.",
+        "rpcUnavailable": "Le RPC Solana est rate-limited en ce moment. Réessayez sous peu, ou passez à TON / USDC.",
+        "walletNotConnected": "Connectez un portefeuille pour continuer.",
+        "insufficientBalance": "Votre portefeuille n'a pas assez de SOL pour couvrir ce paiement et les frais réseau. Sur devnet vous pouvez demander un airdrop de 1 SOL depuis le panneau ci-dessus, ou recharger via faucet.solana.com.",
+        "invalidDestination": "L'adresse de la trésorerie de destination est mal configurée pour ce réseau. Vérifiez VIZZOR_SOLANA_TREASURY pour le cluster actif."
+      }
+    },
     "cta": {
-      "title": "Auto-hébergez pour un contrôle total",
-      "sub": "Il suffit de `docker compose up -d` et d'un VPS.",
-      "quickstart": "Lire le démarrage rapide",
-      "github": "Voir sur GitHub"
+      "start": "Démarrer le paiement",
+      "creating": "Création…",
+      "payWithSol": "Payer avec SOL · {wallet}",
+      "connectAndPay": "Connecte un portefeuille pour continuer",
+      "continueInTelegram": "Continuer le paiement {chain} dans Telegram"
+    },
+    "pending": {
+      "label": "infrastructure de paiement en attente",
+      "title": "Le checkout crypto arrive bientôt",
+      "body": "Le checkout SOL on-site est prêt mais la trésorerie n'a pas encore été activée. En attendant, vous pouvez payer directement via le bot Telegram — même tier, même prix, même accès.",
+      "telegramCta": "Payer dans Telegram"
+    },
+    "prelink": {
+      "cta": "Passez cette étape la prochaine fois — liez votre portefeuille à Telegram maintenant pour que les paiements futurs s'auto-attribuent.",
+      "ctaButton": "Lier le portefeuille",
+      "linkedLabel": "portefeuille lié",
+      "linked": "Lié à @{handle}. Les paiements futurs sauteront cette étape.",
+      "modalTitle": "Liez votre portefeuille à Telegram",
+      "modalBody": "Ouvrez le bot et exécutez la commande ci-dessous. Il vous donnera un défi unique à signer avec ce portefeuille — même clé, sans config supplémentaire.",
+      "modalCommandLabel": "Exécuter dans le bot",
+      "modalCloseAria": "Fermer",
+      "botCommand": "/link wallet"
+    },
+    "grant": {
+      "label": "abonnement débloqué",
+      "title": "Redeem dans Telegram",
+      "body": "Ouvrez le bot pour activer votre abonnement. Le code d'accès est intégré dans le lien — usage unique, expire dans 24h.",
+      "openTelegram": "Ouvrir Telegram",
+      "tryAgain": "Rouvrir le lien",
+      "continueCta": "Continuer dans Telegram",
+      "codeLabel": "Code d'accès",
+      "copyCode": "Copier le code",
+      "copyAria": "Copier le lien de redeem",
+      "copied": "Copié",
+      "codeTtl": "Usage unique · expire dans 24h",
+      "qrLabel": "Scannez avec votre téléphone",
+      "qrShow": "Afficher le QR",
+      "qrHide": "Masquer le QR",
+      "qrAlt": "Code QR vers le lien de redeem du bot Telegram"
+    },
+    "success": {
+      "pendingLabel": "presque fini",
+      "pendingTitle": "Paiement en cours de confirmation…",
+      "pendingBody": "Nous attendons toujours que le watcher émette votre code d'accès. Patientez — généralement quelques secondes.",
+      "missingTitle": "Session introuvable",
+      "missingBody": "L'identifiant de session est manquant ou inconnu. Démarrez un nouveau paiement depuis la page tarifs.",
+      "backToPricing": "Retour aux tarifs"
     }
   },
   "manifesto": {

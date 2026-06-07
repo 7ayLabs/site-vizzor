@@ -1,0 +1,102 @@
+---
+title: AI chat
+description: Multi-LLM chat with tool-use across every Vizzor surface. Claude, GPT, Gemini, or local Ollama — plain-English trade plans + auto-armed TP/SL alerts.
+---
+
+The AI chat is the conversational layer in front of every Vizzor primitive. Predictor, Scanner, Whale Terminal, Forensics, Pre-news, Cross-venue — the chat can call any of them as a tool and stitch the results into a single reply.
+
+Plain-English in, structured output back. You can say *"Long ETH from 2,100 with TP1 at 2,150, TP2 at 2,200, SL at 2,080"* and the chat arms three alerts, opens the position record, and replies with a confirmation. You can say *"Audit 0xABCD on Base"* and the chat runs the Scanner + the contract auditor and renders the verdict inline.
+
+## Multi-LLM, switchable per query
+
+The chat is **provider-agnostic**. Four backends are supported, each with its own strengths:
+
+| Provider | Default model | Strengths | When to switch to it |
+|---|---|---|---|
+| **Anthropic** | Claude Sonnet 4 | Native tool-use, long-context reasoning | Default — works well for everything |
+| **OpenAI** | GPT-5.2 / GPT-4o | Faster for short queries, broad knowledge | Quick lookups, casual conversation |
+| **Google** | Gemini 1.5 Pro | Free tier; competitive on numeric work | Cost-sensitive volume |
+| **Ollama** | Local model (Llama 3, Mistral, etc.) | Fully offline, no API key | Air-gapped operation; privacy-sensitive contexts |
+
+Switching is a chat command: `/llm anthropic` · `/llm openai` · `/llm gemini` · `/llm ollama`. Per-query overrides via `--llm=` work on the CLI; the REST endpoint accepts `?provider=`.
+
+When no API keys are configured anywhere, Ollama is the automatic fallback. Vizzor ships with the integration baked in — install Ollama locally, pull a model, and the chat works fully offline against everything except the chains' RPCs.
+
+## Tool-use, native
+
+The chat doesn't pretend to predict prices itself — it **calls the Predictor**. The same goes for every other Vizzor primitive:
+
+| Tool | What it calls |
+|---|---|
+| `predict` | The Predictor; returns the full record (tier, probability, targets, trigger snapshot) |
+| `scan` | The Scanner; runs the security checklist on a contract address |
+| `audit` | The contract auditor (forensics) deep-dive |
+| `track` | The Whale Terminal feed scoped to a wallet or token |
+| `flow` | Flow-graph reconstruction over a symbol and time window |
+| `price` | Live VWAP across the 15 supported exchanges |
+| `set_trade_plan_alerts` | Arms TP1 / TP2 / SL price thresholds and opens the position record |
+| `set_alert` | Single price-threshold alert |
+| `get_account` | Account / billing state, quota remaining, watchlist |
+
+Tool calls happen **server-side** — the LLM emits structured tool invocations, the server executes them, and the LLM gets the structured result back to weave into the reply. The user never sees the tool envelope; they see a natural-sounding reply backed by real data.
+
+## Plain-English trade plan automation
+
+The chat's standout move is reading a trade plan from natural language and arming the alerts in one round-trip:
+
+<TerminalBlock
+  lang="text"
+  code={`you  >  Long ETH from 2,100. TP1 at 2,150, TP2 at 2,200, SL at 2,080.
+
+vizzor >
+  ✓ Position recorded: ETH long · entry 2,100.00
+  ✓ TP1 alert armed at 2,150.00  (+2.38%)
+  ✓ TP2 alert armed at 2,200.00  (+4.76%)
+  ✓ SL  alert armed at 2,080.00  (−0.95%)
+
+  Predictor's read on this setup:
+    Tier:        tracked
+    Direction:   long  ·  4h horizon
+    Probability: 0.61  (calibrated)
+    Notes:       on-chain whale flow confirms; funding-z neutral
+                 manipulation guard: clean
+
+  I'll DM you when any alert fires. Type /pending to see active trades.`}
+/>
+
+The same flow works for shorts, range trades, scaled entries, and trailing stops. The chat infers the structure from natural-language cues — *"with a trailing 1% stop"*, *"scale in over 4h"*, *"only if BTC holds above 60k"* — and emits the matching `set_trade_plan_alerts` payload.
+
+## Conversation persistence
+
+Every chat thread is durably stored in the `conversations` table (REST surface). Threads survive process restarts and can be reopened on the API or rendered on the Web Dashboard.
+
+The conversation context is **bounded**: prompt-stitching uses the last N exchanges (default 20) plus a system-side summary of older context to keep token cost predictable. Long threads naturally compress; nothing is lost, but old context is summarized rather than re-paid for at every turn.
+
+## Where the chat surfaces
+
+| Surface | Notes |
+|---|---|
+| **Telegram** | `@vizzorai_bot` direct message or any chat where the bot is allowed; LLM picker via `/llm` |
+| **CLI / TUI** | `vizzor` (interactive Ink-based shell with streaming responses) |
+| **REST API** | `POST /v1/chat` (SSE streaming); `POST /v1/chat/thread` (threaded reply); `GET /v1/conversations` (list) |
+| **Web Dashboard** | Chat panel with multi-provider toggle + live tool-call rendering |
+| **Discord** | `@VizzorBot` mention or slash commands |
+
+The Telegram and Discord chats double as the **subscription surfaces** — every command (`/predict`, `/scan`, etc.) is a structured shortcut for what the chat would do via tool calls. Power users mix the two: typed commands for fast lookups, free-text chat for compound queries.
+
+## Streaming + cost control
+
+REST responses stream via SSE so a long reasoning chain renders progressively. Per-user **quotas** are enforced server-side via the billing tier:
+
+- **Free** — limited LLM calls per day (default 0 — `free` is read-only on chat features)
+- **Trial** — 10 calls / day during the 7-day window
+- **Pro** — 200 calls / day
+- **Elite** — unlimited
+
+Per-article LLM operations (like the catalyst classifier) use **prompt caching** so repeated reads cost nothing within the cache window — the same article re-classified within 24h doesn't re-incur Claude / GPT cost.
+
+## Adjacent reading
+
+- [Predictor](/docs/predictor) — the tool the chat calls most
+- [Configuration](/docs/configuration) — provider switching, API keys, Ollama integration
+- [REST API](/docs/api) — `POST /v1/chat` reference with SSE streaming
