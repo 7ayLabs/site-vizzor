@@ -1,25 +1,23 @@
 'use client';
 
 /**
- * MobileMenu — hamburger-triggered slide-in panel for screens below
- * the `md` breakpoint.
+ * MobileMenu — hamburger-triggered side drawer for screens below `md`.
  *
- * The desktop top bar exposes Predict / Surfaces / Pricing / Docs as
- * inline pills, plus the language switch, theme toggle, and Telegram
- * CTA — all of which are `hidden md:flex` for space. On mobile, the
- * hamburger here is the single entry point to all of those.
+ * Visual contract:
+ *   - Right-anchored panel, `min(360px, 88vw)` wide.
+ *   - Docs-sidebar typography vocabulary: mono uppercase section eyebrows,
+ *     13.5px row text, 8px row radius, left-edge 2px bar on active rows.
+ *   - Sections (in order): Navigate, Account, Preferences. Each section
+ *     gets its own dedicated eyebrow so the drawer reads like an atlas
+ *     instead of a flat link dump.
+ *   - Smooth right-edge slide via `mobile-drawer-slide-in/out` (defined
+ *     in app/globals.css), staggered row reveal on first paint.
+ *   - Backdrop click + Escape dismiss, focus returns to the hamburger,
+ *     body scroll locked while open, reduced-motion respected.
  *
- * Behavior:
- *   - Slides in from the right with a backdrop blur.
- *   - Backdrop click and Escape dismiss.
- *   - Body scroll-locked while open.
- *   - Focus returns to the hamburger when the menu closes.
- *   - Selecting any nav item auto-dismisses so the user lands on the
- *     destination cleanly.
- *
- * The Telegram CTA, language switch, and theme toggle are duplicated
- * here from the desktop bar so mobile users get parity without
- * navigating to a separate settings surface.
+ * The wallet entry lives inside the Account section. It reuses the
+ * existing `WalletAuthButton hasProvider={false}` so the connect /
+ * sign-in / signed-in states stay in lock-step with the navbar.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -31,6 +29,7 @@ import type { ComponentProps } from 'react';
 import type { Route } from 'next';
 import { LanguageSwitch } from './language-switch';
 import { ThemeToggle } from './theme-toggle';
+import { WalletAuthButton } from '@/components/auth/wallet-auth-button';
 
 type LinkHref = ComponentProps<typeof Link>['href'];
 type NavKey = 'predict' | 'surfaces' | 'pricing' | 'docs';
@@ -47,7 +46,7 @@ const NAV: readonly { href: LinkHref; key: NavKey; match: RegExp }[] = [
 ];
 
 type Phase = 'closed' | 'opening' | 'open' | 'closing';
-const EXIT_MS = 200;
+const EXIT_MS = 220;
 
 export function MobileMenu() {
   const t = useTranslations('header');
@@ -61,8 +60,6 @@ export function MobileMenu() {
     setMounted(true);
   }, []);
 
-  // Phase machine — opening/closing intermediate states drive
-  // animation, the open/closed states drive interactivity.
   const open = (): void => {
     setPhase((p) => (p === 'closed' || p === 'closing' ? 'opening' : p));
     requestAnimationFrame(() => setPhase((p) => (p === 'opening' ? 'open' : p)));
@@ -105,6 +102,9 @@ export function MobileMenu() {
           rounded-md border border-[var(--border)] bg-[var(--surface)]
           text-[var(--fg)]
           hover:bg-[var(--surface-2)] transition-colors
+          focus-visible:outline-none focus-visible:ring-2
+          focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2
+          focus-visible:ring-offset-[var(--bg)]
         "
       >
         <Menu size={16} strokeWidth={2} />
@@ -144,11 +144,11 @@ function MobilePanel({ phase, onClose, nav, cta }: PanelProps) {
   const t = useTranslations('header');
   const exiting = phase === 'closing';
   const backdropAnim = exiting
-    ? 'motion-safe:wallet-modal-fade-out'
-    : 'motion-safe:wallet-modal-fade-in';
+    ? 'motion-safe:mobile-drawer-fade-out'
+    : 'motion-safe:mobile-drawer-fade-in';
   const panelAnim = exiting
-    ? 'motion-safe:wallet-modal-slide-out'
-    : 'motion-safe:wallet-modal-slide-in';
+    ? 'motion-safe:mobile-drawer-slide-out'
+    : 'motion-safe:mobile-drawer-slide-in';
 
   return createPortal(
     <div
@@ -161,7 +161,7 @@ function MobilePanel({ phase, onClose, nav, cta }: PanelProps) {
         type="button"
         aria-label={t('mobileMenu.closeAria')}
         onClick={onClose}
-        className="absolute inset-0 bg-[color:color-mix(in_oklab,var(--bg)_70%,black_20%)]/80 backdrop-blur-sm"
+        className="absolute inset-0 bg-[color:color-mix(in_oklab,var(--bg)_70%,black_20%)]/85 backdrop-blur-[6px]"
       />
 
       <div
@@ -171,6 +171,7 @@ function MobilePanel({ phase, onClose, nav, cta }: PanelProps) {
           flex flex-col ${panelAnim}
         `}
       >
+        {/* ── Header ─────────────────────────────────────────── */}
         <header className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
           <span className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--fg-3)]">
             {t('mobileMenu.eyebrow')}
@@ -183,41 +184,43 @@ function MobilePanel({ phase, onClose, nav, cta }: PanelProps) {
               inline-flex h-8 w-8 items-center justify-center rounded-md
               text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)]
               transition-colors
+              focus-visible:outline-none focus-visible:ring-2
+              focus-visible:ring-[var(--accent)]
             "
           >
             <X size={16} strokeWidth={2} />
           </button>
         </header>
 
-        <nav className="flex flex-col px-3 py-3 gap-0.5">
-          {nav.map((item) => (
-            <Link
-              key={item.key}
-              href={item.href}
-              onClick={onClose}
-              aria-current={item.active ? 'page' : undefined}
-              className={`
-                inline-flex items-center justify-between px-3 py-3 rounded-lg
-                text-[15px] font-medium transition-colors
-                ${
-                  item.active
-                    ? 'bg-[var(--surface-2)] text-[var(--fg)]'
-                    : 'text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]'
-                }
-              `}
-            >
-              <span>{item.label}</span>
-              <span
-                aria-hidden
-                className="mono tabular text-[11px] text-[var(--fg-3)]"
-              >
-                →
-              </span>
-            </Link>
-          ))}
-        </nav>
+        {/* ── Scrollable body ────────────────────────────────── */}
+        <div className="flex-1 overflow-y-auto px-3 py-4 flex flex-col gap-5">
+          {/* Navigate section */}
+          <SectionEyebrow label={t('mobileMenu.sections.navigate')} />
+          <nav className="flex flex-col gap-0.5">
+            {nav.map((item, i) => (
+              <DrawerRow
+                key={item.key}
+                href={item.href}
+                label={item.label}
+                active={item.active}
+                onClick={onClose}
+                delayMs={40 + i * 25}
+              />
+            ))}
+          </nav>
 
-        <div className="mt-auto border-t border-[var(--border)] px-5 py-4 flex flex-col gap-3">
+          {/* Account section */}
+          <SectionEyebrow label={t('mobileMenu.sections.account')} />
+          <div
+            className="mobile-drawer-row-in px-1"
+            style={{ ['--row-delay' as string]: `${40 + nav.length * 25 + 30}ms` }}
+          >
+            <WalletAuthButton hasProvider={false} />
+          </div>
+        </div>
+
+        {/* ── Footer: CTA + preferences ──────────────────────── */}
+        <div className="border-t border-[var(--border)] px-5 py-4 flex flex-col gap-3">
           <a
             href="https://t.me/vizzorai_bot"
             target="_blank"
@@ -236,7 +239,7 @@ function MobilePanel({ phase, onClose, nav, cta }: PanelProps) {
 
           <div className="flex items-center justify-between gap-3 pt-1">
             <span className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--fg-3)]">
-              {t('mobileMenu.settings')}
+              {t('mobileMenu.sections.preferences')}
             </span>
             <div className="flex items-center gap-2">
               <LanguageSwitch />
@@ -247,5 +250,64 @@ function MobilePanel({ phase, onClose, nav, cta }: PanelProps) {
       </div>
     </div>,
     document.body,
+  );
+}
+
+/* ─────────────── pieces ─────────────── */
+
+function SectionEyebrow({ label }: { label: string }) {
+  return (
+    <p className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--fg-3)] px-2.5 -mb-1">
+      {label}
+    </p>
+  );
+}
+
+function DrawerRow({
+  href,
+  label,
+  active,
+  onClick,
+  delayMs,
+}: {
+  href: LinkHref;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  delayMs: number;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      style={{ ['--row-delay' as string]: `${delayMs}ms` }}
+      className={`
+        mobile-drawer-row-in
+        relative flex items-center justify-between
+        rounded-lg px-2.5 py-2
+        text-[13.5px] transition-colors
+        ${
+          active
+            ? 'bg-[var(--surface-2)] text-[var(--fg)] font-semibold'
+            : 'text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]'
+        }
+      `}
+    >
+      {/* Left-edge active bar — mirrors the docs sidebar treatment. */}
+      {active && (
+        <span
+          aria-hidden
+          className="absolute left-[-2px] top-[30%] bottom-[30%] w-[2px] rounded-sm bg-[var(--fg)]"
+        />
+      )}
+      <span>{label}</span>
+      <span
+        aria-hidden
+        className="mono tabular text-[10.5px] text-[var(--fg-3)]"
+      >
+        →
+      </span>
+    </Link>
   );
 }
