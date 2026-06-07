@@ -24,8 +24,8 @@ export function VizzorLoader() {
       role="status"
       aria-label="Loading"
       className="
-        fixed inset-0 z-50 flex items-center justify-center
-        bg-[var(--bg)]/85 backdrop-blur-sm
+        fixed inset-0 z-[60] flex items-center justify-center
+        bg-[var(--bg)]
       "
     >
       <div className="relative flex flex-col items-center gap-6">

@@ -3,58 +3,48 @@
 /**
  * Page transition wrapper.
  *
- * Two behaviours layered on top of each other:
+ * The brand-mark loader (`<VizzorLoader />`) is shown:
  *
- *   1. Re-keys on every pathname change so React unmounts the previous
- *      page tree and remounts the new one — triggering the CSS
- *      `page-transition-enter` animation defined in `app/globals.css`
- *      and mirrored into `app/docs/docs.css` (calm 220ms fade + 6px
- *      slide-up).
+ *   1. On the **first paint** of every fresh visit — the loader is part
+ *      of the initial SSR HTML (initial useState value is `true`), so
+ *      it appears the moment the browser parses the document, *before*
+ *      React has hydrated. This covers slow-network first-loads: the
+ *      user sees the brand mark immediately and the rest of the page
+ *      builds up behind it.
  *
- *   2. Shows the Vizzor brand-mark loader (`<VizzorLoader />`) for a
- *      minimum visibility window on every navigation. Next's native
- *      `loading.tsx` convention only fires when the new segment
- *      genuinely suspends; instant client-side swaps between
- *      pre-rendered pages would otherwise never surface the loader at
- *      all. The minimum window guarantees the user always gets a
- *      brand-shaped beat of feedback when they navigate.
+ *   2. On **every subsequent navigation** for at least `MIN_LOADER_MS`.
+ *      Next.js's native `loading.tsx` convention only kicks in for
+ *      segments that genuinely suspend; instant client-side swaps would
+ *      otherwise never surface a loader. The minimum window guarantees
+ *      a brand-shaped beat of feedback on every nav, and the loader
+ *      stays on top until both (a) the timer expires AND (b) the new
+ *      page has rendered underneath — so slow networks keep the loader
+ *      visible for longer naturally.
  *
- * Initial-load semantics — we never flash the loader on the page the
- * user first lands on. To distinguish "first session visit" from
- * "second mount after a cross-layout nav" we persist the last path in
- * `sessionStorage`. The marketing zone (`/[locale]/*`) and the docs
- * zone (`/docs/*`) have independent root layouts; navigating between
- * them unmounts the previous PageTransition instance entirely, so an
- * in-memory ref alone would treat the new mount as a fresh visit and
- * silently swallow the loader. sessionStorage is the survivor.
+ * The `<div key={pathname}>` triggers the `page-transition-enter`
+ * fade + slide-up the moment the loader hides. Reduced-motion users
+ * get the static frame via the existing media block in the stylesheet.
  *
- * Reduced-motion users get the final state with no animation via the
- * existing media block in the stylesheet; the loader still mounts but
- * the brand-mark pulse and ring rotation collapse to a static frame.
+ * sessionStorage carries the last visited path across cross-layout
+ * navigations (the marketing zone and the docs zone have independent
+ * root layouts, so an in-memory ref alone wouldn't survive). It's
+ * currently only used to record visits — every mount / nav shows the
+ * loader regardless — but the persistence layer is in place for any
+ * future logic that wants to differentiate first-vs-subsequent visits.
  */
 
 import { usePathname } from 'next/navigation';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { VizzorLoader } from './vizzor-loader';
 
 /**
  * Minimum window the brand loader is on screen during navigation.
  * Tuned so the brand moment registers without feeling like a stall.
- * Match it with the longest individual leg of the loader animation
- * (~700ms covers one full inner-ring rotation + a pulse beat).
+ * 700ms covers one full inner-ring rotation + a pulse beat.
  */
 const MIN_LOADER_MS = 700;
 
 const STORAGE_KEY = 'vizzor.nav.lastPath';
-
-function readLastPath(): string | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    return window.sessionStorage.getItem(STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
 
 function writeLastPath(path: string): void {
   if (typeof window === 'undefined') return;
@@ -67,37 +57,17 @@ function writeLastPath(path: string): void {
 
 export function PageTransition({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  // Locks the "first useEffect run" so we never flash the loader at
-  // initial render of this component instance, even when sessionStorage
-  // already holds a different path from a previous tab navigation.
-  const initialisedRef = useRef(false);
-  const [showLoader, setShowLoader] = useState(false);
+  // Default to `true` so the loader is part of the SSR HTML. Browsers
+  // paint it before React hydrates — the brand mark is on screen the
+  // moment the document parses, which is what makes slow-network
+  // first-loads still feel branded.
+  const [showLoader, setShowLoader] = useState(true);
 
   useEffect(() => {
-    const previous = readLastPath();
-
-    // First effect run for this mount. Two cases:
-    //   (a) sessionStorage is empty -> brand-new session. Record and
-    //       skip the loader.
-    //   (b) sessionStorage holds a path != current -> the user came
-    //       from another layout (e.g. /pricing -> /docs/predictor).
-    //       Treat as a navigation: show the loader.
-    if (!initialisedRef.current) {
-      initialisedRef.current = true;
-      if (previous !== null && previous !== pathname) {
-        setShowLoader(true);
-        const id = window.setTimeout(() => {
-          setShowLoader(false);
-          writeLastPath(pathname);
-        }, MIN_LOADER_MS);
-        return () => window.clearTimeout(id);
-      }
-      writeLastPath(pathname);
-      return;
-    }
-
-    // Subsequent runs — pathname changed within the same mount.
-    if (previous === pathname) return;
+    // Re-arm the loader on every mount and every path change. The
+    // initial mount already had `showLoader=true` from useState, so
+    // this just resets the timer to the new path; subsequent path
+    // changes flip the loader back on for another full window.
     setShowLoader(true);
     const id = window.setTimeout(() => {
       setShowLoader(false);
