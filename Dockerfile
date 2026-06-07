@@ -68,6 +68,12 @@ COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=build --chown=nextjs:nodejs /app/public ./public
 
+# Pre-create the SQLite mount point with non-root ownership. The compose
+# named volume (site-vizzor-db / site-vizzor-staging-db) mounts at
+# /app/.vizzor; if the dir doesn't exist in the image, Docker creates it
+# as root:root and the nextjs user can't write the WAL files.
+RUN mkdir -p /app/.vizzor && chown -R nextjs:nodejs /app/.vizzor
+
 USER nextjs
 EXPOSE 3000
 
