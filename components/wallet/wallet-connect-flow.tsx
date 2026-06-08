@@ -35,7 +35,11 @@ import {
   WalletReadyState,
   type WalletName,
 } from '@solana/wallet-adapter-base';
-import { isMobileWeb, universalLinkFor } from '@/lib/wallet/mobile';
+import {
+  appDeepLinkFor,
+  isMobileWeb,
+  universalLinkFor,
+} from '@/lib/wallet/mobile';
 
 export type SolanaProviderId = 'phantom' | 'solflare' | 'more';
 
@@ -111,22 +115,58 @@ export function WalletConnectFlow({
   // Mobile handoff helper. On iOS / Android in a regular mobile browser
   // (Safari, Chrome, Brave, …) the wallet's browser extension does not
   // exist, so the Wallet Standard registry is empty and select() will
-  // never resolve. Instead of dropping the user on a desktop install
-  // page, we navigate to the wallet's *universal link*: the OS opens
-  // the matching wallet app and its in-app browser reloads the current
-  // page with the wallet provider injected. The reloaded page then
-  // discovers the wallet through the normal path. Returns true if we
-  // initiated a handoff (caller should stop and not call fail()).
+  // never resolve. We hand off to the native wallet app via its custom
+  // URL scheme — `phantom://browse/<url>` opens Phantom directly with
+  // no website round-trip. If the app isn't installed, we fall back to
+  // the universal link (which points at the wallet's install page).
+  //
+  // Why the custom scheme first: iOS universal-link interception of
+  // `phantom.app/ul/*` is gated on the app's associated-domains
+  // entitlement being live. After fresh installs or stale iOS link
+  // caches the universal link silently degrades into a normal HTTPS
+  // navigation and lands the user on phantom.app's website instead
+  // of inside the wallet — the exact bug we're fixing here.
+  //
+  // Visibility-change detection: when the OS hands off to the wallet
+  // app, the page's `visibilityState` flips to 'hidden'. We use that
+  // as the signal "app opened, cancel the fallback". If the page is
+  // still 'visible' after the timeout, the scheme had no handler
+  // (app not installed) → fall back to the universal link.
+  //
+  // Returns true if we initiated a handoff (caller stops the install-
+  // page path).
   const tryMobileHandoff = useCallback(
     (id: SolanaProviderId): boolean => {
       if (id === 'more' || !isMobileWeb()) return false;
-      const url = universalLinkFor(id);
-      if (!url) return false;
-      // Same-window navigation — the OS interprets the URL as an
-      // app link and hands off to the wallet app. The "connecting"
-      // status persists in the modal until the user returns, at
-      // which point the reloaded page picks up the in-app wallet.
-      window.location.href = url;
+      const deepLink = appDeepLinkFor(id);
+      const universalLink = universalLinkFor(id);
+      if (!deepLink || !universalLink) return false;
+
+      let appOpened = false;
+      const onVisibilityChange = () => {
+        if (document.visibilityState === 'hidden') appOpened = true;
+      };
+      document.addEventListener('visibilitychange', onVisibilityChange);
+
+      // Step 1 — fire the app's custom scheme. iOS / Android dispatch
+      // this to the wallet's URL handler if the app is installed; the
+      // page typically blurs and visibilityState flips to 'hidden'
+      // within ~200ms when handoff succeeds.
+      window.location.href = deepLink;
+
+      // Step 2 — short fallback timer. If we're still visible after
+      // 1.2s, the scheme had no handler and we fall back to the
+      // universal link (which surfaces phantom.app's install / open
+      // prompt). 1.2s is enough headroom for the OS to dispatch on
+      // a cold launch but short enough that the user doesn't sit on
+      // a frozen UI when the app is genuinely missing.
+      window.setTimeout(() => {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+        if (appOpened) return;
+        if (document.visibilityState !== 'visible') return;
+        window.location.href = universalLink;
+      }, 1200);
+
       return true;
     },
     [],
