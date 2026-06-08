@@ -50,8 +50,10 @@ export type UniversalLinkProviderId = 'phantom' | 'solflare';
 
 /**
  * Returns the universal-link URL that asks the OS to open the current
- * page inside the named wallet's in-app browser. Returns null in SSR
- * or for unknown provider ids.
+ * page inside the named wallet's in-app browser. Used as the FALLBACK
+ * in the mobile handoff — if the app's custom-scheme deeplink fails
+ * because the app isn't installed, this navigates to phantom.app or
+ * solflare.com which exposes an install / open-in-app prompt.
  *
  * Both wallets accept the URL-encoded target and an optional `ref`
  * parameter that lets analytics in their browser attribute the visit
@@ -66,5 +68,34 @@ export function universalLinkFor(providerId: UniversalLinkProviderId): string | 
       return `https://phantom.app/ul/browse/${target}?ref=${ref}`;
     case 'solflare':
       return `https://solflare.com/ul/v1/browse/${target}?ref=${ref}`;
+  }
+}
+
+/**
+ * Returns the wallet's *custom-scheme* deeplink — the app-only URL the
+ * OS dispatches straight to the installed wallet with no website
+ * round-trip. This is the PRIMARY mobile handoff target; the universal
+ * link is only a fallback for the not-installed case.
+ *
+ * Why prefer this over the universal link:
+ *   iOS universal-link interception relies on the wallet app's
+ *   associated-domains entitlement being live for `phantom.app/ul/*`.
+ *   After a fresh install, after iOS clears its smart-app-banner
+ *   cache, or when the user has manually long-pressed a similar URL
+ *   and chosen "Open in Safari", the universal link silently degrades
+ *   to a normal HTTPS navigation — landing the user on phantom.app's
+ *   website instead of inside the wallet. The custom URL scheme is
+ *   not subject to any of that; the OS either has a registered
+ *   handler (open the app) or it doesn't (we time out and fall back).
+ */
+export function appDeepLinkFor(providerId: UniversalLinkProviderId): string | null {
+  if (typeof window === 'undefined') return null;
+  const target = encodeURIComponent(window.location.href);
+  const ref = encodeURIComponent(window.location.host);
+  switch (providerId) {
+    case 'phantom':
+      return `phantom://browse/${target}?ref=${ref}`;
+    case 'solflare':
+      return `solflare://browse/${target}?ref=${ref}`;
   }
 }
