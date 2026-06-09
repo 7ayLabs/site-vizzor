@@ -1,25 +1,24 @@
 /**
- * POST /api/quota/reset — dev-only quota reset.
+ * POST /api/quota/reset — dev-only quota reset for the active wallet.
  *
- * Two layers of defense ensure this is unusable by anonymous users on
- * production:
+ * v0.3.0: with the counter moved into SQLite (wallet_free_usage), this
+ * endpoint now deletes the wallet's row. Anonymous callers return 401;
+ * production callers return 404 unless `ALLOW_QUOTA_RESET=true`.
  *
- *   1. The endpoint itself returns 404 when `NODE_ENV === 'production'`
- *      AND `ALLOW_QUOTA_RESET !== 'true'`. The override exists so the
- *      operator can re-enable it temporarily (e.g. during a support
- *      incident) without redeploying.
+ * Defense layers:
  *
- *   2. The matching UI affordance in <QuotaSidebar> is gated on
- *      `process.env.NODE_ENV !== 'production'`, which Next.js inlines
- *      at build time — the button is dead-code-eliminated from the
- *      production bundle entirely.
- *
- * Even with both gates open the cookie is HttpOnly + SameSite=Lax, so
- * third-party scripts can't trigger this on the user's behalf.
+ *   1. The endpoint returns 404 in production unless explicitly enabled
+ *      (`ALLOW_QUOTA_RESET=true`). The override exists for support cases.
+ *   2. Callers must hold a valid SIWS session — the wallet to reset is
+ *      derived from the cookie, never accepted as a body parameter.
+ *   3. The matching UI affordance is gated on
+ *      `process.env.NODE_ENV !== 'production'` and dead-code-eliminated
+ *      from the production bundle.
  */
 
 import { NextResponse } from 'next/server';
-import { QUOTA_COOKIE } from '@/lib/quota';
+import { getActiveSession } from '@/lib/payment/auth-session';
+import { getDb } from '@/lib/payment/db';
 import { freePredictions } from '@/lib/feature-flags';
 
 export const dynamic = 'force-dynamic';
@@ -32,36 +31,24 @@ function resetAllowed(): boolean {
 
 export async function POST() {
   if (!resetAllowed()) {
-    // Match the body shape of an unmatched Next.js route to avoid
-    // confirming the endpoint exists. Don't leak that the gate fired.
     return new NextResponse('Not Found', { status: 404 });
   }
 
-  // Write the cookie VALUE to "0" with a normal Max-Age rather than
-  // attempting expiry via Max-Age=0. Two reasons:
-  //   1. Cookie deletion requires every attribute on the deleting
-  //      cookie to match the original (Path, Domain, SameSite). Any
-  //      mismatch and the browser keeps the old cookie. Setting a new
-  //      value sidesteps the matching dance — name + path + domain are
-  //      enough for the new cookie to replace the old.
-  //   2. readQuota() treats "0" and "absent" identically (clamps to
-  //      0 either way), so a value-of-0 cookie is functionally a reset.
+  const session = await getActiveSession();
+  if (!session) {
+    return NextResponse.json(
+      { error: 'wallet_required' },
+      { status: 401, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
+  getDb()
+    .prepare(`DELETE FROM wallet_free_usage WHERE wallet_address = ?`)
+    .run(session.wallet);
+
   const limit = freePredictions();
-  const fresh = {
-    used: 0,
-    limit,
-    remaining: limit,
-    exhausted: false,
-  };
-
-  const headers = new Headers({
-    'Cache-Control': 'no-store',
-    'Content-Type': 'application/json',
-  });
-  headers.append(
-    'Set-Cookie',
-    `${QUOTA_COOKIE}=0; Path=/; Max-Age=${60 * 60 * 24 * 30}; HttpOnly; SameSite=Lax`,
+  return NextResponse.json(
+    { used: 0, limit, remaining: limit, exhausted: false },
+    { headers: { 'Cache-Control': 'no-store' } },
   );
-
-  return new NextResponse(JSON.stringify(fresh), { status: 200, headers });
 }

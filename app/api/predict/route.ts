@@ -30,9 +30,12 @@
  */
 
 import type { UIMessage } from 'ai';
-import { buildIncrementedQuotaCookie, readQuota } from '@/lib/quota';
+import { incrementWalletQuota, readWalletQuota } from '@/lib/quota';
 import { parseIntent } from '@/lib/commands';
-import { getSubscriptionForActiveSession } from '@/lib/payment/auth-session';
+import {
+  getActiveSession,
+  getSubscriptionForActiveSession,
+} from '@/lib/payment/auth-session';
 import {
   PREDICT_ROUTE_REQUIREMENTS,
   assertRequiredEnv,
@@ -65,6 +68,24 @@ export async function POST(req: Request) {
     return Response.json({ error: 'no_messages' }, { status: 400 });
   }
 
+  /* ------------------- wallet auth gate (v0.3.0) ----------------- */
+  // /predict is no longer anonymous. The visitor MUST complete SIWS
+  // before any engine cycles are spent — this binds the free-tier
+  // counter to a real wallet so it can't be reset by clearing cookies
+  // or opening an incognito window. Subscriptions still bypass the
+  // counter; the SIWS check is the only gate for them too.
+  const session = await getActiveSession();
+  if (!session) {
+    return Response.json(
+      {
+        error: 'wallet_required',
+        message:
+          'Connect your wallet to predict. The free tier is bound to your wallet so the counter survives cookie clears.',
+      },
+      { status: 401, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
   const lastUserText = extractLastUserText(body.messages);
   const intent = parseIntent(lastUserText);
 
@@ -78,35 +99,30 @@ export async function POST(req: Request) {
 
   /* --------------------- predict gate (quota) -------------------- */
 
-  const quota = await readQuota();
-
-  // Wallet-based subscription bypass — if the visitor signed in with
-  // SIWS and that wallet has an active subscription on file, every
-  // prediction is free and the quota counter is left untouched.
   const subscription = await getSubscriptionForActiveSession();
   const subscribed = !!subscription;
 
-  if (!subscribed && quota.exhausted) {
-    return Response.json(
-      {
-        error: 'free_quota_exhausted',
-        message:
-          'Free predictions exhausted. Subscribe at /pricing — pay in SOL on Solana.',
-        quota,
-      },
-      { status: 402, headers: { 'Cache-Control': 'no-store' } },
-    );
+  if (!subscribed) {
+    const quota = readWalletQuota(session.wallet);
+    if (quota.exhausted) {
+      return Response.json(
+        {
+          error: 'free_quota_exhausted',
+          message:
+            'Free predictions exhausted for this wallet. Subscribe at /pricing — pay in SOL on Solana.',
+          quota,
+        },
+        { status: 402, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
   }
 
-  // The would-be cookie. Only attached when the upstream actually
-  // delivers a prediction. Subscribers don't increment the free counter.
-  const cookieOnSuccess = !subscribed
-    ? buildIncrementedQuotaCookie(quota.used)
-    : null;
-
   /* --------------------- forward to vizzor engine ---------------- */
-
-  return forwardToVizzor(body.messages, cookieOnSuccess);
+  // Counter increment happens AFTER the upstream call confirms success
+  // — see `forwardToVizzor`. We pass the wallet down so the counter
+  // can be bumped atomically on the success path only.
+  const walletForCounter = subscribed ? null : session.wallet;
+  return forwardToVizzor(body.messages, walletForCounter);
 }
 
 /* ------------------------------------------------------------------ *\
@@ -116,7 +132,7 @@ export async function POST(req: Request) {
 
 async function forwardToVizzor(
   messages: UIMessage[],
-  cookieOnSuccess: string | null,
+  walletForCounter: string | null,
 ): Promise<Response> {
   const base =
     process.env.VIZZOR_API_URL ??
@@ -137,7 +153,7 @@ async function forwardToVizzor(
     .filter((m) => m.content.length > 0);
 
   if (vizzorMessages.length === 0) {
-    return offlineResponse(null);
+    return offlineResponse();
   }
 
   const controller = new AbortController();
@@ -147,19 +163,36 @@ async function forwardToVizzor(
   );
 
   try {
+    // The upstream engine validates an X-API-Key on every request
+    // (see `vizzor/src/api/auth/middleware.ts`). The site holds a
+    // single service key in env; if it's missing in prod we still try
+    // the request (and surface the upstream's 401 as "offline") rather
+    // than throwing at boot, since the rest of the site doesn't need
+    // the engine to render.
+    const apiKey = process.env.VIZZOR_API_KEY;
+    const upstreamHeaders: Record<string, string> = {
+      'content-type': 'application/json',
+      accept: 'text/event-stream',
+    };
+    if (apiKey) upstreamHeaders['x-api-key'] = apiKey;
+
     const upstreamRes = await fetch(`${base}/v1/chat`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'text/event-stream',
-      },
+      headers: upstreamHeaders,
       body: JSON.stringify({ messages: vizzorMessages }),
       signal: controller.signal,
       cache: 'no-store',
     });
 
     if (!upstreamRes.ok || !upstreamRes.body) {
-      return offlineResponse(null);
+      return offlineResponse();
+    }
+
+    // Atomically bump the free-tier counter for this wallet now that
+    // the upstream has agreed to deliver a stream. Subscribers pass
+    // `null` and the counter is untouched.
+    if (walletForCounter) {
+      incrementWalletQuota(walletForCounter);
     }
 
     // Transform Vizzor SSE → AI SDK UI Message Stream so the client's
@@ -174,11 +207,10 @@ async function forwardToVizzor(
       'x-vercel-ai-ui-message-stream': 'v1',
       'x-vizzor-source': 'engine',
     });
-    if (cookieOnSuccess) headers.set('set-cookie', cookieOnSuccess);
 
     return new Response(transformed, { status: 200, headers });
   } catch {
-    return offlineResponse(null);
+    return offlineResponse();
   } finally {
     clearTimeout(timeout);
   }
@@ -316,8 +348,8 @@ In the meantime:
 
 status: vizzor-engine offline`;
 
-function offlineResponse(setCookie: string | null): Response {
-  return streamPlainText(OFFLINE_MESSAGE, setCookie, { offline: true });
+function offlineResponse(): Response {
+  return streamPlainText(OFFLINE_MESSAGE, null, { offline: true });
 }
 
 /* ------------------------------------------------------------------ *\

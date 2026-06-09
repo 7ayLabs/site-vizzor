@@ -9,7 +9,7 @@
  * support was removed in favor of a single, well-tested rail.
  */
 
-const DEFAULT_FREE_PREDICTIONS = 3;
+const DEFAULT_FREE_PREDICTIONS = 7;
 const DEFAULT_PAYMENT_RATE_LOCK_SECONDS = 5 * 60;
 
 export function freePredictions(): number {

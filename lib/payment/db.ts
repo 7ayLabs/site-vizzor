@@ -263,6 +263,25 @@ function runV020Migrations(db: DB): void {
     );
     CREATE INDEX IF NOT EXISTS idx_sanctioned_address ON sanctioned_addresses(address);
   `);
+
+  /* v0.3.0 — wallet-bound free-tier counter.
+   *
+   * Replaces the legacy cookie-based gate (`vizzor.free_used`) for
+   * /predict. Free-tier predictions are now counted per SIWS-bound
+   * wallet so a single user cannot multiply their quota by clearing
+   * cookies / using incognito. Subscribers still bypass entirely; this
+   * row is only consulted on the free path.
+   *
+   * Additive — fresh DBs and existing DBs behave identically when no
+   * row is present (counts as zero). */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS wallet_free_usage (
+      wallet_address  TEXT PRIMARY KEY,
+      used            INTEGER NOT NULL DEFAULT 0,
+      first_used_at   INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000),
+      last_used_at    INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000)
+    );
+  `);
 }
 
 export function getDb(): DB {
@@ -339,6 +358,45 @@ export interface WalletLinkRow {
   wallet_address: string;
   linked_at: number;
   siws_token: string | null;
+}
+
+export interface WalletFreeUsageRow {
+  wallet_address: string;
+  used: number;
+  first_used_at: number;
+  last_used_at: number;
+}
+
+/**
+ * Returns the current free-tier usage count for a wallet. A missing row
+ * is treated as zero (and returned as such) — wallets are upserted on
+ * the first successful prediction.
+ */
+export function getWalletFreeUsage(wallet: string): number {
+  const row = getDb()
+    .prepare(`SELECT used FROM wallet_free_usage WHERE wallet_address = ?`)
+    .get(wallet) as { used: number } | undefined;
+  return row?.used ?? 0;
+}
+
+/**
+ * Atomically increments a wallet's free-tier counter and returns the
+ * post-increment value. Uses SQLite's UPSERT (ON CONFLICT DO UPDATE) so
+ * the first call creates the row and subsequent calls bump the count
+ * without a separate INSERT/SELECT race.
+ */
+export function incrementWalletFreeUsage(wallet: string): number {
+  const now = Date.now();
+  getDb()
+    .prepare(
+      `INSERT INTO wallet_free_usage (wallet_address, used, first_used_at, last_used_at)
+       VALUES (@wallet, 1, @now, @now)
+       ON CONFLICT(wallet_address) DO UPDATE SET
+         used = used + 1,
+         last_used_at = @now`,
+    )
+    .run({ wallet, now });
+  return getWalletFreeUsage(wallet);
 }
 
 export interface IdempotencyKeyRow {
