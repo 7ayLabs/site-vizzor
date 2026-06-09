@@ -1,10 +1,8 @@
 /**
  * /[locale]/predict — Vizzor chat surface.
  *
- * Server shell — locale binding + metadata. The whole interactive
- * surface (sidebar, thread, composer) lives in <PredictShell>, a
- * client component. The shell takes the full remaining viewport
- * below the site header so it reads as a chat app.
+ * Server shell. Locale binding + metadata. The whole interactive shell
+ * is a client component (wallet adapter, useChat stream, SWR auth/quota).
  */
 
 import { setRequestLocale, getTranslations } from 'next-intl/server';
@@ -32,5 +30,9 @@ export default async function PredictPage({
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
-  return <PredictShell />;
+  return (
+    <main className="relative isolate bg-[var(--bg)]">
+      <PredictShell />
+    </main>
+  );
 }
