@@ -32,7 +32,7 @@ export function NavLinks() {
   const pathname = usePathname();
 
   return (
-    <nav className="hidden md:flex items-center gap-1 text-[13px]">
+    <nav className="hidden md:flex items-center gap-0.5 text-[13px]">
       {NAV.map((item) => {
         const isActive = item.match.test(pathname);
         return (
@@ -41,24 +41,16 @@ export function NavLinks() {
             href={item.href}
             aria-current={isActive ? 'page' : undefined}
             className={`
-              relative inline-flex items-center gap-1.5 rounded-full px-3 py-1.5
+              inline-flex items-center rounded-lg px-3 py-1.5
               transition-colors
               ${
                 isActive
                   ? 'bg-[var(--surface-2)] text-[var(--fg)]'
-                  : 'text-[var(--fg-2)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)]/60'
+                  : 'text-[var(--fg-2)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)]'
               }
             `}
           >
-            {isActive && (
-              <span
-                aria-hidden
-                className="mono tabular text-[10px] tracking-[0.2em] text-[var(--accent)]"
-              >
-                ─
-              </span>
-            )}
-            <span>{t(item.key)}</span>
+            {t(item.key)}
           </Link>
         );
       })}
