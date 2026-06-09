@@ -62,11 +62,21 @@ const WALLET_NAMES: Record<SolanaProviderId, string | null> = {
 };
 
 // How long to wait for Wallet Standard discovery to surface the
-// requested wallet before declaring it not installed. Discovery
-// usually fires within a single frame of mount, but some extensions
-// register late after window.load — 1.5s is a generous ceiling that
-// still feels responsive when the wallet truly isn't installed.
-const READY_TIMEOUT_MS = 1500;
+// requested wallet before declaring it not installed.
+//
+// Discovery usually fires within a single frame of mount, but two
+// browser conditions need a longer window:
+//   1. Brave actively suppresses other wallets' synchronous global
+//      injections to stop them from clobbering its own provider, then
+//      releases them on a late tick. With 1.5s Phantom often hadn't
+//      registered yet and the modal fell straight through to the
+//      download URL — exactly the bug a user reported on Brave.
+//   2. Some extensions register late after window.load (cold cache,
+//      service-worker spin-up).
+// 3s is still responsive when the wallet truly isn't installed
+// (the install URL just opens a beat later) and rescues the Brave
+// case without further heuristics.
+const READY_TIMEOUT_MS = 3000;
 
 const INSTALL_URLS: Record<SolanaProviderId, string | null> = {
   phantom: 'https://phantom.app/download',
