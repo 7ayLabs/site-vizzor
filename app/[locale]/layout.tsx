@@ -7,6 +7,7 @@ import { ThemeProvider, themeBootScript } from '@/components/layout/theme-provid
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { TickerCarouselServer } from '@/components/layout/ticker-carousel-server';
+import { ChromeGate } from '@/components/layout/chrome-gate';
 import { PageTransition } from '@/components/layout/page-transition';
 import { routing } from '@/i18n/routing';
 import '../globals.css';
@@ -62,8 +63,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#FAFAF7' },
-    { media: '(prefers-color-scheme: dark)', color: '#0A0A0B' },
+    { media: '(prefers-color-scheme: light)', color: '#F4F5F0' },
+    { media: '(prefers-color-scheme: dark)', color: '#0A0B0F' },
   ],
   width: 'device-width',
   initialScale: 1,
@@ -104,11 +105,15 @@ export default async function LocaleLayout({
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider>
             <TickerCarouselServer />
-            <Header />
+            <ChromeGate>
+              <Header />
+            </ChromeGate>
             <main>
               <PageTransition>{children}</PageTransition>
             </main>
-            <Footer />
+            <ChromeGate>
+              <Footer />
+            </ChromeGate>
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>
