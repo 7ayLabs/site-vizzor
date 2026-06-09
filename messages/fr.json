@@ -188,43 +188,52 @@
   "predict": {
     "meta": {
       "title": "Prédire — Vizzor",
-      "description": "Demandez à Vizzor une prédiction crypto calibrée. Trois prédictions gratuites par navigateur. Propulsé par le même moteur que le bot Telegram."
+      "description": "Connecte ton wallet pour lancer un call crypto calibré contre le même moteur que le bot Telegram. Sept runs gratuits par wallet. Tracked-live, reçus publics."
     },
-    "eyebrow": "en direct · sur le site",
-    "title": "Prédictions, sur la page.",
-    "sub": "Tapez un symbole et un horizon — par exemple \"ETH 4h\" ou \"SOL 1d\" — et recevez la même prédiction calibrée et adossée à des reçus que produit le bot Telegram. Les trois premières sont offertes.",
-    "emptyState": "Demandez une prédiction (\"BTC 4h\", \"ETH 1d\", \"SOL 15m\") ou tapez /help pour les commandes.",
-    "inputPlaceholder": "Symbole + horizon (BTC 4h) ou /help",
-    "send": "Envoyer",
-    "streaming": "Prédiction en cours…",
+    "gate": {
+      "title": "Connecte ton wallet pour prédire.",
+      "body": "Vizzor lie le tier gratuit à ton wallet : le compteur survit aux cookies effacés. Signe une fois avec SIWS — sans email, sans mot de passe.",
+      "perk1": "7 runs gratuits par wallet",
+      "perk2": "Facturation on-chain en SOL",
+      "perk3": "Sans carte, sans KYC",
+      "perk4": "Même moteur que le bot",
+      "composerHint": "Connecte ton wallet pour activer le composer."
+    },
+    "eyebrow": "en direct · tracked",
+    "title": "Lance le call.",
+    "sub": "Symbole + horizon. ETH 4h. SOL 1d. Même moteur que le bot. Même confiance Platt-calibrée. Même reçu public quand ça résout. Les trois premiers sont offerts.",
+    "emptyState": "Tape un symbole et un horizon — BTC 4h, ETH 1d, SOL 15m — ou /help pour les commandes.",
+    "inputPlaceholder": "BTC 4h · ETH 1d · /help",
+    "send": "Lancer",
+    "streaming": "En cours…",
     "loading": "Chargement du quota…",
     "freeTier": {
-      "label": "Prédictions gratuites",
-      "body": "Utilisées {used} sur {limit}. Abonnez-vous pour continuer — payez en SOL sur Solana et économisez 10% instantanément."
+      "label": "Runs gratuits",
+      "body": "{used} sur {limit} utilisés. Abonne-toi pour continuer. Paie en SOL sur Solana et économise 10% instantanément."
     },
     "subscribe": {
-      "label": "Quota gratuit épuisé",
-      "title": "Abonnez-vous pour continuer",
-      "body": "Choisissez un forfait sur /pricing et payez on-chain en SOL. Les abonnés obtiennent des prédictions illimitées sur ce site et dans le bot Telegram.",
-      "cta": "Voir les forfaits →",
-      "legal": "Paiement on-chain · taux verrouillé 5 min · résiliable à tout moment"
+      "label": "Tier gratuit épuisé",
+      "title": "Abonne-toi pour continuer.",
+      "body": "Choisis un tier sur /pricing. Paie on-chain en SOL. Les abonnés ont des calls illimités ici et dans le bot.",
+      "cta": "Voir les tiers",
+      "legal": "On-chain · taux verrouillé 5 min · résiliable à tout moment"
     },
     "exhaustedBanner": {
-      "label": "Quota gratuit épuisé",
-      "body": "Vous avez utilisé les trois prédictions gratuites. Abonnez-vous pour continuer — ou poursuivez dans le bot Telegram.",
-      "telegramCta": "Continuer dans Telegram →",
+      "label": "Tier gratuit épuisé",
+      "body": "Trois runs gratuits utilisés. Abonne-toi pour continuer — ou passe sur Telegram.",
+      "telegramCta": "Ouvrir dans Telegram",
       "resetDev": "réinitialiser · dev seulement"
     },
     "shell": {
       "model": "Vizzor",
       "modelVersion": "v0.15.5 Helios",
-      "newChat": "Nouveau chat",
+      "newChat": "Nouveau run",
       "collapseSidebar": "Réduire la barre latérale",
       "openSidebar": "Ouvrir la barre latérale",
-      "searchPlaceholder": "Symbole ou prédiction…",
+      "searchPlaceholder": "Symbole ou reçu…",
       "quotaLine": "Gratuit {used}/{limit}",
       "nav": {
-        "chat": "Chat",
+        "chat": "Lancer",
         "library": "Reçus",
         "libraryHint": "/precisions",
         "tools": "Outils",
@@ -233,19 +242,40 @@
       "recents": {
         "label": "Récents",
         "clear": "Effacer les récents",
-        "empty": "Aucun prompt récent."
+        "empty": "Aucun run encore."
       },
       "welcome": {
-        "eyebrow": "en direct · sur le site",
-        "title": "Que doit prédire Vizzor ?",
-        "sub": "Tapez symbole + horizon — \"BTC 4h\" — ou utilisez un outil comme /wr, /precisions, /price. Trois prédictions gratuites par navigateur."
+        "eyebrow": "en direct · tracked",
+        "title": "Que doit appeler Vizzor ?",
+        "sub": "Symbole + horizon — BTC 4h. Ou un outil : /wr, /precisions, /price. Trois runs gratuits par navigateur."
       },
       "composer": {
-        "placeholder": "Demandez à Vizzor… (ex. BTC 4h, /help)",
-        "toolHelp": "Lister les commandes",
-        "toolWr": "Afficher le win-rate",
+        "placeholder": "BTC 4h · ETH 1d · /help",
+        "toolHelp": "Commandes",
+        "toolWr": "Win rate",
+        "attach": "Joindre",
+        "browsePrompts": "Parcourir les prompts",
         "footer": "Vizzor peut se tromper. Vérifiez on-chain. Pas un conseil financier."
-      }
+      },
+      "quickActions": {
+        "predict": { "label": "Prédire une crypto" },
+        "wr": { "label": "Voir le win rate" },
+        "precisions": { "label": "Précisions récentes" },
+        "price": { "label": "Vérifier le prix" }
+      },
+      "settingsHeader": "Réglages et aide",
+      "settings": "Réglages",
+      "help": "Aide",
+      "themeLabel": "Thème",
+      "themeLight": "Clair",
+      "themeDark": "Sombre",
+      "identityName": "Invité",
+      "identityMeta": "Connecte ton wallet pour démarrer",
+      "identityConnected": "Wallet connecté",
+      "rightRailTitle": "Reçus",
+      "wr": "Win rate",
+      "watch": "Suivi",
+      "subscribed": "Abonné"
     }
   },
   "hero": {
@@ -261,49 +291,49 @@
     }
   },
   "whatsInIt": {
-    "eyebrow": "ce que vous obtenez vraiment",
-    "title": "Un appel. Reçus complets.",
-    "sub": "Demandez sur n'importe quel token. Vous recevez une direction, un score de confiance qui veut dire ce qu'il dit, et une alerte qui s'arme toute seule au niveau marqué par le moteur. Pas de captures. Pas de shilling.",
+    "eyebrow": "ce qui sort",
+    "title": "Un call. Reçus complets.",
+    "sub": "Direction. Confiance. Alertes. Chaque chiffre en direct. Chaque résultat, public.",
     "bullets": {
-      "directional": "Direction et confiance — calibrées, pas des vibes",
-      "targets": "Smart money flow — voyez ce que font les whales, dans le même appel",
-      "snapshot": "Alertes qui s'arment toutes seules au bon niveau — zéro config"
+      "directional": "Direction plus confiance calibrée — 63% veut dire 63%",
+      "targets": "Smart-money flow sur le même call — voyez ce que les whales viennent de bouger",
+      "snapshot": "Les alertes s'arment toutes seules au niveau marqué par le moteur — zéro setup"
     },
     "learnMore": "Voir la math"
   },
   "howItWorks": {
     "eyebrow": "comment ça marche",
-    "title": "La plupart des bots tirent sans arrêt. Vizzor reste silencieux — jusqu'à être sûr.",
-    "lede": "Six angles indépendants recoupent chaque setup. Un appel ne part que quand quatre s'accordent. Le reste du temps, vous avez le silence — et la raison pour laquelle.",
-    "footer": "Voir le détail complet →",
+    "title": "Trois étapes. C'est tout le produit.",
+    "lede": "Pas besoin de savoir ce qu'il y a sous le capot. Il vous faut un call actionnable, en quelques secondes, avec un reçu à la fin.",
+    "footer": "Voir ce qui tourne en dessous",
     "steps": {
       "fetch": {
-        "title": "Écouter",
-        "description": "Flux en direct depuis les exchanges, les wallets whale, les news de dernière minute, les odds des prediction markets. Rafraîchi toutes les quelques secondes — sans délai, sans tricks de cache.",
-        "ariaLabel": "Six signaux d'entrée convergeant vers un seul nœud de fusion"
+        "title": "01. Demandez",
+        "description": "Tapez une crypto. Choisissez un horizon. C'est tout.",
+        "ariaLabel": "Étape un : tapez un symbole et un horizon pour demander un call à Vizzor"
       },
       "fuse": {
-        "title": "Recouper",
-        "description": "Chaque angle vote, pondéré. Les signaux forts pèsent, les faibles sont amortis. Le moteur retient ce qui a marché et s'ajuste tout seul.",
-        "ariaLabel": "Deux courbes convergeant en un point d'intersection pulsant"
+        "title": "02. Recevez un call",
+        "description": "Une direction claire, un chiffre de confiance et les raisons derrière. En quelques secondes.",
+        "ariaLabel": "Étape deux : recevez un call directionnel avec une confiance calibrée"
       },
       "emit": {
-        "title": "Ne lâcher que les A+",
-        "description": "La plupart du temps, les angles divergent — et vous n'entendez rien. Quand quatre sur six s'alignent, l'appel part avec la math derrière. Moins de pings. Plus d'edge.",
-        "ariaLabel": "Quatre filtres de hauteur croissante, avec une étoile marquant l'émission finale A+"
+        "title": "03. Suivez le résultat",
+        "description": "Chaque call est inscrit au tableau public. Vous voyez les wins. Vous voyez les misses. Aucune retouche.",
+        "ariaLabel": "Étape trois : chaque call atterrit sur un tableau public, wins et misses ensemble"
       }
     }
   },
   "liveReceipts": {
-    "eyebrow": "reçus · flux en direct",
-    "title": "Les appels entrent, les résultats sortent.",
-    "lede": "Chaque prédiction est suivie, résolue et notée. Le decisive WR que tu vois en haut, c'est ce qui reste quand on retire le marketing.",
+    "eyebrow": "tracked-live · ledger public",
+    "title": "Calls entrent. Reçus sortent.",
+    "lede": "Chaque call tracked, résolu, noté. Le decisive WR en haut, c'est ce qui survit une fois le marketing enlevé.",
     "calibration": {
       "climbingTo": "en route vers",
       "trackedWr": "tracked WR"
     },
-    "footerNote": "On affiche les 10 derniers. Historique complet avec filtres →",
-    "cta": "Voir tous les reçus"
+    "footerNote": "Les 10 derniers affichés. Ledger complet avec filtres.",
+    "cta": "Voir les reçus"
   },
   "receiptsScorecard": {
     "eyebrowTop": "dernières 24 heures",
@@ -330,114 +360,133 @@
     "viewAll": "tout voir →"
   },
   "surfaceCompare": {
-    "eyebrow": "comment vous l'utilisez",
-    "title": "Un moteur. Trois portes d'entrée.",
-    "lede": "Choisissez votre façon de vivre. Même moteur, mêmes reçus — rejoignez-le sur Telegram, dans votre terminal ou sur un dashboard. Changez quand vous voulez.",
+    "eyebrow": "là où vous tradez",
+    "title": "Tradez là où vous tradez déjà.",
+    "lede": "Telegram pour les chat-native. CLI pour les power users. Web pour tout voir. Le même moteur derrière les trois — choisissez la porte qui colle à votre façon de trader.",
     "telegram": {
-      "pill": "le plus utilisé",
-      "title": "Bot Telegram",
-      "sub": "Zéro install. 32 commandes. C'est là que Vizzor vit la plupart du temps.",
+      "pill": "là où vit la plupart",
+      "title": "Telegram",
+      "headline": "Là où vit la plupart des traders.",
+      "sub": "Vizzor vit dans le chat que vous regardez déjà. Demandez en langage naturel, recevez un call en quelques secondes, les alertes vous tapent dessus quand le niveau tombe.",
+      "example": "/predict ETH 4h",
       "features": {
-        "alerts": "Les alertes s'arment toutes seules au niveau marqué par le moteur",
-        "session": "Win rate par session, dans votre fuseau horaire",
-        "runtime": "Ajustez le moteur depuis le chat — pas de fichier de config"
+        "alerts": "Les alertes atterrissent dans le même chat que vos calls de groupe",
+        "session": "Mobile-first. Pensé pour trader d'un seul pouce",
+        "runtime": "Zéro install. Tapez le lien et commencez à demander."
       },
-      "cta": "Ouvrir Telegram"
+      "cta": "Ouvrir dans Telegram"
     },
     "cli": {
-      "title": "Ligne de commande",
-      "sub": "Pour les nerds de terminal. 18 commandes. Se branche à tout via pipe.",
+      "pill": "là où vivent les power users",
+      "title": "CLI",
+      "headline": "Là où vivent les power users.",
+      "sub": "Pour les devs Web3, les analystes on-chain et toute personne qui veut câbler Vizzor dans son propre pipeline. Pipe-able. Cron-able. Vissé à votre stack.",
+      "example": "$ vizzor ask BTC 4h",
       "features": {
-        "offline": "Tourne hors-ligne avec Ollama · état SQLite local",
-        "json": "Sortie JSON — à coller dans scripts et notebooks",
-        "engine": "Même moteur, mêmes reçus, même calibration"
+        "offline": "Pipez le JSON direct dans vos scripts et notebooks",
+        "json": "Branchez les calls à vos bots et tableaux de bord",
+        "engine": "Auto-hébergez sur un VPS à 5 $ ou un portable — pas de lock-in cloud"
       },
-      "cta": "Docs du CLI"
+      "cta": "Lire les docs du CLI"
     },
     "dashboard": {
-      "title": "Dashboard web",
-      "sub": "Visuel. Temps réel. Pour quand lire ne suffit plus — vous voulez le voir bouger.",
+      "pill": "là où tout est visible",
+      "title": "Web",
+      "headline": "Là où tout est visible.",
+      "sub": "Le dashboard complet. Reçus en direct, charts, historique, compte, facturation. Pour les traders de bureau qui veulent tout sur un seul écran.",
+      "example": "https://vizzor.ai/predict",
       "features": {
-        "websocket": "Streaming en websocket — sans rafraîchir",
-        "polymarket": "Attrape les edges où Polymarket diverge",
-        "paperTrading": "Agents paper-trade qui suivent les signaux"
+        "websocket": "Historique complet des reçus, filtrable par chaîne et horizon",
+        "polymarket": "Charts, watchlists et smart-money flow sur une seule vue",
+        "paperTrading": "Compte, facturation et tableau public, tout visible"
       },
-      "cta": "Docs du dashboard",
+      "cta": "Ouvrir le web",
       "mockup": {
         "chrome": "vizzor · dashboard",
         "btcSpot": "BTC · spot",
         "trackedWr": "tracked WR",
         "trending": "trending",
         "trendingHint": "dernières 4h",
-        "whale": "🐋 événements",
+        "whale": "événements whale",
         "whaleHint": "dernière 1h"
       }
     }
   },
   "sixSignals": {
-    "eyebrow": "ce qu'on lit",
-    "title": "Six angles sur chaque chart.",
-    "lede": "Aucun angle ne déclenche un appel à lui seul. Chacun doit contribuer — et les angles en désaccord amortissent le verdict, ils ne peuvent pas l'emporter au vote.",
-    "ariaLabel": "Famille de signaux {family}",
-    "families": {
-      "onChain": {
-        "description": "Ce que fait le smart money — wallets whale, flux sur les exchanges, prints de stablecoins. Construit sur des feeds gratuits, donc aucun abonnement à 1 200 $/mois cuit dans votre prix.",
-        "reveal": "Suit les mouvements de 250k$ et plus en boucle de 30 secondes."
+    "eyebrow": "conçu pour le web3",
+    "title": "Conçu pour le Web3.",
+    "lede": "Multi-chaîne par défaut. Connexion par wallet. Facturation on-chain. Pas de carte. Pas de KYC. Utilisez-le depuis Telegram, le terminal ou le web — là où vous vivez déjà.",
+    "ariaLabel": "Pilier {pillar}",
+    "pillars": {
+      "chains": {
+        "title": "11 chaînes, en direct",
+        "description": "Solana, TON, Base, Arbitrum, Ethereum, Polygon, BSC, Avalanche, Optimism, Sui et TRON. Un seul moteur pour toutes.",
+        "reveal": "De nouvelles chaînes arrivent à chaque trimestre."
       },
-      "mlEnsemble": {
-        "description": "Les modèles mathématiques recoupés avec les indicateurs que tous les traders regardent — funding, volume, momentum. Un signal, sans tableurs.",
-        "reveal": "Tourne partout — sans Python, sans GPU, sans dépendances."
+      "wallet": {
+        "title": "Connexion par wallet",
+        "description": "SIWS côté Solana. TON Connect côté TON. Signez une fois avec la wallet que vous utilisez déjà. Pas d'email. Pas de mot de passe.",
+        "reveal": "Vos clés ne quittent jamais votre wallet."
       },
-      "predictionMarkets": {
-        "description": "Les odds Polymarket et les spreads des prediction markets. Quand la foule diverge de notre moteur, voilà un edge à prendre.",
-        "reveal": "Trade le spread quand notre verdict et la foule divergent."
+      "billing": {
+        "title": "Facturation on-chain",
+        "description": "Payez en SOL, TON ou USDC. Pas de carte. Pas de KYC. Chaque rail intègre sa remise — SOL 15%, TON 10%, USDC 5%.",
+        "reveal": "Chaque paiement vérifié on-chain — pas de Stripe au milieu."
       },
-      "socialNarrative": {
-        "description": "Les news de dernière minute et les titres, classés par impact réel. Pas un vibe score — un chiffre sur lequel agir.",
-        "reveal": "Nomme le titre qui a fait bouger l'appel, pour que vous voyiez pourquoi."
+      "surfaces": {
+        "title": "Multi-surface",
+        "description": "Bot Telegram, CLI et web. Même moteur, mêmes reçus. Utilisez-le depuis le chat, le terminal ou le dashboard — selon le moment.",
+        "reveal": "Changez de surface quand vous voulez. Les reçus vous suivent."
       },
-      "patternMatch": {
-        "description": "Les patterns de chart que les pros tradent vraiment — liquidity sweeps, breakouts, kill-zones. Les setups que les algos chassent avant que le retail les voie.",
-        "reveal": "La bibliothèque de patterns se reconstruit à chaque trade résolu."
+      "scoreboard": {
+        "title": "Tableau public",
+        "description": "Chaque call est inscrit. Wins, misses, neutres — tout visible. Le win rate de la home est celui que vous calculeriez vous-même.",
+        "reveal": "Aucun cherry-picking. Aucune retouche. Auditable."
       },
-      "logicRules": {
-        "description": "Des règles écrites à la main depuis des playbooks de traders pros. Dérivés, macro et on-chain — tout vérifié en même temps.",
-        "reveal": "Le hit rate de chaque règle est suivi en direct. Les perdantes perdent du poids. Les gagnantes prennent un boost."
+      "community": {
+        "title": "Communauté d'abord",
+        "description": "Canal Telegram public. Docs ouvertes. Code BUSL-1.1. Auto-hébergez tout le stack si l'hébergement venait à s'arrêter.",
+        "reveal": "Bâti pour survivre à son propre hébergement."
       }
     }
   },
   "trustBecauseTracked": {
-    "eyebrow": "des reçus, pas des promesses",
-    "title": "Notre win rate est public. Noté de manière décisive.",
-    "ringLabel": "win rate tracked",
-    "ringCaption": "tous horizons · 90 derniers jours · tout compte",
-    "ladderEyebrow": "échelle à quatre tiers",
-    "tiers": {
-      "highConviction": {
-        "name": "high-conviction",
-        "description": "Au moins quatre angles sur six s'accordent. Le plus haut niveau de confiance — et le plus susceptible de toucher."
+    "eyebrow": "les reçus",
+    "title": "Vrais reçus. Vrais traders.",
+    "lede": "Utilisé par des traders Web3-native sur onze chaînes. Chaque win, chaque miss, sur le même tableau public. Rien d'enterré, rien d'édité.",
+    "ringLabel": "tableau public",
+    "ringCaption": "tous horizons · 90 derniers jours · rien d'écarté",
+    "proofEyebrow": "ce que la communauté a tracké jusqu'ici",
+    "proof": {
+      "traders": {
+        "name": "traders",
+        "value": "12,4k+",
+        "description": "Wallets actives lançant des calls sur Telegram, CLI et le web."
       },
-      "whaleConfirmed": {
-        "name": "whale-confirmed",
-        "description": "High-conviction ET le smart money bouge dans la même direction. Le tier le plus rare — et le hit rate le plus haut."
+      "calls": {
+        "name": "calls inscrits",
+        "value": "184k+",
+        "description": "Chaque prédiction notée. Filtrez par chaîne, horizon ou tier — le même chiffre que vous calculeriez vous-même."
       },
-      "tracked": {
-        "name": "tracked",
-        "description": "Passe tous les filtres, juste sous les tiers du haut. Reste dans le pool strict qui décide du win rate public."
+      "chains": {
+        "name": "chaînes en direct",
+        "value": "11",
+        "description": "Solana, TON, Base, Arbitrum, Ethereum et six autres. Un seul moteur pour toutes."
       },
-      "advisory": {
-        "name": "advisory",
-        "description": "Ne passe que les filtres légers. Hors du pool strict — mais quand même résolue, notée, et nourrit le moteur."
+      "hidden": {
+        "name": "cachés",
+        "value": "0",
+        "description": "Wins et misses, les deux sortent. Aucun cherry-picking. Aucune retouche a posteriori."
       }
     }
   },
   "ctaBlock": {
-    "eyebrow": "commencez avec un appel",
-    "title": "Voyez le trade avant qu'il n'arrive.",
-    "body": "Ouvrez le bot, demandez sur n'importe quel token, regardez l'appel se résoudre. S'il rate, le suivant est plus tranchant. Les reçus s'accumulent.",
+    "eyebrow": "commencez avec un call",
+    "title": "Arrête de deviner. Commence à tracker.",
+    "body": "Ouvrez Vizzor dans Telegram. Tier gratuit. Sans carte. Sans KYC. Lancez un call, regardez-le se résoudre, voyez le reçu atterrir dans le ledger public.",
     "ctaTelegram": "Ouvrir dans Telegram",
     "ctaCli": "Installer le CLI",
-    "manifesto": "Lire le manifeste →"
+    "manifesto": "Lire le manifeste"
   },
   "languageSwitch": {
     "label": "Changer de langue",
