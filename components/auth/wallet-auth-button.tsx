@@ -51,10 +51,17 @@ interface WalletAuthButtonProps {
    *  provider tree (sign-in flow available). When false, only shows
    *  the badge if already signed in. */
   hasProvider?: boolean;
+  /** Force the selector-modal UX even when an outer wallet provider is
+   *  mounted (e.g. the in-composer Connect-wallet button on /predict).
+   *  The modal then skips its own inner LazyWalletAdapter mount so it
+   *  shares the host's provider context — preventing the dual-provider
+   *  stall where Phantom never pops on connect. */
+  useModal?: boolean;
 }
 
 export function WalletAuthButton({
   hasProvider = false,
+  useModal = false,
 }: WalletAuthButtonProps) {
   const t = useTranslations('auth');
   const { data, mutate } = useSWR<AuthState>('/api/auth/session', fetcher, {
@@ -73,16 +80,18 @@ export function WalletAuthButton({
     }} />;
   }
 
-  if (!hasProvider) {
-    // No wallet provider on this route. The Solana adapter bundle is
-    // intentionally only loaded on /predict and /pay to keep marketing
-    // pages light. So instead of routing immediately, we open the
-    // WalletSelectorModal which lets the user pick a provider; each
-    // option then deep-routes to the page where the adapter (Solana or
-    // TON) actually lives, with a `?connect=<id>` hint the destination
-    // route consumes to auto-fire the connect flow.
+  if (!hasProvider || useModal) {
+    // Two cases land here:
+    //   1. The host page has no wallet provider mounted (navbar on
+    //      marketing pages). The modal mounts its own adapter.
+    //   2. The host page DOES have a provider (e.g. /predict) but the
+    //      caller explicitly asked for the modal UX. The modal then
+    //      shares the host provider via hasOuterProvider=true.
     return (
-      <ProviderlessConnect label={t('connect')} />
+      <ProviderlessConnect
+        label={t('connect')}
+        hasOuterProvider={hasProvider}
+      />
     );
   }
 
@@ -399,7 +408,13 @@ function capitalize(s: string): string {
 
 /* ────────────── providerless connect (opens selector modal) ────────────── */
 
-function ProviderlessConnect({ label }: { label: string }) {
+function ProviderlessConnect({
+  label,
+  hasOuterProvider = false,
+}: {
+  label: string;
+  hasOuterProvider?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -438,7 +453,11 @@ function ProviderlessConnect({ label }: { label: string }) {
           "
         />
       </button>
-      <WalletSelectorModal open={open} onClose={() => setOpen(false)} />
+      <WalletSelectorModal
+        open={open}
+        onClose={() => setOpen(false)}
+        hasOuterProvider={hasOuterProvider}
+      />
     </>
   );
 }

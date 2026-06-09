@@ -117,11 +117,22 @@ const SUCCESS_HOLD_MS = 1400;
 export interface WalletSelectorModalProps {
   open: boolean;
   onClose: () => void;
+  /**
+   * When true, an outer Solana wallet-adapter provider is already
+   * mounted by the host page (e.g. `/predict`). The modal then renders
+   * `<WalletConnectFlow>` directly instead of wrapping it in its own
+   * `<LazyWalletAdapter>`. Two nested providers cause Phantom's
+   * `connect()` to land in a different context than the one
+   * autoConnect already touched on the outer provider — the extension
+   * popup never appears. Skipping the inner mount fixes this.
+   */
+  hasOuterProvider?: boolean;
 }
 
 export function WalletSelectorModal({
   open,
   onClose,
+  hasOuterProvider = false,
 }: WalletSelectorModalProps) {
   const t = useTranslations('auth');
   const router = useRouter();
@@ -312,21 +323,29 @@ export function WalletSelectorModal({
         {showLoading && selectedProvider && (
           <>
             <LoadingView phase={phase} option={selectedOption} />
-            {/* The wallet adapter and ConnectFlow mount here. The
-                adapter chunk is loaded on demand, so the user only
-                pays the bundle cost once they actually pick a wallet.
-                `key={attempt}` force-remounts on retry.
-                `autoConnect={false}` — the connect flow drives the
-                connect call itself so we can catch errors instead of
-                letting them surface as unhandled promise rejections. */}
-            <LazyWalletAdapter autoConnect={false}>
+            {/* Connect flow. When the host page already mounts its own
+                Solana provider (e.g. `/predict`), skip the inner
+                `<LazyWalletAdapter>` to avoid two nested provider
+                trees — the cause of Phantom hanging on
+                "Open Phantom to approve" without the extension ever
+                popping up. */}
+            {hasOuterProvider ? (
               <LazyConnectFlow
                 key={attempt}
                 providerId={selectedProvider}
                 onStatus={handleStatus}
                 onError={handleError}
               />
-            </LazyWalletAdapter>
+            ) : (
+              <LazyWalletAdapter autoConnect={false}>
+                <LazyConnectFlow
+                  key={attempt}
+                  providerId={selectedProvider}
+                  onStatus={handleStatus}
+                  onError={handleError}
+                />
+              </LazyWalletAdapter>
+            )}
           </>
         )}
 
