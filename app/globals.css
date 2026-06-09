@@ -17,6 +17,7 @@
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-border: var(--border);
+  --color-border-hi: var(--border-hi);
   --color-fg: var(--fg);
   --color-fg-2: var(--fg-2);
   --color-fg-3: var(--fg-3);
@@ -51,44 +52,49 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, .dark, .dark *));
 
 /*
- * Vizzor goes strict black-and-white. We keep the historical color
- * token names — `--accent`, `--gold`, `--whale`, `--danger` — because
- * every component reads them, but every one now resolves to a value
- * inside the neutral scale that flips correctly between light and
- * dark mode. No green, no orange, no blue, no red. The only emphasis
- * comes from inversion (`bg-fg / text-bg`) or contrast steps inside
- * the fg / fg-2 / fg-3 ramp.
+ * Vizzor Terminal aesthetic — strict monochrome edition.
  *
- * Why redefine instead of search-and-replace every callsite: every
- * future component that reaches for the token gets the right value
- * automatically. There is one source of truth.
+ * The chromatic experiment (mint/gold/whale accents) was rolled back per
+ * user direction: the site reads ONLY in the neutral scale. The terminal
+ * feel still comes from mono typography, hairline borders, vt-brackets,
+ * scanline overlays, GSAP/3D moments — none of which need color.
+ *
+ * Token names are kept (`--accent`, `--gold`, `--whale`, `--danger`)
+ * because every component already reaches for them; aliasing them to
+ * the neutral scale propagates the policy site-wide without callsite
+ * churn. The bright-on-dark / dark-on-light contrast does the work that
+ * a color accent used to do (selections, focus rings, CTA buttons).
+ *
+ * Direction tokens (`--up`, `--down`) are the one scoped exception: they
+ * encode functional information for ticker scans and pair with ▲/▼
+ * glyphs so colorblind users still get the signal without color. They
+ * are NEVER used as decoration.
  */
 
 :root {
-  --bg: #fafaf7;
-  --surface: #ffffff;
-  --surface-2: #f5f4ef;
-  --border: #e8e7e0;
-  --fg: #0a0a0a;
-  --fg-2: #52525b;
-  --fg-3: #737373;
+  --bg: #F4F5F0;
+  --surface: #FFFFFF;
+  --surface-2: #ECEDE7;
+  --border: #D9DAD2;
+  --border-hi: rgba(10, 11, 15, 0.18);
+  --fg: #0A0B0F;
+  --fg-2: #3F4654;
+  --fg-3: #6E7585;
 
-  /* Token aliases — all collapsed to the neutral scale. */
+  /* All "color" tokens collapse to the neutral scale. The visual hit
+   * comes from inversion (bg-fg / text-bg), not hue. */
   --accent: var(--fg);
   --accent-fg: var(--bg);
-  --danger: var(--fg);
-  --gold: var(--fg-2);
+  --gold: var(--fg);
   --whale: var(--fg-2);
+  --danger: var(--fg);
 
-  /* Direction tokens — the one scoped exception to strict monochrome.
-   * Price-change direction is a functional signal, not decoration; an
-   * up arrow that reads identical to a down arrow fails colorblind
-   * users and breaks the at-a-glance scan a ticker is built for. We
-   * pair these with ▲/▼ glyphs so the signal is still legible without
-   * color (AA). Tones are deep-saturated rather than retail-bright so
-   * they sit naturally next to the neutral palette. */
+  /* Direction tokens — scoped a11y exception, used only with ▲/▼. */
   --up: #15803d;
   --down: #b91c1c;
+
+  /* Scanline overlay tint — achromatic, derived from fg. */
+  --scan: rgba(10, 11, 15, 0.04);
 
   --code-bg: #0a0a0a;
   --code-fg: #e8e8e8;
@@ -97,25 +103,26 @@
 }
 
 [data-theme='dark'] {
-  --bg: #0a0a0b;
-  --surface: #111114;
-  --surface-2: #17171b;
-  --border: #23232a;
-  --fg: #f5f5f2;
-  --fg-2: #a1a1aa;
-  --fg-3: #71717a;
+  --bg: #0A0B0F;
+  --surface: #11141B;
+  --surface-2: #161A23;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-hi: rgba(255, 255, 255, 0.16);
+  --fg: #E6EAF0;
+  --fg-2: #8A93A2;
+  --fg-3: #5A6270;
 
   --accent: var(--fg);
   --accent-fg: var(--bg);
-  --danger: var(--fg);
-  --gold: var(--fg-2);
+  --gold: var(--fg);
   --whale: var(--fg-2);
+  --danger: var(--fg);
 
-  /* Direction tokens — lifted in dark mode for legible contrast on
-   * the near-black surface, still muted enough to read as financial
-   * data rather than retail bling. */
+  /* Direction tokens — lifted for dark-mode contrast. */
   --up: #4ade80;
   --down: #f87171;
+
+  --scan: rgba(255, 255, 255, 0.04);
 
   --code-bg: #000000;
   --code-fg: #e8e8e8;
@@ -185,6 +192,69 @@
 
   .hairline {
     border-color: var(--border);
+  }
+
+  /*
+   * Terminal corner brackets — Bloomberg-style L-shaped marks at the
+   * top-left + bottom-right of a tile. Uses currentColor with --accent
+   * as the default tint. Caller adds `relative` to the wrapper so the
+   * absolute pseudo-elements anchor correctly.
+   */
+  .vt-bracket {
+    position: relative;
+    color: var(--accent);
+  }
+  .vt-bracket::before,
+  .vt-bracket::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-color: currentColor;
+    border-style: solid;
+    pointer-events: none;
+  }
+  .vt-bracket::before {
+    top: 0;
+    left: 0;
+    border-width: 1px 0 0 1px;
+  }
+  .vt-bracket::after {
+    right: 0;
+    bottom: 0;
+    border-width: 0 1px 1px 0;
+  }
+
+  /*
+   * Scanline overlay — repeating linear gradient mimicking CRT phosphor.
+   * Caller wraps a relative-positioned section and drops a
+   * <ScanlineOverlay /> inside. Reduced motion strips the gradient
+   * entirely so users opting out of decoration get a clean surface.
+   */
+  .vt-scanlines {
+    background-image: repeating-linear-gradient(
+      transparent 0,
+      transparent 2px,
+      var(--scan) 3px
+    );
+    pointer-events: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .vt-scanlines {
+      background-image: none;
+    }
+  }
+
+  /*
+   * Terminal glow rings — a 1px crisp outline plus a soft outer halo.
+   * Used to mark a "hot" / live / selected primitive without changing
+   * its dimensions. Mint = signal, gold = premium.
+   */
+  .vt-glow-mint {
+    box-shadow: 0 0 0 1px var(--accent), 0 0 24px -8px var(--accent);
+  }
+  .vt-glow-gold {
+    box-shadow: 0 0 0 1px var(--gold), 0 0 24px -8px var(--gold);
   }
 
   .pulse-dot::after {

@@ -36,6 +36,12 @@ export interface GsapHeadlineProps {
   titleId?: string;
   /** Heading level — defaults to h2; the hero uses h1. */
   as?: 'h1' | 'h2';
+  /**
+   * When true, layers a 200ms 1px RGB-split on initial reveal — terminal
+   * aesthetic. No-op under reduced motion. Defaults to false, preserving
+   * every current call site exactly.
+   */
+  glitch?: boolean;
 }
 
 function splitTitleWords(node: React.ReactNode): string[] | null {
@@ -54,6 +60,7 @@ export function GsapHeadline({
   className,
   titleId,
   as = 'h2',
+  glitch = false,
 }: GsapHeadlineProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const eyebrowRef = useRef<HTMLDivElement | null>(null);
@@ -134,6 +141,25 @@ export function GsapHeadline({
             },
             eyebrowTargets.length ? '-=0.3' : 0,
           );
+
+          // Glitch: short RGB-split overlay on the heading element itself
+          // (we tint the parent h-tag so all word spans inherit). Drop it
+          // back to none after 200ms so the heading settles crisp.
+          if (glitch && titleEl) {
+            tl.set(
+              titleEl,
+              {
+                textShadow:
+                  '1px 0 0 var(--accent), -1px 0 0 var(--danger)',
+              },
+              '-=0.1',
+            )
+              .set(
+                titleEl,
+                { textShadow: 'none' },
+                '+=0.2',
+              );
+          }
         }
         if (subTargets.length) {
           tl.to(
@@ -165,7 +191,7 @@ export function GsapHeadline({
 
       return () => io.disconnect();
     },
-    { scope: wrapRef, dependencies: [titleWords?.join(' ') ?? ''] },
+    { scope: wrapRef, dependencies: [titleWords?.join(' ') ?? '', glitch] },
   );
 
   const TitleTag = as;
