@@ -73,10 +73,12 @@ const WALLET_NAMES: Record<SolanaProviderId, string | null> = {
 //      download URL — exactly the bug a user reported on Brave.
 //   2. Some extensions register late after window.load (cold cache,
 //      service-worker spin-up).
-// 3s is still responsive when the wallet truly isn't installed
-// (the install URL just opens a beat later) and rescues the Brave
-// case without further heuristics.
-const READY_TIMEOUT_MS = 3000;
+// Bumped to 6s (was 3s) because subsequent same-tab attempts also
+// race against Wallet Standard re-registration after a disconnect —
+// Phantom briefly drops off the registry between attempts and 3s
+// wasn't always enough. 6s is still well under any user's patience
+// threshold when the wallet really isn't installed.
+const READY_TIMEOUT_MS = 6000;
 
 const INSTALL_URLS: Record<SolanaProviderId, string | null> = {
   phantom: 'https://phantom.app/download',
@@ -220,31 +222,42 @@ export function WalletConnectFlow({
       ) {
         startedRef.current = true;
         onStatus('connecting');
-        try {
-          // Just select — the second effect below handles the actual
-          // `connect()` call once `wallet` settles in the context.
-          // We intentionally do NOT rely on the provider's autoConnect
-          // here because it issues a `{ silent: true }` connect that
-          // can throw `WalletConnectionError: Unexpected error` for
-          // untrusted wallets (every first-time visitor).
-          select(candidate.adapter.name as WalletName);
-        } catch (e) {
-          void fail('user_rejected', (e as Error).message);
-        }
+        void (async () => {
+          try {
+            // If we're already holding a stale connection from a prior
+            // attempt (same page, no reload), the adapter's `connected`
+            // state is true and Step 2's `connect()` would short-circuit
+            // — Phantom's popup would never re-pop. Disconnect first so
+            // the next `connect()` is a fresh handshake the extension
+            // actually surfaces.
+            if (connected) {
+              try {
+                await disconnect();
+              } catch {
+                // ignored — even if disconnect fails, we still want to
+                // try select+connect with whatever state the adapter
+                // reports.
+              }
+            }
+            // Just select — Step 2 below handles the actual `connect()`
+            // call once `wallet` settles in the context. We intentionally
+            // do NOT rely on the provider's autoConnect here because it
+            // issues a `{ silent: true }` connect that can throw
+            // `WalletConnectionError: Unexpected error` for untrusted
+            // wallets (every first-time visitor).
+            select(candidate.adapter.name as WalletName);
+          } catch (e) {
+            void fail('user_rejected', (e as Error).message);
+          }
+        })();
         return;
       }
       if (state === WalletReadyState.NotDetected) {
-        startedRef.current = true;
-        // On mobile, "not detected" means there's no extension to detect.
-        // Hand off to the wallet app via its universal link — when the
-        // user returns the page reloads inside the wallet's webview
-        // with the provider present.
-        if (tryMobileHandoff(providerId)) return;
-        const url = INSTALL_URLS[providerId];
-        if (url && typeof window !== 'undefined') {
-          window.open(url, '_blank', 'noopener,noreferrer');
-        }
-        void fail('wallet_not_installed', targetName);
+        // NotDetected on a subsequent attempt in the same tab is almost
+        // always Wallet Standard discovery being slow — Phantom briefly
+        // unregisters between attempts. Don't redirect to the install
+        // page yet; let the timeout below run and re-evaluate. Only the
+        // explicit timeout path opens the install URL.
         return;
       }
       // state === Unsupported (e.g. SSR / non-browser env) — fall
@@ -270,7 +283,7 @@ export function WalletConnectFlow({
     }, READY_TIMEOUT_MS);
 
     return () => window.clearTimeout(timer);
-  }, [providerId, wallets, select, setVisible, onStatus, fail, tryMobileHandoff]);
+  }, [providerId, wallets, select, setVisible, onStatus, fail, tryMobileHandoff, connected, disconnect]);
 
   // Step 2 — once `select()` has settled and `wallet` is non-null,
   // call `connect()` explicitly. The provider's `autoConnect` is OFF
