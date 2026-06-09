@@ -8,6 +8,7 @@
 import { setRequestLocale, getTranslations } from 'next-intl/server';
 import type { Metadata } from 'next';
 import { PredictShell } from '@/components/predict/predict-shell';
+import { getTicker } from '@/lib/snapshot';
 
 export async function generateMetadata({
   params,
@@ -30,9 +31,12 @@ export default async function PredictPage({
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
+  // Snapshot ticker — feeds the welcome state's live ticker cards.
+  // Same source as the marquee in the layout chrome.
+  const tickers = getTicker();
   return (
     <main className="relative isolate bg-[var(--bg)]">
-      <PredictShell />
+      <PredictShell tickers={tickers} />
     </main>
   );
 }
