@@ -1,28 +1,53 @@
 /**
- * GET /api/quota — current free-tier state for the active browser.
+ * GET /api/quota — current free-tier state for the active wallet.
  *
- * Returns `{ used, limit, remaining, exhausted, subscribed, subscription }`
- * so the chat sidebar can render the right state (free / paywall /
- * subscribed) without also reading the HttpOnly quota cookie directly.
+ * v0.3.0: the gate moved from a browser cookie to a wallet-bound DB
+ * counter. The client now gets one of three shapes back:
+ *
+ *   1. No SIWS session    → { connected: false, limit, used: 0 }
+ *   2. Authenticated free → { connected: true, used, limit, remaining,
+ *                             exhausted, subscribed: false, ... }
+ *   3. Authenticated sub  → as above plus subscribed: true and the
+ *                             subscription block. Counter is informational
+ *                             only; subscribers bypass the gate.
  */
 
 import { NextResponse } from 'next/server';
-import { readQuota } from '@/lib/quota';
-import { getSubscriptionForActiveSession } from '@/lib/payment/auth-session';
+import { readWalletQuota } from '@/lib/quota';
+import {
+  getActiveSession,
+  getSubscriptionForActiveSession,
+} from '@/lib/payment/auth-session';
+import { freePredictions } from '@/lib/feature-flags';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function GET() {
-  const quota = await readQuota();
+  const session = await getActiveSession();
+  if (!session) {
+    return NextResponse.json(
+      {
+        connected: false,
+        used: 0,
+        limit: freePredictions(),
+        remaining: freePredictions(),
+        exhausted: false,
+        subscribed: false,
+        subscription: null,
+      },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
+  const quota = readWalletQuota(session.wallet);
   const sub = await getSubscriptionForActiveSession();
   const subscribed = !!sub;
+
   return NextResponse.json(
     {
+      connected: true,
       ...quota,
-      // When the visitor is signed in with a wallet that has an
-      // active subscription, the free-tier quota becomes irrelevant:
-      // /api/predict bypasses the gate for subscribed wallets.
       subscribed,
       subscription: sub
         ? {
