@@ -317,7 +317,7 @@ export function AccountProfile({
         )}
 
         {/* ─── Activity ─── */}
-        <section className="flex flex-col gap-4">
+        <section id="payments" className="flex flex-col gap-4 scroll-mt-20">
           <header className="flex items-baseline justify-between">
             <h2 className="text-[17px] font-semibold tracking-tight text-[var(--fg)]">
               {t('activity.title')}

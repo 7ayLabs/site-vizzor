@@ -281,13 +281,16 @@
         "chat": "Run",
         "library": "Receipts",
         "libraryHint": "/precisions",
+        "receipts": "Receipts",
         "tools": "Tools",
         "toolsHint": "/help"
       },
       "recents": {
-        "label": "Recent",
+        "label": "Recent chats",
         "clear": "Clear recent",
-        "empty": "No runs yet."
+        "delete": "Delete chat",
+        "empty": "No chats yet.",
+        "signInPrompt": "Sign in with your wallet to keep your chat history."
       },
       "welcome": {
         "eyebrow": "live · tracked",
@@ -321,6 +324,25 @@
       "wr": "Win rate",
       "watch": "Watch",
       "subscribed": "Subscribed"
+    },
+    "settings": {
+      "eyebrow": "Preferences",
+      "title": "Settings",
+      "close": "Close",
+      "theme": {
+        "label": "Theme",
+        "light": "Light",
+        "dark": "Dark",
+        "system": "System"
+      },
+      "language": {
+        "label": "Language"
+      },
+      "privacy": {
+        "label": "This device",
+        "clearLocal": "Clear local data",
+        "signOut": "Sign out"
+      }
     }
   },
   "hero": {

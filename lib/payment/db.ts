@@ -282,6 +282,39 @@ function runV020Migrations(db: DB): void {
       last_used_at    INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000)
     );
   `);
+
+  /* v0.3.0 — server-persisted chat conversations.
+   *
+   * Each row is one chat thread owned by a SIWS-authenticated wallet.
+   * Title is derived from the first user message (truncated). The
+   * messages live in a child table joined by `conversation_id`.
+   * Ordering for the sidebar list is `updated_at DESC` so the chat
+   * the user touched most recently floats to the top.
+   *
+   * Cascade delete: dropping a conversation drops all its messages
+   * (foreign_keys pragma is ON above). */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS conversations (
+      id              TEXT PRIMARY KEY,
+      wallet_address  TEXT NOT NULL,
+      title           TEXT NOT NULL,
+      created_at      INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000),
+      updated_at      INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000)
+    );
+    CREATE INDEX IF NOT EXISTS idx_conversations_wallet_updated
+      ON conversations(wallet_address, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS conversation_messages (
+      id              TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL,
+      role            TEXT NOT NULL,
+      content         TEXT NOT NULL,
+      created_at      INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000),
+      FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_messages_conversation_created
+      ON conversation_messages(conversation_id, created_at);
+  `);
 }
 
 export function getDb(): DB {
@@ -814,4 +847,144 @@ export function getRateCache(token: string): RateCacheRow | null {
     .prepare(`SELECT * FROM rate_cache WHERE token = ?`)
     .get(token) as RateCacheRow | undefined;
   return row ?? null;
+}
+
+/* ------------------------------------------------------------------ *\
+ * Conversations — server-persisted /predict chat threads.
+\* ------------------------------------------------------------------ */
+
+export interface ConversationRow {
+  id: string;
+  wallet_address: string;
+  title: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface ConversationMessageRow {
+  id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: number;
+}
+
+const TITLE_FALLBACK = 'New chat';
+const TITLE_MAX_CHARS = 80;
+
+export function deriveConversationTitle(firstUserMessage: string): string {
+  const trimmed = firstUserMessage.trim().replace(/\s+/g, ' ');
+  if (!trimmed) return TITLE_FALLBACK;
+  if (trimmed.length <= TITLE_MAX_CHARS) return trimmed;
+  return trimmed.slice(0, TITLE_MAX_CHARS - 1).trimEnd() + '…';
+}
+
+export function createConversation(opts: {
+  id: string;
+  wallet: string;
+  title?: string;
+}): ConversationRow {
+  const now = Date.now();
+  const row: ConversationRow = {
+    id: opts.id,
+    wallet_address: opts.wallet,
+    title: opts.title?.trim() || TITLE_FALLBACK,
+    created_at: now,
+    updated_at: now,
+  };
+  getDb()
+    .prepare(
+      `INSERT INTO conversations (id, wallet_address, title, created_at, updated_at)
+       VALUES (@id, @wallet_address, @title, @created_at, @updated_at)`,
+    )
+    .run(row);
+  return row;
+}
+
+export function listConversationsForWallet(
+  wallet: string,
+  limit = 50,
+): ConversationRow[] {
+  return getDb()
+    .prepare(
+      `SELECT * FROM conversations
+        WHERE wallet_address = ?
+        ORDER BY updated_at DESC
+        LIMIT ?`,
+    )
+    .all(wallet, limit) as ConversationRow[];
+}
+
+export function getConversationForWallet(
+  id: string,
+  wallet: string,
+): ConversationRow | null {
+  const row = getDb()
+    .prepare(
+      `SELECT * FROM conversations WHERE id = ? AND wallet_address = ?`,
+    )
+    .get(id, wallet) as ConversationRow | undefined;
+  return row ?? null;
+}
+
+export function listMessagesForConversation(
+  conversationId: string,
+): ConversationMessageRow[] {
+  return getDb()
+    .prepare(
+      `SELECT * FROM conversation_messages
+        WHERE conversation_id = ?
+        ORDER BY created_at ASC, id ASC`,
+    )
+    .all(conversationId) as ConversationMessageRow[];
+}
+
+export function appendConversationMessage(opts: {
+  id: string;
+  conversationId: string;
+  role: 'user' | 'assistant';
+  content: string;
+}): void {
+  const now = Date.now();
+  const db = getDb();
+  const tx = db.transaction(() => {
+    db.prepare(
+      `INSERT INTO conversation_messages (id, conversation_id, role, content, created_at)
+       VALUES (@id, @conversation_id, @role, @content, @created_at)`,
+    ).run({
+      id: opts.id,
+      conversation_id: opts.conversationId,
+      role: opts.role,
+      content: opts.content,
+      created_at: now,
+    });
+    db.prepare(
+      `UPDATE conversations SET updated_at = ? WHERE id = ?`,
+    ).run(now, opts.conversationId);
+  });
+  tx();
+}
+
+export function updateConversationTitle(
+  conversationId: string,
+  wallet: string,
+  title: string,
+): void {
+  const clean = title.trim() || TITLE_FALLBACK;
+  getDb()
+    .prepare(
+      `UPDATE conversations SET title = ?, updated_at = ?
+        WHERE id = ? AND wallet_address = ?`,
+    )
+    .run(clean, Date.now(), conversationId, wallet);
+}
+
+export function deleteConversationForWallet(
+  id: string,
+  wallet: string,
+): boolean {
+  const r = getDb()
+    .prepare(`DELETE FROM conversations WHERE id = ? AND wallet_address = ?`)
+    .run(id, wallet);
+  return r.changes > 0;
 }

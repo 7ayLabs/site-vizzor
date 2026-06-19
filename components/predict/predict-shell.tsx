@@ -48,24 +48,29 @@ import { ChatBubble } from '@/components/predict/chat-bubble';
 import { CoinIcon } from '@/components/ui/coin-icon';
 import { Link } from '@/i18n/navigation';
 import { WalletAuthButton } from '@/components/auth/wallet-auth-button';
+import { useRouter } from '@/i18n/navigation';
+import { useLocale } from 'next-intl';
 import { cn } from '@/lib/utils';
-import type { TickerEntry } from '@/lib/types';
-import { loadRecents, pushRecent, clearRecents } from './recents-store';
+import {
+  useConversations,
+  type ConversationSummary,
+} from './use-conversations';
 import {
   IconChat,
   IconClose,
   IconHelp,
   IconHistory,
-  IconLibrary,
   IconLock,
   IconMenu,
   IconPaperclip,
   IconPlus,
+  IconReceipts,
   IconSend,
   IconSettings,
   IconTools,
 } from './predict-icons';
 import { SlashPalette } from './slash-palette';
+import { SettingsSheet } from './settings-sheet';
 
 const SolanaWalletAdapter = dynamic(
   () => import('@/components/wallet/wallet-provider'),
@@ -93,27 +98,9 @@ const jsonFetcher = <T,>(url: string): Promise<T> =>
 const IS_DEV = process.env.NODE_ENV !== 'production';
 const MAX_CHARS = 3000;
 
-/**
- * Polymarket-style prediction CTAs. Each card opens a directional
- * call on the named symbol over the given horizon. The coin icon
- * pulls from CoinCap's CDN via `<CoinIcon>`.
- */
-interface QuickAction {
-  symbol: string;
-  name: string;
-  horizon: string;
-}
-
-const QUICK_ACTIONS: ReadonlyArray<QuickAction> = [
-  { symbol: 'BTC', name: 'Bitcoin', horizon: '4h' },
-  { symbol: 'ETH', name: 'Ethereum', horizon: '1h' },
-  { symbol: 'SOL', name: 'Solana', horizon: '1d' },
-  { symbol: 'TON', name: 'Toncoin', horizon: '4h' },
-];
-
 /* ─────────────────────────── Shell ─────────────────────────── */
 
-export function PredictShell({ tickers }: { tickers: readonly TickerEntry[] }) {
+export function PredictShell() {
   // autoConnect intentionally OFF.
   //
   // The wallet-adapter library's autoConnect=true issues a silent
@@ -129,19 +116,30 @@ export function PredictShell({ tickers }: { tickers: readonly TickerEntry[] }) {
   // honouring that contract, so autoConnect stays off here.
   return (
     <SolanaWalletAdapter autoConnect={false}>
-      <PredictShellInner tickers={tickers} />
+      <PredictShellInner />
     </SolanaWalletAdapter>
   );
 }
 
-function PredictShellInner({ tickers }: { tickers: readonly TickerEntry[] }) {
+function PredictShellInner() {
   const t = useTranslations('predict');
+  const router = useRouter();
+  const locale = useLocale();
 
   const [input, setInput] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [recents, setRecents] = useState<ReturnType<typeof loadRecents>>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(
+    null,
+  );
+  const [slashOpen, setSlashOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // Tracks which message ids we've already POSTed to
+  // /api/conversations/[id]/messages so a re-render of useChat state
+  // doesn't double-persist. Pre-populated when loading a past chat so
+  // its existing rows aren't re-saved as if they were new turns.
+  const persistedRef = useRef<Set<string>>(new Set());
 
   // Persist sidebar state — keep it across reloads the same way Claude
   // and ChatGPT do.
@@ -176,6 +174,15 @@ function PredictShellInner({ tickers }: { tickers: readonly TickerEntry[] }) {
   const composerLocked =
     !signedIn || (!!quota?.exhausted && !quota?.subscribed);
 
+  const {
+    conversations,
+    createConversation,
+    loadConversation,
+    deleteConversation,
+    persistMessage,
+    bumpRecency,
+  } = useConversations({ enabled: signedIn });
+
   const transport = useMemo(
     () => new DefaultChatTransport({ api: '/api/predict' }),
     [],
@@ -187,10 +194,6 @@ function PredictShellInner({ tickers }: { tickers: readonly TickerEntry[] }) {
       void mutateQuota();
     },
   });
-
-  useEffect(() => {
-    setRecents(loadRecents());
-  }, []);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -218,12 +221,28 @@ function PredictShellInner({ tickers }: { tickers: readonly TickerEntry[] }) {
     (text: string): void => {
       const trimmed = text.trim();
       if (!trimmed || isStreaming || composerLocked) return;
+      // Mint a conversation row before sending so the very first
+      // user message lands inside a persisted thread. The new id is
+      // reflected in `activeConversationId` immediately; the
+      // persistence effect below picks it up on the next render.
+      if (signedIn && !activeConversationId) {
+        void (async () => {
+          const conv = await createConversation(trimmed);
+          if (conv) setActiveConversationId(conv.id);
+        })();
+      }
       sendMessage({ text: trimmed });
-      setRecents(pushRecent(trimmed));
       setInput('');
       setDrawerOpen(false);
     },
-    [isStreaming, composerLocked, sendMessage],
+    [
+      isStreaming,
+      composerLocked,
+      sendMessage,
+      signedIn,
+      activeConversationId,
+      createConversation,
+    ],
   );
 
   const onSubmit = (e: FormEvent<HTMLFormElement>): void => {
@@ -234,14 +253,118 @@ function PredictShellInner({ tickers }: { tickers: readonly TickerEntry[] }) {
   const onNewChat = (): void => {
     setMessages([]);
     setInput('');
+    setActiveConversationId(null);
+    persistedRef.current = new Set();
     setDrawerOpen(false);
     inputRef.current?.focus();
   };
 
-  const onClearRecents = (): void => {
-    clearRecents();
-    setRecents([]);
-  };
+  /**
+   * Replace the current thread with a previously-persisted one.
+   * `setMessages` resets useChat's internal state to the loaded
+   * history; pre-populating `persistedRef` with the loaded ids stops
+   * the persistence effect from re-saving them as if they were new
+   * turns.
+   */
+  const onPickConversation = useCallback(
+    async (id: string): Promise<void> => {
+      const loaded = await loadConversation(id);
+      if (!loaded) return;
+      setActiveConversationId(loaded.conversation.id);
+      const restored = loaded.messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        parts: [{ type: 'text' as const, text: m.content }],
+      }));
+      persistedRef.current = new Set(restored.map((m) => m.id));
+      setMessages(restored);
+      setDrawerOpen(false);
+    },
+    [loadConversation, setMessages],
+  );
+
+  const onDeleteConversation = useCallback(
+    async (id: string): Promise<void> => {
+      const ok = await deleteConversation(id);
+      if (!ok) return;
+      if (id === activeConversationId) {
+        setMessages([]);
+        setActiveConversationId(null);
+        persistedRef.current = new Set();
+      }
+    },
+    [deleteConversation, activeConversationId, setMessages],
+  );
+
+  /**
+   * Persist new user + assistant messages exactly once each.
+   * Runs whenever the messages array changes; the ref guard short-
+   * circuits anything we've already saved (or loaded from history).
+   * The assistant message only gets a non-empty `text` once streaming
+   * is done, so this naturally fires on the right tick.
+   */
+  useEffect(() => {
+    if (!signedIn || !activeConversationId) return;
+    let bumped = false;
+    for (const m of messages) {
+      if (persistedRef.current.has(m.id)) continue;
+      if (m.role !== 'user' && m.role !== 'assistant') continue;
+      const text = m.parts
+        .filter((p) => p.type === 'text')
+        .map((p) => ('text' in p ? (p.text ?? '') : ''))
+        .join('');
+      // Assistant rows arrive in tiny deltas; wait until streaming
+      // completes before persisting so we save the final string, not
+      // the first 12 characters.
+      if (m.role === 'assistant' && (status === 'streaming' || status === 'submitted')) {
+        continue;
+      }
+      if (!text.trim()) continue;
+      persistedRef.current.add(m.id);
+      void persistMessage(activeConversationId, m.role, text);
+      bumped = true;
+    }
+    if (bumped) bumpRecency();
+  }, [
+    messages,
+    status,
+    signedIn,
+    activeConversationId,
+    persistMessage,
+    bumpRecency,
+  ]);
+
+  const onOpenTools = useCallback(() => {
+    setSlashOpen(true);
+    setDrawerOpen(false);
+  }, []);
+
+  const onOpenReceipts = useCallback(() => {
+    // typedRoutes doesn't yet know about hashes — cast through never.
+    router.push('/account#payments' as never);
+    setDrawerOpen(false);
+  }, [router]);
+
+  const onOpenSettings = useCallback(() => {
+    setSettingsOpen(true);
+    setDrawerOpen(false);
+  }, []);
+
+  const onSlashPick = useCallback(
+    (command: string): void => {
+      setSlashOpen(false);
+      // For commands that take no args, send immediately; otherwise
+      // prefill the composer so the user can finish the line.
+      const trimmed = command.trim();
+      if (/^\/[a-z]+(\s|$)/i.test(trimmed) && !trimmed.includes(' ')) {
+        submitPrompt(trimmed);
+      } else {
+        setInput((v) => (v ? `${v} ${trimmed}` : trimmed));
+        inputRef.current?.focus();
+      }
+    },
+    [submitPrompt],
+  );
 
   const onInlineReset = async (): Promise<void> => {
     const res = await fetch('/api/quota/reset', {
@@ -283,11 +406,14 @@ function PredictShellInner({ tickers }: { tickers: readonly TickerEntry[] }) {
         <LeftRail
           search={search}
           onSearch={setSearch}
-          recentsCount={recents.length}
-          recents={recents}
-          onPickRecent={(p) => submitPrompt(p)}
-          onClearRecents={onClearRecents}
+          conversations={conversations}
+          activeConversationId={activeConversationId}
+          onPickConversation={(id) => void onPickConversation(id)}
+          onDeleteConversation={(id) => void onDeleteConversation(id)}
           onNewChat={onNewChat}
+          onOpenTools={onOpenTools}
+          onOpenReceipts={onOpenReceipts}
+          onOpenSettings={onOpenSettings}
           signedIn={signedIn}
           wallet={auth?.wallet}
           quota={quota}
@@ -329,7 +455,7 @@ function PredictShellInner({ tickers }: { tickers: readonly TickerEntry[] }) {
             {!signedIn ? (
               <WalletGate />
             ) : messages.length === 0 ? (
-              <Welcome onPick={submitPrompt} tickers={tickers} />
+              <Welcome />
             ) : (
               <div className="mx-auto max-w-[860px] w-full px-4 sm:px-6 py-6 flex flex-col gap-6">
                 {messages.map((m) => (
@@ -394,17 +520,48 @@ function PredictShellInner({ tickers }: { tickers: readonly TickerEntry[] }) {
           onClose={() => setDrawerOpen(false)}
           search={search}
           onSearch={setSearch}
-          recentsCount={recents.length}
-          recents={recents}
-          onPickRecent={(p) => {
-            submitPrompt(p);
-            setDrawerOpen(false);
-          }}
-          onClearRecents={onClearRecents}
+          conversations={conversations}
+          activeConversationId={activeConversationId}
+          onPickConversation={(id) => void onPickConversation(id)}
+          onDeleteConversation={(id) => void onDeleteConversation(id)}
           onNewChat={onNewChat}
+          onOpenTools={onOpenTools}
+          onOpenReceipts={onOpenReceipts}
+          onOpenSettings={onOpenSettings}
           signedIn={signedIn}
           wallet={auth?.wallet}
           quota={quota}
+        />
+      )}
+
+      {slashOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center px-3 pt-[12vh] sm:pt-[18vh]"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('shell.nav.tools')}
+        >
+          <button
+            type="button"
+            aria-label={t('close')}
+            onClick={() => setSlashOpen(false)}
+            className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+          />
+          <div className="relative z-10 w-full max-w-[520px]">
+            <SlashPalette
+              query=""
+              onPick={onSlashPick}
+              onClose={() => setSlashOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {settingsOpen && (
+        <SettingsSheet
+          locale={locale}
+          signedIn={signedIn}
+          onClose={() => setSettingsOpen(false)}
         />
       )}
     </div>
@@ -510,29 +667,17 @@ function GatePerk({ label }: { label: string }) {
 
 /* ─────────────────────────── Left rail ─────────────────────────── */
 
-function LeftRail({
-  search,
-  onSearch,
-  recentsCount,
-  recents,
-  onPickRecent,
-  onClearRecents,
-  onNewChat,
-  signedIn,
-  wallet,
-  quota,
-  collapsed = false,
-  onToggleCollapse,
-  embedded = false,
-  className,
-}: {
+interface LeftRailProps {
   search: string;
   onSearch: (v: string) => void;
-  recentsCount: number;
-  recents: ReturnType<typeof loadRecents>;
-  onPickRecent: (prompt: string) => void;
-  onClearRecents: () => void;
+  conversations: ConversationSummary[];
+  activeConversationId: string | null;
+  onPickConversation: (id: string) => void;
+  onDeleteConversation: (id: string) => void;
   onNewChat: () => void;
+  onOpenTools: () => void;
+  onOpenReceipts: () => void;
+  onOpenSettings: () => void;
   signedIn: boolean;
   wallet: string | undefined;
   quota?: QuotaState;
@@ -543,17 +688,33 @@ function LeftRail({
    *  brand/toggle row so the chrome doesn't double up. */
   embedded?: boolean;
   className?: string;
-}) {
+}
+
+function LeftRail({
+  search,
+  onSearch,
+  conversations,
+  activeConversationId,
+  onPickConversation,
+  onDeleteConversation,
+  onNewChat,
+  onOpenTools,
+  onOpenReceipts,
+  onOpenSettings,
+  signedIn,
+  wallet,
+  quota,
+  collapsed = false,
+  onToggleCollapse,
+  embedded = false,
+  className,
+}: LeftRailProps) {
   const t = useTranslations('predict');
-  const filteredRecents = useMemo(
-    () =>
-      search.trim()
-        ? recents.filter((r) =>
-            r.prompt.toLowerCase().includes(search.trim().toLowerCase()),
-          )
-        : recents,
-    [recents, search],
-  );
+  const filteredConversations = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return conversations;
+    return conversations.filter((c) => c.title.toLowerCase().includes(q));
+  }, [conversations, search]);
 
   return (
     <aside
@@ -655,60 +816,83 @@ function LeftRail({
           <NavButton
             icon={<IconHistory size={collapsed ? 20 : 17} />}
             label={t('shell.recents.label')}
-            meta={recentsCount > 0 ? String(recentsCount) : undefined}
+            meta={conversations.length > 0 ? String(conversations.length) : undefined}
             collapsed={collapsed}
           />
           <NavButton
             icon={<IconTools size={collapsed ? 20 : 17} />}
             label={t('shell.nav.tools')}
+            onClick={onOpenTools}
             collapsed={collapsed}
           />
           <NavButton
-            icon={<IconLibrary size={collapsed ? 20 : 17} />}
-            label={t('shell.nav.library')}
-            meta={t('shell.nav.libraryHint')}
+            icon={<IconReceipts size={collapsed ? 20 : 17} />}
+            label={t('shell.nav.receipts')}
+            onClick={onOpenReceipts}
             collapsed={collapsed}
           />
         </nav>
 
-        {/* Recents */}
-        {!collapsed && recentsCount > 0 && (
+        {/* Recent chats — server-persisted threads scoped to the
+            signed-in wallet. Hidden in the collapsed gutter; the
+            count badge on the Recents NavButton above hints at it. */}
+        {!collapsed && (
           <div className="mt-5 flex flex-col gap-1">
             <div className="flex items-center justify-between px-3">
               <span className="text-[10.5px] uppercase tracking-[0.16em] text-[var(--fg-3)] font-semibold">
                 {t('shell.recents.label')}
               </span>
-              <button
-                type="button"
-                onClick={onClearRecents}
-                className="text-[10px] text-[var(--fg-3)] hover:text-[var(--fg)] transition-colors"
-              >
-                {t('shell.recents.clear')}
-              </button>
             </div>
-            <ul className="flex flex-col gap-0.5">
-              {filteredRecents.slice(0, 8).map((r) => (
-                <li key={r.id}>
-                  <button
-                    type="button"
-                    onClick={() => onPickRecent(r.prompt)}
-                    className={cn(
-                      'group w-full flex items-center gap-2 text-left',
-                      'px-3 py-1.5 rounded-md',
-                      'text-[12px] text-[var(--fg-2)] truncate',
-                      'hover:bg-[var(--surface-2)] hover:text-[var(--fg)]',
-                      'transition-colors',
-                    )}
-                    title={r.prompt}
-                  >
-                    <span aria-hidden className="text-[var(--fg-3)]">
-                      <IconDotSmall />
-                    </span>
-                    <span className="truncate">{r.prompt}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            {filteredConversations.length === 0 ? (
+              <p className="px-3 mt-1 text-[11.5px] text-[var(--fg-3)] leading-snug">
+                {signedIn
+                  ? t('shell.recents.empty')
+                  : t('shell.recents.signInPrompt')}
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-0.5">
+                {filteredConversations.slice(0, 12).map((c) => (
+                  <li key={c.id} className="group/row relative">
+                    <button
+                      type="button"
+                      onClick={() => onPickConversation(c.id)}
+                      className={cn(
+                        'group w-full flex items-center gap-2 text-left',
+                        'pl-3 pr-9 py-1.5 rounded-md',
+                        'text-[12px] truncate',
+                        'transition-colors',
+                        c.id === activeConversationId
+                          ? 'bg-[var(--surface-2)] text-[var(--fg)]'
+                          : 'text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]',
+                      )}
+                      title={c.title}
+                    >
+                      <span aria-hidden className="text-[var(--fg-3)]">
+                        <IconDotSmall />
+                      </span>
+                      <span className="truncate">{c.title}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteConversation(c.id);
+                      }}
+                      aria-label={t('shell.recents.delete')}
+                      className={cn(
+                        'absolute right-1 top-1/2 -translate-y-1/2',
+                        'inline-flex h-6 w-6 items-center justify-center rounded',
+                        'text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface)]',
+                        'opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100',
+                        'transition-opacity',
+                      )}
+                    >
+                      <IconClose size={11} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
       </div>
@@ -725,7 +909,12 @@ function LeftRail({
             : '-mx-4 px-4 py-3',
         )}
       >
-        <Identity signedIn={signedIn} wallet={wallet} collapsed={collapsed} />
+        <Identity
+          signedIn={signedIn}
+          wallet={wallet}
+          collapsed={collapsed}
+          onOpenSettings={onOpenSettings}
+        />
       </div>
     </aside>
   );
@@ -844,10 +1033,12 @@ function Identity({
   signedIn,
   wallet,
   collapsed = false,
+  onOpenSettings,
 }: {
   signedIn: boolean;
   wallet: string | undefined;
   collapsed?: boolean;
+  onOpenSettings?: () => void;
 }) {
   const t = useTranslations('predict.shell');
   const tAuth = useTranslations('auth');
@@ -980,9 +1171,13 @@ function Identity({
           <DropdownItem
             icon={<IconSettings size={15} />}
             label={t('settings')}
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              setOpen(false);
+              onOpenSettings?.();
+            }}
           />
-          <DropdownItem
+          <DropdownLink
+            href="/docs"
             icon={<IconHelp size={15} />}
             label={t('help')}
             onClick={() => setOpen(false)}
@@ -1111,11 +1306,14 @@ function MobileDrawer({
   onClose,
   search,
   onSearch,
-  recentsCount,
-  recents,
-  onPickRecent,
-  onClearRecents,
+  conversations,
+  activeConversationId,
+  onPickConversation,
+  onDeleteConversation,
   onNewChat,
+  onOpenTools,
+  onOpenReceipts,
+  onOpenSettings,
   signedIn,
   wallet,
   quota,
@@ -1123,11 +1321,14 @@ function MobileDrawer({
   onClose: () => void;
   search: string;
   onSearch: (v: string) => void;
-  recentsCount: number;
-  recents: ReturnType<typeof loadRecents>;
-  onPickRecent: (prompt: string) => void;
-  onClearRecents: () => void;
+  conversations: ConversationSummary[];
+  activeConversationId: string | null;
+  onPickConversation: (id: string) => void;
+  onDeleteConversation: (id: string) => void;
   onNewChat: () => void;
+  onOpenTools: () => void;
+  onOpenReceipts: () => void;
+  onOpenSettings: () => void;
   signedIn: boolean;
   wallet: string | undefined;
   quota?: QuotaState;
@@ -1205,11 +1406,14 @@ function MobileDrawer({
           <LeftRail
             search={search}
             onSearch={onSearch}
-            recentsCount={recentsCount}
-            recents={recents}
-            onPickRecent={onPickRecent}
-            onClearRecents={onClearRecents}
+            conversations={conversations}
+            activeConversationId={activeConversationId}
+            onPickConversation={onPickConversation}
+            onDeleteConversation={onDeleteConversation}
             onNewChat={onNewChat}
+            onOpenTools={onOpenTools}
+            onOpenReceipts={onOpenReceipts}
+            onOpenSettings={onOpenSettings}
             signedIn={signedIn}
             wallet={wallet}
             quota={quota}
@@ -1735,24 +1939,32 @@ function TopicIcon({ kind, size = 12 }: { kind: TopicIconKind; size?: number }) 
 
 /* ─────────────────────────── Welcome ─────────────────────────── */
 
-function Welcome({
-  onPick,
-  tickers,
-}: {
-  onPick: (prompt: string) => void;
-  tickers: readonly TickerEntry[];
-}) {
+function Welcome() {
   const t = useTranslations('predict.shell.welcome');
-  // Index by symbol so each existing prediction tile can show its own
-  // live spot price + 24h delta inline. No extra row of cards — the
-  // ticker data is folded into the prediction CTA itself.
-  const tickerBySymbol = new Map<string, TickerEntry>();
-  for (const tk of tickers) {
-    tickerBySymbol.set(tk.symbol.toUpperCase(), tk);
-  }
   return (
-    <div className="mx-auto max-w-[760px] w-full px-4 sm:px-6 py-12 sm:py-16 lg:py-24 flex flex-col items-center gap-8 sm:gap-10 text-center">
-      <div className="flex flex-col gap-3 vz-rise" style={{ animationDelay: '0ms' }}>
+    // Full-height container so the title is vertically centred in the
+    // available chat area, not just padded from the top. min-h-full
+    // works because the parent thread scroller is the height anchor.
+    <div className="min-h-full w-full flex flex-col items-center justify-center px-4 sm:px-6 py-10 text-center">
+      <div className="flex flex-col items-center gap-4 vz-rise" style={{ animationDelay: '0ms' }}>
+        <span aria-hidden className="inline-flex">
+          <Image
+            src="/brand/vizzor_darkicon.png"
+            alt=""
+            width={364}
+            height={535}
+            priority
+            className="block dark:hidden h-9 w-auto opacity-90"
+          />
+          <Image
+            src="/brand/vizzor_icon.png"
+            alt=""
+            width={364}
+            height={535}
+            priority
+            className="hidden dark:block h-9 w-auto opacity-90"
+          />
+        </span>
         <h2 className="display text-[var(--fg)] text-balance text-[28px] sm:text-[38px] lg:text-[44px] leading-[1.05] tracking-tight font-semibold max-w-[20ch] mx-auto">
           {t('title')}
         </h2>
@@ -1760,143 +1972,8 @@ function Welcome({
           {t('sub')}
         </p>
       </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-[560px]">
-        {QUICK_ACTIONS.map((qa, idx) => {
-          const prompt = `${qa.symbol} ${qa.horizon}`;
-          const tk = tickerBySymbol.get(qa.symbol);
-          const up = tk ? tk.changePct >= 0 : true;
-          return (
-            <button
-              key={qa.symbol}
-              type="button"
-              onClick={() => onPick(prompt)}
-              style={{ animationDelay: `${120 + idx * 90}ms` }}
-              className={cn(
-                'group flex flex-col items-stretch text-left',
-                'rounded-2xl border border-[var(--border)] bg-[var(--surface)]',
-                'p-4 gap-3',
-                'hover:border-[var(--fg)] hover:bg-[var(--surface-2)]',
-                'hover:-translate-y-0.5 active:translate-y-0',
-                'transition-[border-color,background-color,transform] duration-200 ease-out',
-                'vz-rise',
-              )}
-            >
-              {/* Top row: coin icon + asset name + horizon chip */}
-              <span className="flex items-center gap-3 min-w-0">
-                <span className="relative inline-flex shrink-0">
-                  <CoinIcon symbol={qa.symbol} size={36} />
-                  {tk && (
-                    <span
-                      aria-hidden
-                      className={cn(
-                        'absolute -bottom-0.5 -right-0.5 inline-flex h-2 w-2 rounded-full',
-                        'bg-[var(--fg)] ring-1 ring-[var(--bg)]',
-                        'motion-safe:animate-pulse',
-                      )}
-                    />
-                  )}
-                </span>
-                <span className="min-w-0 flex flex-col leading-tight flex-1">
-                  <span className="text-[14px] font-semibold text-[var(--fg)] truncate">
-                    {qa.name}
-                  </span>
-                  {tk ? (
-                    <span className="mono tabular text-[11px] text-[var(--fg-3)] truncate flex items-center gap-1.5">
-                      <span>{formatPrice(tk.price)}</span>
-                      <span aria-hidden className="text-[var(--fg-3)]/60">·</span>
-                      <span className="inline-flex items-center gap-0.5 text-[var(--fg-2)]">
-                        <IconArrowTick up={up} />
-                        {formatPct(tk.changePct)}
-                      </span>
-                    </span>
-                  ) : (
-                    <span className="mono tabular text-[11px] text-[var(--fg-3)] truncate">
-                      {qa.symbol}
-                    </span>
-                  )}
-                </span>
-                <span
-                  className={cn(
-                    'mono tabular text-[10.5px] uppercase tracking-[0.14em]',
-                    'inline-flex items-center rounded-md border border-[var(--border)] px-2 py-1',
-                    'text-[var(--fg-2)] shrink-0',
-                  )}
-                >
-                  {qa.horizon}
-                </span>
-              </span>
-
-              {/* Predict CTA — liquid-glass capsule. Translucent fg
-                  surface + light backdrop-blur + a 1px inset highlight
-                  along the top edge to read as a glass bubble. No drop
-                  shadow, no glow — keeps it quiet. */}
-              <span
-                className={cn(
-                  'inline-flex items-center justify-center gap-1.5',
-                  'rounded-full h-10 px-4',
-                  'bg-[color-mix(in_oklab,var(--fg)_88%,transparent)]',
-                  'text-[var(--bg)] backdrop-blur-md',
-                  'shadow-[0_1px_0_color-mix(in_oklab,var(--bg)_22%,transparent)_inset]',
-                  'text-[13px] font-semibold tracking-tight',
-                  'group-hover:bg-[var(--fg)] group-active:scale-[0.98]',
-                  'transition-[background-color,transform]',
-                )}
-              >
-                <span>Predict {qa.symbol}</span>
-                <span aria-hidden className="inline-flex translate-x-0 group-hover:translate-x-0.5 transition-transform">
-                  →
-                </span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
-}
-
-/* ─────────────────────────── Ticker helpers ─────────────────────────── */
-
-function IconArrowTick({ up }: { up: boolean }) {
-  return (
-    <svg
-      width="8"
-      height="8"
-      viewBox="0 0 8 8"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      style={{ transform: up ? 'rotate(0deg)' : 'rotate(180deg)' }}
-    >
-      <path d="M4 1.5v5" />
-      <path d="M1.5 4L4 1.5L6.5 4" />
-    </svg>
-  );
-}
-
-function formatPrice(n: number): string {
-  if (!Number.isFinite(n)) return '—';
-  if (n >= 1000) {
-    return `$${Math.round(n).toLocaleString('en-US')}`;
-  }
-  if (n >= 1) {
-    return `$${n.toFixed(2)}`;
-  }
-  if (n >= 0.01) {
-    return `$${n.toFixed(3)}`;
-  }
-  return `$${n.toPrecision(2)}`;
-}
-
-function formatPct(d: number): string {
-  if (!Number.isFinite(d)) return '—';
-  const pct = d * 100;
-  const sign = pct >= 0 ? '+' : '';
-  return `${sign}${pct.toFixed(2)}%`;
 }
 
 /* ─────────────────────────── Exhausted banner ─────────────────────────── */

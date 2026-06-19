@@ -271,13 +271,16 @@
         "chat": "Lancer",
         "library": "Reçus",
         "libraryHint": "/precisions",
+        "receipts": "Reçus",
         "tools": "Outils",
         "toolsHint": "/help"
       },
       "recents": {
-        "label": "Récents",
+        "label": "Chats récents",
         "clear": "Effacer les récents",
-        "empty": "Aucun run encore."
+        "delete": "Supprimer le chat",
+        "empty": "Pas encore de chat.",
+        "signInPrompt": "Connecte ton wallet pour garder ton historique."
       },
       "welcome": {
         "eyebrow": "en direct · tracked",
@@ -311,6 +314,25 @@
       "wr": "Win rate",
       "watch": "Suivi",
       "subscribed": "Abonné"
+    },
+    "settings": {
+      "eyebrow": "Préférences",
+      "title": "Réglages",
+      "close": "Fermer",
+      "theme": {
+        "label": "Thème",
+        "light": "Clair",
+        "dark": "Sombre",
+        "system": "Système"
+      },
+      "language": {
+        "label": "Langue"
+      },
+      "privacy": {
+        "label": "Cet appareil",
+        "clearLocal": "Effacer les données locales",
+        "signOut": "Se déconnecter"
+      }
     }
   },
   "hero": {
