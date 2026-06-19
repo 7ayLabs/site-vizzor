@@ -34,8 +34,10 @@ import {
   decryptSignMessageCallback,
   encodeSignMessagePayload,
   loadHandoff,
+  saveHandoff,
   updateHandoff,
   type DeeplinkStep,
+  type HandoffState,
 } from '@/lib/wallet/deeplink';
 import { localizedAbsoluteUrl } from '@/lib/wallet/locale-url';
 import { SupportCodeChip } from '@/components/ui/support-code-chip';
@@ -98,7 +100,43 @@ export function WalletCallback() {
       const currentStep: DeeplinkStep = rawStep;
       setStep(currentStep);
 
-      const handoff = loadHandoff();
+      // Lookup order — server-side first, localStorage as fallback.
+      // iOS Brave / Safari frequently land the wallet's universal
+      // link redirect in a NEW WKWebView process pool whose
+      // localStorage is empty (the source tab was suspended while
+      // the wallet app was active). The server-side `hid` token is
+      // immune to that — it survives any browser storage edge case
+      // because the secret lives in our SQLite, not the browser.
+      const hid = params.get('hid');
+      let handoff: HandoffState | null = null;
+      if (hid) {
+        try {
+          const res = await fetch('/api/auth/mobile-handoff/redeem', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ hid }),
+          });
+          if (res.ok) {
+            const data = (await res.json()) as {
+              ok?: boolean;
+              state?: HandoffState;
+            };
+            if (data.ok && data.state) {
+              handoff = data.state;
+              // Re-hydrate localStorage so the second leg (sign-step
+              // callback) can find it without re-redeeming — the
+              // redeem endpoint is one-shot, so the row is gone now.
+              saveHandoff(data.state);
+            }
+          }
+        } catch {
+          // Network / parse failure — fall through to localStorage.
+        }
+      }
+      if (!handoff) {
+        handoff = loadHandoff();
+      }
       if (!handoff) {
         fail('handoff_missing');
         return;

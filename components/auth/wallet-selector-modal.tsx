@@ -45,8 +45,10 @@ import { SupportCodeChip } from '@/components/ui/support-code-chip';
 import { walletConnectCode } from '@/lib/errors';
 import {
   isMobileWeb,
+  preallocateServerHandoff,
   startMobileConnect,
   type DeeplinkProviderId,
+  type ServerHandoff,
 } from '@/lib/wallet/deeplink';
 import { localizedAbsoluteUrl } from '@/lib/wallet/locale-url';
 
@@ -160,6 +162,15 @@ export function WalletSelectorModal({
   // re-fires.
   const [attempt, setAttempt] = useState(0);
 
+  // Pre-allocated server-side handoffs, keyed by deeplink provider.
+  // Populated on mobile when the modal opens; used synchronously by
+  // the click handler so the user-tap navigation happens within iOS'
+  // gesture window. `null` while in-flight or unavailable — click
+  // handler falls back to the legacy localStorage path in that case.
+  const [serverHandoffs, setServerHandoffs] = useState<
+    Partial<Record<DeeplinkProviderId, ServerHandoff>>
+  >({});
+
   // Portal target available on client only.
   useEffect(() => {
     setMounted(true);
@@ -220,6 +231,45 @@ export function WalletSelectorModal({
     return () => window.clearTimeout(id);
   }, [phase, mutate, onClose]);
 
+  /* Pre-allocate server-side handoff state for mobile providers as
+   * soon as the modal opens. iOS Brave / Safari drop per-origin
+   * storage when the wallet's universal-link redirect resumes in a
+   * fresh WKWebView process — so we stash the dapp's X25519 secret
+   * key on the server instead and embed its `hid` in the wallet's
+   * `redirect_link`. The pre-allocation happens here, NOT in the tap
+   * handler, so the click stays synchronous and iOS honors the
+   * Universal Link interception inside its user-gesture window.
+   *
+   * Failures (offline, server 5xx) are swallowed — the legacy
+   * localStorage path inside `startMobileConnect` is still wired and
+   * takes over when `serverHandoffs[provider]` is absent. */
+  useEffect(() => {
+    if (phase !== 'open' && phase !== 'opening') return;
+    if (!isMobileWeb()) return;
+    let cancelled = false;
+    const providers: DeeplinkProviderId[] = ['phantom', 'solflare'];
+    for (const providerId of providers) {
+      void (async () => {
+        try {
+          const handoff = await preallocateServerHandoff({
+            providerId,
+            returnTo: window.location.href,
+          });
+          if (cancelled) return;
+          setServerHandoffs((prev) => ({ ...prev, [providerId]: handoff }));
+        } catch {
+          // Pre-allocation failed — `handleSelect` will fall back to
+          // the localStorage path. Don't surface anything to the user;
+          // the failure is invisible unless the localStorage path
+          // also fails (the existing error UI handles that).
+        }
+      })();
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [phase]);
+
   /* ─────────────── handlers ─────────────── */
 
   const handleSelect = useCallback(
@@ -250,10 +300,18 @@ export function WalletSelectorModal({
           '/wallet/callback?step=connect',
           locale,
         );
+        // Use the server-side pre-allocated handoff when available —
+        // `startMobileConnect` appends `&hid=<hid>` to the redirect
+        // URL so the callback page can redeem it server-side. When
+        // the pre-allocation hasn't returned yet (slow network, cold
+        // start), pass `undefined` and the helper generates a fresh
+        // keypair + localStorage fallback as before.
+        const serverHandoff = serverHandoffs[deeplinkProvider];
         const kickoff = startMobileConnect({
           providerId: deeplinkProvider,
           returnTo: window.location.href,
           callbackUrl,
+          serverHandoff,
         });
         try {
           window.localStorage.setItem(
@@ -279,7 +337,7 @@ export function WalletSelectorModal({
       setSelectedProvider(action.providerId);
       setPhase('connecting');
     },
-    [locale, onClose, router],
+    [locale, onClose, router, serverHandoffs],
   );
 
   const handleStatus = useCallback((status: ConnectStatus) => {

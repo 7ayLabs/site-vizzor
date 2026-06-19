@@ -480,25 +480,113 @@ export interface MobileConnectKickoff {
  * still on the page after ~2s the UI should reveal a "Open in
  * Phantom" button bound to `fallbackSchemeUrl`.
  */
+/**
+ * Pre-allocated server-side handoff state. The dapp generates the
+ * X25519 keypair, POSTs it to `/api/auth/mobile-handoff`, and stores
+ * the returned `hid` token. The callback page redeems the `hid`
+ * server-side instead of relying on browser storage — bypasses iOS
+ * Brave / Safari's habit of dropping per-origin storage when the
+ * wallet's universal link is resumed in a fresh WKWebView process.
+ */
+export interface ServerHandoff {
+  hid: string;
+  dappPublicKey: string;
+  dappSecretKey: string;
+}
+
+/**
+ * Generate a keypair, POST it to the server, and return the hid +
+ * keypair the caller will plug into `startMobileConnect`. The fetch
+ * is async — callers should pre-allocate while the modal opens so
+ * the user-tap handler can stay synchronous (iOS Universal Link
+ * interception requires the navigation to happen inside the gesture
+ * window).
+ *
+ * Throws on network / server failure — caller falls back to the
+ * localStorage path inside `startMobileConnect`.
+ */
+export async function preallocateServerHandoff(opts: {
+  providerId: DeeplinkProviderId;
+  returnTo: string;
+}): Promise<ServerHandoff> {
+  const kp = generateDappKeypair();
+  const dappPublicKey = bs58.encode(kp.publicKey);
+  const dappSecretKey = bs58.encode(kp.secretKey);
+  const res = await fetch('/api/auth/mobile-handoff', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({
+      state: {
+        providerId: opts.providerId,
+        dappPublicKey,
+        dappSecretKey,
+        returnTo: opts.returnTo,
+        createdAt: Date.now(),
+      },
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`preallocate_failed:${res.status}`);
+  }
+  const data = (await res.json()) as { ok?: boolean; hid?: string };
+  if (!data.ok || !data.hid) {
+    throw new Error('preallocate_response_missing_hid');
+  }
+  return { hid: data.hid, dappPublicKey, dappSecretKey };
+}
+
+/**
+ * Append `&hid=<hid>` to the callback URL so the wallet's redirect
+ * arrives at the dapp carrying the server-side handoff token along
+ * with the wallet's encrypted response params. Caller-side helper so
+ * the URL composition stays in one place.
+ */
+function appendHidToCallback(callbackUrl: string, hid: string): string {
+  return callbackUrl.includes('?')
+    ? `${callbackUrl}&hid=${hid}`
+    : `${callbackUrl}?hid=${hid}`;
+}
+
 export function startMobileConnect(opts: {
   providerId: DeeplinkProviderId;
   returnTo: string;
   /** Where Phantom should redirect back to. */
   callbackUrl: string;
+  /** Pre-allocated server-side handoff. When provided we use its
+   *  keypair + hid; the redirect URL gets `&hid=<hid>` so the
+   *  callback can redeem it. When omitted, we fall back to the
+   *  legacy localStorage path (kept for graceful degradation when
+   *  the pre-allocation network call hasn't returned yet). */
+  serverHandoff?: ServerHandoff;
 }): MobileConnectKickoff {
-  const kp = generateDappKeypair();
-  const dappPublicKey = bs58.encode(kp.publicKey);
-  const dappSecretKey = bs58.encode(kp.secretKey);
+  let dappPublicKey: string;
+  let dappSecretKey: string;
+  let callbackUrl = opts.callbackUrl;
+
+  if (opts.serverHandoff) {
+    dappPublicKey = opts.serverHandoff.dappPublicKey;
+    dappSecretKey = opts.serverHandoff.dappSecretKey;
+    callbackUrl = appendHidToCallback(callbackUrl, opts.serverHandoff.hid);
+  } else {
+    const kp = generateDappKeypair();
+    dappPublicKey = bs58.encode(kp.publicKey);
+    dappSecretKey = bs58.encode(kp.secretKey);
+  }
+
+  // Always persist to localStorage too — costs nothing and gives the
+  // callback page a fallback if the server-side hid lookup fails.
   saveHandoff({
     providerId: opts.providerId,
     dappPublicKey,
     dappSecretKey,
     returnTo: opts.returnTo,
   });
+
   const universalUrl = buildConnectUrl({
     providerId: opts.providerId,
     dappPublicKey,
-    redirectLink: opts.callbackUrl,
+    redirectLink: callbackUrl,
   });
   return {
     universalUrl,

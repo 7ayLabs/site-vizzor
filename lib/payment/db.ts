@@ -315,6 +315,35 @@ function runV020Migrations(db: DB): void {
     CREATE INDEX IF NOT EXISTS idx_messages_conversation_created
       ON conversation_messages(conversation_id, created_at);
   `);
+
+  /* v0.3.1 — mobile Connect-Protocol handoff state.
+   *
+   * The Phantom/Solflare deeplink flow needs the dapp's per-attempt
+   * X25519 secret key to decrypt the wallet's encrypted response when
+   * the user returns. We used to stash this in localStorage, but iOS
+   * Brave / Safari frequently land the wallet's universal-link redirect
+   * in a new WKWebView process pool that doesn't carry the source
+   * tab's per-origin storage — the secret is gone, and the callback
+   * surfaces `VZ-WAL-011 mobile-handoff-missing`.
+   *
+   * Persisting the state server-side, keyed by a 32-byte random `id`
+   * we embed in the redirect URL, makes the round trip independent of
+   * any browser storage edge case. The row is one-shot (deleted on
+   * first read) and TTL-bounded so abandoned attempts can't be
+   * replayed. The keypair itself is X25519 (32B secret, 32B public),
+   * generated freshly per attempt — trusting our own server with it
+   * for ≤5 minutes is the same trust we already extend to the auth
+   * session cookie. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS mobile_handoffs (
+      id          TEXT PRIMARY KEY,
+      state       TEXT NOT NULL,
+      created_at  INTEGER NOT NULL,
+      expires_at  INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_mobile_handoffs_expires
+      ON mobile_handoffs(expires_at);
+  `);
 }
 
 export function getDb(): DB {
@@ -987,4 +1016,69 @@ export function deleteConversationForWallet(
     .prepare(`DELETE FROM conversations WHERE id = ? AND wallet_address = ?`)
     .run(id, wallet);
   return r.changes > 0;
+}
+
+/* ------------------------------------------------------------------ *\
+ * Mobile Connect-Protocol handoff persistence
+\* ------------------------------------------------------------------ */
+
+export interface MobileHandoffRow {
+  id: string;
+  state: string;
+  created_at: number;
+  expires_at: number;
+}
+
+/**
+ * Persist a new handoff state. `state` is opaque JSON the caller
+ * controls — we treat it as a blob. Caller passes the generated `id`
+ * (32-byte hex, ~unguessable) and TTL window.
+ */
+export function insertMobileHandoff(opts: {
+  id: string;
+  state: string;
+  expiresAt: number;
+}): void {
+  getDb()
+    .prepare(
+      `INSERT INTO mobile_handoffs (id, state, created_at, expires_at)
+        VALUES (?, ?, ?, ?)`,
+    )
+    .run(opts.id, opts.state, Date.now(), opts.expiresAt);
+}
+
+/**
+ * One-shot redeem: returns the row if it exists AND hasn't expired,
+ * AND removes it atomically so a second call can't replay. Returns
+ * `null` on missing / expired / already-redeemed.
+ *
+ * Atomic via a transaction: SELECT then DELETE inside the same
+ * better-sqlite3 transaction so a concurrent redeem can't get the
+ * same row twice.
+ */
+export function redeemMobileHandoff(id: string): MobileHandoffRow | null {
+  const db = getDb();
+  const tx = db.transaction((handoffId: string) => {
+    const row = db
+      .prepare(
+        `SELECT id, state, created_at, expires_at
+           FROM mobile_handoffs WHERE id = ?`,
+      )
+      .get(handoffId) as MobileHandoffRow | undefined;
+    if (!row) return null;
+    db.prepare(`DELETE FROM mobile_handoffs WHERE id = ?`).run(handoffId);
+    if (row.expires_at < Date.now()) return null;
+    return row;
+  });
+  return tx(id);
+}
+
+/**
+ * Hourly maintenance helper — removes every handoff whose TTL has
+ * already passed. Wired into the retention-sweep cron. */
+export function pruneExpiredMobileHandoffs(): number {
+  const r = getDb()
+    .prepare(`DELETE FROM mobile_handoffs WHERE expires_at < ?`)
+    .run(Date.now());
+  return r.changes;
 }
