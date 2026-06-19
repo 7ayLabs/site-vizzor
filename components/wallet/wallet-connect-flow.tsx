@@ -497,55 +497,83 @@ export function WalletConnectFlow({
         }
 
         let signedMessageB64: string | null = null;
-        let sigB58: string;
+        let sigB58: string | null = null;
 
-        // Primary path: `signMessage` against the server-built canonical
-        // SIWS bytes. We tried `signIn` first (the Wallet Standard
-        // SIWS primitive) but Phantom on localhost + Devnet rejects
-        // `signIn` post-confirm with the generic "Unexpected error":
-        // its multi-chain Testnet Mode (Solana Devnet + Ethereum
-        // Sepolia simultaneously) trips an internal validation we
-        // can't influence from the dapp side. `signMessage` of the
-        // same bytes works because Phantom treats it as opaque bytes
-        // — no SIWS-specific validation applies. The domain-agnostic
-        // statement we ship in the message also keeps Phantom's
-        // phishing protection from flagging the bytes on localhost.
+        // SIWS sign cascade:
+        //   1. `signIn` — the Wallet Standard SIWS primitive every
+        //      modern Solana wallet ships. Phantom (and others)
+        //      optimize this path internally and accept it cleanly on
+        //      mainnet / production dapps. This is the right default.
+        //   2. `signMessage` — fallback for the narrow case where
+        //      `signIn` returns Phantom's generic "Unexpected error"
+        //      (its catch-all for an internal validation failure, e.g.
+        //      multi-chain Testnet Mode on localhost+Devnet). Phantom
+        //      treats arbitrary `signMessage` bytes as opaque, so the
+        //      same canonical SIWS body succeeds when the SIWS-aware
+        //      path doesn't.
         //
-        // `signIn` remains as a fallback for adapters that don't
-        // implement `signMessage` (rare; every modern Solana wallet
-        // ships it).
-        if (signMessage) {
+        // User rejections re-throw immediately — we never re-prompt
+        // after an explicit user decline.
+        const isUserRejection = (err: unknown): boolean => {
+          const msg = ((err as Error)?.message || '').toLowerCase();
+          return (
+            msg.includes('user rejected') ||
+            msg.includes('user denied') ||
+            msg.includes('cancelled') ||
+            msg.includes('rejected the request')
+          );
+        };
+        const isPhantomGenericFail = (err: unknown): boolean => {
+          const msg = ((err as Error)?.message || '').toLowerCase();
+          return msg.includes('unexpected error');
+        };
+
+        if (signIn) {
+          try {
+            const origin =
+              typeof window !== 'undefined' ? window.location.origin : '';
+            let uri = origin;
+            let domain = '';
+            try {
+              const u = new URL(origin);
+              uri = u.origin;
+              domain = u.host;
+            } catch {
+              // origin already malformed; let the wallet fill the gap.
+            }
+            const out = await signIn({
+              domain: nonceData.domain ?? domain ?? undefined,
+              address: walletAddr,
+              statement: 'Authenticate this wallet to start your Vizzor session.',
+              uri: nonceData.uri ?? uri ?? undefined,
+              version: '1',
+              chainId: nonceData.chainId,
+              nonce: nonceData.nonce,
+              issuedAt: nonceData.issuedAt,
+              expirationTime: nonceData.expiresAt,
+            });
+            signedMessageB64 = base64Encode(out.signedMessage);
+            sigB58 = base58Encode(out.signature);
+          } catch (signInErr) {
+            if (isUserRejection(signInErr)) throw signInErr;
+            if (!signMessage || !isPhantomGenericFail(signInErr)) throw signInErr;
+            if (typeof console !== 'undefined') {
+              console.warn(
+                '[vizzor] signIn returned generic error, falling back to signMessage',
+                formatCauseChain(walkErrorChain(signInErr)),
+              );
+            }
+          }
+        }
+
+        if (sigB58 === null) {
+          if (!signMessage) {
+            await fail('verify_failed', 'no_sign_primitive');
+            return;
+          }
           const messageBytes = new TextEncoder().encode(nonceData.message);
           const sigBytes = await signMessage(messageBytes);
           sigB58 = base58Encode(sigBytes);
-        } else if (signIn) {
-          const origin =
-            typeof window !== 'undefined' ? window.location.origin : '';
-          let uri = origin;
-          let domain = '';
-          try {
-            const u = new URL(origin);
-            uri = u.origin;
-            domain = u.host;
-          } catch {
-            // origin already malformed; let the wallet fill the gap.
-          }
-          const out = await signIn({
-            domain: nonceData.domain ?? domain ?? undefined,
-            address: walletAddr,
-            statement: 'Authenticate this wallet to start your Vizzor session.',
-            uri: nonceData.uri ?? uri ?? undefined,
-            version: '1',
-            chainId: nonceData.chainId,
-            nonce: nonceData.nonce,
-            issuedAt: nonceData.issuedAt,
-            expirationTime: nonceData.expiresAt,
-          });
-          signedMessageB64 = base64Encode(out.signedMessage);
-          sigB58 = base58Encode(out.signature);
-        } else {
-          await fail('verify_failed', 'no_sign_primitive');
-          return;
         }
 
         const verifyRes = await fetch('/api/auth/siws/verify', {

@@ -334,43 +334,75 @@ function ConnectFlow({
       }
 
       let signedMessageB64: string | null = null;
-      let sigB58: string;
-      // `signMessage` is primary — see the equivalent comment in
-      // `components/wallet/wallet-connect-flow.tsx`. Phantom on
-      // localhost + Devnet rejects `signIn` post-confirm; the legacy
-      // primitive doesn't trip the same validation.
-      if (signMessage) {
+      let sigB58: string | null = null;
+
+      // SIWS sign cascade — see the equivalent comment in
+      // `components/wallet/wallet-connect-flow.tsx`. `signIn` is the
+      // canonical Wallet Standard SIWS primitive (works on production
+      // / mainnet across all modern Solana wallets). `signMessage` is
+      // a silent fallback for Phantom's generic "Unexpected error"
+      // from its internal SIWS validation (e.g. localhost+Devnet
+      // multi-chain Testnet Mode). User rejections re-throw without
+      // fallback.
+      const isUserRejection = (err: unknown): boolean => {
+        const msg = ((err as Error)?.message || '').toLowerCase();
+        return (
+          msg.includes('user rejected') ||
+          msg.includes('user denied') ||
+          msg.includes('cancelled') ||
+          msg.includes('rejected the request')
+        );
+      };
+      const isPhantomGenericFail = (err: unknown): boolean => {
+        const msg = ((err as Error)?.message || '').toLowerCase();
+        return msg.includes('unexpected error');
+      };
+
+      if (signIn) {
+        try {
+          const origin =
+            typeof window !== 'undefined' ? window.location.origin : '';
+          let uri = origin;
+          let domain = '';
+          try {
+            const u = new URL(origin);
+            uri = u.origin;
+            domain = u.host;
+          } catch {
+            // fall through to wallet-resolved defaults
+          }
+          const out = await signIn({
+            domain: nonceData.domain ?? domain ?? undefined,
+            address: wallet,
+            statement: 'Authenticate this wallet to start your Vizzor session.',
+            uri: nonceData.uri ?? uri ?? undefined,
+            version: '1',
+            chainId: nonceData.chainId,
+            nonce: nonceData.nonce,
+            issuedAt: nonceData.issuedAt,
+            expirationTime: nonceData.expiresAt,
+          });
+          signedMessageB64 = base64Encode(out.signedMessage);
+          sigB58 = base58Encode(out.signature);
+        } catch (signInErr) {
+          if (isUserRejection(signInErr)) throw signInErr;
+          if (!signMessage || !isPhantomGenericFail(signInErr)) throw signInErr;
+          if (typeof console !== 'undefined') {
+            console.warn(
+              '[vizzor] signIn returned generic error, falling back to signMessage',
+            );
+          }
+        }
+      }
+
+      if (sigB58 === null) {
+        if (!signMessage) {
+          throw new Error('no_sign_primitive');
+        }
         const sigBytes = await signMessage(
           new TextEncoder().encode(nonceData.message),
         );
         sigB58 = base58Encode(sigBytes);
-      } else if (signIn) {
-        const origin =
-          typeof window !== 'undefined' ? window.location.origin : '';
-        let uri = origin;
-        let domain = '';
-        try {
-          const u = new URL(origin);
-          uri = u.origin;
-          domain = u.host;
-        } catch {
-          // fall through to wallet-resolved defaults
-        }
-        const out = await signIn({
-          domain: nonceData.domain ?? domain ?? undefined,
-          address: wallet,
-          statement: 'Authenticate this wallet to start your Vizzor session.',
-          uri: nonceData.uri ?? uri ?? undefined,
-          version: '1',
-          chainId: nonceData.chainId,
-          nonce: nonceData.nonce,
-          issuedAt: nonceData.issuedAt,
-          expirationTime: nonceData.expiresAt,
-        });
-        signedMessageB64 = base64Encode(out.signedMessage);
-        sigB58 = base58Encode(out.signature);
-      } else {
-        throw new Error('no_sign_primitive');
       }
 
       const verifyRes = await fetch('/api/auth/siws/verify', {
