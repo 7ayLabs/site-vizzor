@@ -50,6 +50,7 @@ jobs:
       service_name:    ${{ steps.r.outputs.service_name }}
       compose_overlay: ${{ steps.r.outputs.compose_overlay }}
       build_api_url:   ${{ steps.r.outputs.build_api_url }}
+      payment_network: ${{ steps.r.outputs.payment_network }}
       checkout_ref:    ${{ steps.r.outputs.checkout_ref }}
     steps:
       - id: r
@@ -66,6 +67,7 @@ jobs:
               echo "service_name=site-vizzor"                           >> "$GITHUB_OUTPUT"
               echo "compose_overlay=docker-compose.prod.yml"            >> "$GITHUB_OUTPUT"
               echo "build_api_url=https://api.vizzor.ai"                >> "$GITHUB_OUTPUT"
+              echo "payment_network=mainnet"                            >> "$GITHUB_OUTPUT"
               echo "checkout_ref=main"                                  >> "$GITHUB_OUTPUT"
               ;;
             testing|refs/heads/testing)
@@ -78,6 +80,12 @@ jobs:
               # `api.test.vizzor.ai`. If/when the engine deploys a
               # staging surface, flip this URL here and rebuild.
               echo "build_api_url=https://api.vizzor.ai"                >> "$GITHUB_OUTPUT"
+              # test.vizzor.ai runs on Solana devnet (same as localhost
+              # dev defaults). Baked at build because `paymentNetwork()`
+              # reads `NEXT_PUBLIC_PAYMENT_NETWORK` from both client and
+              # server bundles. Keeps Phantom in Testnet Mode signing
+              # cleanly on staging without per-deploy env edits.
+              echo "payment_network=devnet"                             >> "$GITHUB_OUTPUT"
               echo "checkout_ref=testing"                               >> "$GITHUB_OUTPUT"
               ;;
             *)
@@ -135,13 +143,16 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          # NEXT_PUBLIC_VIZZOR_API_URL is baked at build into the JS
-          # bundle, so the per-env value MUST come from the resolve job —
-          # not hardcoded. The same Dockerfile builds both images.
+          # NEXT_PUBLIC_* vars are baked at build into the JS bundle,
+          # so per-env values MUST come from the resolve job — not
+          # hardcoded. The same Dockerfile builds both images.
+          # `NEXT_PUBLIC_PAYMENT_NETWORK` ships `devnet` for testing
+          # (test.vizzor.ai) and `mainnet` for prod (vizzor.ai).
           build-args: |
             GIT_SHA=${{ github.sha }}
             BUILD_TIME=${{ github.event.head_commit.timestamp }}
             NEXT_PUBLIC_VIZZOR_API_URL=${{ needs.resolve.outputs.build_api_url }}
+            NEXT_PUBLIC_PAYMENT_NETWORK=${{ needs.resolve.outputs.payment_network }}
 
   # ────────────────────────────────────────────────────────────────────
   # deploy-vps — SSH into the (single) VPS, pull the just-pushed image
