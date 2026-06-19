@@ -62,7 +62,12 @@ function buildCsp(): string {
     'default-src': ["'self'"],
     'base-uri': ["'self'"],
     'object-src': ["'none'"],
-    'frame-ancestors': ["'none'"],
+    // SAMEORIGIN, not 'none'. Wallet in-app browsers (Phantom, Solflare)
+    // render dapps inside an embedded WebView that the OS treats as a
+    // same-origin frame; `'none'` blanks the page (about:blank). The
+    // cross-origin clickjacking threat — a third-party site iframe-
+    // embedding Vizzor — is still blocked.
+    'frame-ancestors': ["'self'"],
     'form-action': ["'self'"],
     'script-src': ["'self'", "'unsafe-inline'"],
     'style-src': ["'self'", "'unsafe-inline'"],
@@ -111,7 +116,11 @@ function applySecurityHeaders(res: NextResponse): NextResponse {
   }
 
   res.headers.set('X-Content-Type-Options', 'nosniff');
-  res.headers.set('X-Frame-Options', 'DENY');
+  // SAMEORIGIN, not DENY. See the `frame-ancestors` directive above —
+  // wallet in-app browsers need same-origin framing to render the dapp.
+  // Cross-origin iframe embedding (the real clickjacking threat) is
+  // still refused.
+  res.headers.set('X-Frame-Options', 'SAMEORIGIN');
   res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.headers.set(
     'Permissions-Policy',

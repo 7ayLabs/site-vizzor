@@ -45,10 +45,9 @@ import { SupportCodeChip } from '@/components/ui/support-code-chip';
 import { walletConnectCode } from '@/lib/errors';
 import {
   isMobileWeb,
-  preallocateServerHandoff,
-  startMobileConnect,
+  isWalletBrowser,
+  startDappBrowserHandoff,
   type DeeplinkProviderId,
-  type ServerHandoff,
 } from '@/lib/wallet/deeplink';
 import { localizedAbsoluteUrl } from '@/lib/wallet/locale-url';
 
@@ -137,12 +136,24 @@ export interface WalletSelectorModalProps {
    * popup never appears. Skipping the inner mount fixes this.
    */
   hasOuterProvider?: boolean;
+  /**
+   * When set, the modal auto-fires `handleSelect` for the matching
+   * provider once it lands in the `open` phase. Used by the dapp-
+   * browser handoff: the user's single tap in their regular mobile
+   * browser opens the wallet's in-app browser at
+   * `/predict?action=connect&provider=<id>`; the parent reads those
+   * params and forwards `autoSelectProvider` so the user never has to
+   * tap Connect a second time inside Phantom's browser. Fires exactly
+   * once per modal open cycle.
+   */
+  autoSelectProvider?: SolanaProviderId | null;
 }
 
 export function WalletSelectorModal({
   open,
   onClose,
   hasOuterProvider = false,
+  autoSelectProvider = null,
 }: WalletSelectorModalProps) {
   const t = useTranslations('auth');
   const router = useRouter();
@@ -156,20 +167,15 @@ export function WalletSelectorModal({
     useState<SolanaProviderId | null>(null);
   const [errorCode, setErrorCode] = useState<ConnectErrorCode | null>(null);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  // Tracks whether the dapp-browser auto-select has already fired for
+  // the current open cycle so the effect doesn't loop on every render
+  // (and re-firing is gated to one shot per modal open).
+  const autoSelectFiredRef = useRef(false);
 
   // Active connect attempt — bump to force-remount the LazyConnectFlow
   // when the user retries after an error so the start-on-mount effect
   // re-fires.
   const [attempt, setAttempt] = useState(0);
-
-  // Pre-allocated server-side handoffs, keyed by deeplink provider.
-  // Populated on mobile when the modal opens; used synchronously by
-  // the click handler so the user-tap navigation happens within iOS'
-  // gesture window. `null` while in-flight or unavailable — click
-  // handler falls back to the legacy localStorage path in that case.
-  const [serverHandoffs, setServerHandoffs] = useState<
-    Partial<Record<DeeplinkProviderId, ServerHandoff>>
-  >({});
 
   // Portal target available on client only.
   useEffect(() => {
@@ -192,6 +198,7 @@ export function WalletSelectorModal({
       setSelectedProvider(null);
       setErrorCode(null);
       setErrorDetail(null);
+      autoSelectFiredRef.current = false;
     }, EXIT_MS);
     return () => window.clearTimeout(id);
   }, [open]);
@@ -231,45 +238,6 @@ export function WalletSelectorModal({
     return () => window.clearTimeout(id);
   }, [phase, mutate, onClose]);
 
-  /* Pre-allocate server-side handoff state for mobile providers as
-   * soon as the modal opens. iOS Brave / Safari drop per-origin
-   * storage when the wallet's universal-link redirect resumes in a
-   * fresh WKWebView process — so we stash the dapp's X25519 secret
-   * key on the server instead and embed its `hid` in the wallet's
-   * `redirect_link`. The pre-allocation happens here, NOT in the tap
-   * handler, so the click stays synchronous and iOS honors the
-   * Universal Link interception inside its user-gesture window.
-   *
-   * Failures (offline, server 5xx) are swallowed — the legacy
-   * localStorage path inside `startMobileConnect` is still wired and
-   * takes over when `serverHandoffs[provider]` is absent. */
-  useEffect(() => {
-    if (phase !== 'open' && phase !== 'opening') return;
-    if (!isMobileWeb()) return;
-    let cancelled = false;
-    const providers: DeeplinkProviderId[] = ['phantom', 'solflare'];
-    for (const providerId of providers) {
-      void (async () => {
-        try {
-          const handoff = await preallocateServerHandoff({
-            providerId,
-            returnTo: window.location.href,
-          });
-          if (cancelled) return;
-          setServerHandoffs((prev) => ({ ...prev, [providerId]: handoff }));
-        } catch {
-          // Pre-allocation failed — `handleSelect` will fall back to
-          // the localStorage path. Don't surface anything to the user;
-          // the failure is invisible unless the localStorage path
-          // also fails (the existing error UI handles that).
-        }
-      })();
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [phase]);
-
   /* ─────────────── handlers ─────────────── */
 
   const handleSelect = useCallback(
@@ -281,64 +249,78 @@ export function WalletSelectorModal({
         window.setTimeout(() => router.push(href as never), EXIT_MS);
         return;
       }
-      // Mobile fast-path — navigate synchronously inside the user's
-      // tap handler. iOS Universal Link interception requires the
-      // navigation to happen WITHIN the user-gesture window, and
-      // routing through React's setState → mount → useEffect chain
-      // burns past that window (Safari treats the late
-      // `window.location.href = …` as a programmatic navigation and
-      // falls through to the wallet's marketing page instead of
-      // opening the app). By kicking the deeplink off here we
-      // preserve the gesture: tap → kickoff URL → navigation, all
-      // synchronous.
+      // Mobile fast-path — open Vizzor inside the wallet's own in-app
+      // browser. Wallet Standard auto-injects there and the desktop
+      // SIWS flow runs verbatim, sidestepping Phantom's Connect
+      // Protocol entirely (no second-leg deeplink, no encrypted
+      // handoff, no "Opening link…" bridge-page trap).
+      //
+      // We navigate synchronously inside the tap handler so iOS keeps
+      // the user-gesture and resolves the custom scheme without
+      // falling through to a marketing page. The target URL carries
+      // `?action=connect&provider=<id>` — the auto-trigger contract
+      // on `/predict` reads those params and resumes the connect
+      // dance with no extra user tap.
       if (
         isMobileWeb() &&
         (action.providerId === 'phantom' || action.providerId === 'solflare')
       ) {
         const deeplinkProvider: DeeplinkProviderId = action.providerId;
-        const callbackUrl = localizedAbsoluteUrl(
-          '/wallet/callback?step=connect',
-          locale,
-        );
-        // Use the server-side pre-allocated handoff when available —
-        // `startMobileConnect` appends `&hid=<hid>` to the redirect
-        // URL so the callback page can redeem it server-side. When
-        // the pre-allocation hasn't returned yet (slow network, cold
-        // start), pass `undefined` and the helper generates a fresh
-        // keypair + localStorage fallback as before.
-        const serverHandoff = serverHandoffs[deeplinkProvider];
-        const kickoff = startMobileConnect({
+        const targetUrl = localizedAbsoluteUrl('/predict', locale);
+        const kickoff = startDappBrowserHandoff({
           providerId: deeplinkProvider,
-          returnTo: window.location.href,
-          callbackUrl,
-          serverHandoff,
+          targetUrl,
         });
         try {
           window.localStorage.setItem(
             'vizzor.wallet.fallback',
-            kickoff.fallbackSchemeUrl,
+            kickoff.fallbackInstallUrl,
           );
         } catch {
           // Best-effort — private modes block localStorage and the
           // user can recover via the standard retry path.
         }
-        // Android uses the Intent URL (guaranteed app launch + Play
-        // Store fallback); iOS uses the Universal Link.
         const target =
           kickoff.platform === 'android'
             ? kickoff.androidIntentUrl
-            : kickoff.universalUrl;
+            : kickoff.iosUrl;
         window.location.href = target;
         return;
       }
-      // Solana flow — stays in place.
+      // Solana flow — stays in place. Also the path taken inside the
+      // wallet's in-app browser, since `isMobileWeb()` returns false
+      // there (the WALLET_BROWSER_UA filter excludes those UAs).
       setErrorCode(null);
       setErrorDetail(null);
       setSelectedProvider(action.providerId);
       setPhase('connecting');
     },
-    [locale, onClose, router, serverHandoffs],
+    [locale, onClose, router],
   );
+
+  /* Auto-trigger the wallet selection when the dapp-browser handoff
+   * lands the user on `?action=connect&provider=<id>`. Fires once the
+   * modal reaches the `open` phase so the connect flow inherits the
+   * fresh provider context (handleSelect → setPhase('connecting') →
+   * LazyConnectFlow mounts → Wallet Standard discovery runs). Inside
+   * a wallet browser the discovery finds the auto-injected provider
+   * synchronously; outside a wallet browser the prop is ignored.
+   *
+   * Guarded by a ref so concurrent state transitions don't loop. */
+  useEffect(() => {
+    if (phase !== 'open') return;
+    if (!autoSelectProvider) return;
+    if (autoSelectFiredRef.current) return;
+    if (!isWalletBrowser()) return;
+    const target = OPTIONS.find(
+      (o) =>
+        o.action.kind === 'solana' &&
+        o.action.providerId === autoSelectProvider,
+    );
+    if (!target) return;
+    autoSelectFiredRef.current = true;
+    handleSelect(target);
+  }, [phase, autoSelectProvider, handleSelect]);
 
   const handleStatus = useCallback((status: ConnectStatus) => {
     setPhase(status);

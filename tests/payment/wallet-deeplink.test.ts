@@ -19,6 +19,7 @@ import {
   HANDOFF_TTL_MS,
   buildAndroidIntentUrl,
   buildConnectUrl,
+  buildDappBrowserUrl,
   buildFallbackSchemeUrl,
   buildSignMessageUrl,
   clearHandoff,
@@ -26,8 +27,11 @@ import {
   decryptSignMessageCallback,
   encodeSignMessagePayload,
   generateDappKeypair,
+  isMobileWeb,
+  isWalletBrowser,
   loadHandoff,
   saveHandoff,
+  startDappBrowserHandoff,
   updateHandoff,
 } from '@/lib/wallet/deeplink';
 
@@ -342,5 +346,137 @@ describe('signMessage round trip', () => {
       data: bs58.encode(replyCipher),
     });
     expect(result.signature).toBe('sigbase58encodedstring');
+  });
+});
+
+describe('buildDappBrowserUrl', () => {
+  it('produces a phantom://browse/<encoded>?ref=<encoded> URL', () => {
+    const target =
+      'https://test.vizzor.ai/en/predict?action=connect&provider=phantom';
+    const ref = 'https://test.vizzor.ai';
+    const url = buildDappBrowserUrl('phantom', target, ref);
+    expect(url.startsWith('phantom://browse/')).toBe(true);
+    // The path segment carries the percent-encoded target.
+    expect(url).toContain(encodeURIComponent(target));
+    // The ref is on the query string.
+    expect(url).toContain(`ref=${encodeURIComponent(ref)}`);
+  });
+
+  it('produces a solflare://ul/v1/browse/<encoded>?ref=<encoded> URL', () => {
+    const target = 'https://test.vizzor.ai/en/predict';
+    const ref = 'https://test.vizzor.ai';
+    const url = buildDappBrowserUrl('solflare', target, ref);
+    expect(url.startsWith('solflare://ul/v1/browse/')).toBe(true);
+    expect(url).toContain(encodeURIComponent(target));
+    expect(url).toContain(`ref=${encodeURIComponent(ref)}`);
+  });
+});
+
+describe('startDappBrowserHandoff', () => {
+  const originalNav = globalThis.navigator;
+  const originalWindow = globalThis.window;
+
+  function stubUa(ua: string): void {
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: { userAgent: ua } as Navigator,
+    });
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        navigator: { userAgent: ua },
+        location: { origin: 'https://test.vizzor.ai' },
+      } as unknown as Window & typeof globalThis,
+    });
+  }
+
+  afterEach(() => {
+    if (originalNav) {
+      Object.defineProperty(globalThis, 'navigator', {
+        configurable: true,
+        value: originalNav,
+      });
+    }
+    if (originalWindow) {
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        value: originalWindow,
+      });
+    }
+  });
+
+  it('emits both iOS scheme + Android intent URLs and detects iOS', () => {
+    stubUa('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)');
+    const kickoff = startDappBrowserHandoff({
+      providerId: 'phantom',
+      targetUrl: 'https://test.vizzor.ai/en/predict',
+    });
+    expect(kickoff.platform).toBe('ios');
+    expect(kickoff.iosUrl.startsWith('phantom://browse/')).toBe(true);
+    expect(kickoff.androidIntentUrl.startsWith('intent://')).toBe(true);
+    expect(kickoff.fallbackInstallUrl).toBe('https://phantom.app/download');
+    // The auto-connect contract decoration must be present in BOTH URLs.
+    expect(kickoff.iosUrl).toContain(encodeURIComponent('action=connect'));
+    expect(kickoff.iosUrl).toContain(encodeURIComponent('provider=phantom'));
+    expect(kickoff.androidIntentUrl).toContain(
+      encodeURIComponent('action=connect'),
+    );
+  });
+
+  it('detects Android UA + carries the Play-Store fallback', () => {
+    stubUa('Mozilla/5.0 (Linux; Android 14; Pixel 8)');
+    const kickoff = startDappBrowserHandoff({
+      providerId: 'solflare',
+      targetUrl: 'https://test.vizzor.ai/en/predict',
+    });
+    expect(kickoff.platform).toBe('android');
+    expect(kickoff.androidIntentUrl).toContain('package=com.solflare.mobile');
+    expect(kickoff.androidIntentUrl).toContain(
+      encodeURIComponent('https://solflare.com/download'),
+    );
+  });
+});
+
+describe('isMobileWeb / isWalletBrowser', () => {
+  const originalNav = globalThis.navigator;
+
+  function stubUa(ua: string): void {
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: { userAgent: ua } as Navigator,
+    });
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { navigator: { userAgent: ua } } as Window & typeof globalThis,
+    });
+  }
+
+  afterEach(() => {
+    if (originalNav) {
+      Object.defineProperty(globalThis, 'navigator', {
+        configurable: true,
+        value: originalNav,
+      });
+    }
+  });
+
+  it('returns false for desktop UAs', () => {
+    stubUa('Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit');
+    expect(isMobileWeb()).toBe(false);
+    expect(isWalletBrowser()).toBe(false);
+  });
+
+  it('returns true for plain iOS Safari (mobile, not wallet)', () => {
+    stubUa('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Safari');
+    expect(isMobileWeb()).toBe(true);
+    expect(isWalletBrowser()).toBe(false);
+  });
+
+  it('flips when running inside a wallet in-app browser', () => {
+    stubUa('Mozilla/5.0 (iPhone) Phantom/1.0');
+    // Mobile UA + wallet UA → isMobileWeb FALSE (we want the dapp to
+    // use the desktop flow there), isWalletBrowser TRUE.
+    expect(isMobileWeb()).toBe(false);
+    expect(isWalletBrowser()).toBe(true);
   });
 });

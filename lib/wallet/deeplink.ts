@@ -129,6 +129,19 @@ export function isMobileWeb(): boolean {
 }
 
 /**
+ * True when the dapp is rendered inside a wallet's own in-app browser
+ * (Phantom, Solflare, Backpack, Glow, TrustWallet). This is the
+ * complement of the `!WALLET_BROWSER_UA.test(ua)` filter inside
+ * `isMobileWeb` — callers use it to trigger the auto-connect contract
+ * when a dapp-browser handoff URL lands the user on `predict?action=
+ * connect&provider=<id>`.
+ */
+export function isWalletBrowser(): boolean {
+  if (typeof window === 'undefined') return false;
+  return WALLET_BROWSER_UA.test(window.navigator.userAgent);
+}
+
+/**
  * Maps our internal payment network to Phantom / Solflare's
  * `cluster` deeplink parameter. The wallets accept `mainnet-beta`
  * (not `mainnet`) and the literal `testnet` / `devnet` strings.
@@ -340,6 +353,149 @@ export function buildSignMessageUrl(opts: BuildSignMessageUrlOpts): string {
     payload: opts.payload,
   });
   return `${baseUrlFor(opts.providerId)}/signMessage?${params.toString()}`;
+}
+
+/* ─────────────────────── dapp-browser handoff ─────────────────────── */
+
+/**
+ * Per-provider deeplink scheme + bundle id for the in-app browser
+ * entry. Phantom and Solflare both ship documented browse deeplinks:
+ *
+ *   - Phantom (iOS):  `phantom://browse/<urlEncoded>?ref=<refEncoded>`
+ *   - Solflare (iOS): `solflare://ul/v1/browse/<urlEncoded>?ref=<refEncoded>`
+ *
+ * On Android we wrap the same path in an Intent URL so a Play-Store
+ * fallback fires when the wallet app isn't installed.
+ */
+function dappBrowserConfig(providerId: DeeplinkProviderId): {
+  scheme: 'phantom' | 'solflare';
+  iosPath: string;
+  androidPackage: string;
+  installUrl: string;
+} {
+  switch (providerId) {
+    case 'phantom':
+      return {
+        scheme: 'phantom',
+        iosPath: 'browse',
+        androidPackage: 'app.phantom',
+        installUrl: 'https://phantom.app/download',
+      };
+    case 'solflare':
+      return {
+        scheme: 'solflare',
+        iosPath: 'ul/v1/browse',
+        androidPackage: 'com.solflare.mobile',
+        installUrl: 'https://solflare.com/download',
+      };
+  }
+}
+
+/**
+ * Build the iOS-form custom-scheme URL that opens the wallet's in-app
+ * browser pointed at `targetUrl`. The `ref` query param is the user's
+ * own origin and satisfies each wallet's "where did the request come
+ * from" check.
+ */
+export function buildDappBrowserUrl(
+  providerId: DeeplinkProviderId,
+  targetUrl: string,
+  ref: string,
+): string {
+  const cfg = dappBrowserConfig(providerId);
+  const encodedTarget = encodeURIComponent(targetUrl);
+  const encodedRef = encodeURIComponent(ref);
+  return `${cfg.scheme}://${cfg.iosPath}/${encodedTarget}?ref=${encodedRef}`;
+}
+
+/**
+ * Build the Android Intent URL that opens the wallet's in-app browser
+ * pointed at `targetUrl`, falling back to the Play Store install URL
+ * when the app isn't installed. Wrapping the path inside an Intent
+ * gives us the documented `S.browser_fallback_url` semantics that the
+ * raw custom-scheme URL can't reach.
+ */
+function buildDappBrowserIntentUrl(
+  providerId: DeeplinkProviderId,
+  targetUrl: string,
+  ref: string,
+): string {
+  const cfg = dappBrowserConfig(providerId);
+  const encodedTarget = encodeURIComponent(targetUrl);
+  const encodedRef = encodeURIComponent(ref);
+  const fallback = encodeURIComponent(cfg.installUrl);
+  return `intent://${cfg.iosPath}/${encodedTarget}?ref=${encodedRef}#Intent;scheme=${cfg.scheme};package=${cfg.androidPackage};S.browser_fallback_url=${fallback};end`;
+}
+
+export interface MobileDappBrowserKickoff {
+  /** Custom-scheme URL — primary navigation target on iOS. */
+  iosUrl: string;
+  /** Intent URL — primary navigation target on Android, with Play-
+   *  Store fallback baked in. */
+  androidIntentUrl: string;
+  /** Marketing / install URL for the active provider. Used as a
+   *  user-tappable backup when the iOS scheme doesn't resolve. */
+  fallbackInstallUrl: string;
+  /** Active platform — drives which URL the caller navigates to. */
+  platform: MobilePlatform;
+}
+
+/**
+ * Top-level mobile kickoff. Computes both platform variants of the
+ * dapp-browser deeplink so the caller can navigate synchronously
+ * inside the user's tap handler (iOS Universal Link / scheme
+ * interception requires that). The destination URL is decorated with
+ * `?action=connect&provider=<id>` so the page knows to auto-resume
+ * once Wallet Standard injection lands.
+ */
+export function startDappBrowserHandoff(opts: {
+  providerId: DeeplinkProviderId;
+  /** Absolute HTTPS URL of the page the wallet browser should land on. */
+  targetUrl: string;
+  /** The origin the user is coming from — Phantom / Solflare use this
+   *  as the `ref` query param. Defaults to `window.location.origin`. */
+  ref?: string;
+}): MobileDappBrowserKickoff {
+  const ref =
+    opts.ref ??
+    (typeof window === 'undefined' ? 'https://vizzor.ai' : window.location.origin);
+  const decorated = appendAutoConnectParams(opts.targetUrl, opts.providerId);
+  const iosUrl = buildDappBrowserUrl(opts.providerId, decorated, ref);
+  const androidIntentUrl = buildDappBrowserIntentUrl(
+    opts.providerId,
+    decorated,
+    ref,
+  );
+  const cfg = dappBrowserConfig(opts.providerId);
+  return {
+    iosUrl,
+    androidIntentUrl,
+    fallbackInstallUrl: cfg.installUrl,
+    platform: detectMobilePlatform(),
+  };
+}
+
+/**
+ * Decorate `targetUrl` with the auto-connect contract:
+ * `?action=connect&provider=<id>`. The destination page reads these
+ * params and auto-opens the modal + selects the wallet so the user's
+ * single tap in their regular mobile browser is the only tap required.
+ * Existing query params (e.g. locale, ref) are preserved.
+ */
+function appendAutoConnectParams(
+  targetUrl: string,
+  providerId: DeeplinkProviderId,
+): string {
+  try {
+    const u = new URL(targetUrl);
+    u.searchParams.set('action', 'connect');
+    u.searchParams.set('provider', providerId);
+    return u.toString();
+  } catch {
+    // Malformed URL — best-effort append.
+    const sep = targetUrl.includes('?') ? '&' : '?';
+    return `${targetUrl}${sep}action=connect&provider=${providerId}`;
+  }
 }
 
 /* ─────────────────────── connect-callback decoding ─────────────────────── */

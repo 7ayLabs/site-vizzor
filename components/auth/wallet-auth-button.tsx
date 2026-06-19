@@ -386,7 +386,39 @@ function ConnectFlow({
           sigB58 = base58Encode(out.signature);
         } catch (signInErr) {
           if (isUserRejection(signInErr)) throw signInErr;
-          if (!signMessage || !isPhantomGenericFail(signInErr)) throw signInErr;
+          if (!isPhantomGenericFail(signInErr)) throw signInErr;
+
+          // Dev-mode silent recovery — same shape as
+          // `wallet-connect-flow.tsx`. Phantom's "Unexpected error"
+          // on localhost+Devnet comes AFTER the user already tapped
+          // Confirm in the SIWS popup, so the auth intent is
+          // unambiguous. When the dev-sign endpoint is enabled, mint
+          // the session via the bypass instead of re-prompting with
+          // signMessage. The route is hard-404'd in production.
+          if (process.env.NEXT_PUBLIC_ALLOW_DEV_AUTH === 'true') {
+            try {
+              const res = await fetch('/api/auth/dev-sign', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ wallet }),
+              });
+              if (res.ok) {
+                onSignedIn();
+                return;
+              }
+            } catch {
+              // Network failure — fall through to the signMessage path.
+            }
+          }
+
+          if (!signMessage) throw signInErr;
+          // Only fall back on non-production chains — see the
+          // matching comment in `wallet-connect-flow.tsx`.
+          const allowFallback =
+            nonceData.chainId === 'solana:devnet' ||
+            nonceData.chainId === 'solana:testnet';
+          if (!allowFallback) throw signInErr;
           if (typeof console !== 'undefined') {
             console.warn(
               '[vizzor] signIn returned generic error, falling back to signMessage',
@@ -442,6 +474,29 @@ function ConnectFlow({
       }
       if (typeof console !== 'undefined') {
         console.warn('[vizzor] siws sign rejected', chain);
+      }
+      // Last-chance dev-mode silent recovery — see the equivalent
+      // comment in `wallet-connect-flow.tsx`.
+      const errMsg = (err.message || '').toLowerCase();
+      if (
+        process.env.NEXT_PUBLIC_ALLOW_DEV_AUTH === 'true' &&
+        errMsg.includes('unexpected error') &&
+        publicKey
+      ) {
+        try {
+          const res = await fetch('/api/auth/dev-sign', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ wallet: publicKey.toBase58() }),
+          });
+          if (res.ok) {
+            onSignedIn();
+            return;
+          }
+        } catch {
+          // fall through to the normal error surface
+        }
       }
       setError(err.message);
       try {
@@ -539,6 +594,29 @@ function ProviderlessConnect({
   hasOuterProvider?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [autoSelect, setAutoSelect] = useState<
+    'phantom' | 'solflare' | null
+  >(null);
+
+  // Dapp-browser auto-trigger: when the wallet's in-app browser lands
+  // the user on `…/predict?action=connect&provider=<id>`, open the
+  // modal and forward the provider so the connect dance fires in the
+  // same tick. The URL params are stripped via History API so a
+  // refresh doesn't loop.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const action = url.searchParams.get('action');
+    const provider = url.searchParams.get('provider');
+    if (action !== 'connect') return;
+    if (provider !== 'phantom' && provider !== 'solflare') return;
+    setAutoSelect(provider);
+    setOpen(true);
+    url.searchParams.delete('action');
+    url.searchParams.delete('provider');
+    window.history.replaceState({}, '', url.toString());
+  }, []);
+
   return (
     <>
       <button
@@ -578,8 +656,12 @@ function ProviderlessConnect({
       </button>
       <WalletSelectorModal
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          setOpen(false);
+          setAutoSelect(null);
+        }}
         hasOuterProvider={hasOuterProvider}
+        autoSelectProvider={autoSelect}
       />
     </>
   );
