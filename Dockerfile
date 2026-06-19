@@ -44,6 +44,14 @@ ENV BUILD_TIME=$BUILD_TIME
 ARG NEXT_PUBLIC_VIZZOR_API_URL=https://api.vizzor.ai
 ENV NEXT_PUBLIC_VIZZOR_API_URL=$NEXT_PUBLIC_VIZZOR_API_URL
 
+# Chain selector — baked at build because client components read it via
+# `paymentNetwork()` (lib/payment/network.ts). The deploy workflow
+# passes `devnet` for the `testing` branch (test.vizzor.ai) and
+# `mainnet` for `main` (vizzor.ai). Default `mainnet` keeps unrelated
+# local builds from accidentally shipping a staging chain.
+ARG NEXT_PUBLIC_PAYMENT_NETWORK=mainnet
+ENV NEXT_PUBLIC_PAYMENT_NETWORK=$NEXT_PUBLIC_PAYMENT_NETWORK
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
