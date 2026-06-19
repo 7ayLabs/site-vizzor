@@ -16,7 +16,9 @@ import { describe, it, expect } from 'vitest';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import {
+  buildAndroidIntentUrl,
   buildConnectUrl,
+  buildFallbackSchemeUrl,
   buildSignMessageUrl,
   decryptConnectCallback,
   decryptSignMessageCallback,
@@ -25,7 +27,10 @@ import {
 } from '@/lib/wallet/deeplink';
 
 describe('buildConnectUrl', () => {
-  it('targets phantom.app and carries every required param', () => {
+  it('targets phantom.com and carries every required param', () => {
+    // Phantom moved their universal-link host from phantom.app to
+    // phantom.com in 2025. Hitting the new host directly avoids the
+    // 301 redirect that breaks iOS Universal Link interception.
     const url = new URL(
       buildConnectUrl({
         providerId: 'phantom',
@@ -35,7 +40,7 @@ describe('buildConnectUrl', () => {
         appUrl: 'https://vizzor.ai',
       }),
     );
-    expect(url.origin).toBe('https://phantom.app');
+    expect(url.origin).toBe('https://phantom.com');
     expect(url.pathname).toBe('/ul/v1/connect');
     expect(url.searchParams.get('dapp_encryption_public_key')).toBe(
       'A'.repeat(43),
@@ -60,6 +65,72 @@ describe('buildConnectUrl', () => {
     expect(url.origin).toBe('https://solflare.com');
     expect(url.pathname).toBe('/ul/v1/connect');
     expect(url.searchParams.get('cluster')).toBe('devnet');
+  });
+});
+
+describe('buildFallbackSchemeUrl', () => {
+  it('rewrites a phantom.com universal link as a phantom:// scheme URL', () => {
+    const universal = buildConnectUrl({
+      providerId: 'phantom',
+      dappPublicKey: 'A'.repeat(43),
+      redirectLink: 'https://vizzor.ai/wallet/callback?step=connect',
+      cluster: 'devnet',
+      appUrl: 'https://vizzor.ai',
+    });
+    const scheme = buildFallbackSchemeUrl('phantom', universal);
+    expect(scheme.startsWith('phantom:/ul/v1/connect?')).toBe(true);
+    // Query params must round-trip exactly so the wallet sees the
+    // same dapp_encryption_public_key / cluster / redirect_link the
+    // universal link carries.
+    const restored = new URL(`https://example.com${scheme.replace(/^phantom:/, '')}`);
+    expect(restored.searchParams.get('dapp_encryption_public_key')).toBe('A'.repeat(43));
+    expect(restored.searchParams.get('cluster')).toBe('devnet');
+  });
+
+  it('rewrites solflare universal links under the solflare:// scheme', () => {
+    const universal = buildConnectUrl({
+      providerId: 'solflare',
+      dappPublicKey: 'B'.repeat(43),
+      redirectLink: 'https://vizzor.ai/wallet/callback?step=connect',
+      cluster: 'mainnet-beta',
+      appUrl: 'https://vizzor.ai',
+    });
+    const scheme = buildFallbackSchemeUrl('solflare', universal);
+    expect(scheme.startsWith('solflare:/ul/v1/connect?')).toBe(true);
+  });
+});
+
+describe('buildAndroidIntentUrl', () => {
+  it('wraps a phantom universal link as an Android Intent targeting app.phantom', () => {
+    const universal = buildConnectUrl({
+      providerId: 'phantom',
+      dappPublicKey: 'A'.repeat(43),
+      redirectLink: 'https://vizzor.ai/wallet/callback?step=connect',
+      cluster: 'mainnet-beta',
+      appUrl: 'https://vizzor.ai',
+    });
+    const intent = buildAndroidIntentUrl('phantom', universal);
+    expect(intent.startsWith('intent://phantom.com/ul/v1/connect')).toBe(true);
+    expect(intent).toContain('scheme=https');
+    expect(intent).toContain('package=app.phantom');
+    expect(intent).toContain('S.browser_fallback_url=');
+    // The browser fallback must be the universal link — Android
+    // routes to the Play Store / Phantom website when the app is
+    // not installed.
+    expect(intent).toContain(encodeURIComponent(universal));
+    expect(intent.endsWith(';end')).toBe(true);
+  });
+
+  it('targets com.solflare.mobile for the solflare provider', () => {
+    const universal = buildConnectUrl({
+      providerId: 'solflare',
+      dappPublicKey: 'B'.repeat(43),
+      redirectLink: 'https://vizzor.ai/wallet/callback?step=connect',
+      cluster: 'devnet',
+      appUrl: 'https://vizzor.ai',
+    });
+    const intent = buildAndroidIntentUrl('solflare', universal);
+    expect(intent).toContain('package=com.solflare.mobile');
   });
 });
 

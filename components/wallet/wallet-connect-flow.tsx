@@ -221,12 +221,33 @@ export function WalletConnectFlow({
         '/wallet/callback?step=connect',
         locale,
       );
-      const connectUrl = startMobileConnect({
+      const kickoff = startMobileConnect({
         providerId: deeplinkProvider,
         returnTo: window.location.href,
         callbackUrl,
       });
-      window.location.href = connectUrl;
+      // Stash the user-tappable backup URL so the modal can surface a
+      // "Open in Phantom" affordance if the user returns to the page
+      // without having reached the wallet app (e.g. iOS got stuck on
+      // the wallet's bridge page).
+      try {
+        window.sessionStorage.setItem(
+          'vizzor.wallet.fallback',
+          kickoff.fallbackSchemeUrl,
+        );
+      } catch {
+        // sessionStorage can be unavailable in private modes — best-effort.
+      }
+      // Android: prefer the Intent URL — guaranteed app launch when
+      // installed, automatic Play-Store fallback when not.
+      // iOS / unknown: universal link. The redirect chain to
+      // `phantom.com` is now eliminated at the source URL, so Safari's
+      // Universal Link interception fires cleanly.
+      const target =
+        kickoff.platform === 'android'
+          ? kickoff.androidIntentUrl
+          : kickoff.universalUrl;
+      window.location.href = target;
       return true;
     },
     [locale],
