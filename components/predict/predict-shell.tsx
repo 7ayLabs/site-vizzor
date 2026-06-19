@@ -183,8 +183,24 @@ function PredictShellInner() {
     bumpRecency,
   } = useConversations({ enabled: signedIn });
 
+  // Forward the browser's resolved IANA timezone on every chat request
+  // so the engine can speak the user's local time (the Telegram bot
+  // already does this via `/tz`). The header is read by
+  // `app/api/predict/route.ts` and forwarded to vizzor-api/v1/chat
+  // alongside the locale (which the engine derives from the
+  // Accept-Language header).
   const transport = useMemo(
-    () => new DefaultChatTransport({ api: '/api/predict' }),
+    () =>
+      new DefaultChatTransport({
+        api: '/api/predict',
+        headers: () => {
+          const tz =
+            typeof Intl !== 'undefined'
+              ? Intl.DateTimeFormat().resolvedOptions().timeZone
+              : 'UTC';
+          return { 'x-vizzor-timezone': tz || 'UTC' };
+        },
+      }),
     [],
   );
 
