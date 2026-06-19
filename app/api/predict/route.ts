@@ -29,6 +29,7 @@
  *   event: done           → {usage?}                                 → text-end + [DONE]
  */
 
+import { createHash } from 'node:crypto';
 import type { UIMessage } from 'ai';
 import { incrementWalletQuota, readWalletQuota } from '@/lib/quota';
 import { parseIntent } from '@/lib/commands';
@@ -36,6 +37,7 @@ import {
   getActiveSession,
   getSubscriptionForActiveSession,
 } from '@/lib/payment/auth-session';
+import type { SubscriptionRow } from '@/lib/payment/db';
 import {
   PREDICT_ROUTE_REQUIREMENTS,
   assertRequiredEnv,
@@ -122,7 +124,11 @@ export async function POST(req: Request) {
   // — see `forwardToVizzor`. We pass the wallet down so the counter
   // can be bumped atomically on the success path only.
   const walletForCounter = subscribed ? null : session.wallet;
-  return forwardToVizzor(body.messages, walletForCounter);
+  return forwardToVizzor(body.messages, walletForCounter, {
+    wallet: session.wallet,
+    subscription,
+    headers: req.headers,
+  });
 }
 
 /* ------------------------------------------------------------------ *\
@@ -133,6 +139,11 @@ export async function POST(req: Request) {
 async function forwardToVizzor(
   messages: UIMessage[],
   walletForCounter: string | null,
+  ctx: {
+    wallet: string;
+    subscription: SubscriptionRow | null;
+    headers: Headers;
+  },
 ): Promise<Response> {
   const base =
     process.env.VIZZOR_API_URL ??
@@ -155,6 +166,24 @@ async function forwardToVizzor(
   if (vizzorMessages.length === 0) {
     return offlineResponse();
   }
+
+  // Per-surface namespaced engine user-id. The vizzor engine resolves
+  // subscription tier by `user_id` from its own Postgres store (which
+  // the bot writes to). Telegram users land in numeric chat IDs; web
+  // users get a `web:` prefix so the two streams never collide and
+  // their `aiChat.toolUse` per-day counters stay independent. The hash
+  // truncation keeps the identifier opaque while still being stable
+  // for the same wallet across sessions.
+  const userId = `web:${hashWalletForUserId(ctx.wallet)}`;
+  const tier = ctx.subscription?.tier ?? 'free';
+  // Best-effort locale + timezone derivation. `Accept-Language` is the
+  // standard browser-forwarded preference; the timezone is a custom
+  // header the client emits (`x-vizzor-timezone`) because the browser
+  // doesn't expose tz in any default header. Both fall through to
+  // sensible defaults if the client doesn't send them.
+  const locale = deriveLocale(ctx.headers.get('accept-language'));
+  const timezone =
+    ctx.headers.get('x-vizzor-timezone')?.trim() || 'UTC';
 
   const controller = new AbortController();
   const timeout = setTimeout(
@@ -179,7 +208,17 @@ async function forwardToVizzor(
     const upstreamRes = await fetch(`${base}/v1/chat`, {
       method: 'POST',
       headers: upstreamHeaders,
-      body: JSON.stringify({ messages: vizzorMessages }),
+      body: JSON.stringify({
+        messages: vizzorMessages,
+        userId,
+        metadata: {
+          tier,
+          wallet: ctx.wallet,
+          locale,
+          timezone,
+          client: 'site-web',
+        },
+      }),
       signal: controller.signal,
       cache: 'no-store',
     });
@@ -397,6 +436,32 @@ function streamPlainText(
   if (setCookie) headers.set('set-cookie', setCookie);
 
   return new Response(stream, { status: 200, headers });
+}
+
+/**
+ * Stable, opaque per-wallet engine identifier. SHA-256 truncated to 16
+ * hex chars — enough entropy to avoid collisions across the active
+ * user base, narrow enough to read in logs. The engine treats it as a
+ * string, no decoding required.
+ */
+function hashWalletForUserId(wallet: string): string {
+  return createHash('sha256').update(wallet).digest('hex').slice(0, 16);
+}
+
+/**
+ * Pick the primary language tag out of an Accept-Language header. The
+ * engine reads the first segment as the response language hint. We
+ * tolerate quality values (`en-US,en;q=0.9,es;q=0.8`) and strip them.
+ * Returns `'en'` when the header is missing or malformed so the engine
+ * can fall back to its own default rather than receive an empty hint.
+ */
+function deriveLocale(header: string | null): string {
+  if (!header) return 'en';
+  const first = header.split(',')[0]?.trim();
+  if (!first) return 'en';
+  // Strip quality value if any made it past the split.
+  const lang = first.split(';')[0]?.trim().toLowerCase();
+  return lang && lang.length > 0 ? lang : 'en';
 }
 
 function extractLastUserText(messages: UIMessage[]): string {

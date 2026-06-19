@@ -1,11 +1,14 @@
 /**
  * POST /api/auth/dev-sign — dev-only auth bypass.
  *
- * The route is triple-gated. These tests assert the gates fail closed
- * — production callers MUST see 404, never a session cookie. The
- * positive case temporarily flips NODE_ENV + the flag + uses a
- * localhost Origin so the gate passes and verifies a proper auth
- * cookie comes back.
+ * The route is double-gated:
+ *   1. `NEXT_PUBLIC_ALLOW_DEV_AUTH === 'true'`
+ *   2. Request origin is localhost OR matches the
+ *      `DEV_AUTH_ALLOWED_ORIGINS` comma-separated allow-list
+ *
+ * These tests assert the gate fails closed in production and opens
+ * cleanly for both localhost dev and the explicit allow-list path used
+ * by the test.vizzor.ai staging deploy.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -27,47 +30,40 @@ function buildRequest(body: unknown, origin = 'http://localhost:3000') {
 }
 
 describe('POST /api/auth/dev-sign', () => {
-  let originalNodeEnv: string | undefined;
   let originalFlag: string | undefined;
-  let originalAllowedOrigins: string | undefined;
+  let originalDevAuthOrigins: string | undefined;
+  let originalExtraOrigins: string | undefined;
 
   beforeEach(() => {
-    originalNodeEnv = process.env.NODE_ENV;
     originalFlag = process.env.NEXT_PUBLIC_ALLOW_DEV_AUTH;
-    originalAllowedOrigins = process.env.NEXT_PUBLIC_ALLOWED_ORIGINS;
-    // origin-check needs to allow localhost:3000 for the positive case.
-    process.env.NEXT_PUBLIC_ALLOWED_ORIGINS = 'http://localhost:3000';
+    originalDevAuthOrigins = process.env.DEV_AUTH_ALLOWED_ORIGINS;
+    originalExtraOrigins = process.env.VIZZOR_EXTRA_ORIGINS;
+    // `checkOrigin` (lib/payment/origin-check.ts) reads the staging
+    // allow-list from VIZZOR_EXTRA_ORIGINS — opt the staging host in
+    // so the positive case isn't blocked by the origin gate.
+    process.env.VIZZOR_EXTRA_ORIGINS = 'https://test.vizzor.ai,https://other.example.com';
   });
 
   afterEach(() => {
     const env = process.env as EnvMutable;
-    env.NODE_ENV = originalNodeEnv;
     env.NEXT_PUBLIC_ALLOW_DEV_AUTH = originalFlag;
-    env.NEXT_PUBLIC_ALLOWED_ORIGINS = originalAllowedOrigins;
+    env.DEV_AUTH_ALLOWED_ORIGINS = originalDevAuthOrigins;
+    env.VIZZOR_EXTRA_ORIGINS = originalExtraOrigins;
   });
 
-  it('returns 404 when NODE_ENV is not development', async () => {
+  it('returns 404 when NEXT_PUBLIC_ALLOW_DEV_AUTH is unset', async () => {
     const env = process.env as EnvMutable;
-    env.NODE_ENV = 'production';
-    env.NEXT_PUBLIC_ALLOW_DEV_AUTH = 'true';
+    env.NEXT_PUBLIC_ALLOW_DEV_AUTH = undefined;
     const res = await POST(buildRequest({ wallet: VALID_WALLET }));
     expect(res.status).toBe(404);
     // No auth cookie was set on the 404.
     expect(res.headers.get('set-cookie')).toBeNull();
   });
 
-  it('returns 404 when NEXT_PUBLIC_ALLOW_DEV_AUTH is unset', async () => {
+  it('returns 404 when the flag is set but origin is neither localhost nor allow-listed', async () => {
     const env = process.env as EnvMutable;
-    env.NODE_ENV = 'development';
-    env.NEXT_PUBLIC_ALLOW_DEV_AUTH = undefined;
-    const res = await POST(buildRequest({ wallet: VALID_WALLET }));
-    expect(res.status).toBe(404);
-  });
-
-  it('returns 404 when origin is not localhost', async () => {
-    const env = process.env as EnvMutable;
-    env.NODE_ENV = 'development';
     env.NEXT_PUBLIC_ALLOW_DEV_AUTH = 'true';
+    env.DEV_AUTH_ALLOWED_ORIGINS = undefined;
     const res = await POST(
       buildRequest({ wallet: VALID_WALLET }, 'https://evil.example.com'),
     );
@@ -76,7 +72,6 @@ describe('POST /api/auth/dev-sign', () => {
 
   it('returns 400 invalid_wallet when wallet is malformed', async () => {
     const env = process.env as EnvMutable;
-    env.NODE_ENV = 'development';
     env.NEXT_PUBLIC_ALLOW_DEV_AUTH = 'true';
     const res = await POST(buildRequest({ wallet: 'not-a-wallet' }));
     expect(res.status).toBe(400);
@@ -85,9 +80,8 @@ describe('POST /api/auth/dev-sign', () => {
     expect(body.reason).toBe('invalid_wallet');
   });
 
-  it('mints a session + sets the auth cookie when all gates pass', async () => {
+  it('mints a session + sets the auth cookie on localhost when the flag is on', async () => {
     const env = process.env as EnvMutable;
-    env.NODE_ENV = 'development';
     env.NEXT_PUBLIC_ALLOW_DEV_AUTH = 'true';
     const res = await POST(buildRequest({ wallet: VALID_WALLET }));
     expect(res.status).toBe(200);
@@ -103,5 +97,38 @@ describe('POST /api/auth/dev-sign', () => {
     expect(cookie).toMatch(/vizzor\.auth=|__Host-vizzor\.auth=/);
     expect(cookie).toContain('HttpOnly');
     expect(cookie).toContain('Path=/');
+    // Localhost: no Secure flag — the dev server is HTTP.
+    expect(cookie).not.toContain('Secure');
+  });
+
+  it('mints a session for an allow-listed staging origin AND sets the Secure cookie flag', async () => {
+    const env = process.env as EnvMutable;
+    env.NEXT_PUBLIC_ALLOW_DEV_AUTH = 'true';
+    env.DEV_AUTH_ALLOWED_ORIGINS = 'https://test.vizzor.ai';
+    const res = await POST(
+      buildRequest({ wallet: VALID_WALLET }, 'https://test.vizzor.ai'),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; wallet: string };
+    expect(body.ok).toBe(true);
+    expect(body.wallet).toBe(VALID_WALLET);
+    const cookie = res.headers.get('set-cookie') ?? '';
+    // Staging is HTTPS — the cookie MUST carry `Secure` so browsers
+    // honor it (and so a downgrade attack can't capture it).
+    expect(cookie).toContain('Secure');
+    expect(cookie).toContain('HttpOnly');
+  });
+
+  it('returns 404 when origin doesnt match any entry in the dev-auth allow-list', async () => {
+    const env = process.env as EnvMutable;
+    env.NEXT_PUBLIC_ALLOW_DEV_AUTH = 'true';
+    env.DEV_AUTH_ALLOWED_ORIGINS = 'https://test.vizzor.ai';
+    // `other.example.com` is in VIZZOR_EXTRA_ORIGINS (so the outer
+    // origin-check passes) but is NOT in DEV_AUTH_ALLOWED_ORIGINS — the
+    // dev-auth gate refuses, returning 404.
+    const res = await POST(
+      buildRequest({ wallet: VALID_WALLET }, 'https://other.example.com'),
+    );
+    expect(res.status).toBe(404);
   });
 });
