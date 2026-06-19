@@ -231,12 +231,12 @@ export function WalletConnectFlow({
       // without having reached the wallet app (e.g. iOS got stuck on
       // the wallet's bridge page).
       try {
-        window.sessionStorage.setItem(
+        window.localStorage.setItem(
           'vizzor.wallet.fallback',
           kickoff.fallbackSchemeUrl,
         );
       } catch {
-        // sessionStorage can be unavailable in private modes — best-effort.
+        // localStorage can be unavailable in private modes — best-effort.
       }
       // Android: prefer the Intent URL — guaranteed app launch when
       // installed, automatic Play-Store fallback when not.

@@ -12,18 +12,23 @@
  *   - decryptConnectCallback throws on tampered ciphertext
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import {
+  HANDOFF_TTL_MS,
   buildAndroidIntentUrl,
   buildConnectUrl,
   buildFallbackSchemeUrl,
   buildSignMessageUrl,
+  clearHandoff,
   decryptConnectCallback,
   decryptSignMessageCallback,
   encodeSignMessagePayload,
   generateDappKeypair,
+  loadHandoff,
+  saveHandoff,
+  updateHandoff,
 } from '@/lib/wallet/deeplink';
 
 describe('buildConnectUrl', () => {
@@ -206,6 +211,90 @@ describe('connect-callback decryption', () => {
         dappSecretKey: bs58.encode(dapp.secretKey),
       }),
     ).toThrow('decrypt_failed');
+  });
+});
+
+describe('handoff persistence', () => {
+  // Vitest's default environment is `node`, so we polyfill localStorage
+  // here for these tests only — the wallet handoff is browser-only,
+  // and the real fix lives in `lib/wallet/deeplink.ts` flipping from
+  // sessionStorage to localStorage so the value survives iOS Safari's
+  // habit of resuming the universal-link redirect in a NEW tab.
+  beforeEach(() => {
+    const bucket = new Map<string, string>();
+    const stub: Storage = {
+      getItem: (k: string) => bucket.get(k) ?? null,
+      setItem: (k: string, v: string) => void bucket.set(k, v),
+      removeItem: (k: string) => void bucket.delete(k),
+      clear: () => bucket.clear(),
+      key: (i: number) => Array.from(bucket.keys())[i] ?? null,
+      get length() {
+        return bucket.size;
+      },
+    };
+    vi.stubGlobal('window', { localStorage: stub });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('round-trips a saved handoff and stamps createdAt', () => {
+    saveHandoff({
+      providerId: 'phantom',
+      dappPublicKey: 'pub',
+      dappSecretKey: 'sec',
+      returnTo: 'https://test.vizzor.ai/predict',
+    });
+    const loaded = loadHandoff();
+    expect(loaded?.providerId).toBe('phantom');
+    expect(loaded?.dappPublicKey).toBe('pub');
+    expect(loaded?.dappSecretKey).toBe('sec');
+    expect(loaded?.createdAt).toBeTypeOf('number');
+    expect(loaded!.createdAt!).toBeLessThanOrEqual(Date.now());
+  });
+
+  it('preserves the original createdAt across updateHandoff', () => {
+    saveHandoff({
+      providerId: 'phantom',
+      dappPublicKey: 'pub',
+      dappSecretKey: 'sec',
+      returnTo: 'https://test.vizzor.ai',
+    });
+    const first = loadHandoff();
+    expect(first?.createdAt).toBeTypeOf('number');
+    const originalCreatedAt = first!.createdAt!;
+    // Update after a small delay — createdAt must stay pinned to
+    // the first save so the TTL window doesn't slide.
+    const updated = updateHandoff({ walletAddress: 'WAL123' });
+    expect(updated?.walletAddress).toBe('WAL123');
+    expect(updated?.createdAt).toBe(originalCreatedAt);
+  });
+
+  it('drops handoffs older than HANDOFF_TTL_MS and returns null', () => {
+    const ancient = Date.now() - HANDOFF_TTL_MS - 1_000;
+    saveHandoff({
+      providerId: 'phantom',
+      dappPublicKey: 'pub',
+      dappSecretKey: 'sec',
+      returnTo: 'https://test.vizzor.ai',
+      createdAt: ancient,
+    });
+    expect(loadHandoff()).toBeNull();
+    // The expired entry must be wiped — a later save shouldn't see it.
+    expect(window.localStorage.getItem('vizzor.wallet.handoff')).toBeNull();
+  });
+
+  it('clearHandoff removes the stored entry', () => {
+    saveHandoff({
+      providerId: 'phantom',
+      dappPublicKey: 'pub',
+      dappSecretKey: 'sec',
+      returnTo: 'https://test.vizzor.ai',
+    });
+    expect(loadHandoff()).not.toBeNull();
+    clearHandoff();
+    expect(loadHandoff()).toBeNull();
   });
 });
 

@@ -11,7 +11,8 @@
  * Round-trip (Phantom; Solflare is identical with different base URLs):
  *
  *   1. Site generates an ephemeral X25519 keypair, persists it to
- *      sessionStorage, then sets window.location.href to:
+ *      localStorage (see security note below), then sets
+ *      window.location.href to:
  *
  *        https://phantom.com/ul/v1/connect
  *          ?dapp_encryption_public_key=<base58>
@@ -51,10 +52,19 @@
  * deps) matches Solana's address encoding so callers can treat
  * `walletAddress` as a regular pubkey string.
  *
- * Why sessionStorage and not localStorage: the keypair is sensitive
- * to this tab + this attempt. Closing the tab discards the secret.
- * Other tabs can't pick up a partial handoff. After verify succeeds
- * we clear it; if the user abandons the flow it dies on tab close.
+ * Why localStorage (and not sessionStorage): the wallet app's
+ * Universal Link redirect back to the dapp commonly lands in a
+ * *new* browser tab on iOS (Safari + Brave + Chrome iOS all do
+ * this when WKWebView resolves the UL while the original tab is
+ * suspended). A new tab carries its own empty `sessionStorage`,
+ * which means the dapp secret key needed to decrypt Phantom's
+ * encrypted response is gone — the callback then 400s with
+ * `handoff_missing` even though the user signed correctly. The
+ * security trade-off is acceptable: the X25519 keypair is generated
+ * fresh per attempt, narrowly TTL-bounded to 5 minutes (enforced in
+ * `loadHandoff`), and discarded immediately after verify. An XSS
+ * attacker on the dapp can read either storage anyway, so
+ * tab-isolation isn't the real boundary.
  */
 
 import nacl from 'tweetnacl';
@@ -90,7 +100,20 @@ export interface HandoffState {
   siwsExpiresAt?: string;
   /** Where to send the user once verify succeeds. */
   returnTo: string;
+  /** Epoch ms the handoff was created. `loadHandoff` rejects
+   *  anything older than `HANDOFF_TTL_MS` so stale keypairs from
+   *  abandoned attempts can't be replayed against a new flow. */
+  createdAt?: number;
 }
+
+/**
+ * How long a handoff state is considered fresh. The round trip
+ * through the wallet app is normally well under a minute; the
+ * SIWS nonce we couple to it is also 5-minute TTL. Going beyond
+ * five minutes means the SIWS nonce is dead anyway, so we drop
+ * the handoff state and force a clean restart.
+ */
+export const HANDOFF_TTL_MS = 5 * 60 * 1000;
 
 /* ─────────────────────── environment ─────────────────────── */
 
@@ -138,18 +161,40 @@ function deriveSharedSecret(
 
 export function saveHandoff(state: HandoffState): void {
   if (typeof window === 'undefined') return;
-  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  // Always stamp the creation time on first save — the TTL gate in
+  // `loadHandoff` keys off this. Subsequent `updateHandoff` calls
+  // preserve the original `createdAt` so the window doesn't extend.
+  const stamped: HandoffState = {
+    ...state,
+    createdAt: state.createdAt ?? Date.now(),
+  };
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(stamped));
 }
 
 export function loadHandoff(): HandoffState | null {
   if (typeof window === 'undefined') return null;
-  const raw = window.sessionStorage.getItem(STORAGE_KEY);
+  const raw = window.localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
+  let parsed: HandoffState | null = null;
   try {
-    return JSON.parse(raw) as HandoffState;
+    parsed = JSON.parse(raw) as HandoffState;
   } catch {
+    // Malformed payload — discard rather than surface to the caller
+    // as a partial state that could decrypt against wrong keys.
+    window.localStorage.removeItem(STORAGE_KEY);
     return null;
   }
+  // TTL gate: handoffs older than HANDOFF_TTL_MS are dead and could
+  // be replays. The SIWS nonce we coupled to this keypair is also
+  // 5-minute TTL, so anything older was unrecoverable anyway.
+  if (
+    parsed?.createdAt &&
+    Date.now() - parsed.createdAt > HANDOFF_TTL_MS
+  ) {
+    window.localStorage.removeItem(STORAGE_KEY);
+    return null;
+  }
+  return parsed;
 }
 
 export function updateHandoff(
@@ -164,7 +209,7 @@ export function updateHandoff(
 
 export function clearHandoff(): void {
   if (typeof window === 'undefined') return;
-  window.sessionStorage.removeItem(STORAGE_KEY);
+  window.localStorage.removeItem(STORAGE_KEY);
 }
 
 /* ─────────────────────── URL builders ─────────────────────── */

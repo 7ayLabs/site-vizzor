@@ -256,12 +256,12 @@ export function WalletSelectorModal({
           callbackUrl,
         });
         try {
-          window.sessionStorage.setItem(
+          window.localStorage.setItem(
             'vizzor.wallet.fallback',
             kickoff.fallbackSchemeUrl,
           );
         } catch {
-          // Best-effort — private modes block sessionStorage and the
+          // Best-effort — private modes block localStorage and the
           // user can recover via the standard retry path.
         }
         // Android uses the Intent URL (guaranteed app launch + Play
