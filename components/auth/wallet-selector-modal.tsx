@@ -32,7 +32,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useSWRConfig } from 'swr';
 import { useRouter } from '@/i18n/navigation';
 import { X, Loader2, Check, AlertCircle, ExternalLink } from 'lucide-react';
@@ -43,6 +43,12 @@ import type {
 } from '@/components/wallet/wallet-connect-flow';
 import { SupportCodeChip } from '@/components/ui/support-code-chip';
 import { walletConnectCode } from '@/lib/errors';
+import {
+  isMobileWeb,
+  startMobileConnect,
+  type DeeplinkProviderId,
+} from '@/lib/wallet/deeplink';
+import { localizedAbsoluteUrl } from '@/lib/wallet/locale-url';
 
 /* ─────────────── lazy heavy bundles ─────────────── */
 
@@ -138,6 +144,7 @@ export function WalletSelectorModal({
 }: WalletSelectorModalProps) {
   const t = useTranslations('auth');
   const router = useRouter();
+  const locale = useLocale();
   const { mutate } = useSWRConfig();
   const firstOptionRef = useRef<HTMLButtonElement | null>(null);
 
@@ -224,13 +231,55 @@ export function WalletSelectorModal({
         window.setTimeout(() => router.push(href as never), EXIT_MS);
         return;
       }
+      // Mobile fast-path — navigate synchronously inside the user's
+      // tap handler. iOS Universal Link interception requires the
+      // navigation to happen WITHIN the user-gesture window, and
+      // routing through React's setState → mount → useEffect chain
+      // burns past that window (Safari treats the late
+      // `window.location.href = …` as a programmatic navigation and
+      // falls through to the wallet's marketing page instead of
+      // opening the app). By kicking the deeplink off here we
+      // preserve the gesture: tap → kickoff URL → navigation, all
+      // synchronous.
+      if (
+        isMobileWeb() &&
+        (action.providerId === 'phantom' || action.providerId === 'solflare')
+      ) {
+        const deeplinkProvider: DeeplinkProviderId = action.providerId;
+        const callbackUrl = localizedAbsoluteUrl(
+          '/wallet/callback?step=connect',
+          locale,
+        );
+        const kickoff = startMobileConnect({
+          providerId: deeplinkProvider,
+          returnTo: window.location.href,
+          callbackUrl,
+        });
+        try {
+          window.sessionStorage.setItem(
+            'vizzor.wallet.fallback',
+            kickoff.fallbackSchemeUrl,
+          );
+        } catch {
+          // Best-effort — private modes block sessionStorage and the
+          // user can recover via the standard retry path.
+        }
+        // Android uses the Intent URL (guaranteed app launch + Play
+        // Store fallback); iOS uses the Universal Link.
+        const target =
+          kickoff.platform === 'android'
+            ? kickoff.androidIntentUrl
+            : kickoff.universalUrl;
+        window.location.href = target;
+        return;
+      }
       // Solana flow — stays in place.
       setErrorCode(null);
       setErrorDetail(null);
       setSelectedProvider(action.providerId);
       setPhase('connecting');
     },
-    [onClose, router],
+    [locale, onClose, router],
   );
 
   const handleStatus = useCallback((status: ConnectStatus) => {
