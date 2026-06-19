@@ -13,11 +13,19 @@
  *   1. Site generates an ephemeral X25519 keypair, persists it to
  *      sessionStorage, then sets window.location.href to:
  *
- *        https://phantom.app/ul/v1/connect
+ *        https://phantom.com/ul/v1/connect
  *          ?dapp_encryption_public_key=<base58>
  *          &cluster=<mainnet-beta|devnet|testnet>
  *          &app_url=<https://vizzor.ai>
  *          &redirect_link=<https://vizzor.ai/en/wallet/callback?step=connect>
+ *
+ *      Phantom moved their universal-link host from `phantom.app` to
+ *      `phantom.com` in 2025; using the new host directly avoids the
+ *      `.app → .com` 301 that breaks iOS Universal Link interception
+ *      (Safari ends up stuck on Phantom's marketing page with the
+ *      "Opening link…" message instead of opening the app). On
+ *      Android we use the equivalent `intent://` form so the Play
+ *      Store fallback is preserved even when Phantom isn't installed.
  *
  *   2. iOS / Android dispatches to the wallet app; user approves;
  *      Phantom redirects back to the redirect_link with:
@@ -32,7 +40,7 @@
  *
  *   4. Site fetches the SIWS nonce (`/api/auth/siws/nonce`), encrypts
  *      `{ session, message }` under the shared secret, and navigates to
- *      `https://phantom.app/ul/v1/signMessage?...&payload=<base58>`.
+ *      `https://phantom.com/ul/v1/signMessage?...&payload=<base58>`.
  *
  *   5. User signs; Phantom redirects back; site decrypts the signature,
  *      POSTs to `/api/auth/siws/verify`, then hops back to `returnTo`.
@@ -161,13 +169,86 @@ export function clearHandoff(): void {
 
 /* ─────────────────────── URL builders ─────────────────────── */
 
+/**
+ * Universal-link base URL per provider. Phantom previously published
+ * `phantom.app/ul/v1/...` but consolidated to `phantom.com` in 2025 —
+ * the old host now 301s to the new one, and on iOS the redirect chain
+ * breaks the Universal Link association so Safari ends up stuck on
+ * the marketing page ("Opening link…"). Targeting the new host
+ * directly preserves the user gesture and lets iOS / Android open
+ * the wallet app.
+ */
 function baseUrlFor(providerId: DeeplinkProviderId): string {
   switch (providerId) {
     case 'phantom':
-      return 'https://phantom.app/ul/v1';
+      return 'https://phantom.com/ul/v1';
     case 'solflare':
       return 'https://solflare.com/ul/v1';
   }
+}
+
+/**
+ * Custom-scheme equivalent of the universal link, used as a manual
+ * fallback when iOS / Android don't intercept the https deeplink (the
+ * "Opening link…" stuck state). Tapping a `phantom://` URL invokes
+ * the app's URL handler directly and bypasses the browser's
+ * association-resolution dance — but only works when the app is
+ * actually installed, so we show it behind the primary UL navigation
+ * rather than instead of it.
+ */
+export function buildFallbackSchemeUrl(
+  providerId: DeeplinkProviderId,
+  universalUrl: string,
+): string {
+  // Strip the `https://<host>` prefix so we keep the same path + query
+  // string in the custom scheme. Phantom and Solflare both honor the
+  // identical path under their custom scheme.
+  const stripped = universalUrl.replace(
+    /^https:\/\/(phantom\.com|phantom\.app|solflare\.com)/,
+    '',
+  );
+  switch (providerId) {
+    case 'phantom':
+      return `phantom:${stripped}`;
+    case 'solflare':
+      return `solflare:${stripped}`;
+  }
+}
+
+/**
+ * Platform discriminator used to pick the right fallback strategy.
+ * Android's `intent://` URL is the most reliable invocation; iOS
+ * always uses the universal link + a tap-to-open custom-scheme
+ * backup. Desktop callers should never reach this path.
+ */
+export type MobilePlatform = 'ios' | 'android' | 'desktop';
+
+export function detectMobilePlatform(): MobilePlatform {
+  if (typeof window === 'undefined') return 'desktop';
+  const ua = window.navigator.userAgent;
+  if (/iPhone|iPad|iPod/.test(ua)) return 'ios';
+  if (/Android/.test(ua)) return 'android';
+  return 'desktop';
+}
+
+/**
+ * Build an Android Intent URL that guarantees the wallet app is
+ * launched when installed, with the universal link as the browser
+ * fallback when it isn't. Format documented at
+ * https://developer.chrome.com/docs/android/intents/.
+ *
+ * The `package` field uses the published app id Phantom and Solflare
+ * register on the Play Store.
+ */
+export function buildAndroidIntentUrl(
+  providerId: DeeplinkProviderId,
+  universalUrl: string,
+): string {
+  const pkg = providerId === 'phantom' ? 'app.phantom' : 'com.solflare.mobile';
+  // Strip `https://` so the path travels under the Intent's `scheme=https`.
+  const stripped = universalUrl.replace(/^https:\/\//, '');
+  const fallback = encodeURIComponent(universalUrl);
+  return `intent://${stripped}#Intent;scheme=https;package=${pkg};S.browser_fallback_url=${fallback};end`;
 }
 
 export interface BuildConnectUrlOpts {
@@ -322,17 +403,44 @@ export function decryptSignMessageCallback(opts: {
 
 /* ─────────────────────── high-level kickoff ─────────────────────── */
 
+export interface MobileConnectKickoff {
+  /** Universal-link URL — `https://phantom.com/ul/v1/connect?…`.
+   *  Primary navigation target on iOS and the browser-fallback
+   *  inside the Android Intent. */
+  universalUrl: string;
+  /** Android Intent URL — guaranteed wallet-app invocation when the
+   *  app is installed; falls through to `universalUrl` when not. */
+  androidIntentUrl: string;
+  /** Custom-scheme URL — `phantom:/ul/v1/connect?…` — used as the
+   *  user-tappable "Open in Phantom" fallback when the iOS
+   *  Universal Link doesn't intercept and Safari gets stuck on the
+   *  wallet website's bridge page. */
+  fallbackSchemeUrl: string;
+  /** Active platform — drives which URL the caller navigates to
+   *  first. */
+  platform: MobilePlatform;
+}
+
 /**
  * Top-level entry from `WalletConnectFlow`'s mobile branch. Generates
- * a fresh keypair, persists the handoff state, and returns the URL
- * to navigate to. Caller does `window.location.href = url`.
+ * a fresh keypair, persists the handoff state, and returns every URL
+ * the caller might need:
+ *
+ *   - `universalUrl`         → primary on iOS
+ *   - `androidIntentUrl`     → primary on Android
+ *   - `fallbackSchemeUrl`    → user-tappable backup on either
+ *
+ * Caller should `window.location.href = androidIntentUrl` on Android
+ * and `window.location.href = universalUrl` on iOS; if the user is
+ * still on the page after ~2s the UI should reveal a "Open in
+ * Phantom" button bound to `fallbackSchemeUrl`.
  */
 export function startMobileConnect(opts: {
   providerId: DeeplinkProviderId;
   returnTo: string;
   /** Where Phantom should redirect back to. */
   callbackUrl: string;
-}): string {
+}): MobileConnectKickoff {
   const kp = generateDappKeypair();
   const dappPublicKey = bs58.encode(kp.publicKey);
   const dappSecretKey = bs58.encode(kp.secretKey);
@@ -342,9 +450,15 @@ export function startMobileConnect(opts: {
     dappSecretKey,
     returnTo: opts.returnTo,
   });
-  return buildConnectUrl({
+  const universalUrl = buildConnectUrl({
     providerId: opts.providerId,
     dappPublicKey,
     redirectLink: opts.callbackUrl,
   });
+  return {
+    universalUrl,
+    androidIntentUrl: buildAndroidIntentUrl(opts.providerId, universalUrl),
+    fallbackSchemeUrl: buildFallbackSchemeUrl(opts.providerId, universalUrl),
+    platform: detectMobilePlatform(),
+  };
 }
