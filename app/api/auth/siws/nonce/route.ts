@@ -20,6 +20,7 @@ import {
   generateNonce,
   isValidSolanaAddress,
   parseSiwsAction,
+  resolveSiwsContext,
   type SiwsAction,
 } from '@/lib/payment/siws';
 import { enforceRateLimit } from '@/lib/payment/rate-limit';
@@ -64,12 +65,22 @@ export async function POST(req: Request) {
   const nonce = generateNonce();
   const issuedAt = new Date();
   const expiresAt = new Date(Date.now() + NONCE_TTL_MS);
+  // SIWS context resolution: domain, URI and chain ID must match the
+  // origin the user loaded the dapp from AND the active payment
+  // network. Phantom (and the SIWS standard) reject signatures where
+  // these don't match. The /verify endpoint runs the SAME resolution
+  // against its incoming request — both sides arrive at byte-identical
+  // message strings, so the ed25519 signature verifies.
+  const siwsCtx = resolveSiwsContext(req);
   const message = buildSiwsMessage({
     wallet,
     nonce,
     action,
     issuedAt,
     expiresAt,
+    domain: siwsCtx.domain,
+    uri: siwsCtx.uri,
+    chainId: siwsCtx.chainId,
   });
 
   const headers = new Headers({
@@ -92,6 +103,16 @@ export async function POST(req: Request) {
       nonce,
       message,
       action,
+      // chainId is echoed back so the client can pass it as `chainId`
+      // in the Wallet Standard `signIn` input. Phantom (especially in
+      // Testnet Mode) refuses to sign when its current chain isn't
+      // explicitly declared by the dapp — the prompt renders but the
+      // user's Confirm click resolves to "Unexpected error". Echoing
+      // the resolved value keeps client + server byte-aligned and
+      // lets Phantom's chain enforcement pass.
+      chainId: siwsCtx.chainId,
+      domain: siwsCtx.domain,
+      uri: siwsCtx.uri,
       issuedAt: issuedAt.toISOString(),
       expiresAt: expiresAt.toISOString(),
     }),
