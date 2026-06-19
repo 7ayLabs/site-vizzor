@@ -46,6 +46,14 @@ export const ROUTE_LIMITS: Readonly<Record<string, RateLimitConfig>> = {
   'auth.siws.nonce': { capacity: 10, refillPerSecond: 10 / 60 },
   // 20 req/min — wallet may retry signing a few times.
   'auth.siws.verify': { capacity: 20, refillPerSecond: 20 / 60 },
+  // 20 req/min — modal pre-allocates 2 handoffs (phantom + solflare)
+  // per open; user may retry on iOS where the gesture window is
+  // tight. The cap absorbs that without inviting enumeration.
+  'auth.mobile-handoff.create': { capacity: 20, refillPerSecond: 20 / 60 },
+  // 40 req/min — the callback redeem fires once per round-trip leg
+  // (connect + sign = 2). Slightly higher cap because retries on
+  // flaky mobile networks land here disproportionately.
+  'auth.mobile-handoff.redeem': { capacity: 40, refillPerSecond: 40 / 60 },
   // 30 req/min — checkout shell retries on transient errors.
   'payment.session': { capacity: 30, refillPerSecond: 30 / 60 },
   // 5 req/s — legitimate bot bursts (many users hitting /start).
