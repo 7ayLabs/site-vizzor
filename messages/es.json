@@ -46,11 +46,17 @@
       "successSubtitle": "Sesión iniciada",
       "retry": "Reintentar",
       "installAction": "Instalar wallet",
+      "copyCode": "Copiar código de soporte",
+      "codeCopied": "Código copiado",
       "error": {
         "wallet_not_installed": "{wallet} no está instalada",
         "user_rejected": "Conexión cancelada",
+        "stale_session": "{wallet} no pudo completar la firma",
+        "stale_session_hint": "{wallet} está rechazando internamente — la firma se aprueba en la wallet pero la dapp recibe un error genérico. Prueba en orden:\n1. {wallet} → Ajustes → Configuración para desarrolladores → deja UNA sola cadena activa (p. ej. solo Solana Devnet en localhost, solo mainnet en producción).\n2. {wallet} → Ajustes → Aplicaciones de confianza → revoca este sitio y recarga.\n3. Bloquea + desbloquea {wallet} (limpia la caché de sesión).\n4. Desactiva otras extensiones de wallet de Solana en esta pestaña.",
         "nonce_failed": "No se pudo iniciar el inicio de sesión",
         "verify_failed": "Firma rechazada",
+        "wrong_chain": "Cambia {wallet} a {chain}",
+        "wrong_chain_hint": "Tu {wallet} está conectada a una cadena distinta a la que esta app necesita.\n\n1. Abre {wallet} → Ajustes → Configuración para desarrolladores.\n2. Activa solo {chain}.\n3. Desactiva otras testnets (por ejemplo Ethereum Sepolia) en esta pestaña y vuelve a intentarlo.",
         "unknown": "Algo salió mal"
       }
     },
@@ -61,6 +67,35 @@
       "solflareCaption": "Solana · iniciar sesión",
       "more": "Más wallets",
       "moreCaption": "Otros adaptadores de Solana"
+    },
+    "callback": {
+      "meta": {
+        "title": "Conectando wallet · Vizzor"
+      },
+      "verifying": "Conectando tu wallet",
+      "verifyingSubtitle": "Un momento — terminando el saludo",
+      "signing": "Inicia sesión en vizzor.ai",
+      "signingSubtitle": "Confirma el mensaje en tu wallet",
+      "success": "Wallet conectada",
+      "successSubtitle": "Volviendo a la página",
+      "errorSubtitle": "Vuelve a intentarlo desde la página de origen",
+      "home": "Ir al inicio",
+      "copyCode": "Copiar código de soporte",
+      "codeCopied": "Código copiado",
+      "error": {
+        "wallet_rejected": "Cancelaste la solicitud",
+        "handoff_missing": "Sesión expirada — empieza de nuevo",
+        "connect_params_missing": "La respuesta de la wallet estaba incompleta",
+        "sign_params_missing": "La respuesta de la wallet estaba incompleta",
+        "shared_secret_missing": "Sesión expirada — empieza de nuevo",
+        "unknown_step": "Paso de retorno desconocido",
+        "decrypt_failed": "No se pudo descifrar la respuesta de la wallet",
+        "connect_payload_missing_fields": "La respuesta de la wallet no es válida",
+        "signature_missing": "Falta la firma",
+        "nonce_failed": "No se pudo iniciar el inicio de sesión",
+        "verify_failed": "La firma fue rechazada",
+        "unknown": "Algo salió mal"
+      }
     }
   },
   "account": {

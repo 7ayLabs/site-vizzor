@@ -46,11 +46,17 @@
       "successSubtitle": "You're signed in",
       "retry": "Try again",
       "installAction": "Install wallet",
+      "copyCode": "Copy support code",
+      "codeCopied": "Code copied",
       "error": {
         "wallet_not_installed": "{wallet} isn't installed",
         "user_rejected": "Connection cancelled",
+        "stale_session": "{wallet} couldn't complete the signature",
+        "stale_session_hint": "{wallet} is rejecting internally — the same call that just signed worked at the wallet but the dapp got back an empty error. Try these in order:\n1. {wallet} → Settings → Developer Settings → keep only ONE chain active (e.g. Solana Devnet only on localhost, mainnet only in prod).\n2. {wallet} → Settings → Trusted Apps → revoke this site, then reload.\n3. Lock + unlock {wallet} (clears its session cache).\n4. Disable other Solana wallet extensions in this tab.",
         "nonce_failed": "Could not start sign-in",
         "verify_failed": "Signature was rejected",
+        "wrong_chain": "Switch {wallet} to {chain}",
+        "wrong_chain_hint": "Your {wallet} is connected to a different chain than this app needs.\n\n1. Open {wallet} → Settings → Developer Settings.\n2. Enable {chain} only.\n3. Disable other testnets (e.g. Ethereum Sepolia) for this tab, then retry.",
         "unknown": "Something went wrong"
       }
     },
@@ -61,6 +67,35 @@
       "solflareCaption": "Solana · sign in",
       "more": "More wallets",
       "moreCaption": "Other Solana adapters"
+    },
+    "callback": {
+      "meta": {
+        "title": "Connecting wallet · Vizzor"
+      },
+      "verifying": "Connecting your wallet",
+      "verifyingSubtitle": "One moment — finishing the handshake",
+      "signing": "Sign in to vizzor.ai",
+      "signingSubtitle": "Confirm the message in your wallet",
+      "success": "Wallet connected",
+      "successSubtitle": "Returning you to the page",
+      "errorSubtitle": "Try again from the page you started on",
+      "home": "Go home",
+      "copyCode": "Copy support code",
+      "codeCopied": "Code copied",
+      "error": {
+        "wallet_rejected": "You cancelled the request",
+        "handoff_missing": "Session expired — start again",
+        "connect_params_missing": "Wallet response was incomplete",
+        "sign_params_missing": "Wallet response was incomplete",
+        "shared_secret_missing": "Session expired — start again",
+        "unknown_step": "Unknown callback step",
+        "decrypt_failed": "Could not decrypt wallet response",
+        "connect_payload_missing_fields": "Wallet response was malformed",
+        "signature_missing": "Signature was missing",
+        "nonce_failed": "Could not start sign-in",
+        "verify_failed": "Signature was rejected",
+        "unknown": "Something went wrong"
+      }
     }
   },
   "account": {

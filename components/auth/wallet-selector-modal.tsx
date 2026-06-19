@@ -41,6 +41,8 @@ import type {
   ConnectStatus,
   SolanaProviderId,
 } from '@/components/wallet/wallet-connect-flow';
+import { SupportCodeChip } from '@/components/ui/support-code-chip';
+import { walletConnectCode } from '@/lib/errors';
 
 /* ─────────────── lazy heavy bundles ─────────────── */
 
@@ -252,6 +254,48 @@ export function WalletSelectorModal({
     setAttempt((n) => n + 1);
   }, []);
 
+  // Dev-only auth bypass. POSTs `/api/auth/dev-sign`, which is hard-
+  // 404'd in production / without the env flag. On success we step
+  // straight to the modal's `success` phase, reusing the existing
+  // SWR mutation + auto-close timer in the success effect above.
+  const handleDevSign = useCallback(async () => {
+    if (process.env.NEXT_PUBLIC_ALLOW_DEV_AUTH !== 'true') return;
+    setErrorCode(null);
+    setErrorDetail(null);
+    setPhase('signing');
+    try {
+      const wallet =
+        process.env.NEXT_PUBLIC_DEV_WALLET ??
+        window.prompt('Dev wallet address (base58)') ??
+        '';
+      if (!wallet) {
+        setPhase('open');
+        return;
+      }
+      const res = await fetch('/api/auth/dev-sign', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ wallet }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        reason?: string;
+      };
+      if (!res.ok || !data.ok) {
+        setErrorCode('verify_failed');
+        setErrorDetail(data.reason ?? `dev_sign_${res.status}`);
+        setPhase('error');
+        return;
+      }
+      setPhase('success');
+    } catch (e) {
+      setErrorCode('verify_failed');
+      setErrorDetail((e as Error).message);
+      setPhase('error');
+    }
+  }, []);
+
   // The selected option (for icon + label in the loading/success/error
   // screens). For "more" we don't have a meaningful selected wallet so
   // we fall back to a neutral header. MUST stay above the early
@@ -292,15 +336,16 @@ export function WalletSelectorModal({
       aria-labelledby="wallet-selector-title"
       className={`fixed inset-0 z-[60] flex items-end sm:items-center justify-center ${backdropAnim}`}
     >
-      {/* Backdrop. Only closes the modal when idle — clicking during
-          connect/sign shouldn't dismiss mid-handshake (the user would
-          be left with a pending wallet popup and no UI). */}
+      {/* Backdrop. Closes the modal in every phase — the user always
+          needs an escape hatch, especially when the wallet adapter is
+          hung waiting for a popup that will never come. A pending
+          handshake is harmless to cancel: we never persist anything
+          until SIWS verify lands. */}
       <button
         type="button"
         aria-label={t('close')}
-        onClick={showSelect ? onClose : undefined}
-        disabled={!showSelect}
-        className="absolute inset-0 bg-[color:color-mix(in_oklab,var(--bg)_70%,black_20%)]/85 backdrop-blur-sm disabled:cursor-default"
+        onClick={onClose}
+        className="absolute inset-0 bg-[color:color-mix(in_oklab,var(--bg)_70%,black_20%)]/85 backdrop-blur-sm"
       />
 
       <div
@@ -310,13 +355,23 @@ export function WalletSelectorModal({
           phase={phase}
           selectedOption={selectedOption}
           onClose={onClose}
-          canDismiss={showSelect || showError || showSuccess}
+          // Always allow dismissal — even mid-connect. If the wallet
+          // adapter is hung waiting for a popup that will never come
+          // (locked vault, blocked extension, etc.) the user needs an
+          // escape hatch. A pending handshake is harmless to cancel:
+          // we never persist anything until SIWS verify lands.
+          canDismiss={true}
         />
 
         {showSelect && (
           <SelectView
             firstOptionRef={firstOptionRef}
             onSelect={handleSelect}
+            onDevSign={
+              process.env.NEXT_PUBLIC_ALLOW_DEV_AUTH === 'true'
+                ? handleDevSign
+                : null
+            }
           />
         )}
 
@@ -358,6 +413,11 @@ export function WalletSelectorModal({
             option={selectedOption}
             onRetry={handleRetry}
             onClose={onClose}
+            onDevSign={
+              process.env.NEXT_PUBLIC_ALLOW_DEV_AUTH === 'true'
+                ? handleDevSign
+                : null
+            }
           />
         )}
 
@@ -424,9 +484,14 @@ function ModalHeader({
 function SelectView({
   firstOptionRef,
   onSelect,
+  onDevSign,
 }: {
   firstOptionRef: React.RefObject<HTMLButtonElement | null>;
   onSelect: (opt: WalletProviderOption) => void;
+  /** Non-null only when `NEXT_PUBLIC_ALLOW_DEV_AUTH=true` is set at
+   *  build time. Renders a dev-only escape-hatch link below the
+   *  wallet list. The endpoint it POSTs to is hard-404'd in prod. */
+  onDevSign: (() => Promise<void>) | null;
 }) {
   const t = useTranslations('auth');
   return (
@@ -458,6 +523,18 @@ function SelectView({
           </button>
         </li>
       ))}
+      {onDevSign && (
+        <li className="mt-1 px-3 pt-2 border-t border-[var(--border)]">
+          <button
+            type="button"
+            onClick={() => void onDevSign()}
+            className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--fg-3)] hover:text-[var(--accent)] transition-colors"
+            data-wallet="dev-sign"
+          >
+            Dev sign-in (skip wallet) →
+          </button>
+        </li>
+      )}
     </ul>
   );
 }
@@ -500,7 +577,14 @@ function LoadingView({
           })}
         </p>
         <p className="mono tabular text-[10.5px] text-[var(--fg-3)] uppercase tracking-[0.14em]">
-          {t(subtitleKey as 'modal.connectingSubtitle')}
+          {/* `signingSubtitle` interpolates {wallet}; `connectingSubtitle`
+              doesn't — passing it harmlessly is fine, next-intl ignores
+              unused vars but errors when a referenced var is missing. */}
+          {t(subtitleKey as 'modal.connectingSubtitle', {
+            wallet: option
+              ? t(`wallets.${option.i18nKey}` as 'wallets.phantom')
+              : '',
+          })}
         </p>
       </div>
     </div>
@@ -544,20 +628,37 @@ function ErrorView({
   option,
   onRetry,
   onClose,
+  onDevSign,
 }: {
   code: ConnectErrorCode | null;
   detail: string | null;
   option: WalletProviderOption | null;
   onRetry: () => void;
   onClose: () => void;
+  /** Non-null when the dev-auth bypass is enabled. We surface it as
+   *  a secondary action on `stale_session` errors so the user has a
+   *  way out when Phantom is hard-rejecting from internal state we
+   *  can't influence. */
+  onDevSign: (() => Promise<void>) | null;
 }) {
   const t = useTranslations('auth');
   const titleKey = code ? `modal.error.${code}` : 'modal.error.unknown';
   const isNotInstalled = code === 'wallet_not_installed';
+  const isStaleSession = code === 'stale_session';
+  const isWrongChain = code === 'wrong_chain';
+  // For `wrong_chain`, the `detail` is the CAIP-2 chain id we expected
+  // (e.g. `solana:devnet`). Surface the human label in the copy.
+  const wrongChainLabel = isWrongChain ? humaniseChain(detail) : '';
+  // The walked cause chain (Layer 2) is appended to `detail` for
+  // non-wrong-chain errors as `Foo: bar ← Baz: qux`. In production we
+  // still show it (it's diagnostic, not internal), but only with the
+  // first link — the rest is for support tickets via the copy chip.
+  const hasCauseChain = Boolean(detail && detail.includes(' ← '));
   const installUrl =
     option && option.action.kind === 'solana'
       ? installUrlFor(option.action.providerId)
       : null;
+  const support = walletConnectCode(code ?? 'unknown');
 
   return (
     <div className="px-5 pt-2 pb-5 flex flex-col items-center gap-4 text-center">
@@ -567,16 +668,52 @@ function ErrorView({
       >
         <AlertCircle size={22} strokeWidth={2} />
       </span>
-      <div className="flex flex-col gap-1.5 min-w-0">
+      <div className="flex flex-col gap-2 min-w-0 items-center">
         <p className="text-[14px] font-medium text-[var(--fg)]">
           {t(titleKey as 'modal.error.unknown', {
             wallet: option
               ? t(`wallets.${option.i18nKey}` as 'wallets.phantom')
               : '',
+            chain: wrongChainLabel,
           })}
         </p>
-        {detail && (
-          <p className="mono tabular text-[10px] text-[var(--fg-3)] uppercase tracking-[0.14em] break-all">
+        {isStaleSession && (
+          <p className="text-[12px] text-[var(--fg-2)] leading-snug max-w-[40ch] whitespace-pre-line">
+            {t('modal.error.stale_session_hint', {
+              wallet: option
+                ? t(`wallets.${option.i18nKey}` as 'wallets.phantom')
+                : 'wallet',
+            })}
+          </p>
+        )}
+        {isWrongChain && (
+          <p className="text-[12px] text-[var(--fg-2)] leading-snug max-w-[40ch] whitespace-pre-line">
+            {t('modal.error.wrong_chain_hint', {
+              wallet: option
+                ? t(`wallets.${option.i18nKey}` as 'wallets.phantom')
+                : 'wallet',
+              chain: wrongChainLabel,
+            })}
+          </p>
+        )}
+        <SupportCodeChip
+          code={support.code}
+          slug={support.slug}
+          copyLabel={t('modal.copyCode')}
+          copiedLabel={t('modal.codeCopied')}
+        />
+        {detail && !isWrongChain && (
+          // Preserve the wallet's original error message verbatim
+          // (no `uppercase`) so users can search for it / paste it
+          // into a support ticket. When Layer 2's verbose capture
+          // walked an inner cause chain, `detail` reads:
+          //   `WalletSignInError: Unexpected error ← <inner cause>`
+          // The split lets support see the underlying reason that
+          // Phantom hid behind the generic top-level message.
+          <p
+            className="mono tabular text-[10px] text-[var(--fg-3)] tracking-[0.04em] break-all max-w-[40ch]"
+            data-cause-chain={hasCauseChain ? 'true' : 'false'}
+          >
             {detail}
           </p>
         )}
@@ -600,6 +737,20 @@ function ErrorView({
         >
           {t('modal.retry')}
         </button>
+        {/* When Phantom is internally rejecting (`stale_session` with
+            "Unexpected error" — Phantom's catch-all) retry alone is
+            futile. Offer the dev-auth bypass as a single-click escape
+            so the user isn't stuck. Only rendered when the env flag
+            is set; the endpoint hard-404s otherwise. */}
+        {onDevSign && isStaleSession && (
+          <button
+            type="button"
+            onClick={() => void onDevSign()}
+            className="inline-flex h-9 items-center justify-center rounded-full border border-[var(--border)] px-4 mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--fg-3)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-colors"
+          >
+            Dev sign-in (skip wallet) →
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}
@@ -689,5 +840,24 @@ function installUrlFor(providerId: SolanaProviderId): string | null {
       return 'https://solflare.com/download';
     case 'more':
       return null;
+  }
+}
+
+/**
+ * Map a CAIP-2 chain identifier to a human-readable label. Used by the
+ * `wrong_chain` copy so users see "Solana Devnet" instead of
+ * "solana:devnet" in the action title and hint.
+ */
+function humaniseChain(chain: string | null | undefined): string {
+  if (!chain) return '';
+  switch (chain) {
+    case 'solana:mainnet':
+      return 'Solana Mainnet';
+    case 'solana:testnet':
+      return 'Solana Testnet';
+    case 'solana:devnet':
+      return 'Solana Devnet';
+    default:
+      return chain;
   }
 }
