@@ -50,7 +50,7 @@ export default function DocsRootLayout({ children }: { children: ReactNode }) {
           dangerouslySetInnerHTML={{ __html: themeBootScript }}
         />
       </head>
-      <body className="min-h-dvh antialiased">
+      <body className="min-h-dvh antialiased" suppressHydrationWarning>
         <ThemeProvider>
           <RootProvider>
             <DocsLayout

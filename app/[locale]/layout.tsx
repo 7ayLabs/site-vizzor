@@ -101,7 +101,14 @@ export default async function LocaleLayout({
           dangerouslySetInnerHTML={{ __html: themeBootScript }}
         />
       </head>
-      <body className="min-h-dvh antialiased">
+      {/* `suppressHydrationWarning` on <body> because some browser
+          extensions (ColorZilla → `cz-shortcut-listen`, Grammarly,
+          1Password, etc.) inject attributes onto <body> before React
+          hydrates. Those are out of our control and never affect the
+          tree underneath, but React would otherwise log a noisy
+          hydration mismatch on every page load for users running
+          those extensions. */}
+      <body className="min-h-dvh antialiased" suppressHydrationWarning>
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider>
             <TickerCarouselServer />
