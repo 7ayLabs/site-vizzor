@@ -29,19 +29,12 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react';
-import { useLocale } from 'next-intl';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import {
   WalletReadyState,
   type WalletName,
 } from '@solana/wallet-adapter-base';
-import {
-  isMobileWeb,
-  startMobileConnect,
-  type DeeplinkProviderId,
-} from '@/lib/wallet/deeplink';
-import { localizedAbsoluteUrl } from '@/lib/wallet/locale-url';
 
 export type SolanaProviderId = 'phantom' | 'solflare' | 'more';
 
@@ -177,7 +170,6 @@ export function WalletConnectFlow({
   // identity to be stable enough that the effect's dep array fires
   // only on real changes. Already part of `useWallet()` return.
   const { setVisible } = useWalletModal();
-  const locale = useLocale();
   const startedRef = useRef(false);
   const connectingRef = useRef(false);
   const signingRef = useRef(false);
@@ -192,65 +184,6 @@ export function WalletConnectFlow({
       }
     },
     [disconnect, onError],
-  );
-
-  // Mobile handoff helper — Phantom / Solflare Connect Protocol.
-  //
-  // On regular mobile browsers (iOS Safari / Chrome / Brave, Android
-  // Chrome / Firefox) there is no extension, so `select()` would
-  // never resolve via Wallet Standard. Instead we kick off the
-  // wallet's `ul/v1/connect` deeplink — the wallet app opens, the
-  // user approves, and the wallet returns to `/wallet/callback`
-  // with an encrypted response. The callback page finishes the
-  // SIWS dance and sends the user back to the page they started on.
-  //
-  // Critical: the user stays in their main mobile browser the whole
-  // time. The wallet app only opens briefly for the connect prompt
-  // and again for the signMessage prompt — it never hosts our site
-  // in its in-app browser.
-  //
-  // Returns true if we kicked off a handoff (the modal's outer
-  // timeout path then stops itself; navigation has already taken
-  // over).
-  const tryMobileHandoff = useCallback(
-    (id: SolanaProviderId): boolean => {
-      if (id === 'more' || !isMobileWeb()) return false;
-      if (id !== 'phantom' && id !== 'solflare') return false;
-      const deeplinkProvider: DeeplinkProviderId = id;
-      const callbackUrl = localizedAbsoluteUrl(
-        '/wallet/callback?step=connect',
-        locale,
-      );
-      const kickoff = startMobileConnect({
-        providerId: deeplinkProvider,
-        returnTo: window.location.href,
-        callbackUrl,
-      });
-      // Stash the user-tappable backup URL so the modal can surface a
-      // "Open in Phantom" affordance if the user returns to the page
-      // without having reached the wallet app (e.g. iOS got stuck on
-      // the wallet's bridge page).
-      try {
-        window.localStorage.setItem(
-          'vizzor.wallet.fallback',
-          kickoff.fallbackSchemeUrl,
-        );
-      } catch {
-        // localStorage can be unavailable in private modes — best-effort.
-      }
-      // Android: prefer the Intent URL — guaranteed app launch when
-      // installed, automatic Play-Store fallback when not.
-      // iOS / unknown: universal link. The redirect chain to
-      // `phantom.com` is now eliminated at the source URL, so Safari's
-      // Universal Link interception fires cleanly.
-      const target =
-        kickoff.platform === 'android'
-          ? kickoff.androidIntentUrl
-          : kickoff.universalUrl;
-      window.location.href = target;
-      return true;
-    },
-    [locale],
   );
 
   // Step 1 — select the requested wallet.
@@ -340,10 +273,13 @@ export function WalletConnectFlow({
     const timer = window.setTimeout(() => {
       if (startedRef.current) return;
       startedRef.current = true;
-      // Mobile path takes priority — if the user is on iOS/Android
-      // there is no extension to wait for, so the timeout is the
-      // canonical moment to hand off to the wallet's universal link.
-      if (tryMobileHandoff(providerId)) return;
+      // Mobile handoff has already fired from the modal's tap handler
+      // (`startDappBrowserHandoff` navigates the user to the wallet's
+      // in-app browser, where the desktop flow resumes via the
+      // `?action=connect&provider=…` auto-trigger). If we're still
+      // here after the timeout, either the wallet app isn't installed
+      // or we're on desktop without the extension — both want the
+      // install URL.
       const url = INSTALL_URLS[providerId];
       if (url && typeof window !== 'undefined') {
         window.open(url, '_blank', 'noopener,noreferrer');
@@ -352,7 +288,7 @@ export function WalletConnectFlow({
     }, READY_TIMEOUT_MS);
 
     return () => window.clearTimeout(timer);
-  }, [providerId, wallets, select, setVisible, onStatus, fail, tryMobileHandoff, connected, disconnect]);
+  }, [providerId, wallets, select, setVisible, onStatus, fail, connected, disconnect]);
 
   // Step 2 — once `select()` has settled and `wallet` is non-null,
   // call `connect()` explicitly. The provider's `autoConnect` is OFF
@@ -556,7 +492,51 @@ export function WalletConnectFlow({
             sigB58 = base58Encode(out.signature);
           } catch (signInErr) {
             if (isUserRejection(signInErr)) throw signInErr;
-            if (!signMessage || !isPhantomGenericFail(signInErr)) throw signInErr;
+            if (!isPhantomGenericFail(signInErr)) throw signInErr;
+
+            // Dev-mode silent recovery. Phantom on localhost+Devnet
+            // with multi-chain Testnet Mode returns "Unexpected error"
+            // AFTER the user already tapped Confirm in the SIWS popup
+            // — the user's intent is unambiguous, only the signature
+            // never makes it back to the dapp. When the dev-sign
+            // endpoint is enabled (NEXT_PUBLIC_ALLOW_DEV_AUTH=true on
+            // a localhost dev session), mint the session via that
+            // bypass instead of double-prompting with signMessage.
+            // Same UX as clicking "Dev sign-in (skip wallet)" — but
+            // automatic, so the user never sees the error chip.
+            //
+            // Production safety: the dev-sign route is triple-gated
+            // (NODE_ENV=development + env flag + localhost origin), so
+            // a leaked NEXT_PUBLIC_ALLOW_DEV_AUTH=true in prod 404s
+            // here and we fall through to the normal cascade.
+            if (process.env.NEXT_PUBLIC_ALLOW_DEV_AUTH === 'true') {
+              try {
+                const res = await fetch('/api/auth/dev-sign', {
+                  method: 'POST',
+                  headers: { 'content-type': 'application/json' },
+                  credentials: 'same-origin',
+                  body: JSON.stringify({ wallet: walletAddr }),
+                });
+                if (res.ok) {
+                  onStatus('success');
+                  return;
+                }
+              } catch {
+                // Network failure — fall through to signMessage cascade.
+              }
+            }
+
+            if (!signMessage) throw signInErr;
+            // Only fall back on non-production chains. The
+            // signMessage workaround exists for Phantom's localhost
+            // + Devnet multi-chain Testnet Mode rejection; running it
+            // on mainnet just produces a second extension popup with
+            // no benefit. Surface stale_session directly so the user
+            // sees the actionable hint instead.
+            const allowFallback =
+              nonceData.chainId === 'solana:devnet' ||
+              nonceData.chainId === 'solana:testnet';
+            if (!allowFallback) throw signInErr;
             if (typeof console !== 'undefined') {
               console.warn(
                 '[vizzor] signIn returned generic error, falling back to signMessage',
@@ -608,6 +588,31 @@ export function WalletConnectFlow({
         if (err.message?.startsWith('wrong_chain:')) {
           await fail('wrong_chain', err.message.slice('wrong_chain:'.length));
           return;
+        }
+        // Last-chance dev-mode silent recovery: covers the case where
+        // BOTH signIn and signMessage rejected (cascade exhausted on a
+        // chain that allowed the fallback). Same gating + safety as
+        // the inner recovery — dev-sign is hard-404 in production.
+        const errMsg = (err.message || '').toLowerCase();
+        if (
+          process.env.NEXT_PUBLIC_ALLOW_DEV_AUTH === 'true' &&
+          errMsg.includes('unexpected error') &&
+          publicKey
+        ) {
+          try {
+            const res = await fetch('/api/auth/dev-sign', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({ wallet: publicKey.toBase58() }),
+            });
+            if (res.ok) {
+              onStatus('success');
+              return;
+            }
+          } catch {
+            // Fall through to the normal error surface.
+          }
         }
         // Classify properly: a real user rejection ("User rejected
         // the request") stays `user_rejected`; a generic
