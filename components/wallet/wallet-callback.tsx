@@ -4,7 +4,7 @@
  * WalletCallback — handles the two return trips of the Phantom /
  * Solflare Connect Protocol.
  *
- * Lifecycle (driven entirely by URL params + sessionStorage):
+ * Lifecycle (driven entirely by URL params + localStorage):
  *
  *   step=connect → decrypt the connect response → POST SIWS nonce →
  *                  build signMessage deeplink → navigate to wallet.
