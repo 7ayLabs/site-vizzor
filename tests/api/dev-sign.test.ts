@@ -101,10 +101,12 @@ describe('POST /api/auth/dev-sign', () => {
     expect(cookie).not.toContain('Secure');
   });
 
-  it('mints a session for an allow-listed staging origin AND sets the Secure cookie flag', async () => {
+  it('recognises test.vizzor.ai as a built-in staging origin (no env needed) AND sets the Secure cookie flag', async () => {
     const env = process.env as EnvMutable;
     env.NEXT_PUBLIC_ALLOW_DEV_AUTH = 'true';
-    env.DEV_AUTH_ALLOWED_ORIGINS = 'https://test.vizzor.ai';
+    // No DEV_AUTH_ALLOWED_ORIGINS — the built-in staging list inside
+    // the route is what lets the staging origin through.
+    env.DEV_AUTH_ALLOWED_ORIGINS = undefined;
     const res = await POST(
       buildRequest({ wallet: VALID_WALLET }, 'https://test.vizzor.ai'),
     );
@@ -119,13 +121,23 @@ describe('POST /api/auth/dev-sign', () => {
     expect(cookie).toContain('HttpOnly');
   });
 
-  it('returns 404 when origin doesnt match any entry in the dev-auth allow-list', async () => {
+  it('honours an explicit DEV_AUTH_ALLOWED_ORIGINS entry for non-built-in hosts', async () => {
+    const env = process.env as EnvMutable;
+    env.NEXT_PUBLIC_ALLOW_DEV_AUTH = 'true';
+    env.DEV_AUTH_ALLOWED_ORIGINS = 'https://other.example.com';
+    const res = await POST(
+      buildRequest({ wallet: VALID_WALLET }, 'https://other.example.com'),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it('returns 404 when origin matches neither built-in staging nor the explicit allow-list', async () => {
     const env = process.env as EnvMutable;
     env.NEXT_PUBLIC_ALLOW_DEV_AUTH = 'true';
     env.DEV_AUTH_ALLOWED_ORIGINS = 'https://test.vizzor.ai';
     // `other.example.com` is in VIZZOR_EXTRA_ORIGINS (so the outer
-    // origin-check passes) but is NOT in DEV_AUTH_ALLOWED_ORIGINS — the
-    // dev-auth gate refuses, returning 404.
+    // origin-check passes) but isn't a built-in staging host and isn't
+    // in DEV_AUTH_ALLOWED_ORIGINS — the dev-auth gate refuses → 404.
     const res = await POST(
       buildRequest({ wallet: VALID_WALLET }, 'https://other.example.com'),
     );
