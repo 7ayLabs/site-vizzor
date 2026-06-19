@@ -29,6 +29,7 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react';
+import { useLocale } from 'next-intl';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import {
@@ -36,19 +37,83 @@ import {
   type WalletName,
 } from '@solana/wallet-adapter-base';
 import {
-  appDeepLinkFor,
   isMobileWeb,
-  universalLinkFor,
-} from '@/lib/wallet/mobile';
+  startMobileConnect,
+  type DeeplinkProviderId,
+} from '@/lib/wallet/deeplink';
+import { localizedAbsoluteUrl } from '@/lib/wallet/locale-url';
 
 export type SolanaProviderId = 'phantom' | 'solflare' | 'more';
 
 export type ConnectErrorCode =
   | 'wallet_not_installed'
   | 'user_rejected'
+  | 'stale_session'
   | 'nonce_failed'
   | 'verify_failed'
+  | 'wrong_chain'
   | 'unknown';
+
+/**
+ * Maps a raw wallet-adapter throw into one of our user-facing error
+ * codes. We prefer the most actionable code: `stale_session` for the
+ * generic `WalletConnectionError: Unexpected error` (because the
+ * recovery action — revoke trust in Phantom or clear local data — is
+ * different from a real user rejection), and `user_rejected` for the
+ * common case where the user closed the popup.
+ */
+/**
+ * One link in a walked error chain. Used for both console diagnostics
+ * and the dev-only modal cause line.
+ */
+interface ErrorChainLink {
+  name: string;
+  message: string;
+}
+
+/**
+ * Walk an Error's `cause` / `error` chain and flatten it into an
+ * array. Phantom and the wallet-standard adapter both nest the
+ * underlying failure inside `WalletSignInError(error?.message, error)`,
+ * so the message we surface to the user (e.g. `"Unexpected error"`)
+ * is often the WRAPPER, not the cause. Walking gives us the inner
+ * line we actually want.
+ */
+function walkErrorChain(err: unknown, depth = 0): ErrorChainLink[] {
+  if (depth > 6 || !err || typeof err !== 'object') return [];
+  const e = err as { name?: unknown; message?: unknown; cause?: unknown; error?: unknown };
+  const link: ErrorChainLink = {
+    name: typeof e.name === 'string' ? e.name : 'Error',
+    message: typeof e.message === 'string' ? e.message : '',
+  };
+  const next = e.cause ?? e.error;
+  return [link, ...walkErrorChain(next, depth + 1)];
+}
+
+/**
+ * Render a walked chain as `<top>: <msg> ← <inner>: <msg> ← ...`
+ * for the dev-only modal line and detail-string round trips.
+ */
+function formatCauseChain(chain: readonly ErrorChainLink[]): string {
+  return chain
+    .map((l) => `${l.name}: ${l.message}`.trim())
+    .filter((s) => s.length > 0)
+    .join(' ← ');
+}
+
+function classifyConnectError(err: Error & { name?: string }): ConnectErrorCode {
+  const msg = (err.message || '').toLowerCase();
+  if (msg.includes('user rejected') || msg.includes('rejected') || msg.includes('denied')) {
+    return 'user_rejected';
+  }
+  // The wallet-adapter ships this exact string for the generic
+  // failure that almost always means "session is in a bad state".
+  if (msg.includes('unexpected error')) {
+    return 'stale_session';
+  }
+  if (err.name === 'WalletNotReadyError') return 'wallet_not_installed';
+  return 'unknown';
+}
 
 export type ConnectStatus =
   | 'connecting'
@@ -105,9 +170,14 @@ export function WalletConnectFlow({
     connected,
     publicKey,
     signMessage,
+    signIn,
     disconnect,
   } = useWallet();
+  // The `wallet` field is reactive — re-running step 3 needs the
+  // identity to be stable enough that the effect's dep array fires
+  // only on real changes. Already part of `useWallet()` return.
   const { setVisible } = useWalletModal();
+  const locale = useLocale();
   const startedRef = useRef(false);
   const connectingRef = useRef(false);
   const signingRef = useRef(false);
@@ -124,64 +194,42 @@ export function WalletConnectFlow({
     [disconnect, onError],
   );
 
-  // Mobile handoff helper. On iOS / Android in a regular mobile browser
-  // (Safari, Chrome, Brave, …) the wallet's browser extension does not
-  // exist, so the Wallet Standard registry is empty and select() will
-  // never resolve. We hand off to the native wallet app via its custom
-  // URL scheme — `phantom://browse/<url>` opens Phantom directly with
-  // no website round-trip. If the app isn't installed, we fall back to
-  // the universal link (which points at the wallet's install page).
+  // Mobile handoff helper — Phantom / Solflare Connect Protocol.
   //
-  // Why the custom scheme first: iOS universal-link interception of
-  // `phantom.app/ul/*` is gated on the app's associated-domains
-  // entitlement being live. After fresh installs or stale iOS link
-  // caches the universal link silently degrades into a normal HTTPS
-  // navigation and lands the user on phantom.app's website instead
-  // of inside the wallet — the exact bug we're fixing here.
+  // On regular mobile browsers (iOS Safari / Chrome / Brave, Android
+  // Chrome / Firefox) there is no extension, so `select()` would
+  // never resolve via Wallet Standard. Instead we kick off the
+  // wallet's `ul/v1/connect` deeplink — the wallet app opens, the
+  // user approves, and the wallet returns to `/wallet/callback`
+  // with an encrypted response. The callback page finishes the
+  // SIWS dance and sends the user back to the page they started on.
   //
-  // Visibility-change detection: when the OS hands off to the wallet
-  // app, the page's `visibilityState` flips to 'hidden'. We use that
-  // as the signal "app opened, cancel the fallback". If the page is
-  // still 'visible' after the timeout, the scheme had no handler
-  // (app not installed) → fall back to the universal link.
+  // Critical: the user stays in their main mobile browser the whole
+  // time. The wallet app only opens briefly for the connect prompt
+  // and again for the signMessage prompt — it never hosts our site
+  // in its in-app browser.
   //
-  // Returns true if we initiated a handoff (caller stops the install-
-  // page path).
+  // Returns true if we kicked off a handoff (the modal's outer
+  // timeout path then stops itself; navigation has already taken
+  // over).
   const tryMobileHandoff = useCallback(
     (id: SolanaProviderId): boolean => {
       if (id === 'more' || !isMobileWeb()) return false;
-      const deepLink = appDeepLinkFor(id);
-      const universalLink = universalLinkFor(id);
-      if (!deepLink || !universalLink) return false;
-
-      let appOpened = false;
-      const onVisibilityChange = () => {
-        if (document.visibilityState === 'hidden') appOpened = true;
-      };
-      document.addEventListener('visibilitychange', onVisibilityChange);
-
-      // Step 1 — fire the app's custom scheme. iOS / Android dispatch
-      // this to the wallet's URL handler if the app is installed; the
-      // page typically blurs and visibilityState flips to 'hidden'
-      // within ~200ms when handoff succeeds.
-      window.location.href = deepLink;
-
-      // Step 2 — short fallback timer. If we're still visible after
-      // 1.2s, the scheme had no handler and we fall back to the
-      // universal link (which surfaces phantom.app's install / open
-      // prompt). 1.2s is enough headroom for the OS to dispatch on
-      // a cold launch but short enough that the user doesn't sit on
-      // a frozen UI when the app is genuinely missing.
-      window.setTimeout(() => {
-        document.removeEventListener('visibilitychange', onVisibilityChange);
-        if (appOpened) return;
-        if (document.visibilityState !== 'visible') return;
-        window.location.href = universalLink;
-      }, 1200);
-
+      if (id !== 'phantom' && id !== 'solflare') return false;
+      const deeplinkProvider: DeeplinkProviderId = id;
+      const callbackUrl = localizedAbsoluteUrl(
+        '/wallet/callback?step=connect',
+        locale,
+      );
+      const connectUrl = startMobileConnect({
+        providerId: deeplinkProvider,
+        returnTo: window.location.href,
+        callbackUrl,
+      });
+      window.location.href = connectUrl;
       return true;
     },
-    [],
+    [locale],
   );
 
   // Step 1 — select the requested wallet.
@@ -304,25 +352,76 @@ export function WalletConnectFlow({
       return;
     }
     connectingRef.current = true;
+    // Watchdog: when Phantom is in a state where it silently auto-
+    // connects (or silently fails to respond — e.g. Testnet Mode
+    // mismatch, locked vault, popup blocked behind the extension
+    // panel), `connect()` can hang indefinitely while the user
+    // stares at "Open Phantom to approve · Waiting…". Surface a
+    // dedicated `stale_session` error after 30s so they can act.
+    const watchdog = window.setTimeout(() => {
+      if (signingRef.current) return;
+      // Last-chance grace: if the adapter has actually connected
+      // but `connected` from useWallet hasn't synced yet, give it
+      // one more render before failing. The Step 3 effect picks
+      // this up naturally.
+      if (wallet.adapter.connected && wallet.adapter.publicKey) return;
+      void fail('stale_session', 'connect_timeout');
+    }, 30_000);
+
     void (async () => {
       try {
         await connect();
+        // Happy path: adapter emitted 'connect', useWallet will sync,
+        // Step 3 fires. Cancel the watchdog.
+        window.clearTimeout(watchdog);
       } catch (e) {
-        // Most common: user dismissed the wallet popup. Less common:
-        // the wallet's session was revoked or the extension is in a
-        // funny state. Either way, surface it as a retryable rejection.
-        await fail('user_rejected', (e as Error).message);
+        window.clearTimeout(watchdog);
+        const err = e as Error & { error?: unknown; name?: string };
+        // Wallet Standard race: connect() rejected but the underlying
+        // adapter actually completed the handshake. Authoritative
+        // truth is the adapter's own `connected` + `publicKey`. Keep
+        // connectingRef true so this effect doesn't re-fire and pop
+        // Phantom a second time; Step 3 takes over once useWallet
+        // syncs.
+        const adapter = wallet?.adapter;
+        if (adapter?.connected && adapter?.publicKey) {
+          return;
+        }
+        if (typeof console !== 'undefined') {
+          console.warn(
+            '[vizzor] wallet connect rejected',
+            { name: err.name, message: err.message, cause: err.error },
+          );
+        }
+        const code = classifyConnectError(err);
+        await fail(code, err.message || 'connect_failed');
         connectingRef.current = false;
       }
     })();
+
+    return () => window.clearTimeout(watchdog);
   }, [wallet, connected, connect, fail]);
 
   // Step 3 — once the wallet is connected, run the SIWS dance. Same
   // happy path as components/auth/wallet-auth-button.tsx but driven
   // here from inside the modal so the user never leaves their page.
+  //
+  // We prefer Wallet Standard `signIn` (the canonical SIWS feature
+  // every modern Solana wallet ships) over the legacy `signMessage`.
+  // The spec lets the wallet prefix/modify the message before signing
+  // — so even with a byte-perfect canonical SIWS body, `signMessage`
+  // could be silently mutated by the wallet and our server-side
+  // reconstruction would no longer verify. `signIn` returns the exact
+  // bytes the wallet endorsed; the server verifies against those
+  // bytes and parses out the security-relevant fields (nonce, wallet,
+  // statement) instead of trusting a reconstruction. This is the
+  // route Phantom optimizes internally — and the missing piece behind
+  // the persistent "Unexpected error" failure on `signMessage`.
   useEffect(() => {
     if (signingRef.current) return;
-    if (!connected || !publicKey || !signMessage) return;
+    if (!connected || !publicKey) return;
+    // Either primitive is enough — we'll pick the best one available.
+    if (!signIn && !signMessage) return;
     signingRef.current = true;
 
     void (async () => {
@@ -338,19 +437,95 @@ export function WalletConnectFlow({
         const nonceData = (await nonceRes.json()) as {
           ok: boolean;
           message?: string;
+          nonce?: string;
+          chainId?: string;
+          domain?: string;
+          uri?: string;
           issuedAt?: string;
           expiresAt?: string;
           reason?: string;
         };
-        if (!nonceData.ok || !nonceData.message) {
+        if (!nonceData.ok || !nonceData.message || !nonceData.nonce) {
           await fail('nonce_failed', nonceData.reason);
           return;
         }
 
-        const sigBytes = await signMessage(
-          new TextEncoder().encode(nonceData.message),
-        );
-        const sigB58 = base58Encode(sigBytes);
+        // Pre-flight: verify the active Wallet Standard account claims
+        // the chain we're about to ask it to sign on. Without this we
+        // silently hand Phantom a chain mismatch and get back the
+        // generic `"Unexpected error"` with no actionable signal.
+        // The chain enum is exposed via the StandardWalletAdapter's
+        // public `wallet` getter; legacy direct-injection adapters
+        // omit it, in which case we trust the wallet (no false-positives).
+        const expectedChain = nonceData.chainId;
+        if (expectedChain && wallet?.adapter) {
+          const standardWallet = (
+            wallet.adapter as unknown as {
+              wallet?: { accounts?: ReadonlyArray<{ chains?: readonly string[] }> };
+            }
+          ).wallet;
+          const declaredChains = standardWallet?.accounts?.[0]?.chains;
+          if (
+            declaredChains &&
+            declaredChains.length > 0 &&
+            !declaredChains.includes(expectedChain)
+          ) {
+            await fail('wrong_chain', expectedChain);
+            return;
+          }
+        }
+
+        let signedMessageB64: string | null = null;
+        let sigB58: string;
+
+        // Primary path: `signMessage` against the server-built canonical
+        // SIWS bytes. We tried `signIn` first (the Wallet Standard
+        // SIWS primitive) but Phantom on localhost + Devnet rejects
+        // `signIn` post-confirm with the generic "Unexpected error":
+        // its multi-chain Testnet Mode (Solana Devnet + Ethereum
+        // Sepolia simultaneously) trips an internal validation we
+        // can't influence from the dapp side. `signMessage` of the
+        // same bytes works because Phantom treats it as opaque bytes
+        // — no SIWS-specific validation applies. The domain-agnostic
+        // statement we ship in the message also keeps Phantom's
+        // phishing protection from flagging the bytes on localhost.
+        //
+        // `signIn` remains as a fallback for adapters that don't
+        // implement `signMessage` (rare; every modern Solana wallet
+        // ships it).
+        if (signMessage) {
+          const messageBytes = new TextEncoder().encode(nonceData.message);
+          const sigBytes = await signMessage(messageBytes);
+          sigB58 = base58Encode(sigBytes);
+        } else if (signIn) {
+          const origin =
+            typeof window !== 'undefined' ? window.location.origin : '';
+          let uri = origin;
+          let domain = '';
+          try {
+            const u = new URL(origin);
+            uri = u.origin;
+            domain = u.host;
+          } catch {
+            // origin already malformed; let the wallet fill the gap.
+          }
+          const out = await signIn({
+            domain: nonceData.domain ?? domain ?? undefined,
+            address: walletAddr,
+            statement: 'Authenticate this wallet to start your Vizzor session.',
+            uri: nonceData.uri ?? uri ?? undefined,
+            version: '1',
+            chainId: nonceData.chainId,
+            nonce: nonceData.nonce,
+            issuedAt: nonceData.issuedAt,
+            expirationTime: nonceData.expiresAt,
+          });
+          signedMessageB64 = base64Encode(out.signedMessage);
+          sigB58 = base58Encode(out.signature);
+        } else {
+          await fail('verify_failed', 'no_sign_primitive');
+          return;
+        }
 
         const verifyRes = await fetch('/api/auth/siws/verify', {
           method: 'POST',
@@ -362,6 +537,7 @@ export function WalletConnectFlow({
             action: 'login',
             issuedAt: nonceData.issuedAt,
             expiresAt: nonceData.expiresAt,
+            ...(signedMessageB64 ? { signedMessage: signedMessageB64 } : {}),
           }),
         });
         const verifyData = (await verifyRes.json()) as {
@@ -374,13 +550,47 @@ export function WalletConnectFlow({
         }
         onStatus('success');
       } catch (e) {
-        // signMessage throws when the user closes the popup or denies.
-        await fail('user_rejected', (e as Error).message);
+        const err = e as Error & { error?: unknown; name?: string };
+        const causeChain = walkErrorChain(err);
+        if (typeof console !== 'undefined') {
+          console.warn('[vizzor] siws sign rejected', causeChain);
+        }
+        // Pre-flight `wrong_chain` throws via Error message — recover.
+        if (err.message?.startsWith('wrong_chain:')) {
+          await fail('wrong_chain', err.message.slice('wrong_chain:'.length));
+          return;
+        }
+        // Classify properly: a real user rejection ("User rejected
+        // the request") stays `user_rejected`; a generic
+        // `WalletConnectionError: Unexpected error` becomes
+        // `stale_session` so the recovery hint is correct.
+        const code = classifyConnectError(err);
+        // Append the walked cause chain to the detail string so the
+        // dev-only modal line can surface it. Format:
+        // `<top>: <msg> ← <inner>: <msg> ← ...`
+        const detail = formatCauseChain(causeChain) || err.message || 'sign_failed';
+        await fail(code, detail);
       }
     })();
-  }, [connected, publicKey, signMessage, fail, onStatus]);
+  }, [connected, publicKey, wallet, signIn, signMessage, fail, onStatus]);
 
   return null;
+}
+
+/**
+ * Minimal base64 encoder for an arbitrary Uint8Array. The wallet
+ * `signIn` output bytes are not guaranteed to be base58-friendly
+ * (the wallet may prefix domain confirmation bytes per spec), so we
+ * use base64 for that channel and reserve base58 for the 64-byte
+ * ed25519 signature.
+ */
+function base64Encode(bytes: Uint8Array): string {
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  if (typeof btoa === 'function') return btoa(bin);
+  // Server / non-browser fallback — shouldn't hit in this `'use client'`
+  // module, but keeps typecheck honest under noUncheckedIndexedAccess.
+  return Buffer.from(bin, 'binary').toString('base64');
 }
 
 /**

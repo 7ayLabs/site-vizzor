@@ -46,11 +46,17 @@
       "successSubtitle": "Tu es connecté",
       "retry": "Réessayer",
       "installAction": "Installer le portefeuille",
+      "copyCode": "Copier le code support",
+      "codeCopied": "Code copié",
       "error": {
         "wallet_not_installed": "{wallet} n'est pas installé",
         "user_rejected": "Connexion annulée",
+        "stale_session": "{wallet} n'a pas pu compléter la signature",
+        "stale_session_hint": "{wallet} refuse en interne — la signature est validée dans la wallet mais la dapp reçoit une erreur générique. Essaie dans l'ordre :\n1. {wallet} → Réglages → Paramètres développeur → garde UNE seule chaîne active (par ex. seulement Solana Devnet en localhost, seulement mainnet en prod).\n2. {wallet} → Réglages → Applications de confiance → révoque ce site puis recharge.\n3. Verrouille + déverrouille {wallet} (vide le cache de session).\n4. Désactive les autres extensions Solana sur cet onglet.",
         "nonce_failed": "Impossible de démarrer la connexion",
         "verify_failed": "Signature refusée",
+        "wrong_chain": "Bascule {wallet} sur {chain}",
+        "wrong_chain_hint": "Ton {wallet} est connecté à une chaîne différente de celle attendue par cette app.\n\n1. Ouvre {wallet} → Réglages → Paramètres développeur.\n2. Active uniquement {chain}.\n3. Désactive les autres testnets (par exemple Ethereum Sepolia) pour cet onglet, puis réessaye.",
         "unknown": "Une erreur est survenue"
       }
     },
@@ -61,6 +67,35 @@
       "solflareCaption": "Solana · se connecter",
       "more": "Plus de portefeuilles",
       "moreCaption": "Autres adaptateurs Solana"
+    },
+    "callback": {
+      "meta": {
+        "title": "Connexion du portefeuille · Vizzor"
+      },
+      "verifying": "Connexion de votre portefeuille",
+      "verifyingSubtitle": "Un instant — finalisation de la poignée de main",
+      "signing": "Connectez-vous à vizzor.ai",
+      "signingSubtitle": "Confirmez le message dans votre portefeuille",
+      "success": "Portefeuille connecté",
+      "successSubtitle": "Retour à la page",
+      "errorSubtitle": "Réessayez depuis la page d'origine",
+      "home": "Accueil",
+      "copyCode": "Copier le code support",
+      "codeCopied": "Code copié",
+      "error": {
+        "wallet_rejected": "Vous avez annulé la demande",
+        "handoff_missing": "Session expirée — recommencez",
+        "connect_params_missing": "Réponse du portefeuille incomplète",
+        "sign_params_missing": "Réponse du portefeuille incomplète",
+        "shared_secret_missing": "Session expirée — recommencez",
+        "unknown_step": "Étape de retour inconnue",
+        "decrypt_failed": "Impossible de déchiffrer la réponse",
+        "connect_payload_missing_fields": "Réponse du portefeuille invalide",
+        "signature_missing": "Signature manquante",
+        "nonce_failed": "Impossible de démarrer la connexion",
+        "verify_failed": "Signature rejetée",
+        "unknown": "Une erreur est survenue"
+      }
     }
   },
   "account": {

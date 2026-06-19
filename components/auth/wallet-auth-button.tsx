@@ -266,7 +266,15 @@ function ConnectFlow({
   onSignedIn: () => void;
 }) {
   const t = useTranslations('auth');
-  const { publicKey, signMessage, disconnect, connecting, connected } = useWallet();
+  const {
+    publicKey,
+    wallet: activeWallet,
+    signMessage,
+    signIn,
+    disconnect,
+    connecting,
+    connected,
+  } = useWallet();
   const { setVisible } = useWalletModal();
 
   // Auto-fire the SIWS flow once the wallet is connected. The user
@@ -279,7 +287,7 @@ function ConnectFlow({
   }, [connected, publicKey]);
 
   const runSiws = async () => {
-    if (!publicKey || !signMessage) return;
+    if (!publicKey || (!signMessage && !signIn)) return;
     setBusy(true);
     setError(null);
     try {
@@ -293,18 +301,77 @@ function ConnectFlow({
       const nonceData = (await nonceRes.json()) as {
         ok: boolean;
         message?: string;
+        nonce?: string;
+        chainId?: string;
+        domain?: string;
+        uri?: string;
         issuedAt?: string;
         expiresAt?: string;
         reason?: string;
       };
-      if (!nonceData.ok || !nonceData.message) {
+      if (!nonceData.ok || !nonceData.message || !nonceData.nonce) {
         throw new Error(nonceData.reason ?? 'nonce_failed');
       }
 
-      const sigBytes = await signMessage(
-        new TextEncoder().encode(nonceData.message),
-      );
-      const sigB58 = base58Encode(sigBytes);
+      // Pre-flight: refuse to sign if the active Wallet Standard
+      // account doesn't claim the chain the server expects. Mirrors
+      // the guard in components/wallet/wallet-connect-flow.tsx.
+      const expectedChain = nonceData.chainId;
+      if (expectedChain && activeWallet?.adapter) {
+        const standardWallet = (
+          activeWallet.adapter as unknown as {
+            wallet?: { accounts?: ReadonlyArray<{ chains?: readonly string[] }> };
+          }
+        ).wallet;
+        const declaredChains = standardWallet?.accounts?.[0]?.chains;
+        if (
+          declaredChains &&
+          declaredChains.length > 0 &&
+          !declaredChains.includes(expectedChain)
+        ) {
+          throw new Error(`wrong_chain:${expectedChain}`);
+        }
+      }
+
+      let signedMessageB64: string | null = null;
+      let sigB58: string;
+      // `signMessage` is primary — see the equivalent comment in
+      // `components/wallet/wallet-connect-flow.tsx`. Phantom on
+      // localhost + Devnet rejects `signIn` post-confirm; the legacy
+      // primitive doesn't trip the same validation.
+      if (signMessage) {
+        const sigBytes = await signMessage(
+          new TextEncoder().encode(nonceData.message),
+        );
+        sigB58 = base58Encode(sigBytes);
+      } else if (signIn) {
+        const origin =
+          typeof window !== 'undefined' ? window.location.origin : '';
+        let uri = origin;
+        let domain = '';
+        try {
+          const u = new URL(origin);
+          uri = u.origin;
+          domain = u.host;
+        } catch {
+          // fall through to wallet-resolved defaults
+        }
+        const out = await signIn({
+          domain: nonceData.domain ?? domain ?? undefined,
+          address: wallet,
+          statement: 'Authenticate this wallet to start your Vizzor session.',
+          uri: nonceData.uri ?? uri ?? undefined,
+          version: '1',
+          chainId: nonceData.chainId,
+          nonce: nonceData.nonce,
+          issuedAt: nonceData.issuedAt,
+          expirationTime: nonceData.expiresAt,
+        });
+        signedMessageB64 = base64Encode(out.signedMessage);
+        sigB58 = base58Encode(out.signature);
+      } else {
+        throw new Error('no_sign_primitive');
+      }
 
       const verifyRes = await fetch('/api/auth/siws/verify', {
         method: 'POST',
@@ -316,6 +383,7 @@ function ConnectFlow({
           action: 'login',
           issuedAt: nonceData.issuedAt,
           expiresAt: nonceData.expiresAt,
+          ...(signedMessageB64 ? { signedMessage: signedMessageB64 } : {}),
         }),
       });
       const verifyData = (await verifyRes.json()) as {
@@ -327,7 +395,23 @@ function ConnectFlow({
       }
       onSignedIn();
     } catch (e) {
-      setError((e as Error).message);
+      const err = e as Error & { cause?: unknown; error?: unknown };
+      const chain: { name: string; message: string }[] = [];
+      let cursor: unknown = err;
+      let depth = 0;
+      while (cursor && typeof cursor === 'object' && depth < 6) {
+        const c = cursor as { name?: unknown; message?: unknown; cause?: unknown; error?: unknown };
+        chain.push({
+          name: typeof c.name === 'string' ? c.name : 'Error',
+          message: typeof c.message === 'string' ? c.message : '',
+        });
+        cursor = c.cause ?? c.error;
+        depth += 1;
+      }
+      if (typeof console !== 'undefined') {
+        console.warn('[vizzor] siws sign rejected', chain);
+      }
+      setError(err.message);
       try {
         await disconnect();
       } catch {
@@ -380,6 +464,13 @@ function ConnectFlow({
       )}
     </div>
   );
+}
+
+function base64Encode(bytes: Uint8Array): string {
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  if (typeof btoa === 'function') return btoa(bin);
+  return Buffer.from(bin, 'binary').toString('base64');
 }
 
 function base58Encode(bytes: Uint8Array): string {
