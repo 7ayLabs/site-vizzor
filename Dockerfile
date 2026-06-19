@@ -52,6 +52,18 @@ ENV NEXT_PUBLIC_VIZZOR_API_URL=$NEXT_PUBLIC_VIZZOR_API_URL
 ARG NEXT_PUBLIC_PAYMENT_NETWORK=mainnet
 ENV NEXT_PUBLIC_PAYMENT_NETWORK=$NEXT_PUBLIC_PAYMENT_NETWORK
 
+# Dev-auth bypass — baked at build because the wallet-connect cascade
+# reads it client-side to decide whether to silently mint a session
+# via `/api/auth/dev-sign` when Phantom rejects post-confirm with the
+# generic "Unexpected error" (the documented localhost+Devnet multi-
+# chain Phantom bug). Without this, the `testing` build ships a dead
+# `process.env.NEXT_PUBLIC_ALLOW_DEV_AUTH === 'true'` check that
+# always evaluates false at runtime — there's nothing to read in the
+# client bundle. Default empty so unrelated builds (prod) don't
+# accidentally inherit the bypass.
+ARG NEXT_PUBLIC_ALLOW_DEV_AUTH=
+ENV NEXT_PUBLIC_ALLOW_DEV_AUTH=$NEXT_PUBLIC_ALLOW_DEV_AUTH
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 

@@ -51,6 +51,7 @@ jobs:
       compose_overlay: ${{ steps.r.outputs.compose_overlay }}
       build_api_url:   ${{ steps.r.outputs.build_api_url }}
       payment_network: ${{ steps.r.outputs.payment_network }}
+      allow_dev_auth:  ${{ steps.r.outputs.allow_dev_auth }}
       checkout_ref:    ${{ steps.r.outputs.checkout_ref }}
     steps:
       - id: r
@@ -68,6 +69,10 @@ jobs:
               echo "compose_overlay=docker-compose.prod.yml"            >> "$GITHUB_OUTPUT"
               echo "build_api_url=https://api.vizzor.ai"                >> "$GITHUB_OUTPUT"
               echo "payment_network=mainnet"                            >> "$GITHUB_OUTPUT"
+              # Production NEVER ships the dev-auth bypass — the
+              # downstream client-side cascade dead-codes against this
+              # being unset; the server-side route hard-404s.
+              echo "allow_dev_auth="                                    >> "$GITHUB_OUTPUT"
               echo "checkout_ref=main"                                  >> "$GITHUB_OUTPUT"
               ;;
             testing|refs/heads/testing)
@@ -86,6 +91,13 @@ jobs:
               # server bundles. Keeps Phantom in Testnet Mode signing
               # cleanly on staging without per-deploy env edits.
               echo "payment_network=devnet"                             >> "$GITHUB_OUTPUT"
+              # Enable the dev-auth bypass on staging so the cascade
+              # silently mints a session via /api/auth/dev-sign when
+              # Phantom rejects post-confirm with "Unexpected error"
+              # (the documented localhost+Devnet multi-chain bug). The
+              # server-side route additionally recognises test.vizzor.ai
+              # as a built-in staging origin — no VPS env edit needed.
+              echo "allow_dev_auth=true"                                >> "$GITHUB_OUTPUT"
               echo "checkout_ref=testing"                               >> "$GITHUB_OUTPUT"
               ;;
             *)
@@ -153,6 +165,7 @@ jobs:
             BUILD_TIME=${{ github.event.head_commit.timestamp }}
             NEXT_PUBLIC_VIZZOR_API_URL=${{ needs.resolve.outputs.build_api_url }}
             NEXT_PUBLIC_PAYMENT_NETWORK=${{ needs.resolve.outputs.payment_network }}
+            NEXT_PUBLIC_ALLOW_DEV_AUTH=${{ needs.resolve.outputs.allow_dev_auth }}
 
   # ────────────────────────────────────────────────────────────────────
   # deploy-vps — SSH into the (single) VPS, pull the just-pushed image

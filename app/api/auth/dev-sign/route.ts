@@ -11,18 +11,16 @@
  *
  * Double-gated. The endpoint returns 404 unless ALL of these hold:
  *   1. `process.env.NEXT_PUBLIC_ALLOW_DEV_AUTH === 'true'`
- *   2. The request origin is either a `localhost`-class origin OR is
- *      in the explicit `DEV_AUTH_ALLOWED_ORIGINS` allow-list (commas).
+ *   2. The request origin is either a `localhost`-class origin, a
+ *      built-in staging host (e.g. `test.vizzor.ai`), or in the
+ *      explicit `DEV_AUTH_ALLOWED_ORIGINS` allow-list (commas).
  *
- * Both gates default to closed: the env flag MUST be opted in per
- * deploy, and the allow-list is empty unless a deploy explicitly sets
- * it. Production builds where neither var is configured 404 every
- * call — the route's mere presence doesn't leak the bypass.
- *
- * The previous `NODE_ENV === 'development'` gate is intentionally
- * dropped so the staging deploy on `test.vizzor.ai` (which runs
- * `NODE_ENV=production`) can still light up the silent dev-sign
- * recovery path when its 1Password template sets both flags.
+ * The flag defaults to closed: the deploy workflow bakes
+ * `NEXT_PUBLIC_ALLOW_DEV_AUTH=true` only for the `testing` branch via
+ * the resolve job → build-args path. Production ships the env var
+ * unset → endpoint 404s every call. The built-in staging origin
+ * mirrors the same resolve mapping, so `test.vizzor.ai` gets the
+ * silent dev-sign recovery automatically — no VPS template edit.
  *
  * Body shape:  { wallet: string }   (a valid base58 Solana address)
  * Success:     200 { ok: true, wallet, expiresAt } + auth cookie
@@ -62,12 +60,26 @@ function isLocalhostOrigin(req: Request): boolean {
 }
 
 /**
+ * Built-in staging hosts the dev-sign route always recognises when the
+ * `NEXT_PUBLIC_ALLOW_DEV_AUTH=true` build-arg is in effect. Mirrors
+ * the deploy workflow's per-branch resolve job, so `test.vizzor.ai`
+ * gets the silent dev-sign recovery automatically — no VPS template
+ * edit needed. Production builds ship the build-arg unset, so this
+ * list is unreachable there: the outer flag gate refuses before this
+ * function is ever called.
+ */
+const BUILTIN_STAGING_ORIGINS: readonly string[] = [
+  'https://test.vizzor.ai',
+];
+
+/**
  * Parse the explicit allow-list of dev-auth origins out of
  * `DEV_AUTH_ALLOWED_ORIGINS` (comma-separated). The match is a
  * `startsWith()` against the request's Origin/Referer so we accept the
  * configured origin regardless of trailing path. Empty values are
  * filtered. Returns an empty array if the env var isn't set — caller
- * treats that as "no extra origins allowed beyond localhost".
+ * treats that as "no extra origins allowed beyond localhost / the
+ * built-in staging hosts".
  */
 function allowedExtraOrigins(): string[] {
   return (process.env.DEV_AUTH_ALLOWED_ORIGINS ?? '')
@@ -77,10 +89,13 @@ function allowedExtraOrigins(): string[] {
 }
 
 function isAllowListedOrigin(req: Request): boolean {
-  const list = allowedExtraOrigins();
-  if (list.length === 0) return false;
   const origin = originHeader(req);
   if (!origin) return false;
+  if (BUILTIN_STAGING_ORIGINS.some((allowed) => origin.startsWith(allowed))) {
+    return true;
+  }
+  const list = allowedExtraOrigins();
+  if (list.length === 0) return false;
   return list.some((allowed) => origin.startsWith(allowed));
 }
 
