@@ -31,13 +31,19 @@
 
 import { createHash } from 'node:crypto';
 import type { UIMessage } from 'ai';
-import { incrementWalletQuota, readWalletQuota } from '@/lib/quota';
 import { parseIntent } from '@/lib/commands';
+import { getActiveSession } from '@/lib/payment/auth-session';
 import {
-  getActiveSession,
-  getSubscriptionForActiveSession,
-} from '@/lib/payment/auth-session';
-import type { SubscriptionRow } from '@/lib/payment/db';
+  incrementWalletFreeUsage,
+  insertPredictTelemetry,
+} from '@/lib/payment/db';
+import { enforceWalletRateLimit } from '@/lib/payment/rate-limit';
+import {
+  metadataTierFor,
+  resolveTierWithTrialStart,
+  type EffectiveTier,
+} from '@/lib/payment/tier-resolver';
+import { promptByteCap } from '@/lib/feature-flags';
 import {
   PREDICT_ROUTE_REQUIREMENTS,
   assertRequiredEnv,
@@ -99,34 +105,107 @@ export async function POST(req: Request) {
     return streamPlainText(intent.text ?? '', null);
   }
 
-  /* --------------------- predict gate (quota) -------------------- */
+  /* --------------------- 5-layer cost shield --------------------- *\
+   * The cost guard runs before any LLM hop. Layered cheapest-first
+   * so a malicious script bounces off the fastest check it can hit.
+   *
+   *   1. Prompt size cap  — refuse "novel as a prompt" upfront.
+   *   2. Plan gate        — `free` tier wallets refused (402).
+   *   3. Daily cap        — trial @ 10/day, pro @ 1000/day, elite ∞.
+   *   4. Burst rate limit — 1 prediction / 5s / wallet.
+   *   5. Engine API key   — backstop, 60 req/min on the upstream key.
+   *
+   * The counter is bumped only after the upstream returns 200; a
+   * failed engine call doesn't burn the day cap.
+  \* -------------------------------------------------------------- */
 
-  const subscription = await getSubscriptionForActiveSession();
-  const subscribed = !!subscription;
+  const walletHash = hashWalletForUserId(session.wallet);
+  const promptBytes = lastUserText ? Buffer.byteLength(lastUserText, 'utf8') : 0;
 
-  if (!subscribed) {
-    const quota = readWalletQuota(session.wallet);
-    if (quota.exhausted) {
+  // Layer 1 — prompt size.
+  if (promptBytes > promptByteCap()) {
+    insertPredictTelemetry({
+      walletHash,
+      tier: 'unknown',
+      promptBytes,
+      status: 413,
+    });
+    return Response.json(
+      {
+        error: 'prompt_too_long',
+        message: `Your prompt exceeds the ${promptByteCap()}-byte cap. Shorten it or split it across multiple turns.`,
+        promptBytes,
+        cap: promptByteCap(),
+      },
+      { status: 413, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
+  const effective = resolveTierWithTrialStart(session.wallet);
+
+  // Layer 2 — plan gate.
+  if (effective.kind === 'free') {
+    const message =
+      effective.reason === 'never_started'
+        ? 'Connect first to start your 7-day Pro trial.'
+        : effective.reason === 'operator_killed'
+          ? 'Free trial temporarily disabled. Subscribe at /pricing to continue.'
+          : 'Your 7-day Pro trial has ended. Subscribe at /pricing to keep predicting.';
+    insertPredictTelemetry({ walletHash, tier: 'free', promptBytes, status: 402 });
+    return Response.json(
+      {
+        error: 'free_trial_expired',
+        reason: effective.reason,
+        message,
+      },
+      { status: 402, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
+  // Layer 3 — daily cap (elite is unlimited; pro/trial have soft caps).
+  if (effective.kind === 'pro' || effective.kind === 'trial') {
+    if (effective.dailyUsed >= effective.dailyCap) {
+      insertPredictTelemetry({
+        walletHash,
+        tier: effective.kind,
+        promptBytes,
+        status: 429,
+      });
       return Response.json(
         {
-          error: 'free_quota_exhausted',
-          message:
-            'Free predictions exhausted for this wallet. Subscribe at /pricing — pay in SOL on Solana.',
-          quota,
+          error: 'daily_cap_reached',
+          reason: 'daily_cap',
+          message: `Daily prediction cap of ${effective.dailyCap} reached for your ${effective.kind} tier. Resets at 00:00 UTC.`,
+          dailyUsed: effective.dailyUsed,
+          dailyCap: effective.dailyCap,
         },
-        { status: 402, headers: { 'Cache-Control': 'no-store' } },
+        { status: 429, headers: { 'Cache-Control': 'no-store' } },
       );
     }
   }
 
+  // Layer 4 — per-wallet burst limit (1 / 5s).
+  const burstResponse = enforceWalletRateLimit(session.wallet, 'predict.burst');
+  if (burstResponse) {
+    insertPredictTelemetry({
+      walletHash,
+      tier: effective.kind,
+      promptBytes,
+      status: 429,
+    });
+    return burstResponse;
+  }
+
   /* --------------------- forward to vizzor engine ---------------- */
   // Counter increment happens AFTER the upstream call confirms success
-  // — see `forwardToVizzor`. We pass the wallet down so the counter
-  // can be bumped atomically on the success path only.
-  const walletForCounter = subscribed ? null : session.wallet;
-  return forwardToVizzor(body.messages, walletForCounter, {
+  // — see `forwardToVizzor`. `effective` carries the tier override (a
+  // trial wallet is sent to the engine as `pro` so it gets the rich
+  // response) and the subscription row (used for downstream metadata).
+  return forwardToVizzor(body.messages, {
     wallet: session.wallet,
-    subscription,
+    walletHash,
+    effective,
+    promptBytes,
     headers: req.headers,
   });
 }
@@ -138,10 +217,11 @@ export async function POST(req: Request) {
 
 async function forwardToVizzor(
   messages: UIMessage[],
-  walletForCounter: string | null,
   ctx: {
     wallet: string;
-    subscription: SubscriptionRow | null;
+    walletHash: string;
+    effective: EffectiveTier;
+    promptBytes: number;
     headers: Headers;
   },
 ): Promise<Response> {
@@ -174,8 +254,12 @@ async function forwardToVizzor(
   // their `aiChat.toolUse` per-day counters stay independent. The hash
   // truncation keeps the identifier opaque while still being stable
   // for the same wallet across sessions.
-  const userId = `web:${hashWalletForUserId(ctx.wallet)}`;
-  const tier = ctx.subscription?.tier ?? 'free';
+  const userId = `web:${ctx.walletHash}`;
+  // The engine receives the EFFECTIVE tier — trial wallets are sent
+  // as `pro` so the engine grants the rich response and the Telegram-
+  // grade tool-use breadth during the 7-day window. Elite stays elite;
+  // free wallets never reach this code (gated upstream).
+  const tier = metadataTierFor(ctx.effective);
   // Best-effort locale + timezone derivation. `Accept-Language` is the
   // standard browser-forwarded preference; the timezone is a custom
   // header the client emits (`x-vizzor-timezone`) because the browser
@@ -224,15 +308,27 @@ async function forwardToVizzor(
     });
 
     if (!upstreamRes.ok || !upstreamRes.body) {
+      insertPredictTelemetry({
+        walletHash: ctx.walletHash,
+        tier: ctx.effective.kind,
+        promptBytes: ctx.promptBytes,
+        status: upstreamRes.status || 503,
+      });
       return offlineResponse();
     }
 
-    // Atomically bump the free-tier counter for this wallet now that
-    // the upstream has agreed to deliver a stream. Subscribers pass
-    // `null` and the counter is untouched.
-    if (walletForCounter) {
-      incrementWalletQuota(walletForCounter);
+    // Bump the lifetime + daily counters now that the upstream agreed
+    // to deliver a stream. Elite wallets aren't subject to the cap so
+    // we skip the daily bookkeeping for them.
+    if (ctx.effective.kind !== 'elite') {
+      incrementWalletFreeUsage(ctx.wallet);
     }
+    insertPredictTelemetry({
+      walletHash: ctx.walletHash,
+      tier: ctx.effective.kind,
+      promptBytes: ctx.promptBytes,
+      status: 200,
+    });
 
     // Transform Vizzor SSE → AI SDK UI Message Stream so the client's
     // `useChat` hook renders it natively. The transform also surfaces

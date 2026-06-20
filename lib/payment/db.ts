@@ -316,6 +316,51 @@ function runV020Migrations(db: DB): void {
       ON conversation_messages(conversation_id, created_at);
   `);
 
+  /* v0.3.2 — 7-day Pro trial + per-day cap + telemetry on the free tier.
+   *
+   * The legacy "7 runs per wallet forever" gate is replaced by a
+   * time-based trial: each wallet gets full Pro-equivalent access for
+   * `freeTrialDays()` (default 7) days from `trial_started_at`. A
+   * `daily_used` counter (anchored on `daily_used_at`) caps abuse —
+   * default 10 predictions/day for trial wallets, higher for paid
+   * tiers. After expiry the wallet drops to a `free` tier with no LLM
+   * access. See `lib/payment/tier-resolver.ts`.
+   *
+   * The schema change is purely additive (`ALTER TABLE … ADD COLUMN`)
+   * so a redeploy is safe; existing rows get `trial_started_at`
+   * back-filled from `first_used_at` so users who started under the
+   * count-based regime keep their honest anchor instead of a fresh
+   * window. */
+  addColumnIfMissing(db, 'wallet_free_usage', 'trial_started_at', 'INTEGER');
+  addColumnIfMissing(db, 'wallet_free_usage', 'daily_used', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing(db, 'wallet_free_usage', 'daily_used_at', 'INTEGER');
+  db.exec(
+    `UPDATE wallet_free_usage
+        SET trial_started_at = COALESCE(first_used_at, CAST(strftime('%s','now') AS INTEGER) * 1000)
+      WHERE trial_started_at IS NULL`,
+  );
+
+  /* v0.3.2 — per-request predict telemetry.
+   *
+   * One row per `/api/predict` call, regardless of outcome. Feeds a
+   * future Grafana panel + cost alerts; **never** consulted by any
+   * gate (so a write failure can't lock users out). Retention is
+   * trimmed by `lib/payment/retention.ts` to 30 days. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS predict_telemetry (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts            INTEGER NOT NULL,
+      wallet_hash   TEXT NOT NULL,
+      tier          TEXT NOT NULL,
+      prompt_bytes  INTEGER NOT NULL,
+      status        INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_predict_telemetry_ts
+      ON predict_telemetry(ts);
+    CREATE INDEX IF NOT EXISTS idx_predict_telemetry_wallet
+      ON predict_telemetry(wallet_hash, ts);
+  `);
+
   /* v0.3.1 — mobile Connect-Protocol handoff state.
    *
    * The Phantom/Solflare deeplink flow needs the dapp's per-attempt
@@ -427,12 +472,18 @@ export interface WalletFreeUsageRow {
   used: number;
   first_used_at: number;
   last_used_at: number;
+  /** Epoch ms when the 7-day Pro trial opened for this wallet. */
+  trial_started_at: number | null;
+  /** Epoch ms anchor for the per-day cap counter. */
+  daily_used_at: number | null;
+  /** Predictions used since `daily_used_at`. Resets per UTC day. */
+  daily_used: number;
 }
 
 /**
- * Returns the current free-tier usage count for a wallet. A missing row
- * is treated as zero (and returned as such) — wallets are upserted on
- * the first successful prediction.
+ * Returns the current free-tier usage count for a wallet. Lifetime
+ * counter, kept for telemetry only after the v0.3.2 shift to trial-
+ * based gating. A missing row is treated as zero.
  */
 export function getWalletFreeUsage(wallet: string): number {
   const row = getDb()
@@ -442,23 +493,96 @@ export function getWalletFreeUsage(wallet: string): number {
 }
 
 /**
- * Atomically increments a wallet's free-tier counter and returns the
- * post-increment value. Uses SQLite's UPSERT (ON CONFLICT DO UPDATE) so
- * the first call creates the row and subsequent calls bump the count
- * without a separate INSERT/SELECT race.
+ * Atomically increments a wallet's lifetime predictions counter +
+ * bumps the per-day cap counter (resetting to 1 if it's a new UTC
+ * day). Returns the post-increment row for callers that need both
+ * numbers without a second read. Idempotent at the SQL boundary via
+ * UPSERT.
+ *
+ * The daily reset uses UTC day boundaries — every call computes the
+ * start-of-current-day in UTC and compares to the stored
+ * `daily_used_at`. Wallets in non-UTC timezones see their counter
+ * reset at local-equivalent-of-00:00-UTC; the UI surfaces "{used}/{cap}
+ * today" so the absolute boundary is implicit.
  */
-export function incrementWalletFreeUsage(wallet: string): number {
+export function incrementWalletFreeUsage(wallet: string): WalletFreeUsageRow {
+  const now = Date.now();
+  const dayStart = Math.floor(now / 86_400_000) * 86_400_000;
+  getDb()
+    .prepare(
+      `INSERT INTO wallet_free_usage
+         (wallet_address, used, first_used_at, last_used_at,
+          trial_started_at, daily_used, daily_used_at)
+       VALUES (@wallet, 1, @now, @now, @now, 1, @dayStart)
+       ON CONFLICT(wallet_address) DO UPDATE SET
+         used         = used + 1,
+         last_used_at = @now,
+         daily_used   = CASE
+                          WHEN COALESCE(daily_used_at, 0) >= @dayStart
+                          THEN daily_used + 1
+                          ELSE 1
+                        END,
+         daily_used_at = @dayStart`,
+    )
+    .run({ wallet, now, dayStart });
+  return getWalletFreeUsageRow(wallet)!;
+}
+
+/**
+ * Idempotently stamp the trial start anchor for a wallet. Called on
+ * every authenticated `/api/predict` request so wallets that connect
+ * but never predict still get a fair window if they come back later.
+ * Returns the row's effective `trial_started_at`.
+ */
+export function startTrialIfNew(wallet: string): number {
   const now = Date.now();
   getDb()
     .prepare(
-      `INSERT INTO wallet_free_usage (wallet_address, used, first_used_at, last_used_at)
-       VALUES (@wallet, 1, @now, @now)
+      `INSERT INTO wallet_free_usage
+         (wallet_address, used, first_used_at, last_used_at, trial_started_at)
+       VALUES (@wallet, 0, @now, @now, @now)
        ON CONFLICT(wallet_address) DO UPDATE SET
-         used = used + 1,
-         last_used_at = @now`,
+         trial_started_at = COALESCE(trial_started_at, @now)`,
     )
     .run({ wallet, now });
-  return getWalletFreeUsage(wallet);
+  const row = getWalletFreeUsageRow(wallet);
+  return row?.trial_started_at ?? now;
+}
+
+/**
+ * Full row read — used by the tier resolver to compute trial state
+ * and daily-cap headroom in one query.
+ */
+export function getWalletFreeUsageRow(wallet: string): WalletFreeUsageRow | null {
+  const row = getDb()
+    .prepare(`SELECT * FROM wallet_free_usage WHERE wallet_address = ?`)
+    .get(wallet) as WalletFreeUsageRow | undefined;
+  return row ?? null;
+}
+
+/**
+ * Best-effort write to `predict_telemetry`. Swallows errors so a
+ * write failure can never block a request. One row per /predict call;
+ * `prompt_bytes` and `status` (HTTP status code) carry the cost +
+ * outcome signals a future analyzer correlates against subscription
+ * conversion.
+ */
+export function insertPredictTelemetry(row: {
+  walletHash: string;
+  tier: string;
+  promptBytes: number;
+  status: number;
+}): void {
+  try {
+    getDb()
+      .prepare(
+        `INSERT INTO predict_telemetry (ts, wallet_hash, tier, prompt_bytes, status)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(Date.now(), row.walletHash, row.tier, row.promptBytes, row.status);
+  } catch {
+    // Telemetry must never break the request path.
+  }
 }
 
 export interface IdempotencyKeyRow {

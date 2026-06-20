@@ -66,6 +66,12 @@ export const ROUTE_LIMITS: Readonly<Record<string, RateLimitConfig>> = {
   'account.delete': { capacity: 30, refillPerSecond: 0.5 },
   // 5 req/min — retention sweep is server-side cron, low frequency.
   'internal.retention-sweep': { capacity: 5, refillPerSecond: 5 / 60 },
+  // Per-wallet burst limit on /predict. 1 token, refills every 5s →
+  // a single wallet can fire at most 12 predictions/minute. This is
+  // the burst shield in front of the daily cap (Layer 3 of the cost
+  // shield). Keyed on the SIWS-bound wallet, not the IP, so a NAT'd
+  // user behind a shared IP isn't unfairly penalized.
+  'predict.burst': { capacity: 1, refillPerSecond: 1 / 5 },
 };
 
 export type RateLimitResult =
@@ -185,6 +191,51 @@ export function enforceRateLimit(
   return new Response(
     JSON.stringify({
       ok: false,
+      reason: result.reason,
+      retryAfterSeconds: result.retryAfterSeconds,
+    }),
+    { status: 429, headers },
+  );
+}
+
+/**
+ * Wallet-keyed variant of `takeToken`. Used by the predict route's
+ * burst shield (Layer 3 of the cost protection) — a single SIWS-bound
+ * wallet can't bypass the limit by switching IPs (mobile networks
+ * rotate) and a NAT'd corp network of legit users isn't penalized for
+ * sharing an IP. The wallet is hashed via the same `hashClientIp`
+ * primitive so the bucket key stays opaque (no raw wallet stored).
+ */
+export function takeTokenForWallet(
+  routeKey: keyof typeof ROUTE_LIMITS,
+  wallet: string,
+): RateLimitResult {
+  // The hash primitive accepts any string and is salted via the same
+  // RATE_LIMIT_SALT env that protects the IP buckets — no new key
+  // material to manage.
+  return takeToken(routeKey, `wallet:${wallet}`);
+}
+
+/**
+ * Convenience wrapper: take a wallet-keyed token; on rejection return
+ * a ready-to-`return` 429 with `Retry-After`. Mirrors `enforceRateLimit`
+ * but for the per-wallet shield.
+ */
+export function enforceWalletRateLimit(
+  wallet: string,
+  routeKey: keyof typeof ROUTE_LIMITS,
+): Response | null {
+  const result = takeTokenForWallet(routeKey, wallet);
+  if (result.ok) return null;
+  const headers = new Headers({
+    'content-type': 'application/json',
+    'retry-after': String(result.retryAfterSeconds),
+    'cache-control': 'no-store',
+  });
+  return new Response(
+    JSON.stringify({
+      ok: false,
+      error: 'burst_rate_limited',
       reason: result.reason,
       retryAfterSeconds: result.retryAfterSeconds,
     }),

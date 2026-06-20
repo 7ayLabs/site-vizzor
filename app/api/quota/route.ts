@@ -1,24 +1,25 @@
 /**
- * GET /api/quota — current free-tier state for the active wallet.
+ * GET /api/quota — current plan + trial state for the active wallet.
  *
- * v0.3.0: the gate moved from a browser cookie to a wallet-bound DB
- * counter. The client now gets one of three shapes back:
+ * v0.3.2: the response moved from count-based (used/limit/remaining)
+ * to trial-aware. New clients read `tier` + `trial`; legacy fields
+ * (`used`, `limit`, `remaining`, `exhausted`) are preserved for one
+ * release so older bundles loaded from disk cache don't crash.
  *
- *   1. No SIWS session    → { connected: false, limit, used: 0 }
- *   2. Authenticated free → { connected: true, used, limit, remaining,
- *                             exhausted, subscribed: false, ... }
- *   3. Authenticated sub  → as above plus subscribed: true and the
- *                             subscription block. Counter is informational
- *                             only; subscribers bypass the gate.
+ * Three shapes:
+ *   1. No SIWS session    → `{ connected: false, tier: 'free', ... }`
+ *   2. Authenticated      → `{ connected: true, tier, trial, subscription }`
+ *   3. Subscribed         → as above with `subscription` populated and
+ *                             `subscribed: true`.
  */
 
 import { NextResponse } from 'next/server';
-import { readWalletQuota } from '@/lib/quota';
+import { readWalletQuota, type QuotaState } from '@/lib/quota';
 import {
   getActiveSession,
   getSubscriptionForActiveSession,
 } from '@/lib/payment/auth-session';
-import { freePredictions } from '@/lib/feature-flags';
+import { trialDailyCap } from '@/lib/feature-flags';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -29,25 +30,31 @@ export async function GET() {
     return NextResponse.json(
       {
         connected: false,
-        used: 0,
-        limit: freePredictions(),
-        remaining: freePredictions(),
-        exhausted: false,
+        tier: 'free' as const,
+        trial: null,
+        freeReason: 'never_started' as const,
         subscribed: false,
         subscription: null,
+        // legacy mirror
+        used: 0,
+        limit: trialDailyCap(),
+        remaining: trialDailyCap(),
+        exhausted: false,
       },
       { headers: { 'Cache-Control': 'no-store' } },
     );
   }
 
-  const quota = readWalletQuota(session.wallet);
+  const quota: QuotaState = readWalletQuota(session.wallet);
   const sub = await getSubscriptionForActiveSession();
   const subscribed = !!sub;
 
   return NextResponse.json(
     {
       connected: true,
-      ...quota,
+      tier: quota.tier,
+      trial: quota.trial,
+      freeReason: quota.freeReason,
       subscribed,
       subscription: sub
         ? {
@@ -56,6 +63,11 @@ export async function GET() {
             expiresAt: sub.expires_at,
           }
         : null,
+      // legacy mirror — drop in v0.3.3
+      used: quota.used,
+      limit: quota.limit,
+      remaining: quota.remaining,
+      exhausted: quota.exhausted,
     },
     { headers: { 'Cache-Control': 'no-store' } },
   );
