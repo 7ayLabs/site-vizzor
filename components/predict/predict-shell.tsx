@@ -79,11 +79,21 @@ const SolanaWalletAdapter = dynamic(
 
 interface QuotaState {
   connected: boolean;
+  tier: 'elite' | 'pro' | 'trial' | 'free';
+  trial: {
+    inTrial: boolean;
+    daysRemaining: number;
+    trialExpiresAt: number;
+    dailyUsed: number;
+    dailyCap: number;
+  } | null;
+  freeReason: 'never_started' | 'trial_expired' | 'operator_killed' | null;
+  subscribed?: boolean;
+  // legacy mirror — drop in v0.3.3
   used: number;
   limit: number;
   remaining: number;
   exhausted: boolean;
-  subscribed?: boolean;
 }
 
 interface AuthState {
@@ -513,7 +523,7 @@ function PredictShellInner() {
               {!signedIn ? (
                 <WalletGateMini onSignedIn={() => void mutateAuth()} />
               ) : composerLocked ? (
-                <ExhaustedBanner onReset={onInlineReset} />
+                <ExhaustedBanner onReset={onInlineReset} quota={quota} />
               ) : (
                 <Composer
                   inputRef={inputRef}
@@ -1994,15 +2004,52 @@ function Welcome() {
 
 /* ─────────────────────────── Exhausted banner ─────────────────────────── */
 
-function ExhaustedBanner({ onReset }: { onReset: () => void }) {
+/**
+ * Pick the i18n key suffix that matches the wallet's current state.
+ * Three discrete cases drive separate copy: cap reached today (still
+ * in trial), trial fully expired, and operator-killed trial. Falls
+ * back to the legacy "exhausted" wording for any unrecognized state
+ * so older translations don't blow up.
+ */
+function pickBannerKey(
+  quota: QuotaState | undefined,
+  part: 'label' | 'body',
+): string {
+  const fallback = `exhaustedBanner.${part}`;
+  if (!quota) return fallback;
+  if (quota.tier === 'trial' && quota.trial && quota.trial.dailyUsed >= quota.trial.dailyCap) {
+    return `exhaustedBanner.dailyCap.${part}`;
+  }
+  if (quota.tier === 'free') {
+    if (quota.freeReason === 'trial_expired') return `exhaustedBanner.trialExpired.${part}`;
+    if (quota.freeReason === 'operator_killed') return `exhaustedBanner.operatorKilled.${part}`;
+    if (quota.freeReason === 'never_started') return `exhaustedBanner.notStarted.${part}`;
+  }
+  return fallback;
+}
+
+function ExhaustedBanner({
+  onReset,
+  quota,
+}: {
+  onReset: () => void;
+  quota?: QuotaState;
+}) {
   const t = useTranslations('predict');
+  // The banner doubles as both "trial expired" (plan gate) AND "daily
+  // cap reached" (cost shield). The discriminator is the active
+  // tier — a trial wallet hitting the daily cap stays in the trial
+  // window, so the copy nudges "comes back at 00:00 UTC". An expired
+  // trial wallet drops to `free` with a clear subscribe CTA.
+  const labelKey = pickBannerKey(quota, 'label');
+  const bodyKey = pickBannerKey(quota, 'body');
   return (
     <div className="flex flex-col gap-2 px-4 py-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] vz-rise">
       <p className="text-[11.5px] uppercase tracking-[0.14em] font-semibold text-[var(--fg)]">
-        {t('exhaustedBanner.label')}
+        {t(labelKey as 'exhaustedBanner.label')}
       </p>
       <p className="text-[13px] leading-relaxed text-[var(--fg-2)]">
-        {t('exhaustedBanner.body')}
+        {t(bodyKey as 'exhaustedBanner.body')}
       </p>
       <div className="mt-1 flex flex-wrap items-center gap-3">
         <Link

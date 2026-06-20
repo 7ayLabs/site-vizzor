@@ -34,15 +34,16 @@ interface Tier {
   altCadences: ReadonlyArray<Cadence>;
 }
 
-const BOT = 'https://t.me/vizzorai_bot';
-
 const TIERS: ReadonlyArray<Tier> = [
   {
     key: 'free',
-    // Free tier deep-links Telegram — no payment to process.
-    ctaHref: BOT,
+    // Free tier now CTAs into /predict — the 7-day Pro trial auto-starts
+    // on first SIWS connect. Telegram still works as an alternative
+    // entry point (the bot grants its own 7-day trial on /start), but
+    // the headline CTA is the on-site flow now.
+    ctaHref: '/predict',
     ctaVariant: 'outline',
-    external: true,
+    external: false,
     altCadences: [],
   },
   {

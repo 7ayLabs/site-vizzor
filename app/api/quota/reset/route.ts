@@ -19,7 +19,7 @@
 import { NextResponse } from 'next/server';
 import { getActiveSession } from '@/lib/payment/auth-session';
 import { getDb } from '@/lib/payment/db';
-import { freePredictions } from '@/lib/feature-flags';
+import { trialDailyCap } from '@/lib/feature-flags';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -42,13 +42,20 @@ export async function POST() {
     );
   }
 
+  // v0.3.2: deleting the row clears `trial_started_at`, `daily_used*`,
+  // and the lifetime `used` counter all at once. The next /predict
+  // call re-stamps the trial via `startTrialIfNew`.
   getDb()
     .prepare(`DELETE FROM wallet_free_usage WHERE wallet_address = ?`)
     .run(session.wallet);
 
-  const limit = freePredictions();
   return NextResponse.json(
-    { used: 0, limit, remaining: limit, exhausted: false },
+    {
+      ok: true,
+      tier: 'free',
+      message: 'Wallet quota cleared. Next /predict call will re-stamp the trial.',
+      dailyCap: trialDailyCap(),
+    },
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }

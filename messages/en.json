@@ -233,12 +233,12 @@
   "predict": {
     "meta": {
       "title": "Predict — Vizzor",
-      "description": "Connect your wallet to run a calibrated crypto call against the same engine the Telegram bot uses. Seven free runs per wallet. Tracked-live, receipts public."
+      "description": "Connect your wallet to run a calibrated crypto call against the same engine the Telegram bot uses. 7-day Pro trial, 10 predictions/day. Tracked-live, receipts public."
     },
     "gate": {
       "title": "Connect your wallet to predict.",
-      "body": "Vizzor binds the free tier to your wallet so the counter survives cookie clears. Sign once with SIWS — no email, no password.",
-      "perk1": "7 free runs per wallet",
+      "body": "Vizzor binds the trial to your wallet so the counter survives cookie clears. Sign once with SIWS — no email, no password.",
+      "perk1": "7-day Pro trial, 10/day",
       "perk2": "On-chain billing in SOL",
       "perk3": "No card, no KYC",
       "perk4": "Same engine as the bot",
@@ -265,9 +265,25 @@
     },
     "exhaustedBanner": {
       "label": "Free tier done",
-      "body": "Three free runs used. Subscribe to keep going — or move to Telegram.",
+      "body": "Free trial used up. Subscribe to keep going — or move to Telegram.",
       "telegramCta": "Open in Telegram",
-      "resetDev": "reset · dev only"
+      "resetDev": "reset · dev only",
+      "dailyCap": {
+        "label": "Daily cap reached",
+        "body": "You've hit today's 10-prediction trial cap. Resets at 00:00 UTC. Subscribe for higher caps."
+      },
+      "trialExpired": {
+        "label": "Trial ended",
+        "body": "Your 7-day Pro trial has ended. Subscribe on /pricing to keep predicting — pay in SOL on Solana."
+      },
+      "operatorKilled": {
+        "label": "Trial paused",
+        "body": "Free trial is temporarily disabled. Subscribe on /pricing to keep predicting."
+      },
+      "notStarted": {
+        "label": "Connect to start",
+        "body": "Sign in once to start your 7-day Pro trial. No card, no email."
+      }
     },
     "shell": {
       "model": "Vizzor",
@@ -277,6 +293,10 @@
       "openSidebar": "Open sidebar",
       "searchPlaceholder": "Symbol or receipt…",
       "quotaLine": "Free {used}/{limit}",
+      "trialLine": "Trial · {days}d · {used}/{cap} today",
+      "proLine": "Pro · {used}/{cap} today",
+      "eliteLine": "Elite · unlimited",
+      "freeLine": "Trial expired · /pricing",
       "nav": {
         "chat": "Run",
         "library": "Receipts",
@@ -588,10 +608,10 @@
     "tiers": {
       "free": {
         "name": "Free",
-        "sub": "Scan the market in Telegram",
+        "sub": "7-day Pro trial · scanner forever",
         "price": "$0",
-        "priceUnit": "",
-        "cta": "Open Telegram",
+        "priceUnit": "7-day Pro trial · 10/day",
+        "cta": "Start free",
         "commandsLine": "/scan · /price · /trends · /sentiment · /whale-alert · /narrative · /presale · /help",
         "features": {
           "scanner": {
@@ -611,8 +631,8 @@
             "body": "New DEX pairs · narrative flow · trending tokens · volume spikes · presale tracker"
           },
           "trial": {
-            "title": "7-day Pro trial on first /start",
-            "body": "No card, no KYC, auto-downgrades back to Free — zero risk to try"
+            "title": "7-day Pro trial · 10 predictions/day",
+            "body": "Auto-starts on your first connect — web or Telegram. No card, no KYC, downgrades back to Free after 7 days."
           }
         }
       },

@@ -223,12 +223,12 @@
   "predict": {
     "meta": {
       "title": "Prédire — Vizzor",
-      "description": "Connecte ton wallet pour lancer un call crypto calibré contre le même moteur que le bot Telegram. Sept runs gratuits par wallet. Tracked-live, reçus publics."
+      "description": "Connecte ton wallet pour lancer un call crypto calibré contre le même moteur que le bot Telegram. Essai Pro 7 jours, 10 prédictions/jour. Tracked-live, reçus publics."
     },
     "gate": {
       "title": "Connecte ton wallet pour prédire.",
-      "body": "Vizzor lie le tier gratuit à ton wallet : le compteur survit aux cookies effacés. Signe une fois avec SIWS — sans email, sans mot de passe.",
-      "perk1": "7 runs gratuits par wallet",
+      "body": "Vizzor lie l'essai à ton wallet : le compteur survit aux cookies effacés. Signe une fois avec SIWS — sans email, sans mot de passe.",
+      "perk1": "Essai Pro 7 jours, 10/jour",
       "perk2": "Facturation on-chain en SOL",
       "perk3": "Sans carte, sans KYC",
       "perk4": "Même moteur que le bot",
@@ -255,9 +255,25 @@
     },
     "exhaustedBanner": {
       "label": "Tier gratuit épuisé",
-      "body": "Trois runs gratuits utilisés. Abonne-toi pour continuer — ou passe sur Telegram.",
+      "body": "Essai gratuit terminé. Abonne-toi pour continuer — ou passe sur Telegram.",
       "telegramCta": "Ouvrir dans Telegram",
-      "resetDev": "réinitialiser · dev seulement"
+      "resetDev": "réinitialiser · dev seulement",
+      "dailyCap": {
+        "label": "Limite journalière atteinte",
+        "body": "Tu as atteint la limite de 10 prédictions du jour. Réinit à 00:00 UTC. Abonne-toi pour des limites plus élevées."
+      },
+      "trialExpired": {
+        "label": "Essai terminé",
+        "body": "Ton essai Pro de 7 jours est terminé. Abonne-toi sur /pricing pour continuer — paie en SOL sur Solana."
+      },
+      "operatorKilled": {
+        "label": "Essai en pause",
+        "body": "L'essai gratuit est temporairement désactivé. Abonne-toi sur /pricing pour continuer."
+      },
+      "notStarted": {
+        "label": "Connecte pour démarrer",
+        "body": "Signe une fois pour démarrer ton essai Pro de 7 jours. Sans carte, sans email."
+      }
     },
     "shell": {
       "model": "Vizzor",
@@ -267,6 +283,10 @@
       "openSidebar": "Ouvrir la barre latérale",
       "searchPlaceholder": "Symbole ou reçu…",
       "quotaLine": "Gratuit {used}/{limit}",
+      "trialLine": "Essai · {days}j · {used}/{cap} aujourd'hui",
+      "proLine": "Pro · {used}/{cap} aujourd'hui",
+      "eliteLine": "Elite · illimité",
+      "freeLine": "Essai terminé · /pricing",
       "nav": {
         "chat": "Lancer",
         "library": "Reçus",
@@ -578,10 +598,10 @@
     "tiers": {
       "free": {
         "name": "Free",
-        "sub": "Scannez le marché depuis Telegram",
+        "sub": "Essai Pro 7 jours · scanner pour toujours",
         "price": "0 $",
-        "priceUnit": "",
-        "cta": "Ouvrir Telegram",
+        "priceUnit": "Essai Pro 7 jours · 10/jour",
+        "cta": "Commencer",
         "commandsLine": "/scan · /price · /trends · /sentiment · /whale-alert · /narrative · /presale · /help",
         "features": {
           "scanner": {
@@ -601,8 +621,8 @@
             "body": "Nouvelles paires DEX · flow de narrative · tokens trending · spikes de volume · tracker de presales"
           },
           "trial": {
-            "title": "Essai Pro de 7 jours au premier /start",
-            "body": "Sans carte, sans KYC, redescend tout seul en Free — zéro risque pour tester"
+            "title": "Essai Pro 7 jours · 10 prédictions/jour",
+            "body": "Démarre automatiquement au premier connect — web ou Telegram. Sans carte, sans KYC, redescend en Free après 7 jours."
           }
         }
       },
