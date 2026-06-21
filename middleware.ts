@@ -32,8 +32,51 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import createMiddleware from 'next-intl/middleware';
 import { routing } from './i18n/routing';
+import { localeForCountry, readEdgeCountry } from './i18n/detect';
 
 const localeMiddleware = createMiddleware(routing);
+
+// Path prefixes that indicate the visitor already picked (or was already
+// routed to) a locale — skip geo detection in that case.
+const LOCALE_PREFIX_RE = new RegExp(
+  `^/(?:${routing.locales.join('|')})(?:/|$)`,
+);
+
+/**
+ * First-visit geo redirect. Runs BEFORE next-intl's own negotiation so
+ * we can land Latin-American visitors on `/es/...` and French-speaking
+ * core countries on `/fr/...` before the page renders.
+ *
+ * Conditions that skip the redirect (return null = let next-intl handle):
+ *   - URL already starts with a known locale prefix.
+ *   - Visitor has a `NEXT_LOCALE` cookie (explicit choice, respect it).
+ *   - Geo header missing (dev, non-edge deploy, allowlisted region).
+ *   - Country maps to the default locale ('en') — no redirect needed
+ *     because next-intl's `as-needed` strategy puts `en` at the root.
+ */
+function geoRedirect(req: NextRequest): NextResponse | null {
+  const { pathname, search } = req.nextUrl;
+  if (LOCALE_PREFIX_RE.test(pathname)) return null;
+  if (req.cookies.has('NEXT_LOCALE')) return null;
+  const country = readEdgeCountry(req.headers);
+  const target = localeForCountry(country);
+  if (!target || target === routing.defaultLocale) return null;
+  // Build the locale-prefixed URL and redirect with 307 — temporary so
+  // search engines don't cache the country→locale mapping (different
+  // visitors at the same URL should still get their own routing).
+  const url = req.nextUrl.clone();
+  url.pathname = pathname === '/' ? `/${target}` : `/${target}${pathname}`;
+  url.search = search;
+  const res = NextResponse.redirect(url, 307);
+  // Persist the choice so subsequent visits skip detection and lock to
+  // the URL prefix the visitor has now committed to.
+  res.cookies.set('NEXT_LOCALE', target, {
+    path: '/',
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: 'lax',
+  });
+  return res;
+}
 
 const PROD = process.env.NODE_ENV === 'production';
 
@@ -154,6 +197,14 @@ export default function middleware(req: NextRequest): NextResponse {
   if (skipLocale) {
     return applySecurityHeaders(NextResponse.next());
   }
+
+  // Geo-based first-visit redirect runs BEFORE next-intl negotiation.
+  // When it returns a redirect we apply the security headers to that
+  // response and short-circuit; the redirect target will re-enter this
+  // middleware on the next hop where the locale prefix is present and
+  // both checks no-op cleanly.
+  const geo = geoRedirect(req);
+  if (geo) return applySecurityHeaders(geo);
 
   const localeRes = localeMiddleware(req);
   // `localeMiddleware` always returns a NextResponse-compatible object
