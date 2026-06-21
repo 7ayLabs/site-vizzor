@@ -1,0 +1,108 @@
+---
+title: Forensics
+description: Flow-graph reconstruction, rug detector, contract auditor, bytecode disassembler, address labeler — the bytecode-and-graph layer that turns "an address" into a structured object you can reason about.
+---
+
+The forensics suite is the deep-dive layer behind the Scanner and the Whale Terminal. The Scanner runs the security checklist; the Whale Terminal renders the per-token feed; the forensics suite is what they read from when you need the full picture.
+
+Five tools, one address space. Point any of them at a contract or wallet on any of the 11 supported chains.
+
+## The five tools
+
+### 1. Flow-graph reconstruction
+
+Reconstructs the **directed graph of token transfers** between wallets, contracts, exchanges, and OTC desks for a given symbol and time window. Edges are weighted by USD value at transfer time; node sizes scale with total throughput.
+
+Used to answer questions like:
+
+- "Where did the supply that just hit Binance actually come from?"
+- "Which wallets received tokens from the deployer in the first 24 hours?"
+- "Did the OTC desk that received last week's transfer recently distribute to retail clusters?"
+
+The graph is queryable: collapse exchanges into a single node, expand into the cold-wallet sub-graph, filter by amount threshold, or follow a single path from origin to sink.
+
+### 2. Rug detector
+
+Goes beyond the Scanner's structural checklist with **ML + heuristic risk scoring** on the bytecode + on-chain history pattern:
+
+- Bytecode similarity against a labeled corpus of historical rugs (≈ 12K contracts)
+- Deployment timing pattern (rug deployers cluster around specific hours and gas environments)
+- Initial-LP composition + LP-token destination
+- Owner-wallet behavioral fingerprint (linked to other deployer wallets, prior rug history)
+
+Outputs a `0.00–1.00` rug-probability score with feature attribution — which signals contributed and by how much. Used by the Scanner as the headline verdict and by the Predictor's `onChain` family as a long-tail-token contribution.
+
+### 3. Contract auditor
+
+Static analysis on the deployed bytecode (not just the verified source). Detects:
+
+- **Proxy patterns** — UUPS, transparent, beacon, diamond — and the upgrade key holder
+- **Delegatecall risk** — arbitrary delegatecall targets that let upgraders re-define logic
+- **Reentrancy** — classic and cross-function, including read-only reentrancy
+- **Access-control misconfigurations** — role admin loops, unprotected sensitive functions
+- **Tax / blacklist / pause hooks** — full inventory, with reachability analysis from `transfer()`
+
+Each finding includes the **exact bytecode offset**, the matching pattern, and a severity classification (`critical · high · medium · low · info`). The auditor's output is suitable for a paid audit firm's first-pass review.
+
+### 4. Bytecode disassembler
+
+EVM bytecode → readable assembly with control-flow annotations. Inputs an address (or raw runtime code), outputs:
+
+- Opcode-level disassembly with stack effect annotations
+- Function-selector → entry-point mapping
+- Control-flow graph (basic blocks + jumps + reverts)
+- Storage-slot access map (which functions touch which slots)
+
+Useful when you want to **verify what a contract actually does** independently of the labels on a block explorer. The disassembler is also the back-end for the contract auditor's pattern matching — anything the auditor flags can be traced to the exact opcode sequence.
+
+### 5. Address labeler
+
+Persistent label graph for every address Vizzor has ever seen. Labels live in `whale_store` and grow continuously as patterns emerge.
+
+| Label class | What it covers | Example sources |
+|---|---|---|
+| `exchange` | Centralized exchange cold / hot / deposit wallets | Public exchange-disclosed lists, deposit-address clustering |
+| `otc` | OTC desk wallets — Cumberland, Wintermute, Galaxy, etc. | Repeated counter-party patterns with known desks |
+| `smart-money` | Wallets whose entries historically lead price | Per-token track-record scoring |
+| `dev` | Deployer / dev wallets of a token | Direct deploy lineage + vesting-contract origins |
+| `contract` | Code-bearing addresses, classified by purpose | Bytecode pattern matching (router, vault, multisig, etc.) |
+| `retail-cluster` | Sets of small wallets behaving as a cohort | Clustering on co-funding + timing similarity |
+
+The labeler returns `{ label, confidence, lastSeenAt }` for any address. New labels are added with a starting confidence, then strengthened or demoted as more evidence accumulates.
+
+## Where the suite surfaces
+
+| Surface | Entry point | Notes |
+|---|---|---|
+| Telegram | `/audit <contract>` · `/track <wallet>` | Elite tier; output paginated for the chat-message envelope |
+| CLI / TUI | `vizzor audit <contract>` · `vizzor track <wallet>` · `vizzor flow <symbol>` | Rich terminal rendering |
+| REST | `POST /audit` · `POST /track` · `GET /v1/forensics/flow` | Streams large graphs via SSE |
+| Web | Dashboard "Forensics" zone | Interactive flow-graph + auditor table |
+
+## What the Predictor does with it
+
+The forensics surface isn't a side-product — it feeds the engine. Inside the Predictor:
+
+- The **rug detector** runs as part of the `onChain` family for tokens with low Schelling-point coverage (small-cap, recent launch)
+- **Address labels** are the basis for the Smart Money Flow signal
+- **Flow-graph reconstruction** powers the Whale Terminal feed
+- The **contract auditor**'s critical findings short-circuit the Predictor with an `engine.abort: rugged_contract` outcome — no directional emission on a token the auditor flagged
+
+Forensics aren't a separate product; they're the data layer the rest of Vizzor reads from.
+
+## Limits
+
+The suite operates against bytecode + on-chain history. It does **not**:
+
+- Read off-chain promises (whitepapers, team identities, exchange listings)
+- Predict price (that's the Predictor's job)
+- Validate legitimacy of OTC desks beyond pattern matching against known counterparties
+- Substitute for a paid security audit on a contract you're about to deploy serious capital into
+
+What it **does** is collapse hours of explorer-driving into a structured object you can reason about quickly. Treat the output as a forensic snapshot, not a verdict.
+
+## Adjacent reading
+
+- [Scanner](/docs/scanner) — the pre-buy security checklist surface
+- [Whale Terminal](/docs/whale-terminal) — per-token feed of moves that matter
+- [Pre-news](/docs/pre-news) — SEC EDGAR, token unlocks, options IV (pairs with forensics for full pre-trade due diligence)

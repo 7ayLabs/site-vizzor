@@ -1,20 +1,20 @@
 /**
- * HowItWorks — vertical, minimalist 3-step explanation.
+ * HowItWorks — Bloomberg-meets-Solana three-card terminal grid.
  *
- * Ollama-style restraint: massive whitespace, centered headline + lede, a
- * single horizontal row of three numbered steps (no cards, no SVG diagrams,
- * no chrome). Each step is just typography — a big muted step number, a
- * short title, and a one-sentence description. The footer is a tiny muted
- * mono link to the ChronoVisor math docs.
+ * Each card is a vt-bracket terminal panel with: a mono `01 / 02 / 03`
+ * step number in gold, a `<LiveBadge>`, a `<GlitchHeading>` title, a
+ * short description, and a live mini-visual (streaming sparklines /
+ * 6-into-1 vote graph / animated A+ stamp with conviction count-up).
  *
- * Server component — no event handlers, no state. Each step animates in
- * via `<MotionReveal>` with an 80ms stagger.
+ * Reveal + visuals live in `HowItWorksClient`; this shell stays a server
+ * component and only forwards translated copy. Horizontal arrows between
+ * cards stack to vertical on mobile (collapsed by the grid).
  */
 import { getTranslations } from 'next-intl/server';
 import { SectionEyebrow } from '@/components/ui/section-eyebrow';
-import { MotionReveal } from '@/components/ui/motion-reveal';
 import { GsapHeadline } from '@/components/ui/gsap-headline';
 import { Link } from '@/i18n/navigation';
+import { HowItWorksClient } from './how-it-works.client';
 
 type StepKey = 'fetch' | 'fuse' | 'emit';
 
@@ -23,7 +23,7 @@ interface StepSpec {
   number: string;
 }
 
-const STEPS: ReadonlyArray<StepSpec> = [
+const STEPS: readonly [StepSpec, StepSpec, StepSpec] = [
   { key: 'fetch', number: '01' },
   { key: 'fuse', number: '02' },
   { key: 'emit', number: '03' },
@@ -32,13 +32,26 @@ const STEPS: ReadonlyArray<StepSpec> = [
 export async function HowItWorks() {
   const t = await getTranslations('howItWorks');
 
+  const steps = STEPS.map((s) => ({
+    number: s.number,
+    title: t(`steps.${s.key}.title`),
+    description: t(`steps.${s.key}.description`),
+  })) as unknown as Readonly<
+    [
+      { number: string; title: string; description: string },
+      { number: string; title: string; description: string },
+      { number: string; title: string; description: string },
+    ]
+  >;
+
   return (
     <section
       aria-labelledby="how-it-works-title"
-      className="mx-auto max-w-[1100px] px-4 sm:px-6 lg:px-8 py-32 lg:py-40 text-center"
+      className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 py-32 lg:py-40"
     >
       <GsapHeadline
-        className="flex flex-col items-center gap-4 max-w-[60ch] mx-auto"
+        glitch
+        className="flex flex-col items-center gap-4 max-w-[60ch] mx-auto text-center"
         eyebrow={<SectionEyebrow align="center">{t('eyebrow')}</SectionEyebrow>}
         title={t('title')}
         sub={t('lede')}
@@ -47,28 +60,9 @@ export async function HowItWorks() {
         subClassName="text-[var(--fg-2)] max-w-[58ch] mx-auto leading-relaxed"
       />
 
-      <div className="mt-20 flex flex-col md:flex-row gap-12 md:gap-16 text-left max-w-[1000px] mx-auto">
-        {STEPS.map((step, index) => (
-          <MotionReveal key={step.key} delay={index * 80}>
-            <div className="flex flex-col">
-              <span
-                className="mono tabular text-3xl font-bold leading-none text-[var(--fg-3)]"
-                aria-hidden
-              >
-                {step.number}
-              </span>
-              <h3 className="text-xl font-semibold tracking-tight text-[var(--fg)] mt-3">
-                {t(`steps.${step.key}.title`)}
-              </h3>
-              <p className="text-[15px] leading-relaxed text-[var(--fg-2)] mt-2">
-                {t(`steps.${step.key}.description`)}
-              </p>
-            </div>
-          </MotionReveal>
-        ))}
-      </div>
+      <HowItWorksClient steps={steps} arrow="→" />
 
-      <p className="mt-16 text-[12px] mono text-[var(--fg-3)]">
+      <p className="mt-16 text-[12px] mono text-[var(--fg-3)] text-center">
         <Link
           href="/docs/chronovisor"
           className="underline-offset-4 hover:text-[var(--fg)] hover:underline transition-colors"

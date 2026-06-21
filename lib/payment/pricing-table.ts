@@ -1,51 +1,63 @@
 /**
  * Single source of truth for tier-cadence pricing in cents AND for
- * the $VIZZOR discount math (per the PRICING_MODEL.md strategy doc).
+ * the per-chain discount math.
  *
- * The engine has the same table (and can hot-tune via SQLite overlay per
- * the operator spec). The site copy here is the *display* number we use
- * to render the order summary and to pre-validate the amount before the
- * upstream call. The engine is the canonical authority — if the site
- * and engine disagree, the engine wins (validates input on createSession).
+ * Discount matrix (per PRICING_MODEL.md strategy doc):
+ *   - SOL on Solana:        15% off  (primary rail, sub-second finality)
+ *   - TON native on TON:    10% off  (in-Telegram wallet UX, instant confirm)
+ *   - USDC on Base:          5% off  (Circle USDC, USD-stable, L2 gas)
+ *   - USDC on Arbitrum:      5% off  (Circle USDC, USD-stable, L2 gas)
  *
  * Lifetime is Elite-only by product decision.
  */
 
-import type { PaymentCadence, PaymentTier, PaymentToken } from './session';
+import type {
+  PaymentCadence,
+  PaymentChain,
+  PaymentTier,
+  PaymentToken,
+} from './session';
 
+/**
+ * Tier × cadence price ladder, in USD cents.
+ *
+ * Repriced from the original Vega ladder ($9.99 / $49 / $1,249) to
+ * match the "category-defining crypto intelligence AI" positioning.
+ * Pricing signals quality — sub-$10/mo screams "Telegram scam bot,"
+ * while $19 / $99 puts Vizzor in the "real product" range that
+ * serious traders trust. The new lifetime anchor at $1,499 makes
+ * Pro Annual feel cheaper and rewards the highest-trust buyer
+ * segment without trapping the engine value at "side-project bet."
+ *
+ * Institutional ($999-$2,999/mo) is handled outside this table — the
+ * /pay route validates monthly/annual/lifetime only, and the
+ * institutional card on /pricing routes to a sales contact, not the
+ * on-site checkout.
+ */
 export const TIER_PRICES_USD_CENTS: Readonly<
   Record<PaymentTier, Partial<Record<PaymentCadence, number>>>
 > = {
   pro: {
-    monthly: 999, // $9.99
-    annual: 9900, // $99.00
+    monthly: 1900, // $19
+    annual: 19000, // $190
   },
   elite: {
-    monthly: 4900, // $49.00
-    annual: 49900, // $499.00
-    lifetime: 124900, // $1,249.00
+    monthly: 9900, // $99
+    annual: 99000, // $990
+    lifetime: 149900, // $1,499
   },
 };
 
 /**
- * $VIZZOR-pay discount basis points (10000 = 100%, 2500 = 25% off).
- * Per PRICING_MODEL.md:
- *   - Pro:           25% off (any cadence)
- *   - Elite m/y:     30% off
- *   - Elite lifetime: 35% off
+ * Per-chain flat discount basis points (independent of tier × cadence).
+ * The key is a `${chain}:${token}` join so a new chain doesn't risk
+ * accidentally inheriting another chain's discount.
  */
-const VIZZOR_DISCOUNT_BPS: Readonly<
-  Record<PaymentTier, Partial<Record<PaymentCadence, number>>>
-> = {
-  pro: {
-    monthly: 2500,
-    annual: 2500,
-  },
-  elite: {
-    monthly: 3000,
-    annual: 3000,
-    lifetime: 3500,
-  },
+const CHAIN_DISCOUNT_BPS: Readonly<Record<string, number>> = {
+  'solana:native': 1500,
+  'ton:native': 1000,
+  'base:usdc': 500,
+  'arbitrum:usdc': 500,
 };
 
 export function priceCents(
@@ -64,34 +76,39 @@ export function priceUsd(
   return `$${(c / 100).toFixed(2)}`;
 }
 
-/** Discount basis points for a (tier, cadence, token) combo. 0 if not eligible. */
+/**
+ * Discount basis points for a (tier, cadence, chain, token) combo.
+ * Returns 0 for unsupported pairs.
+ */
 export function discountBps(
-  tier: PaymentTier,
-  cadence: PaymentCadence,
+  _tier: PaymentTier,
+  _cadence: PaymentCadence,
+  chain: PaymentChain,
   token: PaymentToken,
 ): number {
-  if (token !== 'vizzor') return 0;
-  return VIZZOR_DISCOUNT_BPS[tier]?.[cadence] ?? 0;
+  return CHAIN_DISCOUNT_BPS[`${chain}:${token}`] ?? 0;
 }
 
-/** Discounted price in cents for a (tier, cadence, token) combo. */
+/** Discounted price in cents for a (tier, cadence, chain, token) combo. */
 export function effectivePriceCents(
   tier: PaymentTier,
   cadence: PaymentCadence,
+  chain: PaymentChain,
   token: PaymentToken,
 ): number | null {
   const base = priceCents(tier, cadence);
   if (base === null) return null;
-  const bps = discountBps(tier, cadence, token);
+  const bps = discountBps(tier, cadence, chain, token);
   return Math.round(base * (10000 - bps)) / 10000;
 }
 
 export function effectivePriceUsd(
   tier: PaymentTier,
   cadence: PaymentCadence,
+  chain: PaymentChain,
   token: PaymentToken,
 ): string | null {
-  const c = effectivePriceCents(tier, cadence, token);
+  const c = effectivePriceCents(tier, cadence, chain, token);
   if (c === null) return null;
   return `$${(c / 100).toFixed(2)}`;
 }

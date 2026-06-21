@@ -9,6 +9,11 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: 'standalone',
   typedRoutes: true,
+  // Hide the small floating `N` chip Next.js renders in the corner
+  // while running `next dev`. It overlapped the marketing layout's
+  // own bottom-left affordances and read as a stray brand mark to
+  // anyone screenshotting the site.
+  devIndicators: false,
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'cdn.jsdelivr.net', pathname: '/gh/atomiclabs/cryptocurrency-icons/**' },

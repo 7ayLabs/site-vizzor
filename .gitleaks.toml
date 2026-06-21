@@ -1,0 +1,33 @@
+# gitleaks configuration for site-vizzor
+#
+# Defaults: use gitleaks' built-in ruleset. We override only to
+# allowlist known-good placeholder values that appear in templates and
+# documentation so the scan focuses on real accidental commits.
+
+title = "site-vizzor gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Placeholders and documented examples that look like secrets"
+
+# Files that legitimately contain example/template values.
+paths = [
+  '''(^|/).env.example$''',
+  '''(^|/)docs/ops/secrets\.md$''',
+  '''(^|/)docs/rfc/.*\.md$''',
+  '''(^|/)tests/.*\.test\.ts$''',
+]
+
+# Common placeholder values used across docs and templates. Real
+# secrets are never short, never alliterative, and never contain the
+# word "example" or "placeholder".
+regexTarget = "match"
+regexes = [
+  '''(?i)\b(example|placeholder|changeme|dummy|fake|test)[-_]?(secret|token|key|password)\b''',
+  '''sk_(test|live)_(example|placeholder|xxxx+)''',
+  '''0{16,}''',
+  '''1{16,}''',
+  '''^[0-9a-fA-F]{0,7}$''',
+]

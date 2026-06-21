@@ -393,3 +393,256 @@ For development without the real engine, run `pnpm mock` to start a
 deterministic placeholder server at `:7100` that conforms to the same
 SSE protocol. It's labelled `x-vizzor-source: mock` so you can tell
 mock responses apart from real-engine responses at a glance.
+
+---
+
+## v0.2.0 — Site to Bot Contracts
+
+The v0.2.0 release cycle adds three site-owned HTTP routes that the
+Vizzor Telegram bot consumes to bind paying wallets to Telegram users,
+look up subscription state at request time, and pre-link wallets via a
+SIWS-signed handshake. The full design rationale lives in
+`docs/rfc/v0.2.0/wallet-telegram-binding.md`; this section is the
+machine-checkable wire contract.
+
+All three routes share these conventions:
+
+- **Auth.** `x-vizzor-bot-token: <VIZZOR_BOT_SHARED_SECRET>`. Constant-time
+  compared on the site. Missing-header and wrong-header both return
+  `401 { ok: false, reason: 'unauthorized' }` so a probing client cannot
+  distinguish the two states.
+- **Caching.** `Cache-Control: no-store` on every response. The site
+  does not cache the lookup route by default; see the
+  `VIZZOR_BIND_LOOKUP_CACHE_TTL_MS` escape hatch below.
+- **Encoding.** JSON request and JSON response. Field names use
+  `snake_case` to match the existing v0.1.0 site-to-bot surface.
+- **Errors.** Every failure shape is `{ ok: false, reason: '<enum>' }`.
+  Status codes carry semantic weight; bot clients should branch on the
+  reason enum, not the status code, because the status mapping may
+  refine in v0.3.0.
+
+### `POST /api/grants/[code]/redeem`
+
+Redeems a single-use grant code minted by `issueGrantForSession` after
+a confirmed on-chain payment. Atomically marks the grant redeemed,
+back-fills `subscriptions.telegram_user_id`, and upserts the
+`(telegram_user_id, wallet_address)` pair into `wallet_links`.
+
+Code shape is constrained to `/^g_[A-Za-z0-9_-]{16}$/` (12 base64url
+bytes prefixed with `g_`), matching the format emitted by
+`lib/payment/session.ts::issueGrantForSession`.
+
+Idempotency: retry-safe by `(code, telegram_user_id)`. A second call
+with the same TG id returns the same subscription row with `200`. A
+call with a different TG id returns `409 already_redeemed`.
+
+Request body:
+
+```json
+{ "telegram_user_id": 12345, "telegram_username": "satoshi" }
+```
+
+`telegram_username` is accepted but not persisted in v0.2.0; usernames
+are mutable on Telegram and are not a stable identifier.
+
+Success response (`200 OK`):
+
+```json
+{
+  "ok": true,
+  "subscription": {
+    "tier": "pro",
+    "cadence": "monthly",
+    "expires_at": 1748736000000,
+    "wallet_address": "5xK..."
+  }
+}
+```
+
+Failure responses:
+
+| Status | `reason`                | Meaning                                                                |
+| ------ | ----------------------- | ---------------------------------------------------------------------- |
+| 400    | `invalid_code`          | Code does not match the shape regex or no grant row exists             |
+| 400    | `invalid_input`         | Body is missing, malformed, or `telegram_user_id` is not a positive int |
+| 401    | `unauthorized`          | Shared-secret header missing or wrong                                  |
+| 409    | `already_redeemed`      | Code already redeemed by a different TG id (or wallet bound elsewhere) |
+| 410    | `expired`               | Now > `grants.expires_at`                                              |
+| 412    | `session_not_confirmed` | Payment session is not yet `confirmed`; safe to retry after settle     |
+| 500    | `internal_error`        | Transaction rolled back; safe to retry                                 |
+
+Example curl:
+
+```bash
+curl -X POST 'https://vizzor.ai/api/grants/g_kY7hP8aQ2zX9LmRb/redeem' \
+  -H 'content-type: application/json' \
+  -H "x-vizzor-bot-token: $VIZZOR_BOT_SHARED_SECRET" \
+  -d '{"telegram_user_id": 12345, "telegram_username": "satoshi"}'
+```
+
+### `GET /api/subscriptions/lookup`
+
+Resolves the active subscription for a Telegram user. The bot calls
+this on every `/predict` invocation to decide whether to forward to the
+engine or fall back to the free-tier quota. The site is the canonical
+source of truth for subscription state in v0.2.0 (see RFC §4 for the
+v0.3.0 Postgres migration path).
+
+"No active subscription" is a successful response with
+`subscription: null`, not an error. The bot interprets `null` as
+"treat this user as free-tier".
+
+Query parameters:
+
+| Name               | Required | Notes                                          |
+| ------------------ | -------- | ---------------------------------------------- |
+| `telegram_user_id` | yes      | Positive integer, base-10                      |
+
+Success response (`200 OK`):
+
+```json
+{
+  "ok": true,
+  "subscription": {
+    "tier": "pro",
+    "cadence": "monthly",
+    "expires_at": 1748736000000,
+    "wallet_address": "5xK..."
+  }
+}
+```
+
+or:
+
+```json
+{ "ok": true, "subscription": null }
+```
+
+Failure responses:
+
+| Status | `reason`        | Meaning                                                 |
+| ------ | --------------- | ------------------------------------------------------- |
+| 400    | `invalid_input` | `telegram_user_id` missing or not a positive integer    |
+| 401    | `unauthorized`  | Shared-secret header missing or wrong                   |
+
+**Caching policy (RFC §4 locked decision):** the site does not cache
+lookups server-side by default. A stale cache would hide a freshly
+redeemed grant from the bot for the TTL window, breaking the
+acceptance bar that a user who completes the deep-link handshake
+receives a successful `/predict` reply on their next bot message.
+
+The env var `VIZZOR_BIND_LOOKUP_CACHE_TTL_MS` is an operator escape
+hatch: when set to a positive integer, the route engages a small
+in-process LRU keyed by `telegram_user_id` for that many milliseconds.
+Default is `0` (off). The cache is local to the Node process; it
+weakens but does not break correctness when the site is scaled
+horizontally.
+
+Example curl:
+
+```bash
+curl -G 'https://vizzor.ai/api/subscriptions/lookup' \
+  --data-urlencode 'telegram_user_id=12345' \
+  -H "x-vizzor-bot-token: $VIZZOR_BOT_SHARED_SECRET"
+```
+
+### `POST /api/wallet-links`
+
+Durably binds a Solana wallet to a Telegram user. The bot mints a link
+request out of band, the user signs the canonical link message with
+their wallet, and the bot relays the signature to this route. Both
+shared-secret auth AND SIWS signature verification must succeed.
+
+The canonical link message is built by
+`lib/payment/siws.ts::buildLinkWalletMessage`. The site reconstructs
+the message from the request parts and verifies the ed25519 signature;
+no client-supplied message string is trusted.
+
+Request body:
+
+```json
+{
+  "telegram_user_id": 12345,
+  "wallet": "5xK...",
+  "signature": "<base58 or base64 ed25519 sig>",
+  "nonce": "<hex, 16-128 chars>",
+  "issued_at": "2026-06-02T12:00:00.000Z",
+  "expires_at": "2026-06-02T12:05:00.000Z"
+}
+```
+
+Success response (`200 OK`):
+
+```json
+{ "ok": true, "already_linked": false }
+```
+
+A re-assertion of the same `(telegram_user_id, wallet)` pair returns
+`200 { ok: true, already_linked: true }`.
+
+Failure responses:
+
+| Status | `reason`                   | Meaning                                                                     |
+| ------ | -------------------------- | --------------------------------------------------------------------------- |
+| 400    | `invalid_input`            | Body field missing, malformed, or fails the nonce/wallet shape checks       |
+| 401    | `unauthorized`             | Shared-secret header missing or wrong                                       |
+| 401    | `invalid_signature`        | Signature does not verify against the reconstructed canonical link message  |
+| 409    | `already_linked_elsewhere` | Wallet or TG id is already bound to a different counterpart                 |
+| 410    | `expired`                  | `expires_at` is in the past                                                 |
+| 500    | `internal_error`           | Unexpected database error                                                   |
+
+The unique indexes on `wallet_links.wallet_address` and
+`wallet_links.telegram_user_id` enforce the 1:1 mapping. Silent
+re-attribution is intentionally refused: a wallet that has been linked
+elsewhere requires an explicit operator-side `DELETE FROM wallet_links
+WHERE wallet_address = ?` to unlink before a re-link is accepted.
+
+### Required environment variables
+
+| Variable                          | Scope   | Owner   | Purpose                                                                  |
+| --------------------------------- | ------- | ------- | ------------------------------------------------------------------------ |
+| `VIZZOR_BOT_SHARED_SECRET`        | server  | C2 + C6 | Shared secret expected on `x-vizzor-bot-token` for the three routes      |
+| `VIZZOR_BOT_SHARED_SECRET_NEXT`   | server  | C2 + C6 | Second-accepted secret during rotation; unset outside rotation windows   |
+| `VIZZOR_BIND_LOOKUP_CACHE_TTL_MS` | server  | C2      | Positive integer engages opt-in LRU on the lookup route; default `0`     |
+
+In `NODE_ENV=production`, an unset `VIZZOR_BOT_SHARED_SECRET` causes
+every authenticated route to fail closed with `401 unauthorized`.
+Outside production, an unset secret allow-softs with a one-shot console
+warning so local development stays frictionless.
+
+### Shared-secret rotation procedure
+
+Operational procedure for rotating `VIZZOR_BOT_SHARED_SECRET`. The
+canonical narrative lives in RFC §7; this is the short form for
+runbooks. Managed-secret-store migration is owned by C6
+(`feature/v0.2.0/infra-hardening`); until that ships, manual env-var
+distribution is the contract.
+
+1. Generate a fresh 32-byte secret on a trusted workstation:
+   `node -e 'console.log(require("crypto").randomBytes(32).toString("base64url"))'`.
+2. Deploy the new value to the **site** as
+   `VIZZOR_BOT_SHARED_SECRET_NEXT`, leaving the current
+   `VIZZOR_BOT_SHARED_SECRET` in place. The site now accepts either
+   value on `x-vizzor-bot-token`.
+3. Verify by probing each of the three routes with the new value.
+4. Deploy the new value to the **bot** as `VIZZOR_BOT_SHARED_SECRET`,
+   replacing the old value. The bot now uses the new secret.
+5. Confirm a real bot-to-site call succeeds end-to-end.
+6. Promote `VIZZOR_BOT_SHARED_SECRET_NEXT` to
+   `VIZZOR_BOT_SHARED_SECRET` on the site and unset the `_NEXT`
+   variable; redeploy. Rotation complete.
+
+The only zero-downtime risk is between steps 4 and 5 if the bot
+redeploy lands before step 2 has propagated on the site. Always deploy
+the site first, verify with a probe, then deploy the bot.
+
+### Out-of-scope for this addendum
+
+- The browser-facing `POST /api/wallet-links/challenge` and the
+  `/link?c=<id>` page are described in RFC §6 but are not part of the
+  v0.2.0 wallet-telegram-binding sub-branch deliverable; they ship
+  with C3 (`feature/v0.2.0/purchase-ux`).
+- The full SIWS replay-protection audit and the durable replay cache
+  are owned by C4 (`feature/v0.2.0/crypto-security`).
+- The managed secret store migration is owned by C6
+  (`feature/v0.2.0/infra-hardening`).

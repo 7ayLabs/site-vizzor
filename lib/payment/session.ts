@@ -1,39 +1,60 @@
 /**
  * Payment session — site-owned creation + lookup.
  *
- * The site no longer proxies to a remote engine for payment session
- * state. Instead it mints sessions locally:
- *   1. Generates a unique session id
- *   2. Snapshots the current USD-to-token rate via getRate()
- *   3. Picks the treasury destination address for the chain
- *   4. Persists the session row in SQLite (`payment_sessions`)
- *   5. Returns the in-memory shape the UI expects
+ * v0.2.0 ships Solana-native-only. Each session locks a SOL amount,
+ * snapshots the USD-to-SOL rate, and embeds the session_id as the
+ * on-chain memo so the watcher can demux confirmations at the shared
+ * treasury.
  *
- * The watcher daemon (lib/payment/watcher.ts) is what flips
+ * Flow:
+ *   1. Generate a unique session id
+ *   2. Snapshot the current USD-to-SOL rate via getRate('sol')
+ *   3. Persist the session row in SQLite (`payment_sessions`)
+ *   4. Return the in-memory shape the UI expects
+ *
+ * The watcher daemon (lib/payment/watcher.ts) flips
  * `status='confirmed'` on the row once the on-chain transfer is seen.
- *
- * The previous engine-proxy exports stay in place for compatibility
- * with the existing route handlers — same function names, same
- * SessionResult union, just different internals.
  */
 
 import { randomBytes } from 'node:crypto';
-import { acceptTonPayments, acceptVizzorPayments, paymentRateLockSeconds } from '@/lib/feature-flags';
+import {
+  acceptSolanaPayments,
+  paymentRateLockSeconds,
+} from '@/lib/feature-flags';
 import {
   attachGrantCodeToSession,
+  attachTelegramIdToSubscription,
   expireStaleSessions,
+  findWalletLinkByWallet,
+  getDb,
   getSessionRow,
   insertGrant,
   insertSession,
+  insertSubscription,
+  markSessionConfirmed,
   type SessionRow,
 } from './db';
 import { getRate } from './rates';
-import { solanaTreasury, tonTreasury } from './treasury';
+import { evmTreasury, solanaTreasury, tonTreasury } from './treasury';
 
 export type PaymentTier = 'pro' | 'elite';
 export type PaymentCadence = 'monthly' | 'annual' | 'lifetime';
-export type PaymentChain = 'ton' | 'solana';
-export type PaymentToken = 'native' | 'vizzor';
+export type PaymentChain = 'solana' | 'ton' | 'base' | 'arbitrum';
+export type PaymentToken = 'native' | 'usdc';
+
+/** Combinations the checkout shell offers and the engine knows how to settle. */
+export const SUPPORTED_PAIRS = [
+  { chain: 'solana', token: 'native' },
+  { chain: 'ton', token: 'native' },
+  { chain: 'base', token: 'usdc' },
+  { chain: 'arbitrum', token: 'usdc' },
+] as const;
+
+export function isSupportedPair(chain: string, token: string): boolean {
+  return SUPPORTED_PAIRS.some(
+    (p) => p.chain === chain && p.token === token,
+  );
+}
 
 export interface CreateSessionInput {
   tier: PaymentTier;
@@ -74,8 +95,30 @@ export type SessionFailure =
   | 'rate_unavailable'
   | 'invalid_input';
 
+const SOL_DECIMALS = 9;
 const TON_DECIMALS = 9;
-const VIZZOR_DECIMALS = 9;
+const USDC_DECIMALS = 6;
+
+function decimalsFor(chain: PaymentChain, token: PaymentToken): number {
+  if (token === 'usdc') return USDC_DECIMALS;
+  if (chain === 'ton') return TON_DECIMALS;
+  return SOL_DECIMALS;
+}
+
+function priceTokenFor(
+  chain: PaymentChain,
+  token: PaymentToken,
+): 'sol' | 'ton' | 'usdc' {
+  if (token === 'usdc') return 'usdc';
+  if (chain === 'ton') return 'ton';
+  return 'sol';
+}
+
+function destinationFor(chain: PaymentChain): string {
+  if (chain === 'ton') return tonTreasury();
+  if (chain === 'base' || chain === 'arbitrum') return evmTreasury(chain);
+  return solanaTreasury();
+}
 
 function newSessionId(): string {
   // 16 random bytes → 22 chars base64url. Short, URL-safe, unique.
@@ -85,16 +128,10 @@ function newSessionId(): string {
 export async function createSession(
   input: CreateSessionInput,
 ): Promise<SessionResult> {
-  const isTon = input.chain === 'ton' && input.token === 'native';
-  const isVizzor = input.chain === 'solana' && input.token === 'vizzor';
-
-  if (isTon && !acceptTonPayments()) {
-    return { ok: false, reason: 'feature_disabled' };
-  }
-  if (isVizzor && !acceptVizzorPayments()) {
-    return { ok: false, reason: 'feature_disabled' };
-  }
-  if (!isTon && !isVizzor) {
+  // Input validation runs first so callers get a deterministic
+  // `invalid_input` for malformed requests regardless of feature-flag
+  // state. Feature gate is checked only once the shape is known good.
+  if (!isSupportedPair(input.chain, input.token)) {
     return { ok: false, reason: 'invalid_input' };
   }
   if (!['pro', 'elite'].includes(input.tier)) {
@@ -117,16 +154,22 @@ export async function createSession(
   ) {
     return { ok: false, reason: 'invalid_input' };
   }
+  if (!acceptSolanaPayments()) {
+    return { ok: false, reason: 'feature_disabled' };
+  }
 
-  // Snapshot the current rate.
-  const rate = await getRate(isTon ? 'ton' : 'vizzor');
+  const priceToken = priceTokenFor(input.chain, input.token);
+  const rate = await getRate(priceToken);
   if (!rate) return { ok: false, reason: 'rate_unavailable' };
 
-  const usd = input.amountUsdCents / 100;
-  const amount = Math.round((usd / rate.usdPer) * 100) / 100;
-  const decimals = isTon ? TON_DECIMALS : VIZZOR_DECIMALS;
-  const destAddress = isTon ? tonTreasury() : solanaTreasury();
   const sessionId = newSessionId();
+  const usd = input.amountUsdCents / 100;
+  // 4-decimal precision is small enough to avoid rounding issues yet
+  // large enough that wallet UIs render clean numbers.
+  const amount = Math.round((usd / rate.usdPer) * 10000) / 10000;
+  const decimals = decimalsFor(input.chain, input.token);
+
+  const destAddress = destinationFor(input.chain);
   const expiresAt = Date.now() + paymentRateLockSeconds() * 1000;
 
   insertSession({
@@ -168,7 +211,7 @@ export async function createSession(
 }
 
 export async function getSession(id: string): Promise<SessionResult> {
-  if (!acceptTonPayments() && !acceptVizzorPayments()) {
+  if (!acceptSolanaPayments()) {
     return { ok: false, reason: 'feature_disabled' };
   }
   if (!/^[A-Za-z0-9_-]{4,128}$/.test(id)) {
@@ -226,4 +269,96 @@ export async function issueGrantForSession(
   insertGrant({ code, session_id: sessionId, expires_at: expiresAt });
   attachGrantCodeToSession(sessionId, code);
   return { code };
+}
+
+/* ------------------------------------------------------------------ *\
+ * finalizeSession — the watcher's terminal step.
+ *
+ * Called by the Solana watcher once an on-chain transfer has been
+ * matched to a pending session. Wraps the five post-confirm
+ * operations in a single SQLite transaction so a mid-flow crash rolls
+ * back cleanly:
+ *
+ *   1. Re-read the session and assert status === 'pending'. Defends
+ *      against duplicate confirmations from reorgs / watcher retries.
+ *   2. markSessionConfirmed — flips status, attaches tx signature.
+ *   3. insertSubscription with cadence-derived expiry (monthly +30d,
+ *      annual +365d, lifetime null).
+ *   4. issueGrantForSession — mints a 24h single-use bot-handoff
+ *      grant code, attaches it to the session row.
+ *   5. Express lane — if the payer wallet is already in wallet_links,
+ *      eagerly back-fill subscriptions.telegram_user_id so the user
+ *      has bot access without a grant redemption round-trip.
+\* ------------------------------------------------------------------ */
+
+export interface FinalizeResult {
+  confirmed: boolean;
+  subscriptionId?: number;
+  grantCode?: string;
+  walletLinkedTo?: number;
+}
+
+export function cadenceExpiry(cadence: string): number | null {
+  const now = Date.now();
+  switch (cadence) {
+    case 'monthly':
+      return now + 30 * 24 * 60 * 60 * 1000;
+    case 'annual':
+      return now + 365 * 24 * 60 * 60 * 1000;
+    case 'lifetime':
+      return null;
+    default:
+      return now + 30 * 24 * 60 * 60 * 1000;
+  }
+}
+
+export function finalizeSession(
+  session: SessionRow,
+  txSig: string,
+  payer: string,
+): FinalizeResult {
+  const db = getDb();
+  const run = db.transaction((): FinalizeResult => {
+    const fresh = getSessionRow(session.session_id);
+    if (!fresh || fresh.status !== 'pending') {
+      return { confirmed: false };
+    }
+
+    markSessionConfirmed(session.session_id, txSig, payer, Date.now());
+
+    if (!payer) {
+      return { confirmed: true };
+    }
+
+    const subscriptionId = insertSubscription({
+      wallet_address: payer,
+      tier: session.tier,
+      cadence: session.cadence,
+      expires_at: cadenceExpiry(session.cadence),
+      session_id: session.session_id,
+    });
+
+    const code = 'g_' + randomBytes(12).toString('base64url');
+    const grantExpiresAt = Date.now() + GRANT_TTL_MS;
+    insertGrant({
+      code,
+      session_id: session.session_id,
+      expires_at: grantExpiresAt,
+    });
+    attachGrantCodeToSession(session.session_id, code);
+
+    const link = findWalletLinkByWallet(payer);
+    if (link) {
+      attachTelegramIdToSubscription(subscriptionId, link.telegram_user_id);
+      return {
+        confirmed: true,
+        subscriptionId,
+        grantCode: code,
+        walletLinkedTo: link.telegram_user_id,
+      };
+    }
+
+    return { confirmed: true, subscriptionId, grantCode: code };
+  });
+  return run();
 }

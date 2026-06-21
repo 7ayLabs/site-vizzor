@@ -29,12 +29,29 @@
  *   event: done           → {usage?}                                 → text-end + [DONE]
  */
 
+import { createHash } from 'node:crypto';
 import type { UIMessage } from 'ai';
-import { buildIncrementedQuotaCookie, readQuota } from '@/lib/quota';
-import { isTokenLive } from '@/lib/feature-flags';
-import { verifyBurnTx } from '@/lib/solana';
 import { parseIntent } from '@/lib/commands';
-import { getSubscriptionForActiveSession } from '@/lib/payment/auth-session';
+import { getActiveSession } from '@/lib/payment/auth-session';
+import {
+  incrementWalletFreeUsage,
+  insertPredictTelemetry,
+} from '@/lib/payment/db';
+import { enforceWalletRateLimit } from '@/lib/payment/rate-limit';
+import {
+  metadataTierFor,
+  resolveTierWithTrialStart,
+  type EffectiveTier,
+} from '@/lib/payment/tier-resolver';
+import { promptByteCap } from '@/lib/feature-flags';
+import {
+  PREDICT_ROUTE_REQUIREMENTS,
+  assertRequiredEnv,
+} from '@/lib/env';
+
+// Fail fast in production if the predict route is misconfigured. No-op in
+// dev/CI. See lib/env.ts for the declarative requirements bundle.
+assertRequiredEnv('predict', PREDICT_ROUTE_REQUIREMENTS);
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -59,6 +76,24 @@ export async function POST(req: Request) {
     return Response.json({ error: 'no_messages' }, { status: 400 });
   }
 
+  /* ------------------- wallet auth gate (v0.3.0) ----------------- */
+  // /predict is no longer anonymous. The visitor MUST complete SIWS
+  // before any engine cycles are spent — this binds the free-tier
+  // counter to a real wallet so it can't be reset by clearing cookies
+  // or opening an incognito window. Subscriptions still bypass the
+  // counter; the SIWS check is the only gate for them too.
+  const session = await getActiveSession();
+  if (!session) {
+    return Response.json(
+      {
+        error: 'wallet_required',
+        message:
+          'Connect your wallet to predict. The free tier is bound to your wallet so the counter survives cookie clears.',
+      },
+      { status: 401, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
   const lastUserText = extractLastUserText(body.messages);
   const intent = parseIntent(lastUserText);
 
@@ -70,58 +105,109 @@ export async function POST(req: Request) {
     return streamPlainText(intent.text ?? '', null);
   }
 
-  /* --------------------- predict gate (quota) -------------------- */
+  /* --------------------- 5-layer cost shield --------------------- *\
+   * The cost guard runs before any LLM hop. Layered cheapest-first
+   * so a malicious script bounces off the fastest check it can hit.
+   *
+   *   1. Prompt size cap  — refuse "novel as a prompt" upfront.
+   *   2. Plan gate        — `free` tier wallets refused (402).
+   *   3. Daily cap        — trial @ 10/day, pro @ 1000/day, elite ∞.
+   *   4. Burst rate limit — 1 prediction / 5s / wallet.
+   *   5. Engine API key   — backstop, 60 req/min on the upstream key.
+   *
+   * The counter is bumped only after the upstream returns 200; a
+   * failed engine call doesn't burn the day cap.
+  \* -------------------------------------------------------------- */
 
-  const burnHeader = req.headers.get('x-vizzor-burn-tx');
-  const quota = await readQuota();
-  let burnApproved = false;
+  const walletHash = hashWalletForUserId(session.wallet);
+  const promptBytes = lastUserText ? Buffer.byteLength(lastUserText, 'utf8') : 0;
 
-  // Wallet-based subscription bypass — if the visitor signed in with
-  // SIWS and that wallet has an active subscription on file, every
-  // prediction is free and the quota counter is left untouched.
-  const subscription = await getSubscriptionForActiveSession();
-  const subscribed = !!subscription;
-
-  if (burnHeader && isTokenLive()) {
-    const verify = await verifyBurnTx(burnHeader);
-    burnApproved = verify.ok;
-    if (!verify.ok) {
-      return Response.json(
-        {
-          error: 'burn_verification_failed',
-          message:
-            'The burn transaction could not be verified. Try again, or check the wallet panel.',
-          reason: verify.reason,
-        },
-        { status: 402, headers: { 'Cache-Control': 'no-store' } },
-      );
-    }
-  }
-
-  if (!burnApproved && !subscribed && quota.exhausted) {
+  // Layer 1 — prompt size.
+  if (promptBytes > promptByteCap()) {
+    insertPredictTelemetry({
+      walletHash,
+      tier: 'unknown',
+      promptBytes,
+      status: 413,
+    });
     return Response.json(
       {
-        error: 'free_quota_exhausted',
-        message: isTokenLive()
-          ? 'Free predictions exhausted. Subscribe at /pricing, or connect a wallet and burn $VIZZOR to continue.'
-          : 'Free predictions exhausted. Subscribe at /pricing — pay in TON or $VIZZOR on Solana.',
-        quota,
+        error: 'prompt_too_long',
+        message: `Your prompt exceeds the ${promptByteCap()}-byte cap. Shorten it or split it across multiple turns.`,
+        promptBytes,
+        cap: promptByteCap(),
+      },
+      { status: 413, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
+  const effective = resolveTierWithTrialStart(session.wallet);
+
+  // Layer 2 — plan gate.
+  if (effective.kind === 'free') {
+    const message =
+      effective.reason === 'never_started'
+        ? 'Connect first to start your 7-day Pro trial.'
+        : effective.reason === 'operator_killed'
+          ? 'Free trial temporarily disabled. Subscribe at /pricing to continue.'
+          : 'Your 7-day Pro trial has ended. Subscribe at /pricing to keep predicting.';
+    insertPredictTelemetry({ walletHash, tier: 'free', promptBytes, status: 402 });
+    return Response.json(
+      {
+        error: 'free_trial_expired',
+        reason: effective.reason,
+        message,
       },
       { status: 402, headers: { 'Cache-Control': 'no-store' } },
     );
   }
 
-  // The would-be cookie. Only attached when the upstream actually
-  // delivers a prediction. Burns AND subscribers don't increment the
-  // free counter — they're paying / paid via a different surface.
-  const cookieOnSuccess =
-    !burnApproved && !subscribed
-      ? buildIncrementedQuotaCookie(quota.used)
-      : null;
+  // Layer 3 — daily cap (elite is unlimited; pro/trial have soft caps).
+  if (effective.kind === 'pro' || effective.kind === 'trial') {
+    if (effective.dailyUsed >= effective.dailyCap) {
+      insertPredictTelemetry({
+        walletHash,
+        tier: effective.kind,
+        promptBytes,
+        status: 429,
+      });
+      return Response.json(
+        {
+          error: 'daily_cap_reached',
+          reason: 'daily_cap',
+          message: `Daily prediction cap of ${effective.dailyCap} reached for your ${effective.kind} tier. Resets at 00:00 UTC.`,
+          dailyUsed: effective.dailyUsed,
+          dailyCap: effective.dailyCap,
+        },
+        { status: 429, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+  }
+
+  // Layer 4 — per-wallet burst limit (1 / 5s).
+  const burstResponse = enforceWalletRateLimit(session.wallet, 'predict.burst');
+  if (burstResponse) {
+    insertPredictTelemetry({
+      walletHash,
+      tier: effective.kind,
+      promptBytes,
+      status: 429,
+    });
+    return burstResponse;
+  }
 
   /* --------------------- forward to vizzor engine ---------------- */
-
-  return forwardToVizzor(body.messages, cookieOnSuccess, burnHeader);
+  // Counter increment happens AFTER the upstream call confirms success
+  // — see `forwardToVizzor`. `effective` carries the tier override (a
+  // trial wallet is sent to the engine as `pro` so it gets the rich
+  // response) and the subscription row (used for downstream metadata).
+  return forwardToVizzor(body.messages, {
+    wallet: session.wallet,
+    walletHash,
+    effective,
+    promptBytes,
+    headers: req.headers,
+  });
 }
 
 /* ------------------------------------------------------------------ *\
@@ -131,8 +217,13 @@ export async function POST(req: Request) {
 
 async function forwardToVizzor(
   messages: UIMessage[],
-  cookieOnSuccess: string | null,
-  burnHeader: string | null,
+  ctx: {
+    wallet: string;
+    walletHash: string;
+    effective: EffectiveTier;
+    promptBytes: number;
+    headers: Headers;
+  },
 ): Promise<Response> {
   const base =
     process.env.VIZZOR_API_URL ??
@@ -153,8 +244,37 @@ async function forwardToVizzor(
     .filter((m) => m.content.length > 0);
 
   if (vizzorMessages.length === 0) {
-    return offlineResponse(null);
+    return offlineResponse();
   }
+
+  // Per-surface namespaced engine user-id. The vizzor engine resolves
+  // subscription tier by `user_id` from its own Postgres store (which
+  // the bot writes to). Telegram users land in numeric chat IDs; web
+  // users get a `web:` prefix so the two streams never collide and
+  // their `aiChat.toolUse` per-day counters stay independent. The hash
+  // truncation keeps the identifier opaque while still being stable
+  // for the same wallet across sessions.
+  const userId = `web:${ctx.walletHash}`;
+  // The engine receives the EFFECTIVE tier — trial wallets are sent
+  // as `pro` so the engine grants the rich response and the Telegram-
+  // grade tool-use breadth during the 7-day window. Elite stays elite;
+  // free wallets never reach this code (gated upstream).
+  const tier = metadataTierFor(ctx.effective);
+  // Best-effort locale + timezone derivation. `Accept-Language` is the
+  // standard browser-forwarded preference; the timezone is a custom
+  // header the client emits (`x-vizzor-timezone`) because the browser
+  // doesn't expose tz in any default header. Both fall through to
+  // sensible defaults if the client doesn't send them.
+  // Prefer the explicit `x-vizzor-locale` header — the chat shell sets it
+  // to the URL-path locale so the engine response language matches the
+  // page chrome the user is actually looking at. Falls through to the
+  // legacy Accept-Language derivation when the header is missing (e.g.
+  // older clients or non-browser callers).
+  const locale = deriveLocale(
+    ctx.headers.get('x-vizzor-locale') ?? ctx.headers.get('accept-language'),
+  );
+  const timezone =
+    ctx.headers.get('x-vizzor-timezone')?.trim() || 'UTC';
 
   const controller = new AbortController();
   const timeout = setTimeout(
@@ -163,21 +283,59 @@ async function forwardToVizzor(
   );
 
   try {
+    // The upstream engine validates an X-API-Key on every request
+    // (see `vizzor/src/api/auth/middleware.ts`). The site holds a
+    // single service key in env; if it's missing in prod we still try
+    // the request (and surface the upstream's 401 as "offline") rather
+    // than throwing at boot, since the rest of the site doesn't need
+    // the engine to render.
+    const apiKey = process.env.VIZZOR_API_KEY;
+    const upstreamHeaders: Record<string, string> = {
+      'content-type': 'application/json',
+      accept: 'text/event-stream',
+    };
+    if (apiKey) upstreamHeaders['x-api-key'] = apiKey;
+
     const upstreamRes = await fetch(`${base}/v1/chat`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'text/event-stream',
-        ...(burnHeader ? { 'x-vizzor-burn-tx': burnHeader } : {}),
-      },
-      body: JSON.stringify({ messages: vizzorMessages }),
+      headers: upstreamHeaders,
+      body: JSON.stringify({
+        messages: vizzorMessages,
+        userId,
+        metadata: {
+          tier,
+          wallet: ctx.wallet,
+          locale,
+          timezone,
+          client: 'site-web',
+        },
+      }),
       signal: controller.signal,
       cache: 'no-store',
     });
 
     if (!upstreamRes.ok || !upstreamRes.body) {
-      return offlineResponse(null);
+      insertPredictTelemetry({
+        walletHash: ctx.walletHash,
+        tier: ctx.effective.kind,
+        promptBytes: ctx.promptBytes,
+        status: upstreamRes.status || 503,
+      });
+      return offlineResponse();
     }
+
+    // Bump the lifetime + daily counters now that the upstream agreed
+    // to deliver a stream. Elite wallets aren't subject to the cap so
+    // we skip the daily bookkeeping for them.
+    if (ctx.effective.kind !== 'elite') {
+      incrementWalletFreeUsage(ctx.wallet);
+    }
+    insertPredictTelemetry({
+      walletHash: ctx.walletHash,
+      tier: ctx.effective.kind,
+      promptBytes: ctx.promptBytes,
+      status: 200,
+    });
 
     // Transform Vizzor SSE → AI SDK UI Message Stream so the client's
     // `useChat` hook renders it natively. The transform also surfaces
@@ -191,11 +349,10 @@ async function forwardToVizzor(
       'x-vercel-ai-ui-message-stream': 'v1',
       'x-vizzor-source': 'engine',
     });
-    if (cookieOnSuccess) headers.set('set-cookie', cookieOnSuccess);
 
     return new Response(transformed, { status: 200, headers });
   } catch {
-    return offlineResponse(null);
+    return offlineResponse();
   } finally {
     clearTimeout(timeout);
   }
@@ -333,8 +490,8 @@ In the meantime:
 
 status: vizzor-engine offline`;
 
-function offlineResponse(setCookie: string | null): Response {
-  return streamPlainText(OFFLINE_MESSAGE, setCookie, { offline: true });
+function offlineResponse(): Response {
+  return streamPlainText(OFFLINE_MESSAGE, null, { offline: true });
 }
 
 /* ------------------------------------------------------------------ *\
@@ -382,6 +539,40 @@ function streamPlainText(
   if (setCookie) headers.set('set-cookie', setCookie);
 
   return new Response(stream, { status: 200, headers });
+}
+
+/**
+ * Stable, opaque per-wallet engine identifier. SHA-256 truncated to 16
+ * hex chars — enough entropy to avoid collisions across the active
+ * user base, narrow enough to read in logs. The engine treats it as a
+ * string, no decoding required.
+ */
+function hashWalletForUserId(wallet: string): string {
+  return createHash('sha256').update(wallet).digest('hex').slice(0, 16);
+}
+
+/**
+ * Pick the primary language tag out of an Accept-Language header. The
+ * engine reads the first segment as the response language hint. We
+ * tolerate quality values (`en-US,en;q=0.9,es;q=0.8`) and strip them.
+ * Returns `'en'` when the header is missing or malformed so the engine
+ * can fall back to its own default rather than receive an empty hint.
+ */
+// Locales the engine prompt actually understands. Anything else gets
+// clamped to 'en' so we never leak an arbitrary client string into the
+// upstream metadata payload.
+const SUPPORTED_LOCALES = new Set(['en', 'es', 'fr']);
+
+function deriveLocale(header: string | null): string {
+  if (!header) return 'en';
+  const first = header.split(',')[0]?.trim();
+  if (!first) return 'en';
+  // Strip quality value if any made it past the split.
+  const lang = first.split(';')[0]?.trim().toLowerCase();
+  if (!lang) return 'en';
+  // Accept both bare ('es') and regioned ('es-419', 'en-US') forms.
+  const base = lang.slice(0, 2);
+  return SUPPORTED_LOCALES.has(base) ? base : 'en';
 }
 
 function extractLastUserText(messages: UIMessage[]): string {

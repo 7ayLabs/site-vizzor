@@ -17,3 +17,9 @@ docs
 tests
 scripts
 API_CONTRACT.md
+
+# Defensive: any stray .conf at the repo root (nginx symlinks accidentally
+# created in /srv/site-vizzor become dangling inside the container and crash
+# Next.js' file tracer). Only matches root-level; nested .conf inside any
+# subdir is unaffected.
+/*.conf

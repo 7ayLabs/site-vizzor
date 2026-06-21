@@ -1,0 +1,57 @@
+---
+version: v0.15.8
+codename: Vega
+date: 2026-06-21
+summary: Monetization backbone (Pro / Elite / Lifetime tiers, TON HD-wallet, 7-day auto-trial), Claude-tier LLM routing, price-hallucination guard, on-chain phase 0, prompt caching, LLM wrapper parity across every surface.
+---
+
+The Vega release lands the monetization backbone, rewrites the LLM stack onto Claude-tier routing with the self-hosted infrastructure present but dormant, ships the first phase of the on-chain migration as a non-breaking seam, and tightens every chat surface against price hallucination. The four streams ship in one PR because each one depends on the others to feel complete.
+
+## Added
+
+- **Plan-based access control across every surface** — Free / Pro / Elite / Lifetime / Trial tiers gate which LLM tier, tools, alerts, agents, and conversation depth are available. The same wallet, the same plan, every platform. Free can't escalate to a cloud model; only Elite can call forensics or run autonomous agents.
+- **TON HD-wallet payment addresses** — derived per-checkout from a seed, no per-user wallet provisioning required. USD ↔ TON exchange rate oracle keeps invoice amounts current.
+- **Paywall gate + 7-day auto-trial** — first-contact users get a 7-day full-feature trial automatically; the gate kicks in only after the trial window closes.
+- **Claude-tier routing** — Haiku 4.5 for routine queries, Sonnet 4.6 for predictions and trade plans, Opus 4.7 reserved for Elite forensics and audits. Router picks per turn based on complexity + plan, never per session.
+- **Conversational continuity layer** — session-state struct rebuilt per turn carries recent symbols, last prediction, active trade plan, declared portfolio, and user bias into the prompt as a compact `[CONVERSATION STATE]` block. Pronoun and ellipsis expansion happens deterministically before the LLM sees the message ("y en 1h?" expands to "y BTC en 1h?" silently).
+- **`MarketDataSource` abstraction** — engine no longer imports Binance directly. The contract decouples six market-data capabilities (spot price, klines, depth, funding, taker stats, ticker) from any single venue. Default config preserves today's behavior; later phases swap in Hyperliquid, multi-DEX spot, and on-chain CVD without touching prediction code.
+- **Anthropic prompt caching + tool aliases** — the ~30K-token system prompt and ~89-tool registry are now cached at the SDK level; subsequent turns within a conversation reuse the cached read. Operator-friendly tool aliases (`scan`, `predict`, `whale`) resolve to canonical names before dispatch.
+- **LLM wrapper parity across every surface** — `/v1/chat`, Telegram, Discord, and the CLI now share the same price-anchor helper, forensics tool exposure, tool-pairing guidance, and degraded-mode flag. The "Vizzor said one thing on Telegram and another on Web" failure mode is gone.
+- **Self-hosted LLM stack (dormant, opt-in)** — `LocalLLMProvider` with full agentic tool-use loop, an optional `llm-sidecar` Docker service, dialect-aware prompt deltas, and live-price context injection all ship in the tree but stay off by default. Flip `LLM_ENABLED=true` + `VIZZOR_AI_PROVIDER=local-llm` to reactivate without engine code changes.
+- **LLM observability** — four new Prometheus series: `llm_inference_latency_ms`, `llm_tool_call_total`, `llm_fallback_total`, and `llm_circuit_breaker_state`. A 3-state breaker (closed / half-open / open) protects each upstream against cascading failures.
+- **Per-wallet rate limit + daily chat quota** — token-bucket limiter sized by plan, plus an `aiChatPerDay` counter that returns `402` with an upgrade hint when a Free user hits the cap.
+
+## Changed
+
+- **Price hallucination guard** — system-prompt rule + deterministic server-side price anchor prepended on every turn. The LLM cannot quote a price the engine didn't verify; if no symbol is detected, the anchor is a no-op.
+- **Plan prices synced** — Pro, Elite, and Lifetime invoice amounts now match the public pricing page exactly. `pnpm test` covers the parity.
+- **`/diagnose` available to Pro+** — previously Elite-only; the diagnostic snapshot is part of the support-burden floor every paid plan deserves.
+- **Conversational chat voice** — institutional, structured, never refuses on-topic crypto questions. The prompt enforces a commit-and-cite rule (every claim ties back to a tool result or a labeled confidence note) and a silent-pivot rule (no "data partial" deflections — the model pivots to the next viable signal without narrating the gap).
+
+## Fixed
+
+- **Price-anchor leakage** — the `📍 Current prices` block no longer renders inline on free-text answers; the anchor is a system-prompt signal, not user-facing chrome.
+- **CI: npm publish 404** — the release workflow's preflight was presence-only and surfaced npm's 401/403-disguised-as-404 too late. Three-step verification now runs before `pnpm publish`: token present, `npm whoami` against the registry, `npm access list packages` for `@vizzor/cli` scope. Failure modes print the exact rotation URL.
+- **CI: CodeQL `js/missing-rate-limiting` false positives** — extended `paths-ignore` to test fixtures and added an `lgtm[js/missing-rate-limiting]` marker around the auth hook so the analyzer sees the connection to the global `@fastify/rate-limit` registration ~40 LOC above.
+
+## Site
+
+- **Geo-based first-visit locale redirect** — edge headers route LATAM visitors to `/es`, francophone-core countries to `/fr`, everyone else to `/en`. Subsequent visits respect the cookie.
+- **Locale forwarded to engine** — the website chrome's URL locale is now sent on every `/v1/chat` request and clamped to `en` / `es` / `fr` at the engine boundary. The model replies in the website's language regardless of the user's keyboard.
+- **Chat affordances** — Copy and Edit buttons on chat bubbles, hover-revealed and icon-only to stay out of the institutional voice.
+
+```diff
++ LLM_TIER_BY_PLAN routing (Haiku / Sonnet / Opus by complexity × plan)
++ TOOL_MIN_TIER + filterToolsForTier — Free sees 7 tools, Pro 27, Elite all 91
++ TON HD-wallet payment-address derivation + USD/TON oracle
++ MarketDataSource abstraction — six capabilities, swappable per source
++ Prompt-cache + tool aliases (anthropic.beta.prompt_caching)
++ Conversational continuity: [CONVERSATION STATE] block + pronoun expansion
++ Per-wallet rate limit + aiChatPerDay quota with 402 + upgradeHint
++ Self-hosted LocalLLMProvider (dormant; opt-in via LLM_ENABLED=true)
+~ Chat voice — institutional, commit-and-cite, silent-pivot
+~ Price-anchor moved from inline render to system-prompt signal
+- npm publish preflight no longer silent on revoked tokens
+```
+
+Upgrade path: no migration required for hosted users. Self-host operators pull the new `chronovisor_predictions.signal_snapshot` column on first start; if running the optional `llm-sidecar` Docker service for self-hosted LLM, set `LLM_API_URL`, `LLM_API_SECRET`, `LLM_MODEL`, and flip `LLM_ENABLED=true`. The engine + Telegram + Discord + CLI all share the same wallet-scoped subscription, so a Pro user gets Pro on every surface the moment payment lands.

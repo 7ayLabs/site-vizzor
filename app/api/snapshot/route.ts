@@ -29,7 +29,14 @@ async function safeFetch<T>(url: string): Promise<T | null> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+    const apiKey = process.env.VIZZOR_API_KEY;
+    const headers: Record<string, string> = {};
+    if (apiKey) headers['x-api-key'] = apiKey;
+    const res = await fetch(url, {
+      headers,
+      signal: controller.signal,
+      cache: 'no-store',
+    });
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {

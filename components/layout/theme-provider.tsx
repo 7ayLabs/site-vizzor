@@ -10,16 +10,24 @@ interface ThemeContextValue {
   resolved: Resolved;
   setTheme: (next: Theme | 'system') => void;
   toggle: () => void;
+  /**
+   * Cycle through the three modes: light → dark → system → light. The
+   * 'system' stop lets users on mobile (or anywhere) opt back into
+   * following the OS preference after they've manually switched.
+   * Without it, a single tap on the toggle would lock the theme
+   * forever — system-follow becomes a one-way door.
+   */
+  cycle: () => void;
 }
 
 const STORAGE_KEY = 'vizzor-theme';
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function readStored(): Theme | 'system' {
-  if (typeof window === 'undefined') return 'system';
+  if (typeof window === 'undefined') return 'dark';
   const v = window.localStorage.getItem(STORAGE_KEY);
-  if (v === 'light' || v === 'dark') return v;
-  return 'system';
+  if (v === 'light' || v === 'dark' || v === 'system') return v;
+  return 'dark';
 }
 
 function systemPref(): Resolved {
@@ -38,8 +46,8 @@ function applyTheme(resolved: Resolved) {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme | 'system'>('system');
-  const [resolved, setResolved] = useState<Resolved>('light');
+  const [theme, setThemeState] = useState<Theme | 'system'>('dark');
+  const [resolved, setResolved] = useState<Resolved>('dark');
 
   // First mount — read stored pref, compute resolved, apply.
   useEffect(() => {
@@ -81,8 +89,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setTheme(resolved === 'dark' ? 'light' : 'dark');
   }, [resolved, setTheme]);
 
+  const cycle = useCallback(() => {
+    // light → dark → system → light. The order keeps the binary
+    // light/dark flip on the first tap (matching every other site)
+    // and surfaces 'system' on the third tap as the explicit
+    // "follow my OS" stop.
+    const next: Theme | 'system' =
+      theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light';
+    setTheme(next);
+  }, [theme, setTheme]);
+
   return (
-    <ThemeContext.Provider value={{ theme, resolved, setTheme, toggle }}>
+    <ThemeContext.Provider value={{ theme, resolved, setTheme, toggle, cycle }}>
       {children}
     </ThemeContext.Provider>
   );
@@ -106,7 +124,12 @@ export const themeBootScript = `
     var key='${STORAGE_KEY}';
     var stored=localStorage.getItem(key);
     var sys=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
-    var t=(stored==='light'||stored==='dark')?stored:sys;
+    // No stored preference => dark by default (terminal aesthetic is the
+    // brand). Explicit 'system' stop in localStorage opts back into OS.
+    var t = stored === 'light' ? 'light'
+          : stored === 'dark'  ? 'dark'
+          : stored === 'system' ? sys
+          : 'dark';
     var d=document.documentElement;
     d.setAttribute('data-theme',t);
     if(t==='dark'){d.classList.add('dark');}else{d.classList.remove('dark');}

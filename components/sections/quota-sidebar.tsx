@@ -1,30 +1,32 @@
 'use client';
 
 /**
- * QuotaSidebar — free-tier counter + paywall state.
+ * QuotaSidebar — free-tier counter + paywall / subscribed states.
  *
- * Polls `/api/quota` via SWR to stay in sync after each prediction.
- * Three visual states:
- *   1. Free tier active   — shows "Free: N/limit" counter
- *   2. Free exhausted, token NOT live — "$VIZZOR launching soon" panel
- *   3. Free exhausted, token live — wallet connect + burn flow
+ * Terminal aesthetic refactor (Phase 2B):
  *
- * The burn flow (state 3) is rendered by <PaidConnectPanel>, which
- * lives inside the WalletAdapter that PredictRoute mounted. We render
- * the wallet components statically here because by the time the
- * sidebar shows state 3, the wallet provider is already up the tree.
+ *   - Wrapped in a `<DataTile variant="terminal" live>`-style card with
+ *     accent corner brackets, hairline `--border-hi` border, pulsing
+ *     live dot.
+ *   - Mono fraction value (`used / limit`) replaces the existing 36px
+ *     numeral block.
+ *   - Limit-sized progress dot row (▀ filled vs ░ empty) replaces the
+ *     3-column hairline grid.
+ *   - "SUBSCRIBED" mono badge surfaces when the visitor is signed in
+ *     with an active subscription, since `/api/quota` already returns
+ *     the flag.
+ *
+ * SWR wiring (`/api/quota` + dev `/api/quota/reset`) is untouched —
+ * cache key, fetcher, refreshKey behavior are byte-identical to the
+ * previous implementation. Visual only.
  */
 
 import useSWR from 'swr';
 import { useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import { ConnectButton } from '@/components/wallet/wallet-connect';
-import { BurnButton } from '@/components/wallet/burn-button';
-import { burnAmount } from '@/lib/solana';
+import { Link } from '@/i18n/navigation';
+import { cn } from '@/lib/utils';
 
-// Build-time constant. Next.js inlines `process.env.NODE_ENV` so any
-// production build dead-code-eliminates the reset affordance entirely
-// — it doesn't ship in the client bundle at all.
 const IS_DEV = process.env.NODE_ENV !== 'production';
 
 interface QuotaState {
@@ -32,64 +34,59 @@ interface QuotaState {
   limit: number;
   remaining: number;
   exhausted: boolean;
-  isLive: boolean;
+  subscribed?: boolean;
+  subscription?: {
+    tier: string;
+    cadence: string;
+    expiresAt: string;
+  } | null;
 }
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = (url: string): Promise<QuotaState> =>
+  fetch(url).then((r) => r.json() as Promise<QuotaState>);
 
-interface QuotaSidebarProps {
+export interface QuotaSidebarProps {
   refreshKey?: number;
-  onBurnConfirmed?: (signature: string) => void;
 }
 
-export function QuotaSidebar({
-  refreshKey = 0,
-  onBurnConfirmed,
-}: QuotaSidebarProps) {
+export function QuotaSidebar({ refreshKey = 0 }: QuotaSidebarProps) {
   const t = useTranslations('predict');
   const { data, mutate } = useSWR<QuotaState>('/api/quota', fetcher, {
     revalidateOnFocus: false,
     keepPreviousData: true,
   });
 
-  // Refetch quota whenever the parent signals a chat finish.
   useEffect(() => {
     if (refreshKey > 0) void mutate();
   }, [refreshKey, mutate]);
 
   if (!data) {
     return (
-      <div className="border border-[var(--border)] bg-[var(--surface)] p-4">
+      <TerminalCard live={false}>
         <p className="mono tabular text-[10.5px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
           {t('loading')}
         </p>
-      </div>
+      </TerminalCard>
     );
   }
 
-  const onReset = async () => {
+  const onReset = async (): Promise<void> => {
     const res = await fetch('/api/quota/reset', {
       method: 'POST',
       credentials: 'same-origin',
     });
     if (!res.ok) return;
-    // Hard reload guarantees a clean cookie/SWR/UI state. The dev-only
-    // affordance gets dead-code-eliminated from production builds, so
-    // this reload only ever fires in development.
     window.location.reload();
   };
 
   const body = data.exhausted ? (
-    data.isLive ? (
-      <PaidConnectPanel onBurnConfirmed={onBurnConfirmed} />
-    ) : (
-      <WaitlistPanel />
-    )
+    <SubscribePanel />
   ) : (
     <FreeCounterPanel
       used={data.used}
       limit={data.limit}
       remaining={data.remaining}
+      subscribed={!!data.subscribed}
     />
   );
 
@@ -100,6 +97,41 @@ export function QuotaSidebar({
     </div>
   );
 }
+
+/* ────────────── shared terminal card ────────────── */
+
+function TerminalCard({
+  children,
+  live,
+}: {
+  children: React.ReactNode;
+  live: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        'vt-bracket relative flex flex-col gap-3',
+        'rounded-lg bg-[var(--surface)]',
+        'border border-[var(--border-hi)]',
+        'p-5',
+      )}
+    >
+      {live && (
+        <span
+          aria-hidden
+          className="absolute right-3 top-3 inline-block h-1.5 w-1.5 rounded-full"
+          style={{
+            background: 'var(--accent)',
+            animation: 'pulse-dot 1.6s ease-in-out infinite',
+          }}
+        />
+      )}
+      {children}
+    </div>
+  );
+}
+
+/* ────────────── reset link (dev only) ────────────── */
 
 function ResetLink({ onReset }: { onReset: () => void }) {
   return (
@@ -117,113 +149,135 @@ function ResetLink({ onReset }: { onReset: () => void }) {
   );
 }
 
+/* ────────────── free-tier panel ────────────── */
+
 function FreeCounterPanel({
   used,
   limit,
   remaining,
+  subscribed,
 }: {
   used: number;
   limit: number;
   remaining: number;
+  subscribed: boolean;
 }) {
   const t = useTranslations('predict');
 
   return (
-    <div className="border border-[var(--border)] bg-[var(--surface)] p-4 flex flex-col gap-4">
-      <p className="mono tabular text-[10.5px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
-        {t('freeTier.label')}
-      </p>
+    <TerminalCard live>
+      <div className="flex items-start justify-between gap-2">
+        <p className="mono tabular text-[10.5px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
+          {t('freeTier.label')}
+        </p>
+        {subscribed && <SubscribedBadge />}
+      </div>
 
-      <div className="flex items-baseline gap-2">
-        <span className="display text-[36px] leading-none font-semibold text-[var(--fg)] mono tabular">
+      {/* Mono fraction: remaining / limit */}
+      <div className="flex items-baseline gap-1">
+        <span className="mono tabular text-[26px] leading-none font-semibold text-[var(--fg)]">
           {remaining}
         </span>
-        <span className="mono tabular text-[12px] text-[var(--fg-3)]">
-          / {limit}
+        <span className="mono tabular text-[14px] leading-none text-[var(--fg-3)]">
+          /
+        </span>
+        <span className="mono tabular text-[14px] leading-none text-[var(--fg-3)]">
+          {limit}
         </span>
       </div>
 
-      <p className="text-[12.5px] leading-relaxed text-[var(--fg-2)]">
+      {/* Progress dot row — ▀▀ filled (used) vs ░░ empty (remaining). */}
+      <ProgressDotRow used={used} limit={limit} />
+
+      <p className="text-[12px] leading-relaxed text-[var(--fg-2)]">
         {t('freeTier.body', { used, limit })}
       </p>
+    </TerminalCard>
+  );
+}
 
-      <div className="mt-1 grid grid-cols-3 gap-1.5" aria-hidden>
-        {Array.from({ length: limit }, (_, i) => (
-          <div
-            key={i}
-            className="h-1.5"
-            style={{
-              background: i < used ? 'var(--fg-3)' : 'var(--accent)',
-              opacity: i < used ? 0.3 : 1,
-            }}
-          />
-        ))}
-      </div>
+/* ────────────── subscribed badge ────────────── */
+
+function SubscribedBadge() {
+  const t = useTranslations('predict.shell');
+  return (
+    <span
+      className={cn(
+        'mono tabular text-[9.5px] uppercase tracking-[0.18em] font-semibold leading-none',
+        'inline-flex items-center gap-1.5',
+        'border border-[var(--gold)] text-[var(--gold)]',
+        'px-1.5 py-1 rounded',
+      )}
+    >
+      <span
+        aria-hidden
+        className="inline-block h-1 w-1 rounded-full"
+        style={{ background: 'var(--gold)' }}
+      />
+      {t('subscribed')}
+    </span>
+  );
+}
+
+/* ────────────── progress dot row ────────────── */
+
+function ProgressDotRow({ used, limit }: { used: number; limit: number }) {
+  const cells = Array.from({ length: Math.max(0, limit) }, (_, i) => i < used);
+  return (
+    <div
+      className="mono tabular text-[14px] leading-none tracking-[0.08em] select-none"
+      aria-hidden
+    >
+      {cells.map((filled, i) => (
+        <span
+          key={i}
+          className={cn(
+            'inline-block',
+            filled ? 'text-[var(--fg-3)]/55' : 'text-[var(--accent)]',
+          )}
+        >
+          {filled ? '▀' : '░'}
+        </span>
+      ))}
     </div>
   );
 }
 
-function WaitlistPanel() {
+/* ────────────── subscribe panel (exhausted) ────────────── */
+
+function SubscribePanel() {
   const t = useTranslations('predict');
 
   return (
-    <div className="border border-[var(--border)] bg-[var(--surface)] p-4 flex flex-col gap-3">
+    <TerminalCard live={false}>
       <p className="mono tabular text-[10.5px] uppercase tracking-[0.16em] text-[var(--accent)]">
-        {t('waitlist.label')}
+        {t('subscribe.label')}
       </p>
-      <h3 className="text-[16px] font-semibold tracking-tight text-[var(--fg)]">
-        {t('waitlist.title')}
+
+      <h3 className="text-[15px] font-semibold tracking-tight text-[var(--fg)]">
+        {t('subscribe.title')}
       </h3>
+
       <p className="text-[12.5px] leading-relaxed text-[var(--fg-2)]">
-        {t('waitlist.body')}
+        {t('subscribe.body')}
       </p>
-      <a
-        href="https://t.me/vizzorai_bot"
-        target="_blank"
-        rel="noopener"
+
+      <Link
+        href="/pricing"
         className="
-          mt-2 inline-flex items-center justify-center
+          mt-1 inline-flex items-center justify-center
           mono tabular text-[10.5px] uppercase tracking-[0.16em]
           border border-[var(--fg)] bg-[var(--fg)] text-[var(--bg)]
           px-3 py-2 hover:opacity-90 transition-opacity
+          rounded
         "
       >
-        {t('waitlist.cta')}
-      </a>
-    </div>
-  );
-}
-
-function PaidConnectPanel({
-  onBurnConfirmed,
-}: {
-  onBurnConfirmed?: (signature: string) => void;
-}) {
-  const t = useTranslations('predict');
-  const amount = burnAmount();
-
-  return (
-    <div className="border border-[var(--border)] bg-[var(--surface)] p-4 flex flex-col gap-4">
-      <p className="mono tabular text-[10.5px] uppercase tracking-[0.16em] text-[var(--accent)]">
-        {t('paid.label')}
-      </p>
-
-      <h3 className="text-[16px] font-semibold tracking-tight text-[var(--fg)]">
-        {t('paid.title')}
-      </h3>
-
-      <p className="text-[12.5px] leading-relaxed text-[var(--fg-2)]">
-        {t('paid.body', { amount: String(amount) })}
-      </p>
-
-      <div className="flex flex-col gap-2">
-        <ConnectButton />
-        <BurnButton onConfirmed={(sig) => onBurnConfirmed?.(sig)} />
-      </div>
+        {t('subscribe.cta')}
+      </Link>
 
       <p className="mono tabular text-[9.5px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
-        {t('paid.legal')}
+        {t('subscribe.legal')}
       </p>
-    </div>
+    </TerminalCard>
   );
 }
