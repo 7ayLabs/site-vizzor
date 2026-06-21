@@ -233,12 +233,12 @@
   "predict": {
     "meta": {
       "title": "Predict — Vizzor",
-      "description": "Connect your wallet to run a calibrated crypto call against the same engine the Telegram bot uses. 7-day Pro trial, 10 predictions/day. Tracked-live, receipts public."
+      "description": "Connect your wallet to run a calibrated crypto call against the same engine the Telegram bot uses. 7-day Pro trial, 5 predictions/day. Tracked-live, receipts public."
     },
     "gate": {
       "title": "Connect your wallet to predict.",
       "body": "Vizzor binds the trial to your wallet so the counter survives cookie clears. Sign once with SIWS — no email, no password.",
-      "perk1": "7-day Pro trial, 10/day",
+      "perk1": "7-day Pro trial, 5/day",
       "perk2": "On-chain billing in SOL",
       "perk3": "No card, no KYC",
       "perk4": "Same engine as the bot",
@@ -270,7 +270,7 @@
       "resetDev": "reset · dev only",
       "dailyCap": {
         "label": "Daily cap reached",
-        "body": "You've hit today's 10-prediction trial cap. Resets at 00:00 UTC. Subscribe for higher caps."
+        "body": "You've hit today's 5-prediction trial cap. Resets at 00:00 UTC. Subscribe for higher caps."
       },
       "trialExpired": {
         "label": "Trial ended",
@@ -622,7 +622,7 @@
         "name": "Free",
         "sub": "7-day Pro trial · scanner forever",
         "price": "$0",
-        "priceUnit": "7-day Pro trial · 10/day",
+        "priceUnit": "7-day Pro trial · 5/day",
         "cta": "Start free",
         "commandsLine": "/scan · /price · /trends · /sentiment · /whale-alert · /narrative · /presale · /help",
         "features": {
@@ -643,7 +643,7 @@
             "body": "New DEX pairs · narrative flow · trending tokens · volume spikes · presale tracker"
           },
           "trial": {
-            "title": "7-day Pro trial · 10 predictions/day",
+            "title": "7-day Pro trial · 5 predictions/day",
             "body": "Auto-starts on your first connect — web or Telegram. No card, no KYC, downgrades back to Free after 7 days."
           }
         }
