@@ -344,6 +344,73 @@
   }
 
   /*
+   * Slash-palette — the command palette in the predict composer + Tools
+   * modal overlay. Slide-down spring with a tiny overshoot on enter so
+   * the panel "settles in" rather than snapping; reverse with a faster
+   * ease-in on close so dismiss reads as decisive.
+   *
+   * The spring is implemented with a 3-keyframe path because pure CSS
+   * has no spring primitive; the intermediate frame at 70% drops 2px
+   * BELOW the resting position so the eye reads a micro bounce.
+   * Total enter duration: 240ms — slow enough to perceive, fast
+   * enough not to feel laggy on repeat opens.
+   */
+  .slash-palette-slide-in {
+    animation: slash-palette-slide-in 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .slash-palette-slide-out {
+    animation: slash-palette-slide-out 160ms cubic-bezier(0.4, 0, 1, 1) both;
+  }
+
+  .slash-backdrop-fade-in {
+    animation: slash-backdrop-fade-in 180ms ease-out both;
+  }
+
+  .slash-backdrop-fade-out {
+    animation: slash-backdrop-fade-out 140ms ease-in both;
+  }
+
+  @keyframes slash-palette-slide-in {
+    0%  { transform: translateY(-10px); opacity: 0; }
+    70% { transform: translateY(2px);   opacity: 1; }
+    100%{ transform: translateY(0);     opacity: 1; }
+  }
+
+  @keyframes slash-palette-slide-out {
+    from { transform: translateY(0);   opacity: 1; }
+    to   { transform: translateY(-6px); opacity: 0; }
+  }
+
+  @keyframes slash-backdrop-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  /*
+   * Welcome example roll. A single suggestion sits centred under the
+   * subtitle; on each rotation tick the text node remounts with this
+   * keyframe so the new prompt rolls UP into position. Cubic-bezier
+   * easing (~material standard) lands the value smoothly without the
+   * linear feel of a marquee. Pair with a `key={...}` on the text
+   * node so React replays the animation on every change.
+   */
+  .vz-example-roll {
+    animation: vz-example-roll 520ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    will-change: transform, opacity;
+  }
+  @keyframes vz-example-roll {
+    0%   { transform: translateY(0.7em); opacity: 0; filter: blur(2px); }
+    60%  { opacity: 1; filter: blur(0); }
+    100% { transform: translateY(0);     opacity: 1; filter: blur(0); }
+  }
+
+  @keyframes slash-backdrop-fade-out {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+  }
+
+  /*
    * Mobile drawer — right-anchored slide that mirrors the docs sidebar
    * gesture (smooth cubic-bezier with no overshoot, faster exit). The
    * dedicated transform keeps it independent from wallet-modal, which
