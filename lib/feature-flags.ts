@@ -12,7 +12,7 @@
 const DEFAULT_FREE_PREDICTIONS = 7;
 const DEFAULT_PAYMENT_RATE_LOCK_SECONDS = 5 * 60;
 const DEFAULT_FREE_TRIAL_DAYS = 7;
-const DEFAULT_TRIAL_DAILY_CAP = 10;
+const DEFAULT_TRIAL_DAILY_CAP = 5;
 const DEFAULT_PRO_DAILY_CAP = 1000;
 const DEFAULT_PROMPT_BYTE_CAP = 2048;
 
@@ -43,9 +43,10 @@ export function freeTrialDays(): number {
 
 /**
  * Maximum predictions a trial wallet can make per UTC day. The cost
- * ceiling: 7d × cap × ~$0.40 worst-case Sonnet ≈ $28 / wallet hard
- * limit before lockout. Defaults to 10 which is well above legitimate
- * exploration but caps a runaway script.
+ * ceiling: 7d × cap × ~$0.40 worst-case Sonnet ≈ $14 / wallet hard
+ * limit before lockout. Defaults to 5 which still covers an honest
+ * exploration cadence but halves the previous 10/day ($28) exposure
+ * to a runaway script while paid plans are still being wired.
  */
 export function trialDailyCap(): number {
   const raw = process.env.NEXT_PUBLIC_TRIAL_DAILY_CAP;

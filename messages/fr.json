@@ -223,12 +223,12 @@
   "predict": {
     "meta": {
       "title": "Prédire — Vizzor",
-      "description": "Connecte ton wallet pour lancer un call crypto calibré contre le même moteur que le bot Telegram. Essai Pro 7 jours, 10 prédictions/jour. Tracked-live, reçus publics."
+      "description": "Connecte ton wallet pour lancer un call crypto calibré contre le même moteur que le bot Telegram. Essai Pro 7 jours, 5 prédictions/jour. Tracked-live, reçus publics."
     },
     "gate": {
       "title": "Connecte ton wallet pour prédire.",
       "body": "Vizzor lie l'essai à ton wallet : le compteur survit aux cookies effacés. Signe une fois avec SIWS — sans email, sans mot de passe.",
-      "perk1": "Essai Pro 7 jours, 10/jour",
+      "perk1": "Essai Pro 7 jours, 5/jour",
       "perk2": "Facturation on-chain en SOL",
       "perk3": "Sans carte, sans KYC",
       "perk4": "Même moteur que le bot",
@@ -260,7 +260,7 @@
       "resetDev": "réinitialiser · dev seulement",
       "dailyCap": {
         "label": "Limite journalière atteinte",
-        "body": "Tu as atteint la limite de 10 prédictions du jour. Réinit à 00:00 UTC. Abonne-toi pour des limites plus élevées."
+        "body": "Tu as atteint la limite de 5 prédictions du jour. Réinit à 00:00 UTC. Abonne-toi pour des limites plus élevées."
       },
       "trialExpired": {
         "label": "Essai terminé",
@@ -612,7 +612,7 @@
         "name": "Free",
         "sub": "Essai Pro 7 jours · scanner pour toujours",
         "price": "0 $",
-        "priceUnit": "Essai Pro 7 jours · 10/jour",
+        "priceUnit": "Essai Pro 7 jours · 5/jour",
         "cta": "Commencer",
         "commandsLine": "/scan · /price · /trends · /sentiment · /whale-alert · /narrative · /presale · /help",
         "features": {
@@ -633,7 +633,7 @@
             "body": "Nouvelles paires DEX · flow de narrative · tokens trending · spikes de volume · tracker de presales"
           },
           "trial": {
-            "title": "Essai Pro 7 jours · 10 prédictions/jour",
+            "title": "Essai Pro 7 jours · 5 prédictions/jour",
             "body": "Démarre automatiquement au premier connect — web ou Telegram. Sans carte, sans KYC, redescend en Free après 7 jours."
           }
         }
