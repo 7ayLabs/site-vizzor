@@ -245,10 +245,10 @@
       "composerHint": "Connect your wallet to enable the composer."
     },
     "eyebrow": "live · tracked",
-    "title": "Run the call.",
-    "sub": "Symbol + horizon. ETH 4h. SOL 1d. Same engine as the bot. Same Platt-calibrated confidence. Same public receipt when it resolves. First three are free.",
-    "emptyState": "Type a symbol and horizon — BTC 4h, ETH 1d, SOL 15m — or /help for commands.",
-    "inputPlaceholder": "BTC 4h · ETH 1d · /help",
+    "title": "Talk to Vizzor.",
+    "sub": "Ask anything about crypto — which coin to watch, how the week is shaping up, what the on-chain is saying. First three runs are free.",
+    "emptyState": "Tell me what you want to know — something like “Is BTC still strong today?” or “/help” to see the commands.",
+    "inputPlaceholder": "Ask Vizzor anything…",
     "send": "Run",
     "streaming": "Running…",
     "loading": "Loading quota…",
@@ -309,20 +309,32 @@
         "label": "Recent chats",
         "clear": "Clear recent",
         "delete": "Delete chat",
-        "empty": "No chats yet.",
+        "empty": "No chats yet. Your saved runs land here.",
+        "emptyEyebrow": "No history",
         "signInPrompt": "Sign in with your wallet to keep your chat history."
       },
       "welcome": {
         "eyebrow": "live · tracked",
-        "title": "What should Vizzor call?",
-        "sub": "Symbol + horizon — BTC 4h. Or a tool: /wr, /precisions, /price. Three free runs per browser."
+        "title": "Hey, what can I help you with?",
+        "sub": "Ask me anything about crypto — which coin to watch, how the week is shaping up, what the on-chain is saying. Three free runs to get started.",
+        "exampleEyebrow": "Try",
+        "examples": "Should I buy Bitcoin this week? | How is Solana looking the next 4h? | Show me ETH whale flows right now | What is the market saying about TON? | Sum up today in crypto | Is it worth getting into SOL today?"
       },
       "composer": {
-        "placeholder": "BTC 4h · ETH 1d · /help",
+        "placeholder": "Ask Vizzor anything…",
         "toolHelp": "Commands",
         "toolWr": "Win rate",
         "attach": "Attach",
         "browsePrompts": "Browse prompts",
+        "stop": "Stop response",
+        "kbdHint": "↵ send · ⇧↵ new line · ⌘K focus",
+        "edit": "Edit",
+        "sources": "Sources",
+        "copy": "Copy",
+        "copied": "Copied",
+        "retry": "Retry",
+        "priceCheckLabel": "Price looks off — trust the ticker",
+        "priceCheckBody": "%symbol%: model quoted %quoted%, live ticker %live% (%delta%).",
         "footer": "Vizzor can miss. Verify on-chain. Not financial advice."
       },
       "quickActions": {

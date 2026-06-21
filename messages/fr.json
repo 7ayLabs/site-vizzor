@@ -235,10 +235,10 @@
       "composerHint": "Connecte ton wallet pour activer le composer."
     },
     "eyebrow": "en direct · tracked",
-    "title": "Lance le call.",
-    "sub": "Symbole + horizon. ETH 4h. SOL 1d. Même moteur que le bot. Même confiance Platt-calibrée. Même reçu public quand ça résout. Les trois premiers sont offerts.",
-    "emptyState": "Tape un symbole et un horizon — BTC 4h, ETH 1d, SOL 15m — ou /help pour les commandes.",
-    "inputPlaceholder": "BTC 4h · ETH 1d · /help",
+    "title": "Parle avec Vizzor.",
+    "sub": "Demande n’importe quoi sur la crypto — quelle pièce regarder, comment se présente la semaine, ce que dit l’on-chain. Les trois premiers runs sont offerts.",
+    "emptyState": "Dis-moi ce que tu veux savoir — par exemple « BTC tient le coup aujourd’hui ? » ou « /help » pour voir les commandes.",
+    "inputPlaceholder": "Demande tout à Vizzor…",
     "send": "Lancer",
     "streaming": "En cours…",
     "loading": "Chargement du quota…",
@@ -299,20 +299,32 @@
         "label": "Chats récents",
         "clear": "Effacer les récents",
         "delete": "Supprimer le chat",
-        "empty": "Pas encore de chat.",
+        "empty": "Pas encore de chat. Tes runs sauvegardés apparaîtront ici.",
+        "emptyEyebrow": "Aucun historique",
         "signInPrompt": "Connecte ton wallet pour garder ton historique."
       },
       "welcome": {
         "eyebrow": "en direct · tracked",
-        "title": "Que doit appeler Vizzor ?",
-        "sub": "Symbole + horizon — BTC 4h. Ou un outil : /wr, /precisions, /price. Trois runs gratuits par navigateur."
+        "title": "Salut, comment je peux t’aider ?",
+        "sub": "Demande-moi n’importe quoi sur la crypto — quelle pièce regarder, comment se présente la semaine, ce que dit l’on-chain. Trois runs gratuits pour commencer.",
+        "exampleEyebrow": "Essaie",
+        "examples": "Devrais-je acheter du Bitcoin cette semaine ? | Comment se présente Solana sur 4h ? | Montre-moi les whale flows ETH | Que dit le marché sur TON ? | Résume la journée crypto | Ça vaut le coup d’entrer sur SOL aujourd’hui ?"
       },
       "composer": {
-        "placeholder": "BTC 4h · ETH 1d · /help",
+        "placeholder": "Demande tout à Vizzor…",
         "toolHelp": "Commandes",
         "toolWr": "Win rate",
         "attach": "Joindre",
         "browsePrompts": "Parcourir les prompts",
+        "stop": "Arrêter la réponse",
+        "kbdHint": "↵ envoyer · ⇧↵ nouvelle ligne · ⌘K focus",
+        "edit": "Modifier",
+        "sources": "Sources",
+        "copy": "Copier",
+        "copied": "Copié",
+        "retry": "Réessayer",
+        "priceCheckLabel": "Prix incertain — fie-toi au ticker",
+        "priceCheckBody": "%symbol% : le modèle indique %quoted%, ticker en direct %live% (%delta%).",
         "footer": "Vizzor peut se tromper. Vérifiez on-chain. Pas un conseil financier."
       },
       "quickActions": {
