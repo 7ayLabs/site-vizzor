@@ -265,7 +265,14 @@ async function forwardToVizzor(
   // header the client emits (`x-vizzor-timezone`) because the browser
   // doesn't expose tz in any default header. Both fall through to
   // sensible defaults if the client doesn't send them.
-  const locale = deriveLocale(ctx.headers.get('accept-language'));
+  // Prefer the explicit `x-vizzor-locale` header — the chat shell sets it
+  // to the URL-path locale so the engine response language matches the
+  // page chrome the user is actually looking at. Falls through to the
+  // legacy Accept-Language derivation when the header is missing (e.g.
+  // older clients or non-browser callers).
+  const locale = deriveLocale(
+    ctx.headers.get('x-vizzor-locale') ?? ctx.headers.get('accept-language'),
+  );
   const timezone =
     ctx.headers.get('x-vizzor-timezone')?.trim() || 'UTC';
 
@@ -551,13 +558,21 @@ function hashWalletForUserId(wallet: string): string {
  * Returns `'en'` when the header is missing or malformed so the engine
  * can fall back to its own default rather than receive an empty hint.
  */
+// Locales the engine prompt actually understands. Anything else gets
+// clamped to 'en' so we never leak an arbitrary client string into the
+// upstream metadata payload.
+const SUPPORTED_LOCALES = new Set(['en', 'es', 'fr']);
+
 function deriveLocale(header: string | null): string {
   if (!header) return 'en';
   const first = header.split(',')[0]?.trim();
   if (!first) return 'en';
   // Strip quality value if any made it past the split.
   const lang = first.split(';')[0]?.trim().toLowerCase();
-  return lang && lang.length > 0 ? lang : 'en';
+  if (!lang) return 'en';
+  // Accept both bare ('es') and regioned ('es-419', 'en-US') forms.
+  const base = lang.slice(0, 2);
+  return SUPPORTED_LOCALES.has(base) ? base : 'en';
 }
 
 function extractLastUserText(messages: UIMessage[]): string {
