@@ -22,12 +22,14 @@
  * a wallet-provider-bearing route.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import useSWR from 'swr';
-import { Wallet, LogOut, Check } from 'lucide-react';
+import { Wallet, LogOut, Check, UserCircle2 } from 'lucide-react';
+import { Link } from '@/i18n/navigation';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
+import { WalletSelectorModal } from './wallet-selector-modal';
 
 interface AuthState {
   ok: boolean;
@@ -49,10 +51,17 @@ interface WalletAuthButtonProps {
    *  provider tree (sign-in flow available). When false, only shows
    *  the badge if already signed in. */
   hasProvider?: boolean;
+  /** Force the selector-modal UX even when an outer wallet provider is
+   *  mounted (e.g. the in-composer Connect-wallet button on /predict).
+   *  The modal then skips its own inner LazyWalletAdapter mount so it
+   *  shares the host's provider context — preventing the dual-provider
+   *  stall where Phantom never pops on connect. */
+  useModal?: boolean;
 }
 
 export function WalletAuthButton({
   hasProvider = false,
+  useModal = false,
 }: WalletAuthButtonProps) {
   const t = useTranslations('auth');
   const { data, mutate } = useSWR<AuthState>('/api/auth/session', fetcher, {
@@ -71,23 +80,18 @@ export function WalletAuthButton({
     }} />;
   }
 
-  if (!hasProvider) {
-    // No wallet provider on this route — direct user to /predict to
-    // sign in (the wallet adapter is loaded there).
+  if (!hasProvider || useModal) {
+    // Two cases land here:
+    //   1. The host page has no wallet provider mounted (navbar on
+    //      marketing pages). The modal mounts its own adapter.
+    //   2. The host page DOES have a provider (e.g. /predict) but the
+    //      caller explicitly asked for the modal UX. The modal then
+    //      shares the host provider via hasOuterProvider=true.
     return (
-      <a
-        href="/predict"
-        className="
-          hidden sm:inline-flex h-8 items-center gap-1.5 rounded-full
-          border border-[var(--border)] bg-transparent px-3
-          text-[11.5px] font-medium text-[var(--fg-2)]
-          hover:bg-[var(--surface-2)] hover:text-[var(--fg)]
-          transition-colors
-        "
-      >
-        <Wallet size={13} strokeWidth={2} />
-        <span>{t('connect')}</span>
-      </a>
+      <ProviderlessConnect
+        label={t('connect')}
+        hasOuterProvider={hasProvider}
+      />
     );
   }
 
@@ -113,6 +117,35 @@ function SignedInBadge({
 }) {
   const t = useTranslations('auth');
   const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  // Click-outside + Escape — the dropdown dismisses cleanly without
+  // disappearing on incidental hover-out. The listener attaches only
+  // while open so the navbar pays nothing in idle.
+  useEffect(() => {
+    if (!open) return;
+
+    const onPointerDown = (e: MouseEvent) => {
+      if (!wrapperRef.current) return;
+      if (wrapperRef.current.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
   if (!state.wallet) return null;
 
   const short = `${state.wallet.slice(0, 4)}…${state.wallet.slice(-4)}`;
@@ -124,14 +157,13 @@ function SignedInBadge({
     : null;
 
   return (
-    <div
-      className="relative"
-      onMouseLeave={() => setOpen(false)}
-    >
+    <div ref={wrapperRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        onMouseEnter={() => setOpen(true)}
+        aria-haspopup="menu"
+        aria-expanded={open}
         className="
           inline-flex h-8 items-center gap-1.5 rounded-full
           border border-[var(--border)] bg-[var(--surface-2)] px-3
@@ -154,7 +186,10 @@ function SignedInBadge({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 min-w-[220px] border border-[var(--border)] bg-[var(--surface)] shadow-lg">
+        <div
+          role="menu"
+          className="absolute right-0 top-full mt-1 z-50 min-w-[220px] border border-[var(--border)] bg-[var(--surface)] shadow-lg"
+        >
           <div className="px-4 py-3 border-b border-[var(--border)]">
             <p className="mono tabular text-[9.5px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
               {t('signedInAs')}
@@ -180,9 +215,26 @@ function SignedInBadge({
               )}
             </div>
           )}
+          <Link
+            href="/account"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="
+              w-full flex items-center gap-2 px-4 py-2.5
+              text-[12px] text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]
+              transition-colors border-b border-[var(--border)]
+            "
+          >
+            <UserCircle2 size={13} strokeWidth={2} />
+            <span>{t('viewProfile')}</span>
+          </Link>
           <button
             type="button"
-            onClick={onSignOut}
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              void onSignOut();
+            }}
             className="
               w-full flex items-center gap-2 px-4 py-2.5
               text-[12px] text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]
@@ -214,7 +266,15 @@ function ConnectFlow({
   onSignedIn: () => void;
 }) {
   const t = useTranslations('auth');
-  const { publicKey, signMessage, disconnect, connecting, connected } = useWallet();
+  const {
+    publicKey,
+    wallet: activeWallet,
+    signMessage,
+    signIn,
+    disconnect,
+    connecting,
+    connected,
+  } = useWallet();
   const { setVisible } = useWalletModal();
 
   // Auto-fire the SIWS flow once the wallet is connected. The user
@@ -227,7 +287,7 @@ function ConnectFlow({
   }, [connected, publicKey]);
 
   const runSiws = async () => {
-    if (!publicKey || !signMessage) return;
+    if (!publicKey || (!signMessage && !signIn)) return;
     setBusy(true);
     setError(null);
     try {
@@ -236,23 +296,146 @@ function ConnectFlow({
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ wallet }),
+        body: JSON.stringify({ wallet, action: 'login' }),
       });
       const nonceData = (await nonceRes.json()) as {
         ok: boolean;
         message?: string;
+        nonce?: string;
+        chainId?: string;
+        domain?: string;
+        uri?: string;
         issuedAt?: string;
         expiresAt?: string;
         reason?: string;
       };
-      if (!nonceData.ok || !nonceData.message) {
+      if (!nonceData.ok || !nonceData.message || !nonceData.nonce) {
         throw new Error(nonceData.reason ?? 'nonce_failed');
       }
 
-      const sigBytes = await signMessage(
-        new TextEncoder().encode(nonceData.message),
-      );
-      const sigB58 = base58Encode(sigBytes);
+      // Pre-flight: refuse to sign if the active Wallet Standard
+      // account doesn't claim the chain the server expects. Mirrors
+      // the guard in components/wallet/wallet-connect-flow.tsx.
+      const expectedChain = nonceData.chainId;
+      if (expectedChain && activeWallet?.adapter) {
+        const standardWallet = (
+          activeWallet.adapter as unknown as {
+            wallet?: { accounts?: ReadonlyArray<{ chains?: readonly string[] }> };
+          }
+        ).wallet;
+        const declaredChains = standardWallet?.accounts?.[0]?.chains;
+        if (
+          declaredChains &&
+          declaredChains.length > 0 &&
+          !declaredChains.includes(expectedChain)
+        ) {
+          throw new Error(`wrong_chain:${expectedChain}`);
+        }
+      }
+
+      let signedMessageB64: string | null = null;
+      let sigB58: string | null = null;
+
+      // SIWS sign cascade — see the equivalent comment in
+      // `components/wallet/wallet-connect-flow.tsx`. `signIn` is the
+      // canonical Wallet Standard SIWS primitive (works on production
+      // / mainnet across all modern Solana wallets). `signMessage` is
+      // a silent fallback for Phantom's generic "Unexpected error"
+      // from its internal SIWS validation (e.g. localhost+Devnet
+      // multi-chain Testnet Mode). User rejections re-throw without
+      // fallback.
+      const isUserRejection = (err: unknown): boolean => {
+        const msg = ((err as Error)?.message || '').toLowerCase();
+        return (
+          msg.includes('user rejected') ||
+          msg.includes('user denied') ||
+          msg.includes('cancelled') ||
+          msg.includes('rejected the request')
+        );
+      };
+      const isPhantomGenericFail = (err: unknown): boolean => {
+        const msg = ((err as Error)?.message || '').toLowerCase();
+        return msg.includes('unexpected error');
+      };
+
+      if (signIn) {
+        try {
+          const origin =
+            typeof window !== 'undefined' ? window.location.origin : '';
+          let uri = origin;
+          let domain = '';
+          try {
+            const u = new URL(origin);
+            uri = u.origin;
+            domain = u.host;
+          } catch {
+            // fall through to wallet-resolved defaults
+          }
+          const out = await signIn({
+            domain: nonceData.domain ?? domain ?? undefined,
+            address: wallet,
+            statement: 'Authenticate this wallet to start your Vizzor session.',
+            uri: nonceData.uri ?? uri ?? undefined,
+            version: '1',
+            chainId: nonceData.chainId,
+            nonce: nonceData.nonce,
+            issuedAt: nonceData.issuedAt,
+            expirationTime: nonceData.expiresAt,
+          });
+          signedMessageB64 = base64Encode(out.signedMessage);
+          sigB58 = base58Encode(out.signature);
+        } catch (signInErr) {
+          if (isUserRejection(signInErr)) throw signInErr;
+          if (!isPhantomGenericFail(signInErr)) throw signInErr;
+
+          // Dev-mode silent recovery — same shape as
+          // `wallet-connect-flow.tsx`. Phantom's "Unexpected error"
+          // on localhost+Devnet comes AFTER the user already tapped
+          // Confirm in the SIWS popup, so the auth intent is
+          // unambiguous. When the dev-sign endpoint is enabled, mint
+          // the session via the bypass instead of re-prompting with
+          // signMessage. The route is hard-404'd in production.
+          if (process.env.NEXT_PUBLIC_ALLOW_DEV_AUTH === 'true') {
+            try {
+              const res = await fetch('/api/auth/dev-sign', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ wallet }),
+              });
+              if (res.ok) {
+                onSignedIn();
+                return;
+              }
+            } catch {
+              // Network failure — fall through to the signMessage path.
+            }
+          }
+
+          if (!signMessage) throw signInErr;
+          // Only fall back on non-production chains — see the
+          // matching comment in `wallet-connect-flow.tsx`.
+          const allowFallback =
+            nonceData.chainId === 'solana:devnet' ||
+            nonceData.chainId === 'solana:testnet';
+          if (!allowFallback) throw signInErr;
+          if (typeof console !== 'undefined') {
+            console.warn(
+              '[vizzor] signIn returned generic error, falling back to signMessage',
+            );
+          }
+        }
+      }
+
+      if (sigB58 === null) {
+        if (!signMessage) {
+          throw new Error('no_sign_primitive');
+        }
+        const sigBytes = await signMessage(
+          new TextEncoder().encode(nonceData.message),
+        );
+        sigB58 = base58Encode(sigBytes);
+      }
 
       const verifyRes = await fetch('/api/auth/siws/verify', {
         method: 'POST',
@@ -261,8 +444,10 @@ function ConnectFlow({
         body: JSON.stringify({
           wallet,
           signature: sigB58,
+          action: 'login',
           issuedAt: nonceData.issuedAt,
           expiresAt: nonceData.expiresAt,
+          ...(signedMessageB64 ? { signedMessage: signedMessageB64 } : {}),
         }),
       });
       const verifyData = (await verifyRes.json()) as {
@@ -274,7 +459,46 @@ function ConnectFlow({
       }
       onSignedIn();
     } catch (e) {
-      setError((e as Error).message);
+      const err = e as Error & { cause?: unknown; error?: unknown };
+      const chain: { name: string; message: string }[] = [];
+      let cursor: unknown = err;
+      let depth = 0;
+      while (cursor && typeof cursor === 'object' && depth < 6) {
+        const c = cursor as { name?: unknown; message?: unknown; cause?: unknown; error?: unknown };
+        chain.push({
+          name: typeof c.name === 'string' ? c.name : 'Error',
+          message: typeof c.message === 'string' ? c.message : '',
+        });
+        cursor = c.cause ?? c.error;
+        depth += 1;
+      }
+      if (typeof console !== 'undefined') {
+        console.warn('[vizzor] siws sign rejected', chain);
+      }
+      // Last-chance dev-mode silent recovery — see the equivalent
+      // comment in `wallet-connect-flow.tsx`.
+      const errMsg = (err.message || '').toLowerCase();
+      if (
+        process.env.NEXT_PUBLIC_ALLOW_DEV_AUTH === 'true' &&
+        errMsg.includes('unexpected error') &&
+        publicKey
+      ) {
+        try {
+          const res = await fetch('/api/auth/dev-sign', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ wallet: publicKey.toBase58() }),
+          });
+          if (res.ok) {
+            onSignedIn();
+            return;
+          }
+        } catch {
+          // fall through to the normal error surface
+        }
+      }
+      setError(err.message);
       try {
         await disconnect();
       } catch {
@@ -329,6 +553,13 @@ function ConnectFlow({
   );
 }
 
+function base64Encode(bytes: Uint8Array): string {
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  if (typeof btoa === 'function') return btoa(bin);
+  return Buffer.from(bin, 'binary').toString('base64');
+}
+
 function base58Encode(bytes: Uint8Array): string {
   // Minimal base58 encoder. Pulling bs58 into the client bundle is
   // overkill for one 64-byte signature; this is the canonical
@@ -351,4 +582,87 @@ function base58Encode(bytes: Uint8Array): string {
 
 function capitalize(s: string): string {
   return s.length === 0 ? s : s[0]!.toUpperCase() + s.slice(1);
+}
+
+/* ────────────── providerless connect (opens selector modal) ────────────── */
+
+function ProviderlessConnect({
+  label,
+  hasOuterProvider = false,
+}: {
+  label: string;
+  hasOuterProvider?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [autoSelect, setAutoSelect] = useState<
+    'phantom' | 'solflare' | null
+  >(null);
+
+  // Dapp-browser auto-trigger: when the wallet's in-app browser lands
+  // the user on `…/predict?action=connect&provider=<id>`, open the
+  // modal and forward the provider so the connect dance fires in the
+  // same tick. The URL params are stripped via History API so a
+  // refresh doesn't loop.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const action = url.searchParams.get('action');
+    const provider = url.searchParams.get('provider');
+    if (action !== 'connect') return;
+    if (provider !== 'phantom' && provider !== 'solflare') return;
+    setAutoSelect(provider);
+    setOpen(true);
+    url.searchParams.delete('action');
+    url.searchParams.delete('provider');
+    window.history.replaceState({}, '', url.toString());
+  }, []);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className="
+          group relative inline-flex h-8 items-center gap-1.5
+          px-1
+          text-[12px] font-medium text-[var(--fg-3)]
+          transition-[color,transform] duration-200 ease-out
+          hover:text-[var(--fg)] hover:scale-[1.03]
+          active:scale-[0.97]
+          focus-visible:outline-none focus-visible:ring-2
+          focus-visible:ring-[var(--accent)] focus-visible:rounded-md
+        "
+      >
+        <Wallet
+          size={14}
+          strokeWidth={1.75}
+          className="transition-transform duration-200 ease-out group-hover:-rotate-6"
+        />
+        <span>{label}</span>
+        {/* Hover underline grows from left — a Linear-style affordance
+            without taking up an idle pixel. */}
+        <span
+          aria-hidden
+          className="
+            pointer-events-none absolute left-1 right-1 -bottom-0.5
+            h-px origin-left scale-x-0
+            bg-[var(--fg)]
+            transition-transform duration-300 ease-out
+            group-hover:scale-x-100
+          "
+        />
+      </button>
+      <WalletSelectorModal
+        open={open}
+        onClose={() => {
+          setOpen(false);
+          setAutoSelect(null);
+        }}
+        hasOuterProvider={hasOuterProvider}
+        autoSelectProvider={autoSelect}
+      />
+    </>
+  );
 }

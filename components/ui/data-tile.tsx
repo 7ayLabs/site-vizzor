@@ -3,9 +3,17 @@
  * Uppercase micro label, bold mono-tabular value, optional delta line.
  * Color-key: accent for up, danger for down, fg-3 for flat.
  * Caller pre-formats numeric values with formatUsd / formatPct from @/lib/utils.
+ *
+ * Variants:
+ *   - `flat` (default) — current behavior, unchanged.
+ *   - `terminal` — Bloomberg-style: L-shaped corner brackets in accent,
+ *     stronger inner padding, hairline border in --border-hi, optional
+ *     pulsing live dot in the top-right corner.
  */
 
 import { cn } from '@/lib/utils';
+
+export type DataTileVariant = 'flat' | 'terminal';
 
 export interface DataTileProps {
   label: string;
@@ -14,21 +22,31 @@ export interface DataTileProps {
   direction?: 'up' | 'down' | 'flat';
   size?: 'sm' | 'md' | 'lg';
   hint?: string;
+  /** Visual variant — defaults to `flat` to preserve current call sites. */
+  variant?: DataTileVariant;
+  /**
+   * Terminal variant only: when true, renders a pulsing live dot in the
+   * top-right corner. Ignored on `flat` for backward compatibility.
+   */
+  live?: boolean;
 }
 
-const sizeClasses: Record<NonNullable<DataTileProps['size']>, { pad: string; value: string; label: string }> = {
+const sizeClasses: Record<NonNullable<DataTileProps['size']>, { pad: string; padTerm: string; value: string; label: string }> = {
   sm: {
     pad: 'p-3',
+    padTerm: 'p-4',
     value: 'text-base sm:text-lg',
     label: 'text-[10px]',
   },
   md: {
     pad: 'p-4',
+    padTerm: 'p-5',
     value: 'text-xl sm:text-2xl',
     label: 'text-[11px]',
   },
   lg: {
     pad: 'p-5',
+    padTerm: 'p-6',
     value: 'text-2xl sm:text-3xl',
     label: 'text-[11px]',
   },
@@ -57,9 +75,12 @@ export function DataTile({
   direction,
   size = 'md',
   hint,
+  variant = 'flat',
+  live = false,
 }: DataTileProps) {
   const s = sizeClasses[size];
   const dir = resolveDirection(direction, delta);
+  const isTerminal = variant === 'terminal';
 
   const deltaColor =
     dir === 'up'
@@ -71,13 +92,26 @@ export function DataTile({
   return (
     <div
       className={cn(
-        'group flex flex-col gap-1.5',
-        'rounded-lg border border-[var(--border)] bg-[var(--surface)]',
+        'group relative flex flex-col gap-1.5',
+        'rounded-lg bg-[var(--surface)]',
         'transition-transform duration-100 ease-out',
         'hover:-translate-y-px',
-        s.pad,
+        isTerminal
+          ? cn('vt-bracket border border-[var(--border-hi)]', s.padTerm)
+          : cn('border border-[var(--border)]', s.pad),
       )}
     >
+      {isTerminal && live && (
+        <span
+          aria-hidden
+          className="absolute right-3 top-3 inline-block h-1.5 w-1.5 rounded-full"
+          style={{
+            background: 'var(--accent)',
+            animation: 'pulse-dot 1.6s ease-in-out infinite',
+          }}
+        />
+      )}
+
       <div
         className={cn(
           'font-semibold uppercase tracking-[0.16em] text-[var(--fg-3)] leading-none',

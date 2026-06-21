@@ -1,31 +1,39 @@
 /**
- * Hero — Ollama-style aggressive minimalism.
+ * Hero — Ollama-shaped, demo-first.
  *
- * One vertical axis, narrow column, massive whitespace. The hero reads top-to-
- * bottom: a geometric mark, the headline, the sub, one solid CTA, a CLI chip.
+ * Vertical axis, narrow column. Top-to-bottom:
+ *   1. Brand mark
+ *   2. Big headline
+ *   3. Sub
+ *   4. Primary CTA — "Try Vizzor" → /predict (the on-site demo).
+ *      This is the mass-market path; the navbar already pins the
+ *      Telegram bot link so we deliberately don't repeat it here.
+ *   5. Install command — the Ollama-style centerpiece for the
+ *      power-user / self-host path. Click the card to copy.
+ *   6. Helper line — one inline link to the CLI docs for context.
  *
- * Pure neutrals — black text on white / white text on near-black. The accent
- * color shows up exactly once (inside the geometric mark) and nowhere else,
- * matching the Ollama mascot/orange relationship.
- *
- * Server component: pure data read + render, no client state.
+ * Pure neutrals. The headline is the only block of large type on the
+ * page; everything else is muted.
  */
+
 import { getTranslations } from 'next-intl/server';
 import Image from 'next/image';
-import { Link } from '@/i18n/navigation';
-import { CopyChip } from '@/components/ui/copy-chip';
 import { GsapHeadline } from '@/components/ui/gsap-headline';
+import { InstallCommand } from '@/components/ui/install-command';
 import { MotionReveal } from '@/components/ui/motion-reveal';
+import { Link } from '@/i18n/navigation';
+
+const INSTALL_COMMAND = 'npm i -g @vizzor/cli';
 
 export async function Hero() {
   const t = await getTranslations('hero');
 
   return (
     <section className="relative overflow-hidden">
-      <div className="mx-auto max-w-[900px] px-4 sm:px-6 lg:px-8 py-32 lg:py-40 text-center">
-        {/* 1. Brand mark — theme-swapped via the dark: variant (data-theme). */}
+      <div className="mx-auto max-w-[760px] px-4 sm:px-6 lg:px-8 py-28 lg:py-36 text-center">
+        {/* 1. Brand mark */}
         <MotionReveal>
-          <div className="mx-auto mb-12 flex h-24 items-center justify-center">
+          <div className="mx-auto mb-10 flex h-24 items-center justify-center">
             <Image
               src="/brand/vizzor_darkicon.png"
               alt="Vizzor"
@@ -45,45 +53,51 @@ export async function Hero() {
           </div>
         </MotionReveal>
 
-        {/* 2. Headline */}
+        {/* 2. Headline + 3. Sub */}
         <GsapHeadline
           as="h1"
           title={t('headline')}
           sub={t('sub')}
-          titleClassName="display text-[var(--fg)] text-balance text-[44px] sm:text-[56px] lg:text-[64px] leading-[1.05] tracking-tight font-semibold"
-          subClassName="mt-7 text-[17px] sm:text-lg leading-relaxed text-[var(--fg-2)] max-w-[40ch] mx-auto"
+          titleClassName="display text-[var(--fg)] text-balance text-[44px] sm:text-[60px] lg:text-[72px] leading-[1.02] tracking-tight font-semibold"
+          subClassName="mt-6 text-[16px] sm:text-[17px] leading-relaxed text-[var(--fg-2)] max-w-[40ch] mx-auto"
         />
 
-        {/* 3. Primary CTA — on-site prediction surface. Telegram demotes
-            to a secondary line below; the CLI chip stays as the tertiary
-            affordance. */}
-        <MotionReveal delay={160}>
-          <div className="mt-12 flex flex-col items-center gap-3">
+        {/* 4. Primary CTA + 5. install card.
+            A tight `or` rule sits between them so the two paths (demo
+            vs CLI) read as a deliberate split, not two stacked CTAs. */}
+        <MotionReveal delay={140}>
+          <div className="mt-10 mx-auto max-w-[420px] flex flex-col items-stretch gap-4">
             <Link
               href="/predict"
-              className="inline-flex h-13 items-center justify-center rounded-full bg-[var(--fg)] px-7 text-[15px] font-semibold tracking-tight text-[var(--bg)] transition-transform duration-150 ease-out hover:scale-[1.02] active:scale-[0.99]"
-              style={{ height: '3.25rem' }}
+              className="
+                group inline-flex items-center justify-center gap-2 h-12 px-6
+                rounded-full bg-[var(--fg)] text-[var(--bg)]
+                text-[14px] font-semibold tracking-tight
+                transition-transform duration-150 ease-out
+                hover:scale-[1.02] active:scale-[0.99]
+              "
             >
-              <span>{t('predictCta')}</span>
-              <span aria-hidden className="ml-2">
+              <span>{t('tryCta')}</span>
+              <span
+                aria-hidden
+                className="transition-transform duration-150 ease-out group-hover:translate-x-0.5"
+              >
                 →
               </span>
             </Link>
 
-            {/* 4. Secondary line — Telegram + CLI affordances. */}
-            <span className="mt-1 inline-flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[12px] text-[var(--fg-3)]">
-              <a
-                href="https://t.me/vizzorai_bot"
-                target="_blank"
-                rel="noopener"
-                className="underline-offset-4 hover:text-[var(--fg)] hover:underline"
-              >
-                {t('primaryCta')}
-              </a>
-              <span aria-hidden>·</span>
-              <span>{t('secondary')}</span>
-              <CopyChip command="npm i -g @vizzor/cli" />
-            </span>
+            <div
+              aria-hidden
+              className="flex items-center gap-3 text-[var(--fg-3)]"
+            >
+              <span className="h-px flex-1 bg-[var(--border)]" />
+              <span className="mono tabular text-[10.5px] uppercase tracking-[0.18em]">
+                {t('orLabel')}
+              </span>
+              <span className="h-px flex-1 bg-[var(--border)]" />
+            </div>
+
+            <InstallCommand command={INSTALL_COMMAND} />
           </div>
         </MotionReveal>
       </div>

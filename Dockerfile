@@ -3,7 +3,7 @@
 # ──────────────────────────────────────────────────────────────────────
 # Base — pnpm + node 20
 # ──────────────────────────────────────────────────────────────────────
-FROM node:20-alpine AS base
+FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS base
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 WORKDIR /app
 
@@ -11,7 +11,20 @@ WORKDIR /app
 # Dependencies — install only (deterministic, cacheable)
 # ──────────────────────────────────────────────────────────────────────
 FROM base AS deps
+# Native-build toolchain for `better-sqlite3` (load-bearing — the site's
+# entire payment state lives in it) and a few wallet-adapter peer
+# native modules. Alpine ships none of these by default, so without
+# them `pnpm install` fails the deps stage on `node-gyp rebuild`.
+# These layers stay in the deps stage only; the final runner image
+# uses Next.js' standalone bundle and never sees node-gyp.
+RUN apk add --no-cache python3 make g++ libc-dev linux-headers eudev-dev
 COPY package.json pnpm-lock.yaml .npmrc ./
+# fumadocs-mdx runs as a postinstall hook and hashes source.config.ts —
+# the deps stage has no source tree, so without this copy the install
+# throws "Cannot find config file". The file is self-contained (only
+# imports from npm packages) so this doesn't bust the layer cache
+# unless the MDX config itself changes.
+COPY source.config.ts ./
 RUN pnpm install --frozen-lockfile --prefer-offline
 
 # ──────────────────────────────────────────────────────────────────────
@@ -31,6 +44,26 @@ ENV BUILD_TIME=$BUILD_TIME
 ARG NEXT_PUBLIC_VIZZOR_API_URL=https://api.vizzor.ai
 ENV NEXT_PUBLIC_VIZZOR_API_URL=$NEXT_PUBLIC_VIZZOR_API_URL
 
+# Chain selector — baked at build because client components read it via
+# `paymentNetwork()` (lib/payment/network.ts). The deploy workflow
+# passes `devnet` for the `testing` branch (test.vizzor.ai) and
+# `mainnet` for `main` (vizzor.ai). Default `mainnet` keeps unrelated
+# local builds from accidentally shipping a staging chain.
+ARG NEXT_PUBLIC_PAYMENT_NETWORK=mainnet
+ENV NEXT_PUBLIC_PAYMENT_NETWORK=$NEXT_PUBLIC_PAYMENT_NETWORK
+
+# Dev-auth bypass — baked at build because the wallet-connect cascade
+# reads it client-side to decide whether to silently mint a session
+# via `/api/auth/dev-sign` when Phantom rejects post-confirm with the
+# generic "Unexpected error" (the documented localhost+Devnet multi-
+# chain Phantom bug). Without this, the `testing` build ships a dead
+# `process.env.NEXT_PUBLIC_ALLOW_DEV_AUTH === 'true'` check that
+# always evaluates false at runtime — there's nothing to read in the
+# client bundle. Default empty so unrelated builds (prod) don't
+# accidentally inherit the bypass.
+ARG NEXT_PUBLIC_ALLOW_DEV_AUTH=
+ENV NEXT_PUBLIC_ALLOW_DEV_AUTH=$NEXT_PUBLIC_ALLOW_DEV_AUTH
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
@@ -39,7 +72,7 @@ RUN pnpm build
 # ──────────────────────────────────────────────────────────────────────
 # Runner — minimal runtime image with the standalone bundle
 # ──────────────────────────────────────────────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -54,6 +87,12 @@ RUN addgroup -g 1001 -S nodejs && adduser -u 1001 -S nextjs -G nodejs
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=build --chown=nextjs:nodejs /app/public ./public
+
+# Pre-create the SQLite mount point with non-root ownership. The compose
+# named volume (site-vizzor-db / site-vizzor-staging-db) mounts at
+# /app/.vizzor; if the dir doesn't exist in the image, Docker creates it
+# as root:root and the nextjs user can't write the WAL files.
+RUN mkdir -p /app/.vizzor && chown -R nextjs:nodejs /app/.vizzor
 
 USER nextjs
 EXPOSE 3000

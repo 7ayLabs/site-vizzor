@@ -7,6 +7,8 @@ import { ThemeProvider, themeBootScript } from '@/components/layout/theme-provid
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { TickerCarouselServer } from '@/components/layout/ticker-carousel-server';
+import { ChromeGate } from '@/components/layout/chrome-gate';
+import { PageTransition } from '@/components/layout/page-transition';
 import { routing } from '@/i18n/routing';
 import '../globals.css';
 
@@ -46,14 +48,23 @@ export const metadata: Metadata = {
       'Calibrated crypto forecasts. Six signal families. Tracked win rate on every horizon.',
   },
   icons: {
-    icon: '/favicon.ico',
+    // SVG is the primary — its embedded <style> swaps to a white mark
+    // under `prefers-color-scheme: dark`. Chrome and Firefox honour it
+    // directly; Safari falls back to the .ico.
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon-96x96.png', sizes: '96x96', type: 'image/png' },
+      { url: '/favicon.ico', sizes: 'any' },
+    ],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180' }],
   },
+  manifest: '/site.webmanifest',
 };
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#FAFAF7' },
-    { media: '(prefers-color-scheme: dark)', color: '#0A0A0B' },
+    { media: '(prefers-color-scheme: light)', color: '#F4F5F0' },
+    { media: '(prefers-color-scheme: dark)', color: '#0A0B0F' },
   ],
   width: 'device-width',
   initialScale: 1,
@@ -90,13 +101,26 @@ export default async function LocaleLayout({
           dangerouslySetInnerHTML={{ __html: themeBootScript }}
         />
       </head>
-      <body className="min-h-dvh antialiased">
+      {/* `suppressHydrationWarning` on <body> because some browser
+          extensions (ColorZilla → `cz-shortcut-listen`, Grammarly,
+          1Password, etc.) inject attributes onto <body> before React
+          hydrates. Those are out of our control and never affect the
+          tree underneath, but React would otherwise log a noisy
+          hydration mismatch on every page load for users running
+          those extensions. */}
+      <body className="min-h-dvh antialiased" suppressHydrationWarning>
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider>
             <TickerCarouselServer />
-            <Header />
-            <main>{children}</main>
-            <Footer />
+            <ChromeGate>
+              <Header />
+            </ChromeGate>
+            <main>
+              <PageTransition>{children}</PageTransition>
+            </main>
+            <ChromeGate>
+              <Footer />
+            </ChromeGate>
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>

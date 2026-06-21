@@ -2,9 +2,17 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main, testing, develop, release/**]
   push:
-    branches: [main, develop, feat/**, fix/**, hotfix/**]
+    branches:
+      - main
+      - testing
+      - develop
+      - feat/**
+      - fix/**
+      - hotfix/**
+      - feature/v0.2.0/**
+      - release/v0.2.0**
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -16,6 +24,10 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history so gitleaks can scan the diff against the
+          # merge base, not just the latest commit.
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -35,13 +47,17 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # v0.2.x security pass — lint stays soft-fail until ESLint is
+      # configured. `next lint` is deprecated in Next 15 and currently
+      # prompts interactively (would hang CI). Tracked as a follow-up
+      # in docs/security/threat-model.md §G2 — migrate to the ESLint
+      # CLI, then flip this gate to blocking.
       - name: Lint
-        run: pnpm lint || echo "lint not configured yet"
+        run: pnpm lint || echo "lint not yet configured (see docs/security/threat-model.md G2)"
         continue-on-error: true
 
       - name: Test
-        run: pnpm test || echo "no tests yet"
-        continue-on-error: true
+        run: pnpm test
 
       - name: Build
         run: pnpm build
@@ -49,3 +65,47 @@ jobs:
           NEXT_PUBLIC_VIZZOR_API_URL: https://api.vizzor.ai
           GIT_SHA: ${{ github.sha }}
           BUILD_TIME: ${{ github.event.head_commit.timestamp || 'pr-build' }}
+
+      # v0.2.x security pass — pnpm audit is blocking at high-severity.
+      # Critical advisories cannot land on a protected branch without a
+      # human override (re-running with the flag flipped via the
+      # github-product-owner agent or a documented exemption).
+      - name: Dependency audit
+        run: pnpm audit --audit-level high --prod
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so the secret scan sees every commit on a
+          # protected branch, not just HEAD.
+          fetch-depth: 0
+
+      # The gitleaks GitHub Action wrapper (gitleaks/gitleaks-action@v2)
+      # now requires a paid licence for organisation repositories. The
+      # underlying gitleaks binary stays MIT-licensed and free, so we
+      # download it directly and skip the wrapper entirely.
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+        run: |
+          set -euo pipefail
+          curl -sSfL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /tmp gitleaks
+          sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Scan repository for leaked secrets
+        # `detect` walks every commit in history (vs `protect` which
+        # only diffs the latest). The .gitleaks.toml allowlist scopes
+        # known placeholders (.env.example, fixtures) out of the scan
+        # so the failure surface is exclusively accidental commits.
+        run: gitleaks detect
+          --source .
+          --config .gitleaks.toml
+          --redact
+          --no-banner
+          --verbose

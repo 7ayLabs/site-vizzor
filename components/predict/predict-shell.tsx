@@ -1,30 +1,41 @@
 'use client';
 
 /**
- * PredictShell — the on-site Vizzor chat surface, structured like the
- * Claude / ChatGPT app: left sidebar with nav + recents, a thin model
- * bar at the top, a full-bleed chat thread, and a bottom composer
- * with tool buttons. Adapted for crypto:
+ * PredictShell — wallet-gated, liquid-glass layout with crypto widgets
+ * in the right rail (Pass 4).
  *
- *   - the model selector reflects the Vizzor engine version
- *   - "Tools" surfaces Vizzor slash commands (/wr /precisions /scan …)
- *   - quick-start chips on the empty state are real prediction prompts
- *   - recents live in localStorage (no accounts) so the user's recent
- *     prompts persist across visits without a server roundtrip
+ * Server data — live tickers, public win-rate, last-24h breakdown,
+ * recent receipts — is fetched in `app/[locale]/predict/page.tsx` and
+ * passed in via props. The shell stays a client component because it
+ * owns the chat stream, SWR for auth/quota, the wallet provider
+ * subtree, and the responsive drawer.
  *
- * Engine integration is identical to the previous PredictRoute: same
- * `useChat()` against `/api/predict` which proxies to the real
- * Vizzor `/v1/chat`. SSE → AI SDK protocol translation happens server-
- * side; we just render whatever streams in.
+ * Layout (desktop ≥ lg):
+ *   ┌─ LEFT 280px ──┬─ CENTER ────────────┬─ RIGHT 320px ──┐
+ *   │  nav + tools  │   welcome / thread  │  tickers card   │
+ *   │  search       │   + composer        │  win-rate card  │
+ *   │  identity     │                     │  last 24h card  │
+ *   │               │                     │  receipts card  │
+ *   └───────────────┴─────────────────────┴─────────────────┘
  *
- * Wallet adapter (Phase 2) wraps the shell only when isTokenLive().
+ * Mobile (<lg):
+ *   - left rail collapses into a slide-in drawer
+ *   - right rail hides (its data is duplicated in the welcome state's
+ *     mini-banner so the quota stays visible)
+ *   - composer remains sticky at the bottom
+ *
+ * Custom iconography from `./predict-icons`. No `lucide-react` imports
+ * in this file — every visible icon is a hand-drawn SVG owned by the
+ * Predict surface.
  */
 
+import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
-import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -33,89 +44,219 @@ import {
   type ReactNode,
 } from 'react';
 import useSWR from 'swr';
-import {
-  Plus,
-  Search,
-  Send,
-  PanelLeftClose,
-  PanelLeft,
-  Settings2,
-  Compass,
-  Sparkles,
-  MessageSquare,
-  Library,
-  Trash2,
-} from 'lucide-react';
+import { useTicker } from '@/lib/api';
 import { ChatBubble } from '@/components/predict/chat-bubble';
-import { QuotaSidebar } from '@/components/sections/quota-sidebar';
-import { isTokenLive } from '@/lib/feature-flags';
-import { loadRecents, pushRecent, clearRecents } from './recents-store';
+import { CoinIcon } from '@/components/ui/coin-icon';
+import { Link } from '@/i18n/navigation';
+import { WalletAuthButton } from '@/components/auth/wallet-auth-button';
+import { useRouter } from '@/i18n/navigation';
+import { useLocale } from 'next-intl';
+import { cn } from '@/lib/utils';
+import {
+  useConversations,
+  type ConversationSummary,
+} from './use-conversations';
+import {
+  IconChat,
+  IconClose,
+  IconHelp,
+  IconLock,
+  IconMenu,
+  IconPaperclip,
+  IconPlus,
+  IconReceipts,
+  IconSend,
+  IconSettings,
+} from './predict-icons';
+import { SlashPalette } from './slash-palette';
+import { SettingsSheet } from './settings-sheet';
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  horizontalListSortingStrategy,
+  sortableKeyboardCoordinates,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
-const WalletAdapter = dynamic(
+const SolanaWalletAdapter = dynamic(
   () => import('@/components/wallet/wallet-provider'),
   { ssr: false, loading: () => null },
 );
 
 interface QuotaState {
+  connected: boolean;
+  tier: 'elite' | 'pro' | 'trial' | 'free';
+  trial: {
+    inTrial: boolean;
+    daysRemaining: number;
+    trialExpiresAt: number;
+    dailyUsed: number;
+    dailyCap: number;
+  } | null;
+  freeReason: 'never_started' | 'trial_expired' | 'operator_killed' | null;
+  subscribed?: boolean;
+  // legacy mirror — drop in v0.3.3
   used: number;
   limit: number;
   remaining: number;
   exhausted: boolean;
-  isLive: boolean;
 }
 
-const quotaFetcher = (url: string) => fetch(url).then((r) => r.json());
+interface AuthState {
+  ok: boolean;
+  signedIn: boolean;
+  wallet?: string;
+}
+
+const jsonFetcher = <T,>(url: string): Promise<T> =>
+  fetch(url).then((r) => r.json() as Promise<T>);
+
 const IS_DEV = process.env.NODE_ENV !== 'production';
+const MAX_CHARS = 3000;
+
+/* ─────────────────────────── Shell ─────────────────────────── */
 
 export function PredictShell() {
+  // autoConnect intentionally OFF.
+  //
+  // The wallet-adapter library's autoConnect=true issues a silent
+  // `connect({ silent: true })` on mount. That silent call leaves the
+  // Phantom adapter in an intermediate state that swallows the next
+  // explicit `connect()` from the selector modal — the extension popup
+  // never appears (manifesting as "Open Phantom to approve" stuck
+  // forever, both on Chrome and Brave).
+  //
+  // The connect flow inside `wallet-connect-flow.tsx` is built around
+  // `autoConnect=false` (its comment in Step 1 explicitly notes this).
+  // Sharing one provider context across the shell + the modal requires
+  // honouring that contract, so autoConnect stays off here.
+  return (
+    <SolanaWalletAdapter autoConnect={false}>
+      <PredictShellInner />
+    </SolanaWalletAdapter>
+  );
+}
+
+function PredictShellInner() {
   const t = useTranslations('predict');
+  const router = useRouter();
+  const locale = useLocale();
+
   const [input, setInput] = useState('');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [burnSig, setBurnSig] = useState<string | null>(null);
-  const [recents, setRecents] = useState<ReturnType<typeof loadRecents>>([]);
-  const threadRef = useRef<HTMLDivElement | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(
+    null,
+  );
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // Tracks which message ids we've already POSTed to
+  // /api/conversations/[id]/messages so a re-render of useChat state
+  // doesn't double-persist. Pre-populated when loading a past chat so
+  // its existing rows aren't re-saved as if they were new turns.
+  const persistedRef = useRef<Set<string>>(new Set());
 
-  // Quota — shared SWR key with QuotaSidebar so the data dedupes.
-  const { data: quota } = useSWR<QuotaState>('/api/quota', quotaFetcher, {
-    revalidateOnFocus: false,
-    keepPreviousData: true,
-  });
-
-  // Burn-session handoff — chat-panel pattern preserved.
-  const burnSigRef = useRef<string | null>(burnSig);
+  // Persist sidebar state — keep it across reloads the same way Claude
+  // and ChatGPT do.
   useEffect(() => {
-    burnSigRef.current = burnSig;
-  }, [burnSig]);
+    const stored = window.localStorage.getItem('vizzor.predict.sidebar');
+    if (stored === 'collapsed') setSidebarCollapsed(true);
+  }, []);
+  useEffect(() => {
+    window.localStorage.setItem(
+      'vizzor.predict.sidebar',
+      sidebarCollapsed ? 'collapsed' : 'expanded',
+    );
+  }, [sidebarCollapsed]);
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((v) => !v);
+  }, []);
+  const threadRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
+  const { data: auth, mutate: mutateAuth } = useSWR<AuthState>(
+    '/api/auth/session',
+    jsonFetcher,
+    { revalidateOnFocus: false, refreshInterval: 12_000 },
+  );
+  const { data: quota, mutate: mutateQuota } = useSWR<QuotaState>(
+    '/api/quota',
+    jsonFetcher,
+    { revalidateOnFocus: false, keepPreviousData: true },
+  );
+
+  // Live ticker — the same SWR hook that backs the global ticker bar.
+  // We expose a {symbol → price} map to the message stream so each
+  // assistant bubble can cross-check any price the engine quotes
+  // against the live reference. Defends against engine-side LLM
+  // hallucinations (a known incident: BTC quoted at $105k while the
+  // resolver was reading $63k) without claiming to fix the root cause.
+  const ticker = useTicker(30_000);
+  const tickerByCoin = useMemo<ReadonlyMap<string, number>>(() => {
+    const m = new Map<string, number>();
+    for (const e of ticker.data) {
+      if (!e.symbol || !Number.isFinite(e.price)) continue;
+      m.set(e.symbol.toUpperCase(), e.price);
+    }
+    return m;
+  }, [ticker.data]);
+
+  const signedIn = auth?.signedIn === true;
+  const composerLocked =
+    !signedIn || (!!quota?.exhausted && !quota?.subscribed);
+
+  const {
+    conversations,
+    createConversation,
+    loadConversation,
+    deleteConversation,
+    persistMessage,
+    bumpRecency,
+  } = useConversations({ enabled: signedIn });
+
+  // Forward the browser's resolved IANA timezone on every chat request
+  // so the engine can speak the user's local time (the Telegram bot
+  // already does this via `/tz`). The header is read by
+  // `app/api/predict/route.ts` and forwarded to vizzor-api/v1/chat.
+  // We send the URL-path locale explicitly via `x-vizzor-locale` — the
+  // engine clamps it to en/es/fr and locks the reply language to it
+  // so the chat surface matches the site chrome the user is actually
+  // looking at, not the language they happened to type in this turn.
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: '/api/predict',
-        headers: (): Record<string, string> => {
-          const sig = burnSigRef.current;
-          return sig ? { 'x-vizzor-burn-tx': sig } : {};
+        headers: () => {
+          const tz =
+            typeof Intl !== 'undefined'
+              ? Intl.DateTimeFormat().resolvedOptions().timeZone
+              : 'UTC';
+          return {
+            'x-vizzor-timezone': tz || 'UTC',
+            'x-vizzor-locale': locale,
+          };
         },
       }),
-    [],
+    [locale],
   );
 
-  const { messages, sendMessage, status, error, setMessages } = useChat({
+  const { messages, sendMessage, status, error, setMessages, stop } = useChat({
     transport,
     onFinish: () => {
-      if (burnSigRef.current) setBurnSig(null);
-      setRefreshKey((k) => k + 1);
+      void mutateQuota();
     },
   });
 
-  // Load recents once on mount.
-  useEffect(() => {
-    setRecents(loadRecents());
-  }, []);
-
-  // Lock body + html scroll while the chat shell is mounted, so only
-  // the thread area scrolls (not the whole page). Restore on unmount
-  // so navigating away from /predict re-enables normal page scroll.
   useEffect(() => {
     const html = document.documentElement;
     const body = document.body;
@@ -129,450 +270,2668 @@ export function PredictShell() {
     };
   }, []);
 
-  // Auto-scroll the thread on each new chunk.
   useEffect(() => {
     if (threadRef.current) {
       threadRef.current.scrollTop = threadRef.current.scrollHeight;
     }
   }, [messages]);
 
+  // ⌘/Ctrl+K — global focus shortcut (Claude / Linear / GitHub
+  // convention). Lands the caret in the composer from anywhere on the
+  // page and opens the mobile drawer so the input is actually visible
+  // on narrow widths.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const isStreaming = status === 'streaming' || status === 'submitted';
   const isErrored = status === 'error';
-  const composerLocked = !!quota?.exhausted && !burnSig;
 
-  const submitPrompt = (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed || isStreaming || composerLocked) return;
-    sendMessage({ text: trimmed });
-    setRecents(pushRecent(trimmed));
-    setInput('');
-  };
+  const submitPrompt = useCallback(
+    (text: string): void => {
+      const trimmed = text.trim();
+      if (!trimmed || isStreaming || composerLocked) return;
+      // Mint a conversation row before sending so the very first
+      // user message lands inside a persisted thread. The new id is
+      // reflected in `activeConversationId` immediately; the
+      // persistence effect below picks it up on the next render.
+      if (signedIn && !activeConversationId) {
+        void (async () => {
+          const conv = await createConversation(trimmed);
+          if (conv) setActiveConversationId(conv.id);
+        })();
+      }
+      sendMessage({ text: trimmed });
+      setInput('');
+      setDrawerOpen(false);
+    },
+    [
+      isStreaming,
+      composerLocked,
+      sendMessage,
+      signedIn,
+      activeConversationId,
+      createConversation,
+    ],
+  );
 
-  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const onSubmit = (e: FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
     submitPrompt(input);
   };
 
-  const onNewChat = () => {
+  const onNewChat = (): void => {
     setMessages([]);
     setInput('');
+    setActiveConversationId(null);
+    persistedRef.current = new Set();
+    setDrawerOpen(false);
+    inputRef.current?.focus();
   };
 
-  const onClearRecents = () => {
-    clearRecents();
-    setRecents([]);
-  };
+  /**
+   * Replace the current thread with a previously-persisted one.
+   * `setMessages` resets useChat's internal state to the loaded
+   * history; pre-populating `persistedRef` with the loaded ids stops
+   * the persistence effect from re-saving them as if they were new
+   * turns.
+   */
+  const onPickConversation = useCallback(
+    async (id: string): Promise<void> => {
+      const loaded = await loadConversation(id);
+      if (!loaded) return;
+      setActiveConversationId(loaded.conversation.id);
+      const restored = loaded.messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        parts: [{ type: 'text' as const, text: m.content }],
+      }));
+      persistedRef.current = new Set(restored.map((m) => m.id));
+      setMessages(restored);
+      setDrawerOpen(false);
+    },
+    [loadConversation, setMessages],
+  );
 
-  const onInlineReset = async () => {
+  const onDeleteConversation = useCallback(
+    async (id: string): Promise<void> => {
+      const ok = await deleteConversation(id);
+      if (!ok) return;
+      if (id === activeConversationId) {
+        setMessages([]);
+        setActiveConversationId(null);
+        persistedRef.current = new Set();
+      }
+    },
+    [deleteConversation, activeConversationId, setMessages],
+  );
+
+  /**
+   * Persist new user + assistant messages exactly once each.
+   * Runs whenever the messages array changes; the ref guard short-
+   * circuits anything we've already saved (or loaded from history).
+   * The assistant message only gets a non-empty `text` once streaming
+   * is done, so this naturally fires on the right tick.
+   */
+  useEffect(() => {
+    if (!signedIn || !activeConversationId) return;
+    let bumped = false;
+    for (const m of messages) {
+      if (persistedRef.current.has(m.id)) continue;
+      if (m.role !== 'user' && m.role !== 'assistant') continue;
+      const text = m.parts
+        .filter((p) => p.type === 'text')
+        .map((p) => ('text' in p ? (p.text ?? '') : ''))
+        .join('');
+      // Assistant rows arrive in tiny deltas; wait until streaming
+      // completes before persisting so we save the final string, not
+      // the first 12 characters.
+      if (m.role === 'assistant' && (status === 'streaming' || status === 'submitted')) {
+        continue;
+      }
+      if (!text.trim()) continue;
+      persistedRef.current.add(m.id);
+      void persistMessage(activeConversationId, m.role, text);
+      bumped = true;
+    }
+    if (bumped) bumpRecency();
+  }, [
+    messages,
+    status,
+    signedIn,
+    activeConversationId,
+    persistMessage,
+    bumpRecency,
+  ]);
+
+  const onOpenReceipts = useCallback(() => {
+    // typedRoutes doesn't yet know about hashes — cast through never.
+    router.push('/account#payments' as never);
+    setDrawerOpen(false);
+  }, [router]);
+
+  const onOpenSettings = useCallback(() => {
+    setSettingsOpen(true);
+    setDrawerOpen(false);
+  }, []);
+
+  const onSlashPick = useCallback(
+    (command: string): void => {
+      // Called from the modal mount removed in v0.4 — kept as a
+      // typing-time fallback for any consumer that may still hand the
+      // shell a command directly. Pre-fills the composer instead of
+      // submitting so the user can complete the argument list.
+      const trimmed = command.trim();
+      setInput((v) => (v ? `${v} ${trimmed}` : trimmed));
+      inputRef.current?.focus();
+    },
+    [],
+  );
+
+  const onInlineReset = async (): Promise<void> => {
     const res = await fetch('/api/quota/reset', {
       method: 'POST',
       credentials: 'same-origin',
     });
-    if (res.ok) window.location.reload();
+    if (res.ok) void mutateQuota();
   };
 
-  const inner: ReactNode = (
+  const lastAssistantId = useMemo<string | null>(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m && m.role !== 'user') return m.id;
+    }
+    return null;
+  }, [messages]);
+
+  // Last user message is editable iff the engine isn't still streaming
+  // a reply for it. Editing pre-fills the composer + trims the pair so
+  // the next submit reads as a regenerate of that turn.
+  const lastEditableUserId = useMemo<string | null>(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m && m.role === 'user') return m.id;
+    }
+    return null;
+  }, [messages]);
+
+  /**
+   * Pull the user message back into the composer + drop both it and
+   * the assistant reply from the thread. The user can then edit and
+   * submit as normal — no special regenerate state machine.
+   */
+  const onEditUserMessage = useCallback(
+    (id: string, text: string): void => {
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => m.id === id);
+        if (idx === -1) return prev;
+        return prev.slice(0, idx);
+      });
+      setInput(text);
+      setTimeout(() => {
+        const el = inputRef.current;
+        if (!el) return;
+        el.focus();
+        const len = el.value.length;
+        el.setSelectionRange(len, len);
+      }, 0);
+    },
+    [setMessages],
+  );
+
+  /**
+   * Retry the last failed turn. Trims the errored assistant slot from
+   * the thread (if any) and re-fires the latest user prompt. Used by
+   * the inline error banner that surfaces engine 5xx responses.
+   */
+  const onRetryLastTurn = useCallback((): void => {
+    let lastUserText: string | null = null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m && m.role === 'user') {
+        lastUserText = m.parts
+          .filter((p) => p.type === 'text')
+          .map((p) => ('text' in p ? (p.text ?? '') : ''))
+          .join('')
+          .trim();
+        break;
+      }
+    }
+    if (!lastUserText) return;
+    setMessages((prev) => {
+      let cut = prev.length;
+      for (let i = prev.length - 1; i >= 0; i--) {
+        const m = prev[i];
+        if (m && m.role === 'user') break;
+        cut = i;
+      }
+      return prev.slice(0, cut);
+    });
+    sendMessage({ text: lastUserText });
+  }, [messages, setMessages, sendMessage]);
+
+  return (
     <div
-      className={`
-        grid grid-cols-1 h-[calc(100dvh-56px)]
-        border-t border-[var(--border)] overflow-hidden
-        ${sidebarOpen ? 'lg:grid-cols-[260px_1fr]' : 'lg:grid-cols-1'}
-      `}
+      className={cn(
+        // Only the TickerCarousel (32/36px) sits above the chat on
+        // /predict — the global Header is gated off this route by
+        // ChromeGate, so the shell reclaims those 56px. 4px difference
+        // between mobile/desktop ticker heights is accepted rather
+        // than measured.
+        'relative h-[calc(100dvh-32px)] sm:h-[calc(100dvh-36px)] overflow-hidden',
+        'bg-[var(--bg)] text-[var(--fg)]',
+      )}
     >
-      {/* ─────────────── Sidebar ─────────────── */}
-      {sidebarOpen && (
-        <aside className="hidden lg:flex border-r border-[var(--border)] bg-[var(--surface)] flex-col h-full min-h-0 overflow-hidden">
-          {/* Top: new chat + collapse */}
-          <div className="flex items-center justify-between px-3 py-3 border-b border-[var(--border)]">
+      <div
+        className={cn(
+          'h-full min-h-0 grid grid-cols-1 transition-[grid-template-columns] duration-200 ease-out',
+          sidebarCollapsed
+            ? 'lg:grid-cols-[64px_minmax(0,1fr)]'
+            : 'lg:grid-cols-[280px_minmax(0,1fr)]',
+        )}
+      >
+        {/* ─── Left rail ─── */}
+        <LeftRail
+          search={search}
+          onSearch={setSearch}
+          conversations={conversations}
+          activeConversationId={activeConversationId}
+          onPickConversation={(id) => void onPickConversation(id)}
+          onDeleteConversation={(id) => void onDeleteConversation(id)}
+          onNewChat={onNewChat}
+          onOpenReceipts={onOpenReceipts}
+          onOpenSettings={onOpenSettings}
+          signedIn={signedIn}
+          wallet={auth?.wallet}
+          quota={quota}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={toggleSidebar}
+          className="hidden lg:flex"
+        />
+
+        {/* ─── Center column ─── */}
+        <section className="relative flex flex-col h-full min-h-0 min-w-0 overflow-hidden border-l border-[var(--border)]">
+          {/* Mobile-only top bar — drawer trigger only. The brand
+              lives inside the drawer itself (per Pass 25 spec), so
+              this row stays minimal on the main chat view. */}
+          <div
+            className={cn(
+              'lg:hidden flex items-center shrink-0',
+              'px-3 h-12',
+            )}
+          >
             <button
               type="button"
-              onClick={onNewChat}
-              className="
-                flex-1 flex items-center gap-2
-                mono tabular text-[11px] uppercase tracking-[0.14em]
-                text-[var(--fg)] hover:bg-[var(--surface-2)]
-                border border-[var(--border)] px-3 py-2
-                transition-colors
-              "
+              onClick={() => setDrawerOpen(true)}
+              aria-label={t('shell.openSidebar')}
+              className={cn(
+                'inline-flex h-10 w-10 -ml-1 items-center justify-center rounded-lg',
+                'text-[var(--fg-2)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)]',
+                'transition-colors',
+              )}
             >
-              <Plus size={14} strokeWidth={2} />
-              <span>{t('shell.newChat')}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setSidebarOpen(false)}
-              aria-label={t('shell.collapseSidebar')}
-              className="ml-2 p-2 text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)] transition-colors"
-            >
-              <PanelLeftClose size={16} strokeWidth={2} />
+              <IconMenu size={20} />
             </button>
           </div>
 
-          {/* Search */}
-          <div className="px-3 py-2 border-b border-[var(--border)]">
-            <label className="flex items-center gap-2 px-2 py-1.5 border border-[var(--border)] bg-[var(--bg)]">
-              <Search size={12} strokeWidth={2} className="text-[var(--fg-3)]" />
-              <input
-                type="search"
-                placeholder={t('shell.searchPlaceholder')}
-                className="flex-1 bg-transparent text-[12px] text-[var(--fg)] placeholder:text-[var(--fg-3)] outline-none"
-              />
-            </label>
+          <div
+            ref={threadRef}
+            className="flex-1 min-h-0 overflow-y-auto"
+            aria-live="polite"
+          >
+            {!signedIn ? (
+              <WalletGate />
+            ) : messages.length === 0 ? (
+              <Welcome onPick={submitPrompt} />
+            ) : (
+              <div className="mx-auto max-w-[860px] w-full px-4 sm:px-6 py-6 flex flex-col gap-6">
+                {messages.map((m) => (
+                  <ChatBubble
+                    key={m.id}
+                    message={m}
+                    streaming={isStreaming && m.id === lastAssistantId}
+                    // Only the LAST user message gets the edit
+                    // affordance — editing earlier turns would
+                    // require a branching model we don't have.
+                    onEdit={
+                      !isStreaming && m.id === lastEditableUserId
+                        ? onEditUserMessage
+                        : undefined
+                    }
+                    editLabel={t('shell.composer.edit')}
+                    sourcesLabel={t('shell.composer.sources')}
+                    copyLabel={t('shell.composer.copy')}
+                    copiedLabel={t('shell.composer.copied')}
+                    tickerByCoin={tickerByCoin}
+                    priceCheck={{
+                      label: t('shell.composer.priceCheckLabel'),
+                      body: t('shell.composer.priceCheckBody'),
+                    }}
+                  />
+                ))}
+                {isErrored && error && (
+                  // Degraded banner — the engine returned an error
+                  // mid-turn. Surfaces the parsed message and a retry
+                  // CTA that resubmits the last user prompt
+                  // (preserves history; no destructive state). The
+                  // dashed border + accent dot distinguish it from
+                  // the inline tool annotations.
+                  <div
+                    role="alert"
+                    className={cn(
+                      'flex items-start gap-3 px-3 py-2.5',
+                      'rounded-md border border-dashed border-[var(--danger)]',
+                      'bg-[color-mix(in_oklab,var(--danger)_8%,transparent)]',
+                    )}
+                  >
+                    <span
+                      aria-hidden
+                      className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-[var(--danger)] shrink-0"
+                    />
+                    <div className="min-w-0 flex-1 flex flex-col gap-1.5">
+                      <p className="text-[12.5px] text-[var(--fg)] leading-snug">
+                        {parseErrorMessage(error)}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={onRetryLastTurn}
+                        className={cn(
+                          'self-start mono tabular text-[10.5px] uppercase tracking-[0.16em]',
+                          'px-2 py-1 rounded-md',
+                          'border border-[var(--border)] bg-[var(--surface)]',
+                          'text-[var(--fg-2)] hover:text-[var(--fg)] hover:border-[var(--border-hi)]',
+                          'transition-colors',
+                        )}
+                      >
+                        {t('shell.composer.retry')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Static nav */}
-          <nav className="px-2 py-2 border-b border-[var(--border)] flex flex-col gap-0.5">
-            <SidebarItem
-              icon={<MessageSquare size={14} strokeWidth={2} />}
-              label={t('shell.nav.chat')}
-              active
-            />
-            <SidebarItem
-              icon={<Library size={14} strokeWidth={2} />}
-              label={t('shell.nav.library')}
-              hint={t('shell.nav.libraryHint')}
-              onClick={() => submitPrompt('/precisions')}
-            />
-            <SidebarItem
-              icon={<Compass size={14} strokeWidth={2} />}
-              label={t('shell.nav.tools')}
-              hint={t('shell.nav.toolsHint')}
-              onClick={() => submitPrompt('/help')}
-            />
-          </nav>
+          {/* Quota line — sits above the chip strip so the user always
+              knows where they stand. Reads from the same `/api/quota`
+              SWR cache the rest of the shell uses, so this is the
+              authoritative truth (no second fetch). Hidden while
+              streaming so the foot of the page stays calm during work,
+              and skipped entirely for Elite — paying users with
+              unlimited runs don't need a counter cluttering the
+              surface, and an "Elite · unlimited" chip just reads as
+              chrome. */}
+          {signedIn && !composerLocked && !isStreaming && quota && quota.tier !== 'elite' && (
+            <QuotaLine quota={quota} />
+          )}
 
-          {/* Recents */}
-          <div className="flex-1 min-h-0 flex flex-col">
-            <div className="flex items-center justify-between px-4 py-2">
-              <p className="mono tabular text-[10px] uppercase tracking-[0.18em] text-[var(--fg-3)]">
-                {t('shell.recents.label')}
-              </p>
-              {recents.length > 0 && (
-                <button
-                  type="button"
-                  onClick={onClearRecents}
-                  aria-label={t('shell.recents.clear')}
-                  title={t('shell.recents.clear')}
-                  className="text-[var(--fg-3)] hover:text-[var(--danger)] transition-colors"
-                >
-                  <Trash2 size={12} strokeWidth={2} />
-                </button>
+          {/* Suggestions strip — Vizzor-native quick-pick chips placed
+              ABOVE the composer. Reads as "things you can ask right
+              now" instead of a Polymarket-style header at the top of
+              the page. Hidden while the engine is streaming a response
+              and on the locked/exhausted states. */}
+          {signedIn && !composerLocked && !isStreaming && (
+            <ChatTopics
+              onSubmit={submitPrompt}
+              onInsert={(seed) => {
+                // Token chips pre-fill the composer with the bare
+                // ticker + space so the user can complete the prompt
+                // ("BTC " → user types "4h con funding"). Focusing the
+                // textarea is deferred a tick so React's state commit
+                // lands before the caret moves to end-of-input.
+                setInput((v) => {
+                  // If the textarea is empty, just drop the seed. If
+                  // it already has content, append a space + seed so
+                  // both flow together without surprise reformatting.
+                  if (!v) return seed;
+                  return v.endsWith(' ') ? `${v}${seed}` : `${v} ${seed}`;
+                });
+                setTimeout(() => {
+                  const el = inputRef.current;
+                  if (!el) return;
+                  el.focus();
+                  const len = el.value.length;
+                  el.setSelectionRange(len, len);
+                }, 0);
+              }}
+            />
+          )}
+
+          {/* Composer footer — no top divider. The composer card
+              itself reads as the visual end of the thread.
+              `pb-[max(env(safe-area-inset-bottom),0.75rem)]` keeps the
+              composer above iOS's home-indicator pill. */}
+          <div className="shrink-0 flex items-center">
+            <div
+              className="mx-auto max-w-[860px] w-full px-3 sm:px-6 pt-3"
+              style={{
+                paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 0.75rem)',
+              }}
+            >
+              {!signedIn ? (
+                <WalletGateMini onSignedIn={() => void mutateAuth()} />
+              ) : composerLocked ? (
+                <ExhaustedBanner onReset={onInlineReset} quota={quota} />
+              ) : (
+                <Composer
+                  inputRef={inputRef}
+                  value={input}
+                  onChange={setInput}
+                  onSubmit={onSubmit}
+                  onStop={stop}
+                  isStreaming={isStreaming}
+                  placeholder={t('shell.composer.placeholder')}
+                  sendLabel={t('send')}
+                  stopLabel={t('shell.composer.stop')}
+                  hintLabel={t('shell.composer.kbdHint')}
+                />
               )}
             </div>
-            <ul className="px-2 pb-3 flex-1 min-h-0 overflow-y-auto">
-              {recents.length === 0 && (
-                <li className="px-2 py-2 mono tabular text-[10px] text-[var(--fg-3)]">
-                  {t('shell.recents.empty')}
-                </li>
-              )}
-              {recents.map((r) => (
-                <li key={r.id}>
-                  <button
-                    type="button"
-                    onClick={() => setInput(r.prompt)}
-                    className="
-                      w-full text-left px-2 py-1.5
-                      text-[12px] text-[var(--fg-2)]
-                      hover:bg-[var(--surface-2)] hover:text-[var(--fg)]
-                      transition-colors truncate
-                    "
-                    title={r.prompt}
-                  >
-                    {r.prompt}
-                  </button>
-                </li>
-              ))}
-            </ul>
           </div>
+        </section>
 
-          {/* Footer: quota mini-card */}
-          <div className="border-t border-[var(--border)] p-3">
-            <QuotaSidebar
-              refreshKey={refreshKey}
-              onBurnConfirmed={(sig) => setBurnSig(sig)}
-            />
-          </div>
-        </aside>
+      </div>
+
+      {drawerOpen && (
+        <MobileDrawer
+          onClose={() => setDrawerOpen(false)}
+          search={search}
+          onSearch={setSearch}
+          conversations={conversations}
+          activeConversationId={activeConversationId}
+          onPickConversation={(id) => void onPickConversation(id)}
+          onDeleteConversation={(id) => void onDeleteConversation(id)}
+          onNewChat={onNewChat}
+          onOpenReceipts={onOpenReceipts}
+          onOpenSettings={onOpenSettings}
+          signedIn={signedIn}
+          wallet={auth?.wallet}
+          quota={quota}
+        />
       )}
 
-      {/* ─────────────── Main column ─────────────── */}
-      <div className="flex flex-col h-full min-h-0 min-w-0 overflow-hidden">
-        {/* Top bar — model selector + sidebar reopen */}
-        <div className="flex items-center gap-3 border-b border-[var(--border)] px-4 py-2.5 bg-[var(--bg)]">
-          {!sidebarOpen && (
-            <button
-              type="button"
-              onClick={() => setSidebarOpen(true)}
-              aria-label={t('shell.openSidebar')}
-              className="p-1.5 text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)] transition-colors"
-            >
-              <PanelLeft size={16} strokeWidth={2} />
-            </button>
-          )}
-          <ModelBadge />
-          <div className="ml-auto flex items-center gap-2">
-            {quota && (
-              <span className="mono tabular text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
-                {t('shell.quotaLine', {
-                  used: quota.used,
-                  limit: quota.limit,
-                })}
-              </span>
-            )}
-          </div>
-        </div>
+      {settingsOpen && (
+        <SettingsSheet
+          locale={locale}
+          signedIn={signedIn}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
 
-        {/* Thread — the only scrollable element on the page */}
-        <div
-          ref={threadRef}
-          className="flex-1 min-h-0 overflow-y-auto"
-          aria-live="polite"
-        >
-          {messages.length === 0 ? (
-            <Welcome onPick={submitPrompt} />
-          ) : (
-            <div className="mx-auto max-w-[860px] w-full px-4 sm:px-6 py-6 flex flex-col gap-6">
-              {messages.map((m) => (
-                <ChatBubble key={m.id} message={m} />
-              ))}
-              {isErrored && error && (
-                <div className="border border-[var(--border)] bg-[var(--surface)] px-3 py-2 mono tabular text-[11px] uppercase tracking-[0.14em] text-[var(--danger)]">
-                  {parseErrorMessage(error)}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
 
-        {/* Composer */}
-        <div className="border-t border-[var(--border)] bg-[var(--bg)]">
-          <div className="mx-auto max-w-[860px] w-full px-4 sm:px-6 py-4">
-            {composerLocked ? (
-              <ExhaustedBanner onReset={onInlineReset} />
-            ) : (
-              <form
-                onSubmit={onSubmit}
-                className="
-                  flex items-end gap-2
-                  border border-[var(--border)] bg-[var(--surface)]
-                  focus-within:border-[var(--fg-2)]
-                  transition-colors
-                  px-3 py-2
-                "
-              >
-                <textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      submitPrompt(input);
-                    }
-                  }}
-                  placeholder={t('shell.composer.placeholder')}
-                  disabled={isStreaming}
-                  rows={1}
-                  aria-label={t('shell.composer.placeholder')}
-                  className="
-                    flex-1 resize-none bg-transparent
-                    text-[14px] text-[var(--fg)]
-                    placeholder:text-[var(--fg-3)]
-                    outline-none py-1.5 max-h-[160px]
-                  "
-                />
+/* ─────────────────────────── Wallet gate ─────────────────────────── */
 
-                <ToolButton
-                  label="/help"
-                  title={t('shell.composer.toolHelp')}
-                  onClick={() => submitPrompt('/help')}
-                  icon={<Sparkles size={13} strokeWidth={2} />}
-                />
-                <ToolButton
-                  label="/wr"
-                  title={t('shell.composer.toolWr')}
-                  onClick={() => submitPrompt('/wr')}
-                  icon={<Settings2 size={13} strokeWidth={2} />}
-                />
+function WalletGate() {
+  const t = useTranslations('predict.gate');
+  const tShell = useTranslations('predict.shell');
+  return (
+    <div className="mx-auto max-w-[640px] w-full px-4 sm:px-6 py-8 sm:py-16 lg:py-24 flex flex-col items-center gap-6 sm:gap-8 text-center">
+      <span
+        aria-hidden
+        className={cn(
+          'inline-flex h-14 w-14 items-center justify-center',
+          'rounded-2xl border border-[var(--border)]',
+          'bg-[var(--surface-2)] text-[var(--fg)]',
+          'vz-rise',
+        )}
+      >
+        <IconLock size={20} />
+      </span>
 
-                <button
-                  type="submit"
-                  disabled={isStreaming || input.trim().length === 0}
-                  aria-label={t('send')}
-                  className="
-                    inline-flex h-9 w-9 items-center justify-center
-                    bg-[var(--accent)] text-[var(--accent-fg)]
-                    disabled:opacity-40 disabled:cursor-not-allowed
-                    hover:opacity-90 transition-opacity
-                  "
-                >
-                  <Send size={14} strokeWidth={2.5} />
-                </button>
-              </form>
-            )}
+      <div className="flex flex-col gap-3">
+        <h2 className="text-[28px] sm:text-[36px] font-semibold tracking-tight leading-[1.05] text-[var(--fg)] text-balance">
+          {t('title')}
+        </h2>
+        <p className="text-[14px] leading-relaxed text-[var(--fg-2)] max-w-[48ch] mx-auto">
+          {t('body')}
+        </p>
+      </div>
 
-            <p className="mt-2 mono tabular text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)] text-center">
-              {t('shell.composer.footer')}
-            </p>
-          </div>
-        </div>
+      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 w-full max-w-[420px] text-left vz-rise" style={{ animationDelay: '120ms' }}>
+        <GatePerk label={t('perk1')} />
+        <GatePerk label={t('perk2')} />
+        <GatePerk label={t('perk3')} />
+        <GatePerk label={t('perk4')} />
+      </ul>
+
+      <p className="mono tabular text-[10.5px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
+        {tShell('composer.footer')}
+      </p>
+    </div>
+  );
+}
+
+function WalletGateMini({ onSignedIn }: { onSignedIn: () => void }) {
+  const t = useTranslations('predict.gate');
+  useEffect(() => {
+    const id = window.setInterval(onSignedIn, 6_000);
+    return () => window.clearInterval(id);
+  }, [onSignedIn]);
+
+  return (
+    <div className="flex items-center gap-3 vz-rise">
+      <IconLock size={14} className="text-[var(--fg-3)] shrink-0" />
+      <p className="flex-1 text-[13px] text-[var(--fg-2)] min-w-0">
+        {t('composerHint')}
+      </p>
+      <div className="shrink-0">
+        {/* Open the same selector modal the navbar uses, but signal
+            that an outer wallet provider is already mounted (we're
+            inside `<SolanaWalletAdapter>` on /predict). The modal
+            then SKIPS its own LazyWalletAdapter mount and runs the
+            connect flow inside the existing provider context — Phantom
+            actually pops the extension instead of hanging on
+            "Open Phantom to approve". */}
+        <WalletAuthButton hasProvider={true} useModal={true} />
       </div>
     </div>
   );
-
-  return isTokenLive() ? <WalletAdapter>{inner}</WalletAdapter> : inner;
 }
 
-/* ────────────── subcomponents ────────────── */
+function GatePerk({ label }: { label: string }) {
+  return (
+    <li className="flex items-start gap-2">
+      <span
+        aria-hidden
+        className={cn(
+          'mt-0.5 inline-flex h-4 w-4 items-center justify-center shrink-0',
+          'rounded-full border border-[var(--border-hi)] bg-[var(--surface-2)] text-[var(--fg)]',
+        )}
+      >
+        <svg width="9" height="9" viewBox="0 0 9 9" fill="none" aria-hidden>
+          <path
+            d="M1.5 4.5L3.5 6.5L7.5 2.5"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+      <span className="text-[12.5px] text-[var(--fg-2)] leading-snug">
+        {label}
+      </span>
+    </li>
+  );
+}
 
-function SidebarItem({
+/* ─────────────────────────── Left rail ─────────────────────────── */
+
+interface LeftRailProps {
+  search: string;
+  onSearch: (v: string) => void;
+  conversations: ConversationSummary[];
+  activeConversationId: string | null;
+  onPickConversation: (id: string) => void;
+  onDeleteConversation: (id: string) => void;
+  onNewChat: () => void;
+  onOpenReceipts: () => void;
+  onOpenSettings: () => void;
+  signedIn: boolean;
+  wallet: string | undefined;
+  quota?: QuotaState;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+  /** When true, the rail is rendered inside an outer drawer that
+   *  already owns brand + close affordances — suppress the local
+   *  brand/toggle row so the chrome doesn't double up. */
+  embedded?: boolean;
+  className?: string;
+}
+
+function LeftRail({
+  search,
+  onSearch,
+  conversations,
+  activeConversationId,
+  onPickConversation,
+  onDeleteConversation,
+  onNewChat,
+  onOpenReceipts,
+  onOpenSettings,
+  signedIn,
+  wallet,
+  quota,
+  collapsed = false,
+  onToggleCollapse,
+  embedded = false,
+  className,
+}: LeftRailProps) {
+  const t = useTranslations('predict');
+  const filteredConversations = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return conversations;
+    return conversations.filter((c) => c.title.toLowerCase().includes(q));
+  }, [conversations, search]);
+
+  return (
+    <aside
+      className={cn(
+        'flex-col min-h-0 h-full',
+        collapsed ? 'py-3 px-2 items-center' : 'p-4',
+        className,
+      )}
+      aria-label="Predict sidebar"
+      data-collapsed={collapsed ? 'true' : 'false'}
+    >
+      {/* Top row.
+          - Expanded: Vizzor brand (icon + wordmark) on the left,
+            larger collapse toggle on the right. The brand replaces
+            the global navbar that ChromeGate hides on /predict.
+          - Collapsed: just the toggle, centered, larger so it scans
+            as the primary control in the 64px gutter.
+          - Embedded (mobile drawer): suppressed entirely — the outer
+            drawer's header already carries the brand + close. */}
+      {!embedded && <div
+        className={cn(
+          'flex items-center mb-3',
+          collapsed ? 'justify-center w-full' : 'justify-between',
+        )}
+      >
+        {!collapsed && (
+          <Link
+            href="/"
+            aria-label="Vizzor home"
+            className="inline-flex items-center gap-2.5 text-[17px] font-semibold tracking-tight text-[var(--fg)] hover:opacity-80 transition-opacity leading-none"
+          >
+            <Image
+              src="/brand/vizzor_darkicon.png"
+              alt=""
+              width={364}
+              height={535}
+              priority
+              className="block dark:hidden h-7 w-auto"
+            />
+            <Image
+              src="/brand/vizzor_icon.png"
+              alt=""
+              width={364}
+              height={535}
+              priority
+              className="hidden dark:block h-7 w-auto"
+            />
+            <span>vizzor</span>
+          </Link>
+        )}
+        {onToggleCollapse && (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            aria-label={collapsed ? t('shell.openSidebar') : t('shell.collapseSidebar')}
+            aria-pressed={!collapsed}
+            className={cn(
+              'inline-flex items-center justify-center rounded-lg',
+              collapsed ? 'h-12 w-12' : 'h-10 w-10',
+              'text-[var(--fg-2)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)]',
+              'transition-colors',
+            )}
+          >
+            <IconSidebar collapsed={collapsed} size={collapsed ? 23 : 19} />
+          </button>
+        )}
+      </div>}
+
+      {/* Scrollable middle — collapses gracefully when the viewport is
+          short so the bottom Identity row is never clipped. */}
+      <div
+        className={cn(
+          'flex-1 min-h-0 overflow-y-auto -mx-1 px-1',
+          'flex flex-col',
+          collapsed ? 'items-center' : '',
+        )}
+      >
+        {/* Primary navigation. Icons step up to 20px in compact mode
+            so the collapsed gutter reads at a glance. */}
+        <nav
+          className={cn(
+            'flex flex-col',
+            collapsed ? 'gap-1 items-center w-full' : 'gap-0.5',
+          )}
+          aria-label="Predict navigation"
+        >
+          {/* Sidebar nav — v0.4 collapsed to three destinations.
+              The Tools row is gone: the inline `/` palette in the
+              composer is the only commands surface now, opened via the
+              keystroke or by typing `/` directly. The History row is
+              gone too: it had no onClick and only duplicated the
+              "Recent chats" section heading below. What remains is
+              three real destinations — start, current, and receipts. */}
+          <NavButton
+            icon={<IconPlus size={collapsed ? 20 : 17} />}
+            label={t('shell.newChat')}
+            onClick={onNewChat}
+            collapsed={collapsed}
+          />
+          <NavButton
+            icon={<IconChat size={collapsed ? 20 : 17} />}
+            label={t('shell.nav.chat')}
+            active
+            collapsed={collapsed}
+          />
+          <NavButton
+            icon={<IconReceipts size={collapsed ? 20 : 17} />}
+            label={t('shell.nav.receipts')}
+            onClick={onOpenReceipts}
+            collapsed={collapsed}
+          />
+        </nav>
+
+        {/* Recent chats — server-persisted threads scoped to the
+            signed-in wallet. Hidden in the collapsed gutter; the
+            count badge on the Recents NavButton above hints at it. */}
+        {!collapsed && (
+          <div className="mt-5 flex flex-col gap-1">
+            <div className="flex items-center justify-between px-3">
+              <span className="text-[10.5px] uppercase tracking-[0.16em] text-[var(--fg-3)] font-semibold">
+                {t('shell.recents.label')}
+              </span>
+            </div>
+            {filteredConversations.length === 0 ? (
+              // Empty state — friendlier than the bare paragraph it
+              // replaced. A small inline icon + uppercase eyebrow
+              // anchors the empty slot, body explains what populates
+              // it next. Matches Claude's "No conversations yet" feel.
+              <div className="mx-3 mt-1 flex flex-col gap-1.5 px-3 py-3 rounded-md border border-dashed border-[var(--border)]">
+                <div className="flex items-center gap-1.5">
+                  <span aria-hidden className="text-[var(--fg-3)]">
+                    <IconDotSmall />
+                  </span>
+                  <span className="mono tabular text-[9.5px] uppercase tracking-[0.18em] font-semibold text-[var(--fg-3)]">
+                    {t('shell.recents.emptyEyebrow')}
+                  </span>
+                </div>
+                <p className="text-[11.5px] text-[var(--fg-3)] leading-snug">
+                  {signedIn
+                    ? t('shell.recents.empty')
+                    : t('shell.recents.signInPrompt')}
+                </p>
+              </div>
+            ) : (
+              <ul className="flex flex-col gap-0.5">
+                {filteredConversations.slice(0, 12).map((c) => (
+                  <li key={c.id} className="group/row relative">
+                    <button
+                      type="button"
+                      onClick={() => onPickConversation(c.id)}
+                      className={cn(
+                        'group w-full flex items-center gap-2 text-left',
+                        'pl-3 pr-9 py-1.5 rounded-md',
+                        'text-[12px] truncate',
+                        'transition-colors',
+                        c.id === activeConversationId
+                          ? 'bg-[var(--surface-2)] text-[var(--fg)]'
+                          : 'text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]',
+                      )}
+                      title={c.title}
+                    >
+                      <span aria-hidden className="text-[var(--fg-3)]">
+                        <IconDotSmall />
+                      </span>
+                      <span className="truncate">{c.title}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteConversation(c.id);
+                      }}
+                      aria-label={t('shell.recents.delete')}
+                      className={cn(
+                        'absolute right-1 top-1/2 -translate-y-1/2',
+                        'inline-flex h-6 w-6 items-center justify-center rounded',
+                        'text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface)]',
+                        'opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100',
+                        'transition-opacity',
+                      )}
+                    >
+                      <IconClose size={11} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Identity — pinned bottom. Mirrors the composer footer in the
+          center column: same border-t, same `py-3`, same flex
+          alignment. The `-mx` bleed lets the hairline span the full
+          sidebar width despite the aside's own p-4 padding. */}
+      <div
+        className={cn(
+          'shrink-0 border-t border-[var(--border)] flex items-center',
+          collapsed
+            ? '-mx-2 px-2 py-3 justify-center'
+            : '-mx-4 px-4 py-3',
+        )}
+      >
+        <Identity
+          signedIn={signedIn}
+          wallet={wallet}
+          collapsed={collapsed}
+          onOpenSettings={onOpenSettings}
+        />
+      </div>
+    </aside>
+  );
+}
+
+function IconSidebar({ collapsed, size = 15 }: { collapsed: boolean; size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="2.5" y="3" width="11" height="10" rx="2" />
+      <line x1="6" y1="3" x2="6" y2="13" />
+      {collapsed ? (
+        <path d="M9 6l2 2-2 2" />
+      ) : (
+        <path d="M11 6l-2 2 2 2" />
+      )}
+    </svg>
+  );
+}
+
+function IconDotSmall() {
+  return (
+    <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" aria-hidden>
+      <circle cx="4" cy="4" r="1.5" />
+    </svg>
+  );
+}
+
+function NavButton({
   icon,
   label,
-  hint,
-  active = false,
+  meta,
+  active,
   onClick,
+  collapsed = false,
 }: {
   icon: ReactNode;
   label: string;
-  hint?: string;
+  meta?: string;
   active?: boolean;
   onClick?: () => void;
+  collapsed?: boolean;
 }) {
+  // Common label/icon colour state — keep the icon and the text in
+  // lock-step so the hover and active treatments read as a single
+  // affordance. No borders here: the active highlight is bg-only so
+  // hover never shifts layout by 1px when a border appears.
+  const tonal = active
+    ? 'bg-[var(--surface-2)] text-[var(--fg)]'
+    : 'text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]';
+  const iconTone = active
+    ? 'text-[var(--fg)]'
+    : 'text-[var(--fg-3)] group-hover:text-[var(--fg)]';
+
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={label}
+        aria-current={active ? 'page' : undefined}
+        title={label}
+        className={cn(
+          'group inline-flex items-center justify-center',
+          'h-11 w-11 rounded-lg transition-colors',
+          tonal,
+        )}
+      >
+        <span className={cn('transition-colors', iconTone)}>{icon}</span>
+      </button>
+    );
+  }
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`
-        flex items-center gap-2 px-2 py-1.5 text-left
-        text-[12.5px]
-        transition-colors
-        ${
-          active
-            ? 'bg-[var(--surface-2)] text-[var(--fg)]'
-            : 'text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]'
-        }
-      `}
-      title={hint}
+      aria-current={active ? 'page' : undefined}
+      className={cn(
+        'group w-full flex items-center gap-2.5 text-left',
+        'h-9 px-3 rounded-lg',
+        'text-[13px] font-medium leading-none',
+        'transition-colors',
+        tonal,
+      )}
     >
-      <span className="text-[var(--fg-3)]">{icon}</span>
+      <span aria-hidden className={cn('transition-colors', iconTone)}>
+        {icon}
+      </span>
       <span className="flex-1 truncate">{label}</span>
-      {hint && (
-        <span className="mono tabular text-[9.5px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
-          {hint}
+      {meta && (
+        <span
+          className={cn(
+            'mono tabular text-[10px] uppercase tracking-[0.14em] transition-colors',
+            active ? 'text-[var(--fg-2)]' : 'text-[var(--fg-3)] group-hover:text-[var(--fg-2)]',
+          )}
+        >
+          {meta}
         </span>
       )}
     </button>
   );
 }
 
-function ModelBadge() {
+type DropdownPhase = 'closed' | 'enter' | 'open' | 'exit';
+
+function Identity({
+  signedIn,
+  wallet,
+  collapsed = false,
+  onOpenSettings,
+}: {
+  signedIn: boolean;
+  wallet: string | undefined;
+  collapsed?: boolean;
+  onOpenSettings?: () => void;
+}) {
   const t = useTranslations('predict.shell');
+  const tAuth = useTranslations('auth');
+  const [open, setOpen] = useState(false);
+  const [phase, setPhase] = useState<DropdownPhase>('closed');
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  // Two-phase animation: a frame after mount we flip from `enter`
+  // (initial collapsed state) to `open` (visible state) so the CSS
+  // transition runs. On close we flip to `exit` for the duration of
+  // the transition, then unmount.
+  useEffect(() => {
+    if (open) {
+      if (phase === 'closed' || phase === 'exit') {
+        setPhase('enter');
+        const id = requestAnimationFrame(() => setPhase('open'));
+        return () => cancelAnimationFrame(id);
+      }
+    } else {
+      if (phase === 'open' || phase === 'enter') {
+        setPhase('exit');
+        const id = window.setTimeout(() => setPhase('closed'), 140);
+        return () => window.clearTimeout(id);
+      }
+    }
+  }, [open, phase]);
+
+  const isMounted = phase !== 'closed';
+  const isVisible = phase === 'open';
+
+  const short =
+    signedIn && wallet
+      ? `${wallet.slice(0, 4)}…${wallet.slice(-4)}`
+      : t('identityName');
+  const meta = signedIn ? t('identityConnected') : t('identityMeta');
+
+  // Outside-click + Escape — dismiss the dropdown without nuking
+  // focus. The listener attaches only while open so the sidebar pays
+  // nothing in idle.
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: MouseEvent): void => {
+      if (!wrapperRef.current) return;
+      if (wrapperRef.current.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  const onSignOut = async (): Promise<void> => {
+    setOpen(false);
+    try {
+      await fetch('/api/auth/session', {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      });
+    } finally {
+      window.location.reload();
+    }
+  };
+
   return (
-    <span className="inline-flex items-center gap-1.5 mono tabular text-[11px] uppercase tracking-[0.14em] text-[var(--fg)]">
-      <span className="text-[var(--accent)]">▣</span>
-      {t('model')}
-      <span className="text-[var(--fg-3)]">·</span>
-      <span className="text-[var(--fg-3)]">{t('modelVersion')}</span>
-    </span>
+    <div ref={wrapperRef} className="relative w-full">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`${short} menu`}
+        title={collapsed ? `${short} · ${meta}` : undefined}
+        className={cn(
+          'w-full flex items-center gap-2.5 rounded-lg transition-colors',
+          collapsed
+            ? 'h-10 w-10 justify-center p-0'
+            : 'px-2 py-2 text-left hover:bg-[var(--surface-2)]',
+        )}
+      >
+        <span
+          aria-hidden
+          className={cn(
+            'inline-flex h-8 w-8 items-center justify-center shrink-0',
+            'rounded-full bg-[var(--fg)] text-[var(--bg)]',
+            'text-[12px] font-bold',
+          )}
+        >
+          V
+        </span>
+        {!collapsed && (
+          <span className="min-w-0 flex flex-col leading-tight flex-1 text-left">
+            <span className="text-[12.5px] font-semibold text-[var(--fg)] truncate mono tabular">
+              {short}
+            </span>
+            <span className="text-[11px] text-[var(--fg-3)] truncate">{meta}</span>
+          </span>
+        )}
+      </button>
+
+      {isMounted && (
+        <div
+          role="menu"
+          className={cn(
+            'absolute z-50 min-w-[180px]',
+            collapsed
+              ? 'left-full ml-2 bottom-0 origin-bottom-left'
+              : 'left-0 right-0 bottom-full mb-1 origin-bottom',
+            'rounded-lg border border-[var(--border)] bg-[var(--surface)]',
+            'p-1',
+            // Tween — opacity + a small lift toward the trigger. No
+            // shadow, no glow; the border + surface contrast carry
+            // the depth.
+            'transition-[opacity,transform] duration-150 ease-out',
+            isVisible
+              ? 'opacity-100 translate-y-0'
+              : 'opacity-0 translate-y-1 pointer-events-none',
+          )}
+        >
+          <DropdownItem
+            icon={<IconSettings size={15} />}
+            label={t('settings')}
+            onClick={() => {
+              setOpen(false);
+              onOpenSettings?.();
+            }}
+          />
+          <DropdownLink
+            href="/docs"
+            icon={<IconHelp size={15} />}
+            label={t('help')}
+            onClick={() => setOpen(false)}
+          />
+          {signedIn && (
+            <DropdownLink
+              href="/account"
+              icon={<IconUser size={15} />}
+              label={tAuth('viewProfile')}
+              onClick={() => setOpen(false)}
+            />
+          )}
+          {signedIn && (
+            <DropdownItem
+              icon={<IconSignOut size={15} />}
+              label={tAuth('signOut')}
+              onClick={() => void onSignOut()}
+            />
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
-function ToolButton({
-  label,
-  title,
-  onClick,
+const dropdownItemClass = cn(
+  'group w-full flex items-center gap-2.5 text-left',
+  'h-8 px-2.5 rounded-md',
+  'text-[13px] text-[var(--fg-2)]',
+  'hover:bg-[var(--surface-2)] hover:text-[var(--fg)]',
+  'transition-colors',
+);
+
+function DropdownItem({
   icon,
+  label,
+  onClick,
 }: {
-  label: string;
-  title: string;
-  onClick: () => void;
   icon: ReactNode;
+  label: string;
+  onClick: () => void;
 }) {
   return (
     <button
       type="button"
+      role="menuitem"
       onClick={onClick}
-      title={title}
-      aria-label={title}
-      className="
-        hidden sm:inline-flex items-center gap-1 h-9 px-2
-        mono tabular text-[10.5px] uppercase tracking-[0.14em]
-        text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)]
-        border border-transparent hover:border-[var(--border)]
-        transition-colors
-      "
+      className={dropdownItemClass}
     >
-      {icon}
-      <span>{label}</span>
+      <span aria-hidden className="text-[var(--fg-3)] group-hover:text-[var(--fg)] transition-colors">
+        {icon}
+      </span>
+      <span className="flex-1 truncate">{label}</span>
     </button>
   );
 }
 
-function Welcome({ onPick }: { onPick: (prompt: string) => void }) {
-  const t = useTranslations('predict.shell.welcome');
-  const chips = [
-    'BTC 4h',
-    'ETH 1h',
-    'SOL 1d',
-    '/wr',
-    '/precisions',
-    '/price BTC',
-  ];
+function DropdownLink({
+  href,
+  icon,
+  label,
+  onClick,
+}: {
+  href: string;
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
   return (
-    <div className="mx-auto max-w-[860px] w-full px-4 sm:px-6 py-16 flex flex-col items-center gap-8 text-center">
-      <div className="flex flex-col gap-3">
-        <p className="mono tabular text-[10px] uppercase tracking-[0.18em] text-[var(--accent)]">
-          {t('eyebrow')}
-        </p>
-        <h2 className="display text-[var(--fg)] text-balance text-[26px] sm:text-[34px] leading-[1.1] tracking-tight font-semibold max-w-[24ch]">
-          {t('title')}
-        </h2>
-        <p className="text-[14px] leading-relaxed text-[var(--fg-2)] max-w-[52ch] mx-auto">
-          {t('sub')}
-        </p>
-      </div>
+    <Link
+      href={href as never}
+      role="menuitem"
+      onClick={onClick}
+      className={dropdownItemClass}
+    >
+      <span aria-hidden className="text-[var(--fg-3)] group-hover:text-[var(--fg)] transition-colors">
+        {icon}
+      </span>
+      <span className="flex-1 truncate">{label}</span>
+    </Link>
+  );
+}
 
-      <div className="flex flex-wrap items-center justify-center gap-2 max-w-[680px]">
-        {chips.map((c) => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => onPick(c)}
-            className="
-              mono tabular text-[11px] uppercase tracking-[0.14em]
-              border border-[var(--border)] bg-[var(--surface)]
-              px-3 py-2 text-[var(--fg)]
-              hover:bg-[var(--surface-2)]
-              transition-colors
-            "
+function IconUser({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="8" cy="5.5" r="2.5" />
+      <path d="M3 13.5c1-2.5 3-3.5 5-3.5s4 1 5 3.5" />
+    </svg>
+  );
+}
+
+function IconSignOut({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M9.5 12.5h-5a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h5" />
+      <path d="M10 5.5 12.5 8 10 10.5" />
+      <path d="M6.5 8h6" />
+    </svg>
+  );
+}
+
+/* ─────────────────────────── Mobile drawer ─────────────────────────── */
+
+function MobileDrawer({
+  onClose,
+  search,
+  onSearch,
+  conversations,
+  activeConversationId,
+  onPickConversation,
+  onDeleteConversation,
+  onNewChat,
+  onOpenReceipts,
+  onOpenSettings,
+  signedIn,
+  wallet,
+  quota,
+}: {
+  onClose: () => void;
+  search: string;
+  onSearch: (v: string) => void;
+  conversations: ConversationSummary[];
+  activeConversationId: string | null;
+  onPickConversation: (id: string) => void;
+  onDeleteConversation: (id: string) => void;
+  onNewChat: () => void;
+  onOpenReceipts: () => void;
+  onOpenSettings: () => void;
+  signedIn: boolean;
+  wallet: string | undefined;
+  quota?: QuotaState;
+}) {
+  const t = useTranslations('predict');
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="lg:hidden fixed inset-0 z-50 flex"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t('shell.openSidebar')}
+    >
+      <button
+        type="button"
+        aria-label={t('shell.collapseSidebar')}
+        onClick={onClose}
+        className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+      />
+      <div
+        className={cn(
+          'relative flex flex-col w-[min(320px,86vw)] h-full',
+          'bg-[var(--surface)] backdrop-blur-2xl',
+          'motion-safe:animate-[vt-drawer-in_200ms_ease-out]',
+        )}
+      >
+        <style>{`
+          @keyframes vt-drawer-in {
+            from { transform: translate3d(-100%, 0, 0); }
+            to   { transform: translate3d(0, 0, 0); }
+          }
+        `}</style>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+          <Link
+            href="/"
+            aria-label="Vizzor home"
+            className="inline-flex items-center gap-2.5 text-[16px] font-semibold tracking-tight text-[var(--fg)] leading-none hover:opacity-80 transition-opacity"
           >
-            {c}
+            <Image
+              src="/brand/vizzor_darkicon.png"
+              alt=""
+              width={364}
+              height={535}
+              priority
+              className="block dark:hidden h-6 w-auto"
+            />
+            <Image
+              src="/brand/vizzor_icon.png"
+              alt=""
+              width={364}
+              height={535}
+              priority
+              className="hidden dark:block h-6 w-auto"
+            />
+            <span>vizzor</span>
+          </Link>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t('shell.collapseSidebar')}
+            className="inline-flex h-9 w-9 items-center justify-center text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)] rounded-lg transition-colors"
+          >
+            <IconClose size={18} />
           </button>
-        ))}
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto p-2">
+          <LeftRail
+            search={search}
+            onSearch={onSearch}
+            conversations={conversations}
+            activeConversationId={activeConversationId}
+            onPickConversation={onPickConversation}
+            onDeleteConversation={onDeleteConversation}
+            onNewChat={onNewChat}
+            onOpenReceipts={onOpenReceipts}
+            onOpenSettings={onOpenSettings}
+            signedIn={signedIn}
+            wallet={wallet}
+            quota={quota}
+            embedded
+            className="flex h-full border-0 p-0 bg-transparent shadow-none backdrop-blur-none"
+          />
+        </div>
       </div>
     </div>
   );
 }
 
-function ExhaustedBanner({ onReset }: { onReset: () => void }) {
-  const t = useTranslations('predict');
+/* ─────────────────────────── Composer ─────────────────────────── */
+
+function Composer({
+  inputRef,
+  value,
+  onChange,
+  onSubmit,
+  onStop,
+  isStreaming,
+  placeholder,
+  sendLabel,
+  stopLabel,
+  hintLabel,
+}: {
+  inputRef: React.RefObject<HTMLTextAreaElement | null>;
+  value: string;
+  onChange: (v: string) => void;
+  onSubmit: (e: FormEvent<HTMLFormElement>) => void;
+  /** Aborts the in-flight engine stream — wired to `useChat().stop()`. */
+  onStop: () => void;
+  isStreaming: boolean;
+  placeholder: string;
+  sendLabel: string;
+  stopLabel: string;
+  hintLabel: string;
+}) {
+  // The palette opens whenever the input starts with `/` and a space
+  // hasn't been typed yet (i.e. the user is still naming the command).
+  // It also opens when the user clicks the explicit "Browse prompts"
+  // button — the manual-open flag is OR'd with the auto-trigger.
+  const [manualOpen, setManualOpen] = useState(false);
+  const autoOpen =
+    value.startsWith('/') && !value.includes(' ') && !isStreaming;
+  const showPalette = (autoOpen || manualOpen) && !isStreaming;
+
+  useEffect(() => {
+    if (isStreaming) {
+      setManualOpen(false);
+    }
+  }, [isStreaming]);
+
+  // Auto-grow the textarea fluidly with the content — the height
+  // tracks `scrollHeight` capped at 140px, so the input glides open as
+  // the user types and snaps back when the value clears (after send).
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const next = Math.min(el.scrollHeight, 140);
+    el.style.height = `${next}px`;
+  }, [value, inputRef]);
+
+  const onPaletteClose = (): void => {
+    setManualOpen(false);
+  };
+
+  const onPaletteInsert = (command: string): void => {
+    // Replace just the leading slash-fragment if present; otherwise
+    // append the command. Keep the cursor at the end so the user can
+    // continue typing the argument inline.
+    if (value.startsWith('/')) {
+      const space = value.indexOf(' ');
+      const tail = space === -1 ? '' : value.slice(space);
+      onChange(`${command} ${tail.trimStart()}`.trimEnd() + ' ');
+    } else {
+      const sep = value.length && !value.endsWith(' ') ? ' ' : '';
+      onChange(`${value}${sep}${command} `);
+    }
+    setManualOpen(false);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
+  const hasValue = value.trim().length > 0;
+  const canSend = hasValue && !isStreaming;
+
   return (
-    <div className="flex flex-col gap-2 border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-      <p className="mono tabular text-[10.5px] uppercase tracking-[0.16em] text-[var(--accent)]">
-        {t('exhaustedBanner.label')}
+    <form
+      onSubmit={onSubmit}
+      className={cn(
+        // Liquid-glass chrome — mirrors the /docs navbar search bar
+        // exactly: fully transparent surface, heavier backdrop blur,
+        // hairline border. Focus tightens the border to var(--fg) but
+        // does NOT solidify the background, so the surface keeps its
+        // glass quality while reading as "active". `backdrop-saturate`
+        // gives the slight chromatic lift you see on iOS / macOS
+        // glass surfaces — what stops it from feeling like a frosted
+        // dialog and starts feeling like a refractive material.
+        'relative flex items-end gap-1.5',
+        'rounded-3xl px-3 py-2',
+        'border border-[var(--border)]',
+        'bg-[color-mix(in_oklab,var(--surface)_18%,transparent)]',
+        'backdrop-blur-[10px] backdrop-saturate-[140%]',
+        'focus-within:border-[var(--fg)]',
+        'focus-within:bg-[color-mix(in_oklab,var(--surface)_28%,transparent)]',
+        'transition-[border-color,background-color] duration-200 ease-out',
+        'vz-rise',
+      )}
+    >
+      {showPalette && (
+        <SlashPalette
+          query={value}
+          onPick={onPaletteInsert}
+          onClose={onPaletteClose}
+        />
+      )}
+
+      <textarea
+        ref={inputRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value.slice(0, MAX_CHARS))}
+        onKeyDown={(e) => {
+          // ⌘/Ctrl + ↵ always submits, regardless of whether the
+          // palette is open — power-user shortcut that matches Claude
+          // / ChatGPT. Plain ↵ submits only when the palette is
+          // closed; with the palette open ↵ inserts the focused row
+          // (handled inside SlashPalette).
+          const cmdEnter = e.key === 'Enter' && (e.metaKey || e.ctrlKey);
+          if (cmdEnter) {
+            e.preventDefault();
+            e.currentTarget.form?.requestSubmit();
+            return;
+          }
+          if (e.key === 'Enter' && !e.shiftKey) {
+            if (showPalette) return;
+            e.preventDefault();
+            e.currentTarget.form?.requestSubmit();
+          }
+        }}
+        placeholder={placeholder}
+        disabled={isStreaming}
+        rows={1}
+        aria-label={placeholder}
+        aria-expanded={showPalette}
+        aria-controls={showPalette ? 'predict-slash-palette' : undefined}
+        className={cn(
+          'flex-1 resize-none bg-transparent outline-none',
+          'text-[14px] text-[var(--fg)] leading-relaxed',
+          'placeholder:text-[var(--fg-3)] placeholder:transition-opacity placeholder:duration-200',
+          'focus:placeholder:opacity-60',
+          // px-1.5 keeps the caret off the focus ring; py-1.5 vertically
+          // centres single-line state with the send button.
+          'px-1.5 py-1.5 min-w-0',
+          'max-h-[140px] overflow-y-auto',
+          'transition-[height] duration-150 ease-out',
+        )}
+      />
+
+      {isStreaming ? (
+        // Stop button — replaces send while the engine is streaming so
+        // the user can abort a long response (Claude / ChatGPT
+        // convention). Uses the destructured `useChat().stop` upstream.
+        <button
+          type="button"
+          onClick={onStop}
+          aria-label={stopLabel}
+          className={cn(
+            'shrink-0 inline-flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-full',
+            'self-end mb-px',
+            'bg-[var(--surface-2)] text-[var(--fg)]',
+            'border border-[var(--border-hi)]',
+            'transition-[background-color,color,transform] duration-150 ease-out',
+            'hover:bg-[color-mix(in_oklab,var(--fg)_8%,transparent)]',
+            'active:scale-95',
+          )}
+        >
+          {/* Solid square — universal "stop" glyph */}
+          <span
+            aria-hidden
+            className="block w-2.5 h-2.5 rounded-[2px] bg-[var(--fg)]"
+          />
+        </button>
+      ) : (
+        <button
+          type="submit"
+          disabled={!canSend}
+          aria-label={sendLabel}
+          className={cn(
+            // 36px target on touch, 32px on sm+. Ghost when input is
+            // empty (so the chrome stays calm), fills + lifts when the
+            // user has something to send. The scale-down on empty makes
+            // the appearance of "ready to send" feel like the button
+            // grows toward the cursor.
+            'shrink-0 inline-flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-full',
+            'self-end mb-px',
+            'transition-[background-color,color,transform,opacity] duration-200 ease-out',
+            canSend
+              ? 'bg-[var(--fg)] text-[var(--bg)] scale-100 opacity-100'
+              : 'bg-transparent text-[var(--fg-3)] scale-90 opacity-70',
+            'disabled:cursor-not-allowed',
+            'hover:enabled:scale-105 active:enabled:scale-95',
+          )}
+        >
+          <IconSend size={13} />
+        </button>
+      )}
+
+      {/* Kbd hint — sits as a footer row inside the composer card,
+          mirroring Claude's "↵ to send · ⇧↵ for new line" affordance.
+          Hidden while streaming so the row reads as "active work" not
+          "type here". */}
+      {!isStreaming && (
+        <span
+          aria-hidden
+          className={cn(
+            'absolute left-3 right-12 bottom-[-1.25rem]',
+            'mono tabular text-[9.5px] uppercase tracking-[0.18em] text-[var(--fg-3)]',
+            'pointer-events-none select-none',
+            'opacity-0 focus-within:opacity-100 transition-opacity duration-200',
+          )}
+        >
+          {hintLabel}
+        </span>
+      )}
+    </form>
+  );
+}
+
+/* ─────────────────────────── Chat topics bar ─────────────────────────── */
+
+type TopicIconKind =
+  | 'spark'
+  | 'wave'
+  | 'check'
+  | 'target'
+  | 'receipt'
+  | 'gauge'
+  | 'liquid'
+  | 'stack'
+  | 'dice'
+  | 'chip'
+  | 'mesh'
+  | 'building'
+  | 'cycle'
+  | 'radar'
+  | 'globe'
+  | 'shield'
+  | 'bars'
+  | 'anchor'
+  | 'flag';
+
+interface TopicSpec {
+  id: string;
+  label: string;
+  /** What lands in the composer / submits. Tokens use the bare ticker
+   *  + space so the user can complete the horizon ("BTC " → user types
+   *  "4h con funding"). Non-token chips carry a full submit-now prompt. */
+  prompt: string;
+  /** When set, the chip renders `<CoinIcon symbol={ticker}>` as the
+   *  prefix. Used for majors so the chip reads as a directional CTA on
+   *  that coin. */
+  ticker?: string;
+  /** Otherwise, an inline mono SVG drawn by `<TopicIcon kind={icon}>`. */
+  icon?: TopicIconKind;
+  /** `'insert'` — prefill the composer + focus, let user complete the
+   *  prompt. Used for token chips so they read as "compose a prediction
+   *  for this asset" rather than "ask the canned thing".
+   *  `'submit'` — fire the prompt immediately. The default for general
+   *  catalysts like "Whale flow" where the canned prompt IS the value. */
+  behavior?: 'insert' | 'submit';
+}
+
+/**
+ * Canonical topic catalog — every chip the user can possibly have on
+ * their bar. Ordered as the default-bar layout (Vizzor-native concepts
+ * first, then majors, then catalysts).
+ *
+ * The Vizzor-native head (high-conviction, whale flow, resolved) used
+ * to be a separate constant with a `<li>` separator between it and the
+ * body. v0.4 collapses both into a single catalog because the bar is
+ * now user-reorderable — splitting them stops being meaningful when
+ * the user can intermix freely.
+ */
+const TOPICS_CATALOG: ReadonlyArray<TopicSpec> = [
+  // Vizzor-native head (engine's first-class concepts)
+  { id: 'high-conviction', label: 'High conviction', icon: 'spark', prompt: 'Show me current high-conviction predictions', behavior: 'submit' },
+  { id: 'whale', label: 'Whale flow', icon: 'wave', prompt: 'Recent whale-confirmed signals', behavior: 'submit' },
+  { id: 'resolved', label: 'Just resolved', icon: 'check', prompt: 'Show me just-resolved receipts', behavior: 'submit' },
+  // Majors — pre-fill so the user completes the horizon. The bare
+  // ticker + trailing space is what lands in the composer; the user
+  // types "4h", "1d con funding", etc.
+  { id: 'btc', label: 'Bitcoin', ticker: 'BTC', prompt: 'BTC ', behavior: 'insert' },
+  { id: 'eth', label: 'Ethereum', ticker: 'ETH', prompt: 'ETH ', behavior: 'insert' },
+  { id: 'sol', label: 'Solana', ticker: 'SOL', prompt: 'SOL ', behavior: 'insert' },
+  { id: 'ton', label: 'Toncoin', ticker: 'TON', prompt: 'TON ', behavior: 'insert' },
+  // Vizzor-internal surfaces — submit-now
+  { id: 'wr', label: 'Tracked WR', icon: 'target', prompt: '/wr', behavior: 'submit' },
+  { id: 'precisions', label: 'Receipts', icon: 'receipt', prompt: '/precisions', behavior: 'submit' },
+  { id: 'calibration', label: 'Calibration', icon: 'gauge', prompt: 'Show me per-horizon calibration trust', behavior: 'submit' },
+  // Crypto-native sectors
+  { id: 'defi', label: 'DeFi', icon: 'liquid', prompt: 'DeFi sector update', behavior: 'submit' },
+  { id: 'l2', label: 'L2s', icon: 'stack', prompt: 'Layer 2 ecosystem update', behavior: 'submit' },
+  { id: 'memes', label: 'Memes', icon: 'dice', prompt: 'Top memecoins trending now', behavior: 'submit' },
+  { id: 'ai', label: 'AI agents', icon: 'chip', prompt: 'AI agents in crypto', behavior: 'submit' },
+  { id: 'depin', label: 'DePIN', icon: 'mesh', prompt: 'DePIN trends and tokens', behavior: 'submit' },
+  { id: 'rwa', label: 'RWA', icon: 'building', prompt: 'Real-world asset tokens', behavior: 'submit' },
+  { id: 'restaking', label: 'Restaking', icon: 'cycle', prompt: 'Restaking trends and yields', behavior: 'submit' },
+  { id: 'pre-news', label: 'Pre-news', icon: 'radar', prompt: 'Pre-news signals firing now', behavior: 'submit' },
+  // Catalysts that move crypto
+  { id: 'macro', label: 'Macro', icon: 'globe', prompt: 'Macro outlook — Fed, DXY, rates, and crypto impact', behavior: 'submit' },
+  { id: 'etfs', label: 'ETF flows', icon: 'bars', prompt: 'Latest BTC and ETH spot ETF net flows', behavior: 'submit' },
+  { id: 'regulation', label: 'Regulation', icon: 'shield', prompt: 'Crypto regulation watch — SEC, MiCA, Korea', behavior: 'submit' },
+  { id: 'stables', label: 'Stables', icon: 'anchor', prompt: 'Stablecoin supply changes and depeg risk', behavior: 'submit' },
+  { id: 'geopolitics', label: 'Geopolitics', icon: 'flag', prompt: 'Geopolitics and crypto — sanctions, capital flight', behavior: 'submit' },
+  { id: 'stocks', label: 'Stocks tape', icon: 'bars', prompt: 'Crypto-correlated stocks — MSTR, COIN, NVDA', behavior: 'submit' },
+];
+
+const TOPICS_BY_ID: Record<string, TopicSpec> = Object.fromEntries(
+  TOPICS_CATALOG.map((t) => [t.id, t]),
+);
+
+/**
+ * Default chip order — the user's first-time bar. After v0.4 the user
+ * can drag-reorder, add, and remove; their choices persist in
+ * localStorage under `STORAGE_KEY` below.
+ */
+const DEFAULT_BAR_IDS: ReadonlyArray<string> = [
+  'high-conviction',
+  'whale',
+  'resolved',
+  'btc',
+  'eth',
+  'sol',
+  'ton',
+  'wr',
+  'precisions',
+];
+
+const STORAGE_KEY = 'vizzor.predict.topic-bar.v1';
+
+interface StoredBar {
+  v: 1;
+  ids: ReadonlyArray<string>;
+}
+
+/**
+ * Hydrate the chip order from localStorage with strict validation —
+ * unknown ids (catalog evolution between releases) are dropped, the
+ * default list back-fills if the stored payload is empty / corrupt.
+ * Pure read; never throws.
+ */
+function loadBarIds(): string[] {
+  if (typeof window === 'undefined') return [...DEFAULT_BAR_IDS];
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [...DEFAULT_BAR_IDS];
+    const parsed = JSON.parse(raw) as StoredBar | null;
+    if (!parsed || parsed.v !== 1 || !Array.isArray(parsed.ids)) {
+      return [...DEFAULT_BAR_IDS];
+    }
+    const valid = parsed.ids.filter(
+      (id): id is string => typeof id === 'string' && id in TOPICS_BY_ID,
+    );
+    return valid.length > 0 ? valid : [...DEFAULT_BAR_IDS];
+  } catch {
+    return [...DEFAULT_BAR_IDS];
+  }
+}
+
+function saveBarIds(ids: ReadonlyArray<string>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ v: 1, ids } satisfies StoredBar),
+    );
+  } catch {
+    // Best-effort — private mode / quota / etc. The order will just
+    // reset on next mount; not worth a UI error for.
+  }
+}
+
+function ChatTopics({
+  onSubmit,
+  onInsert,
+}: {
+  /** Fire-and-forget submit — used for `behavior: 'submit'` chips. */
+  onSubmit: (prompt: string) => void;
+  /** Pre-fill composer + focus — used for `behavior: 'insert'` chips
+   *  (the token chips). The argument is the bare seed text the chip
+   *  declares; the parent composer drops it into the textarea and
+   *  positions the cursor at the end. */
+  onInsert: (seed: string) => void;
+}) {
+  // Hydrated lazily on mount so SSR doesn't see localStorage and the
+  // first paint matches the default layout. The reorder/add/remove
+  // handlers then mutate this state and persist on every change.
+  const [barIds, setBarIds] = useState<string[]>(() => [...DEFAULT_BAR_IDS]);
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    setBarIds(loadBarIds());
+    setHydrated(true);
+  }, []);
+  useEffect(() => {
+    if (hydrated) saveBarIds(barIds);
+  }, [barIds, hydrated]);
+
+  const [addOpen, setAddOpen] = useState(false);
+  // Closing-phase flag for the (+) add panel — keeps the panel mounted
+  // while the slide-out keyframe plays. Same pattern as the
+  // SlashPalette modal's `slashClosing` previously. The 160ms below
+  // matches the `slash-palette-slide-out` duration in globals.css.
+  const [addClosing, setAddClosing] = useState(false);
+  const dismissAdd = useCallback(() => {
+    setAddClosing(true);
+    window.setTimeout(() => {
+      setAddOpen(false);
+      setAddClosing(false);
+    }, 160);
+  }, []);
+  const toggleAdd = useCallback(() => {
+    if (addOpen) dismissAdd();
+    else setAddOpen(true);
+  }, [addOpen, dismissAdd]);
+
+  // dnd-kit sensors: 6px pointer activation so a regular click still
+  // fires `onSubmit` without accidentally starting a drag. Keyboard
+  // sensor lets Space + arrows reorder the bar for accessibility.
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  const onDragEnd = useCallback((e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    setBarIds((ids) => {
+      const oldIdx = ids.indexOf(String(active.id));
+      const newIdx = ids.indexOf(String(over.id));
+      if (oldIdx === -1 || newIdx === -1) return ids;
+      return arrayMove(ids, oldIdx, newIdx);
+    });
+  }, []);
+
+  const removeChip = useCallback((id: string) => {
+    setBarIds((ids) => ids.filter((x) => x !== id));
+  }, []);
+
+  const addChip = useCallback((id: string) => {
+    setBarIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
+    setAddOpen(false);
+  }, []);
+
+  const available = useMemo(
+    () => TOPICS_CATALOG.filter((t) => !barIds.includes(t.id)),
+    [barIds],
+  );
+
+  const onChipPick = useCallback(
+    (topic: TopicSpec) => {
+      if (topic.behavior === 'insert') {
+        onInsert(topic.prompt);
+      } else {
+        onSubmit(topic.prompt);
+      }
+    },
+    [onInsert, onSubmit],
+  );
+
+  return (
+    <nav
+      aria-label="Prompt suggestions"
+      className={cn(
+        'relative shrink-0',
+        'mx-auto max-w-[860px] w-full px-3 sm:px-6 pt-2',
+      )}
+    >
+      {/* The (+) trigger sits OUTSIDE the scrollable `<ul>` so its popover
+          isn't clipped by the carousel's `overflow-x-auto`. The flex row
+          gives the ul the remaining width (min-w-0 lets it actually shrink
+          below content width and scroll) and pins the (+) to the right. */}
+      <div className="flex items-center gap-1.5">
+        <div className="relative flex-1 min-w-0">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+            <SortableContext items={barIds} strategy={horizontalListSortingStrategy}>
+              <ul
+                className={cn(
+                  // Single-line carousel: `flex-nowrap` forbids wrapping
+                  // and `whitespace-nowrap` belts-and-braces against any
+                  // inline descendant that might force a break.
+                  'flex flex-nowrap items-center gap-1.5 overflow-x-auto whitespace-nowrap',
+                  '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+                )}
+              >
+                {barIds.map((id, idx) => {
+                  const topic = TOPICS_BY_ID[id];
+                  if (!topic) return null;
+                  return (
+                    <SortableTopicChip
+                      key={id}
+                      topic={topic}
+                      onPick={onChipPick}
+                      onRemove={removeChip}
+                      highlighted={idx === 0}
+                    />
+                  );
+                })}
+              </ul>
+            </SortableContext>
+          </DndContext>
+
+          {/* Edge fades — anchored to the scroll container, not the (+)
+              region, so they cue overflow on the chips alone. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 left-0 w-6"
+            style={{
+              background:
+                'linear-gradient(to right, var(--bg), color-mix(in oklab, var(--bg) 0%, transparent))',
+            }}
+          />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 right-0 w-6"
+            style={{
+              background:
+                'linear-gradient(to left, var(--bg), color-mix(in oklab, var(--bg) 0%, transparent))',
+            }}
+          />
+        </div>
+
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={toggleAdd}
+            aria-label={addOpen ? 'Close suggestions menu' : 'Add suggestion'}
+            aria-expanded={addOpen}
+            aria-haspopup="menu"
+            className={cn(
+              'inline-flex items-center justify-center',
+              'h-7 w-7 rounded-full',
+              'border border-dashed',
+              'motion-safe:will-change-transform',
+              'transition-[background-color,border-color,color,transform] duration-150 ease-out',
+              'hover:scale-[1.04] active:scale-95',
+              addOpen
+                ? cn(
+                    // Active fill — solid surface flip so the (+) reads
+                    // as "the open trigger" while the panel is mounted.
+                    'border-[var(--fg)] bg-[var(--fg)] text-[var(--bg)]',
+                  )
+                : cn(
+                    'border-[var(--border)] text-[var(--fg-3)]',
+                    'hover:text-[var(--fg)] hover:border-[var(--border-hi)] hover:bg-[var(--surface-2)]',
+                  ),
+            )}
+          >
+            {/* Icon morph: a single + glyph that rotates 45° when the
+                panel is open so it reads as ×. The rotation is on the
+                SVG itself (not the button) so the active-state bg
+                transition doesn't pull the icon out of center. */}
+            <svg
+              width={11}
+              height={11}
+              viewBox="0 0 16 16"
+              fill="none"
+              className={cn(
+                'transition-transform duration-200 ease-out',
+                addOpen ? 'rotate-45' : 'rotate-0',
+              )}
+            >
+              <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
+            </svg>
+          </button>
+          {addOpen && (
+            <TopicAddPanel
+              available={available}
+              onAdd={addChip}
+              onClose={dismissAdd}
+              closing={addClosing}
+            />
+          )}
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+/**
+ * Each chip is its own dnd-kit sortable. The drag handle is the whole
+ * chip body — pointer activation constraint (6px) lets a quick click
+ * register as `onPick` while a hold-and-drag triggers reorder. The
+ * hover-revealed × is the dedicated remove target so it never conflicts
+ * with either gesture.
+ */
+function SortableTopicChip({
+  topic,
+  onPick,
+  onRemove,
+  highlighted = false,
+}: {
+  topic: TopicSpec;
+  onPick: (topic: TopicSpec) => void;
+  onRemove: (id: string) => void;
+  highlighted?: boolean;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: topic.id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <li ref={setNodeRef} style={style} className={cn('shrink-0 relative group/chip', isDragging && 'z-10')}>
+      <button
+        type="button"
+        onClick={() => onPick(topic)}
+        {...attributes}
+        {...listeners}
+        className={cn(
+          'inline-flex items-center gap-1.5',
+          'h-7 px-2.5 rounded-full',
+          'text-[12.5px] font-medium leading-none whitespace-nowrap',
+          'transition-[background-color,color,border-color,box-shadow,transform] duration-200 ease-out',
+          'motion-safe:will-change-transform',
+          'hover:scale-[1.03] active:scale-95',
+          highlighted
+            ? 'bg-[var(--fg)] text-[var(--bg)]'
+            : 'border border-[var(--border)] text-[var(--fg-2)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)] hover:border-[var(--border-hi)]',
+          isDragging && 'opacity-80 cursor-grabbing shadow-[0_6px_18px_-8px_color-mix(in_oklab,var(--fg)_45%,transparent)]',
+        )}
+      >
+        <span
+          aria-hidden
+          className={cn(
+            'inline-flex items-center justify-center shrink-0',
+            highlighted ? 'text-[var(--bg)]' : 'text-[var(--fg-3)]',
+          )}
+        >
+          {topic.ticker ? (
+            <CoinIcon symbol={topic.ticker} size={14} />
+          ) : topic.icon ? (
+            <TopicIcon kind={topic.icon} size={12} />
+          ) : (
+            <TopicIcon kind="spark" size={12} />
+          )}
+        </span>
+        <span>{topic.label}</span>
+      </button>
+      <button
+        type="button"
+        aria-label={`Remove ${topic.label}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove(topic.id);
+        }}
+        className={cn(
+          'absolute -top-1.5 -right-1.5',
+          'h-4 w-4 rounded-full',
+          'inline-flex items-center justify-center',
+          'bg-[var(--surface)] border border-[var(--border)] text-[var(--fg-3)]',
+          'opacity-0 group-hover/chip:opacity-100',
+          'hover:bg-[var(--surface-2)] hover:text-[var(--fg)]',
+          'transition-opacity duration-150',
+        )}
+      >
+        <svg width={7} height={7} viewBox="0 0 8 8" fill="none">
+          <path d="M1.5 1.5l5 5M6.5 1.5l-5 5" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
+        </svg>
+      </button>
+    </li>
+  );
+}
+
+/**
+ * Tiny dropdown panel anchored to the (+) button. Lists every chip in
+ * the catalog that the user hasn't added yet. Click to add. ESC + click
+ * outside dismiss. Uses the same slide-in keyframes as the slash
+ * palette for visual consistency.
+ */
+function TopicAddPanel({
+  available,
+  onAdd,
+  onClose,
+  closing = false,
+}: {
+  available: ReadonlyArray<TopicSpec>;
+  onAdd: (id: string) => void;
+  onClose: () => void;
+  /** When true, render the slide-out keyframe instead of slide-in. The
+   *  parent keeps the panel mounted for ~160ms so the exit animation
+   *  reads as decisive instead of snapping to unmount. */
+  closing?: boolean;
+}) {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const listRef = useRef<HTMLUListElement | null>(null);
+
+  // Re-clamp the active index if `available` shrinks (the user added a
+  // topic and the panel re-rendered with one fewer row).
+  useEffect(() => {
+    if (activeIdx >= available.length) {
+      setActiveIdx(available.length === 0 ? 0 : available.length - 1);
+    }
+  }, [activeIdx, available.length]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (available.length === 0) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setActiveIdx((i) => Math.min(available.length - 1, i + 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActiveIdx((i) => Math.max(0, i - 1));
+      } else if (e.key === 'Enter') {
+        const picked = available[activeIdx];
+        if (picked) {
+          e.preventDefault();
+          onAdd(picked.id);
+        }
+      }
+    };
+    const onClick = (e: MouseEvent): void => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('[data-topic-add-panel]')) return;
+      // The (+) toggle handles its own dismiss via toggleAdd, so swallow
+      // outside-clicks that land on it to avoid a double-dismiss race.
+      if (target?.closest('[aria-haspopup="menu"]')) return;
+      onClose();
+    };
+    window.addEventListener('keydown', onKey, true);
+    window.addEventListener('pointerdown', onClick);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('pointerdown', onClick);
+    };
+  }, [activeIdx, available, onAdd, onClose]);
+
+  // Scroll the focused row into view as the user arrow-navigates.
+  useEffect(() => {
+    const root = listRef.current;
+    if (!root) return;
+    const el = root.querySelector<HTMLLIElement>(`[data-idx="${activeIdx}"]`);
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, [activeIdx]);
+
+  return (
+    <div
+      data-topic-add-panel
+      role="menu"
+      aria-label="Add topic to bar"
+      className={cn(
+        'absolute z-30',
+        // Anchor: above the (+) trigger, right-aligned to its edge so the
+        // panel grows leftward into the bar — the (+) sits at the
+        // rightmost end of the carousel, and a left-anchored panel would
+        // run off the viewport on narrow widths. Opening above also keeps
+        // the panel out of the composer textarea below.
+        'right-0 bottom-full mb-2',
+        'min-w-[240px] max-h-[280px] overflow-y-auto',
+        // Solid minimalist surface — matches SlashPalette. Transparent
+        // popovers bleed the chips bar through and confuse the reading
+        // hierarchy, so both popovers on this screen stay fully opaque.
+        'rounded-2xl border border-[var(--border)]',
+        'bg-[var(--surface)]',
+        'shadow-[0_12px_36px_-18px_color-mix(in_oklab,#000_85%,transparent)]',
+        'motion-safe:will-change-transform',
+        closing
+          ? 'motion-safe:slash-palette-slide-out'
+          : 'motion-safe:slash-palette-slide-in',
+        'overflow-hidden pb-1',
+      )}
+    >
+      {/* Section stamp — same scale + tracking as the slash palette so
+          both popovers feel like siblings. */}
+      <p className="px-3 pt-3 pb-1.5 text-[10px] uppercase tracking-[0.2em] font-semibold text-[var(--fg-3)]">
+        Add topic
       </p>
-      <p className="text-[12.5px] leading-relaxed text-[var(--fg-2)]">
-        {t('exhaustedBanner.body')}
+      {available.length === 0 ? (
+        <p className="px-3 py-2 text-[12.5px] text-[var(--fg-3)]">
+          Every topic is already in the bar.
+        </p>
+      ) : (
+        <ul ref={listRef} className="flex flex-col max-h-[220px] overflow-y-auto">
+          {available.map((t, idx) => {
+            const active = idx === activeIdx;
+            return (
+              <li key={t.id} data-idx={idx}>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onMouseEnter={() => setActiveIdx(idx)}
+                  onClick={() => onAdd(t.id)}
+                  className={cn(
+                    'relative w-full flex items-center gap-2.5 px-3 py-1.5 text-left',
+                    'text-[12.5px] transition-colors',
+                    // Left-edge accent — same focus-cue pattern as the
+                    // slash palette. No heavy background flood.
+                    'before:absolute before:left-0 before:top-1.5 before:bottom-1.5',
+                    'before:w-[2px] before:rounded-r-full',
+                    'before:transition-colors',
+                    active
+                      ? 'bg-[color-mix(in_oklab,var(--fg)_4%,transparent)] text-[var(--fg)] before:bg-[var(--fg)]'
+                      : 'text-[var(--fg-2)] before:bg-transparent hover:text-[var(--fg)] hover:bg-[color-mix(in_oklab,var(--fg)_3%,transparent)]',
+                  )}
+                >
+                  <span aria-hidden className="inline-flex items-center justify-center shrink-0 w-4 text-[var(--fg-3)]">
+                    {t.ticker ? (
+                      <CoinIcon symbol={t.ticker} size={14} />
+                    ) : t.icon ? (
+                      <TopicIcon kind={t.icon} size={12} />
+                    ) : (
+                      <TopicIcon kind="spark" size={12} />
+                    )}
+                  </span>
+                  <span className="flex-1">{t.label}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Inline 16x16 mono SVGs for topic chips. All paths are
+ * `stroke="currentColor"` so the chip tint controls the colour, and
+ * each glyph is hand-drawn rather than picked from Lucide.
+ */
+function TopicIcon({ kind, size = 12 }: { kind: TopicIconKind; size?: number }) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: '0 0 16 16',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.7,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+  };
+  switch (kind) {
+    case 'spark':
+      // High-conviction — trending-up arrow + breakout glyph
+      return (
+        <svg {...common}>
+          <path d="M2 11.5L6 7.5l2.5 2.5L14 4" />
+          <path d="M10 4h4v4" />
+        </svg>
+      );
+    case 'wave':
+      // Whale flow — soft double-wave
+      return (
+        <svg {...common}>
+          <path d="M2 6c1.5-1.5 3-1.5 4 0s2.5 1.5 4 0 2.5-1.5 4 0" />
+          <path d="M2 11c1.5-1.5 3-1.5 4 0s2.5 1.5 4 0 2.5-1.5 4 0" />
+        </svg>
+      );
+    case 'check':
+      // Just-resolved — checkmark in circle
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="8" r="6" />
+          <path d="M5 8.5l2 2 4-4.5" />
+        </svg>
+      );
+    case 'target':
+      // Tracked WR — bullseye
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="8" r="6" />
+          <circle cx="8" cy="8" r="3" />
+          <circle cx="8" cy="8" r="0.8" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case 'receipt':
+      // Receipts — paper with zig-zag bottom
+      return (
+        <svg {...common}>
+          <path d="M4 2.5h8v11l-1.5-1-1.5 1-1.5-1-1.5 1-1.5-1L4 13.5z" />
+          <path d="M6 6h4M6 8.5h4" />
+        </svg>
+      );
+    case 'gauge':
+      // Calibration — half-arc gauge with needle
+      return (
+        <svg {...common}>
+          <path d="M2.5 11a5.5 5.5 0 0 1 11 0" />
+          <path d="M8 11L11 7" />
+          <circle cx="8" cy="11" r="0.8" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case 'liquid':
+      // DeFi — droplet
+      return (
+        <svg {...common}>
+          <path d="M8 2.5c-2.5 3-4 5-4 7a4 4 0 0 0 8 0c0-2-1.5-4-4-7z" />
+        </svg>
+      );
+    case 'stack':
+      // L2s — 3 stacked layers
+      return (
+        <svg {...common}>
+          <path d="M8 2.5L14 5L8 7.5L2 5z" />
+          <path d="M2 8L8 10.5L14 8" />
+          <path d="M2 11L8 13.5L14 11" />
+        </svg>
+      );
+    case 'dice':
+      // Memes — a die rotated for character
+      return (
+        <svg {...common}>
+          <rect x="3" y="3" width="10" height="10" rx="2" />
+          <circle cx="6" cy="6" r="0.8" fill="currentColor" stroke="none" />
+          <circle cx="10" cy="10" r="0.8" fill="currentColor" stroke="none" />
+          <circle cx="10" cy="6" r="0.8" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case 'chip':
+      // AI agents — IC with pins
+      return (
+        <svg {...common}>
+          <rect x="4" y="4" width="8" height="8" rx="1" />
+          <path d="M6.5 4V2.5M9.5 4V2.5M6.5 13.5V12M9.5 13.5V12M4 6.5H2.5M4 9.5H2.5M13.5 6.5H12M13.5 9.5H12" />
+        </svg>
+      );
+    case 'mesh':
+      // DePIN — interconnected nodes
+      return (
+        <svg {...common}>
+          <circle cx="3.5" cy="4" r="1.2" />
+          <circle cx="12.5" cy="4" r="1.2" />
+          <circle cx="8" cy="12" r="1.2" />
+          <path d="M4.5 4.7L11.5 4.7M4.3 5L7.3 11.2M11.7 5L8.7 11.2" />
+        </svg>
+      );
+    case 'building':
+      // RWA — 4-story building
+      return (
+        <svg {...common}>
+          <path d="M3.5 13.5V4.5L8 2L12.5 4.5V13.5" />
+          <path d="M6 8H6.01M10 8H10.01M6 10.5H6.01M10 10.5H10.01" strokeWidth="2.4" />
+          <path d="M2.5 13.5h11" />
+        </svg>
+      );
+    case 'cycle':
+      // Restaking — circular arrows
+      return (
+        <svg {...common}>
+          <path d="M3.5 6.5A5 5 0 0 1 12.5 5.5" />
+          <path d="M12.5 9.5A5 5 0 0 1 3.5 10.5" />
+          <path d="M10.5 3.5L12.5 5.5L10.5 7" />
+          <path d="M5.5 12.5L3.5 10.5L5.5 9" />
+        </svg>
+      );
+    case 'radar':
+      // Pre-news — radar sweep
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="8" r="6" />
+          <path d="M8 8L13 4.5" />
+          <path d="M8 8L5 3" />
+        </svg>
+      );
+    case 'globe':
+      // Macro — globe with latitude/longitude
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="8" r="6" />
+          <path d="M2 8h12M8 2c2 2.5 2 9.5 0 12M8 2c-2 2.5-2 9.5 0 12" />
+        </svg>
+      );
+    case 'shield':
+      // Regulation — shield outline
+      return (
+        <svg {...common}>
+          <path d="M8 2.5L13 4v4c0 3-2 5-5 6-3-1-5-3-5-6V4z" />
+        </svg>
+      );
+    case 'bars':
+      // ETFs / Stocks — bar chart with ascending bars
+      return (
+        <svg {...common}>
+          <path d="M3 13V10M6.5 13V7M10 13V9M13.5 13V4" />
+        </svg>
+      );
+    case 'anchor':
+      // Stables — anchor
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="4" r="1.4" />
+          <path d="M8 5.5V13" />
+          <path d="M5 8.5h6" />
+          <path d="M3 10c0 2 2.2 3.5 5 3.5S13 12 13 10" />
+        </svg>
+      );
+    case 'flag':
+      // Geopolitics — flag on a pole
+      return (
+        <svg {...common}>
+          <path d="M4 2.5V13.5" />
+          <path d="M4 3h7l-1.5 2.5L11 8H4z" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
+/* ─────────────────────────── Quota line ─────────────────────────── */
+
+/**
+ * Single-line tier + cap badge that sits above the topic chip bar so
+ * the user always knows where they stand. Reads from the cached
+ * `/api/quota` payload — the same SWR slot the rest of the shell uses
+ * — so no second fetch. Four branches matching the discriminated
+ * QuotaState tier:
+ *   - trial  → "Prueba · {days}d · {used}/{cap} hoy"
+ *   - pro    → "Pro · {used}/{cap} hoy"
+ *   - elite  → "Elite · ilimitado"
+ *   - free   → "Prueba terminada · /pricing"
+ */
+function QuotaLine({ quota }: { quota: QuotaState }) {
+  const t = useTranslations('predict.shell');
+  let body: ReactNode = null;
+  if (quota.tier === 'trial' && quota.trial) {
+    body = t('trialLine', {
+      days: quota.trial.daysRemaining,
+      used: quota.trial.dailyUsed,
+      cap: quota.trial.dailyCap,
+    });
+  } else if (quota.tier === 'pro') {
+    body = t('proLine', { used: quota.used, cap: quota.limit });
+  } else if (quota.tier === 'elite') {
+    body = t('eliteLine');
+  } else {
+    body = t('freeLine');
+  }
+  return (
+    <div className="shrink-0 mx-auto max-w-[860px] w-full px-3 sm:px-6 pt-2">
+      <span
+        className={cn(
+          'inline-flex items-center gap-1.5',
+          'mono tabular text-[10px] uppercase tracking-[0.16em]',
+          'text-[var(--fg-3)]',
+        )}
+      >
+        <span
+          aria-hidden
+          className={cn(
+            'inline-block h-1.5 w-1.5 rounded-full',
+            quota.tier === 'elite' && 'bg-[var(--accent)]',
+            quota.tier === 'pro' && 'bg-[var(--accent)]',
+            quota.tier === 'trial' && 'bg-[var(--fg-2)]',
+            quota.tier === 'free' && 'bg-[var(--danger)]',
+          )}
+        />
+        {body}
+      </span>
+    </div>
+  );
+}
+
+/* ────────────────────────── Example roll ────────────────────────── */
+
+/**
+ * Single-line conversational prompt rotator. One example sits centred
+ * under the subtitle and rolls upward every 4s via the
+ * `vz-example-roll` keyframe (defined in globals.css). The wrapping
+ * button submits the foregrounded prompt on click; hover pauses the
+ * cycle so a slow-moving cursor doesn't trigger a stale example.
+ *
+ * Why a single chip instead of a marquee or a grid:
+ *   - Marquee reads as "ticker" — informational. We want "suggestion".
+ *   - Wrapped grid creates visual noise at the empty state, and the
+ *     full catalog is already a tap away via the topic bar below.
+ *   - A single foregrounded prompt mirrors how the user would phrase
+ *     their first question — a single sentence, one click to send.
+ */
+function ExampleRoll({
+  examples,
+  eyebrow,
+  onPick,
+}: {
+  examples: ReadonlyArray<string>;
+  eyebrow: string;
+  onPick: (text: string) => void;
+}) {
+  const [idx, setIdx] = useState(0);
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    if (examples.length <= 1 || paused) return;
+    const id = window.setInterval(() => {
+      setIdx((i) => (i + 1) % examples.length);
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [examples.length, paused]);
+  const current = examples[idx] ?? '';
+
+  return (
+    <div
+      className="mt-3 flex flex-col items-center gap-2 w-full"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
+    >
+      <span className="mono tabular text-[10px] uppercase tracking-[0.2em] text-[var(--fg-3)]">
+        {eyebrow}
+      </span>
+      <button
+        type="button"
+        onClick={() => onPick(current)}
+        aria-live="polite"
+        aria-label={current}
+        className={cn(
+          'group relative inline-flex items-center justify-center',
+          'min-h-[2.25rem] max-w-[44ch] px-3 py-1.5',
+          'text-[13.5px] leading-snug text-[var(--fg-2)]',
+          'rounded-full',
+          'transition-colors duration-200 ease-out',
+          'hover:text-[var(--fg)]',
+          'hover:bg-[color-mix(in_oklab,var(--fg)_4%,transparent)]',
+        )}
+      >
+        {/* The keyed inner span remounts on every idx change, which
+            re-fires the vz-example-roll animation for a smooth
+            text-up transition. The button shell itself never
+            re-mounts, so the click target stays stable across ticks. */}
+        <span
+          key={current}
+          className="vz-example-roll inline-block text-balance"
+        >
+          {current}
+        </span>
+        {/* Hairline underline that draws in on hover — the only
+            visual chrome on the prompt, so it reads as a hyperlink
+            cue rather than a chip. */}
+        <span
+          aria-hidden
+          className={cn(
+            'pointer-events-none absolute left-3 right-3 bottom-1 h-px',
+            'origin-left scale-x-0 group-hover:scale-x-100',
+            'bg-[color-mix(in_oklab,var(--fg)_50%,transparent)]',
+            'transition-transform duration-300 ease-out',
+          )}
+        />
+      </button>
+    </div>
+  );
+}
+
+/* ─────────────────────────── Welcome ─────────────────────────── */
+
+function Welcome({ onPick }: { onPick: (text: string) => void }) {
+  const t = useTranslations('predict.shell.welcome');
+  // Rotating example — a single chip below the subtitle that cycles
+  // through a localized array every 3.5s with a fade. Reads as a
+  // gentle "what should I try" prompt without dragging a full
+  // suggestion grid into the hero. The values come from i18n so the
+  // ES/EN/FR variants can drift independently.
+  const examplesRaw = t('examples');
+  const examples = useMemo<string[]>(() => {
+    if (!examplesRaw) return [];
+    // The key is a `|`-delimited string in messages/*.json so
+    // next-intl returns it verbatim; cheaper than a nested array
+    // (which would need a different message format).
+    return examplesRaw
+      .split('|')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+  }, [examplesRaw]);
+
+  return (
+    // Full-height container so the title is vertically centred in the
+    // available chat area, not just padded from the top. min-h-full
+    // works because the parent thread scroller is the height anchor.
+    <div className="min-h-full w-full flex flex-col items-center justify-center px-4 sm:px-6 py-10 text-center">
+      <div className="flex flex-col items-center gap-4 vz-rise" style={{ animationDelay: '0ms' }}>
+        <span aria-hidden className="inline-flex">
+          <Image
+            src="/brand/vizzor_darkicon.png"
+            alt=""
+            width={364}
+            height={535}
+            priority
+            className="block dark:hidden h-9 w-auto opacity-90"
+          />
+          <Image
+            src="/brand/vizzor_icon.png"
+            alt=""
+            width={364}
+            height={535}
+            priority
+            className="hidden dark:block h-9 w-auto opacity-90"
+          />
+        </span>
+        <h2 className="display text-[var(--fg)] text-balance text-[28px] sm:text-[38px] lg:text-[44px] leading-[1.05] tracking-tight font-semibold max-w-[20ch] mx-auto">
+          {t('title')}
+        </h2>
+        <p className="text-[14.5px] leading-relaxed text-[var(--fg-2)] max-w-[52ch] mx-auto">
+          {t('sub')}
+        </p>
+        {examples.length > 0 && (
+          // Roll suggestion — a single prompt sits centred and rolls
+          // upward on each tick via the `vz-example-roll` keyframe.
+          // Cubic-bezier easing + a brief 2px blur on the rise gives
+          // the swap a polished, "spoken word" feel instead of the
+          // mechanical scroll of a marquee. The whole row is a button
+          // so a single click submits the foregrounded prompt and
+          // starts the conversation. Hover pauses the rotation so the
+          // click target doesn't morph out from under the cursor.
+          <ExampleRoll
+            examples={examples}
+            eyebrow={t('exampleEyebrow')}
+            onPick={onPick}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────── Exhausted banner ─────────────────────────── */
+
+/**
+ * Pick the i18n key suffix that matches the wallet's current state.
+ * Three discrete cases drive separate copy: cap reached today (still
+ * in trial), trial fully expired, and operator-killed trial. Falls
+ * back to the legacy "exhausted" wording for any unrecognized state
+ * so older translations don't blow up.
+ */
+function pickBannerKey(
+  quota: QuotaState | undefined,
+  part: 'label' | 'body',
+): string {
+  const fallback = `exhaustedBanner.${part}`;
+  if (!quota) return fallback;
+  if (quota.tier === 'trial' && quota.trial && quota.trial.dailyUsed >= quota.trial.dailyCap) {
+    return `exhaustedBanner.dailyCap.${part}`;
+  }
+  if (quota.tier === 'free') {
+    if (quota.freeReason === 'trial_expired') return `exhaustedBanner.trialExpired.${part}`;
+    if (quota.freeReason === 'operator_killed') return `exhaustedBanner.operatorKilled.${part}`;
+    if (quota.freeReason === 'never_started') return `exhaustedBanner.notStarted.${part}`;
+  }
+  return fallback;
+}
+
+function ExhaustedBanner({
+  onReset,
+  quota,
+}: {
+  onReset: () => void;
+  quota?: QuotaState;
+}) {
+  const t = useTranslations('predict');
+  // The banner doubles as both "trial expired" (plan gate) AND "daily
+  // cap reached" (cost shield). The discriminator is the active
+  // tier — a trial wallet hitting the daily cap stays in the trial
+  // window, so the copy nudges "comes back at 00:00 UTC". An expired
+  // trial wallet drops to `free` with a clear subscribe CTA.
+  const labelKey = pickBannerKey(quota, 'label');
+  const bodyKey = pickBannerKey(quota, 'body');
+  return (
+    <div className="flex flex-col gap-2 px-4 py-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] vz-rise">
+      <p className="text-[11.5px] uppercase tracking-[0.14em] font-semibold text-[var(--fg)]">
+        {t(labelKey as 'exhaustedBanner.label')}
+      </p>
+      <p className="text-[13px] leading-relaxed text-[var(--fg-2)]">
+        {t(bodyKey as 'exhaustedBanner.body')}
       </p>
       <div className="mt-1 flex flex-wrap items-center gap-3">
+        <Link
+          href="/pricing"
+          className={cn(
+            'inline-flex items-center gap-1.5 h-9 px-4 rounded-full',
+            'bg-[var(--fg)] text-[var(--bg)]',
+            'text-[12.5px] font-semibold tracking-tight',
+            'hover:opacity-90 transition-opacity',
+          )}
+        >
+          {t('subscribe.cta')}
+        </Link>
         <a
           href="https://t.me/vizzorai_bot"
           target="_blank"
           rel="noopener"
-          className="
-            mono tabular text-[10.5px] uppercase tracking-[0.16em]
-            border border-[var(--fg)] bg-[var(--fg)] text-[var(--bg)]
-            px-3 py-2 hover:opacity-90 transition-opacity
-          "
+          className={cn(
+            'inline-flex items-center gap-1.5 h-9 px-4 rounded-full',
+            'border border-[var(--border-hi)] text-[var(--fg)]',
+            'text-[12.5px] font-semibold tracking-tight',
+            'hover:bg-[var(--surface-2)] transition-colors',
+          )}
         >
           {t('exhaustedBanner.telegramCta')}
         </a>
@@ -580,11 +2939,7 @@ function ExhaustedBanner({ onReset }: { onReset: () => void }) {
           <button
             type="button"
             onClick={onReset}
-            className="
-              mono tabular text-[10px] uppercase tracking-[0.16em]
-              text-[var(--fg-3)] hover:text-[var(--fg)]
-              underline-offset-4 hover:underline transition-colors
-            "
+            className="text-[11.5px] text-[var(--fg-3)] hover:text-[var(--fg)] underline-offset-4 hover:underline transition-colors"
           >
             {t('exhaustedBanner.resetDev')}
           </button>
@@ -594,11 +2949,18 @@ function ExhaustedBanner({ onReset }: { onReset: () => void }) {
   );
 }
 
+/* ─────────────────────────── Error parsing ─────────────────────────── */
+
 function parseErrorMessage(error: Error): string {
   try {
-    const parsed = JSON.parse(error.message);
-    if (typeof parsed === 'object' && parsed && 'message' in parsed) {
-      return String(parsed.message);
+    const parsed = JSON.parse(error.message) as unknown;
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      'message' in parsed &&
+      typeof (parsed as { message: unknown }).message === 'string'
+    ) {
+      return (parsed as { message: string }).message;
     }
   } catch {
     // fallthrough

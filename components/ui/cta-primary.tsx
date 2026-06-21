@@ -11,10 +11,18 @@
  *
  * `external` swaps to a native `<a target="_blank">`; otherwise we let
  * Next.js `<Link>` handle client-side routing.
+ *
+ * `magnetic` (terminal upgrade): when true AND not reduced motion, the
+ * button gently tracks the cursor within an 80px radius (up to 8px of
+ * translation) via rAF, springing back on mouseleave. When false or
+ * reduced motion, behavior is identical to today — no listeners attached,
+ * no client JS shipped beyond the base markup. Magnetic mode requires a
+ * client wrapper, so we split the rendering paths.
  */
 import type { ComponentProps } from 'react';
 import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
+import { MagneticWrap } from './cta-primary.magnetic';
 
 type LinkHref = ComponentProps<typeof Link>['href'];
 
@@ -24,6 +32,13 @@ export interface CtaPrimaryProps {
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg';
   icon?: React.ReactNode;
+  /**
+   * When true, the button tracks the cursor within 80px (max 8px lift),
+   * springing back on leave. Reduced-motion users get the static button.
+   * Defaults to false to preserve current behavior for every existing
+   * call site.
+   */
+  magnetic?: boolean;
 }
 
 const SIZE_CLASSES: Record<NonNullable<CtaPrimaryProps['size']>, string> = {
@@ -47,6 +62,7 @@ export function CtaPrimary({
   children,
   size = 'md',
   icon,
+  magnetic = false,
 }: CtaPrimaryProps) {
   const isCommand = looksLikeCommand(children);
 
@@ -73,17 +89,18 @@ export function CtaPrimary({
     </>
   );
 
-  if (external) {
-    return (
-      <a href={href} target="_blank" rel="noopener" className={className}>
-        {content}
-      </a>
-    );
-  }
-
-  return (
+  const inner = external ? (
+    <a href={href} target="_blank" rel="noopener" className={className}>
+      {content}
+    </a>
+  ) : (
     <Link href={href as LinkHref} className={className}>
       {content}
     </Link>
   );
+
+  if (magnetic) {
+    return <MagneticWrap>{inner}</MagneticWrap>;
+  }
+  return inner;
 }

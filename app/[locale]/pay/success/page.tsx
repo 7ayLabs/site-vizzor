@@ -3,14 +3,19 @@
  *
  * Reads `?id=<sessionId>` from the URL, server-fetches the session,
  * confirms it's in 'confirmed' state with a grant code, then renders
- * the GrantHandoff card. If the session is missing or not confirmed,
- * shows a soft "not ready" state instead of fabricating a code.
+ * the GrantHandoff card. The PreLinkAffordance is rendered above the
+ * card and self-decides what to show based on the active auth
+ * session — see `components/pay/pre-link-affordance.tsx`.
+ *
+ * If the session is missing or not confirmed, shows a soft "not
+ * ready" state instead of fabricating a code.
  */
 
 import { setRequestLocale, getTranslations } from 'next-intl/server';
 import type { Metadata } from 'next';
 import { Link } from '@/i18n/navigation';
 import { GrantHandoff } from '@/components/pay/grant-handoff';
+import { PreLinkAffordance } from '@/components/pay/pre-link-affordance';
 import { getSession } from '@/lib/payment/session';
 
 export async function generateMetadata({
@@ -52,7 +57,8 @@ export default async function PaySuccessPage({
 
   return (
     <section className="relative">
-      <div className="mx-auto max-w-[720px] px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
+      <div className="mx-auto max-w-[720px] px-4 sm:px-6 lg:px-8 py-16 lg:py-24 flex flex-col gap-4">
+        <PreLinkAffordance variant="inline" />
         {grantCode ? (
           <GrantHandoff code={grantCode} />
         ) : (

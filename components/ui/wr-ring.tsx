@@ -10,11 +10,20 @@
 import { useId } from 'react';
 import { cn } from '@/lib/utils';
 
+export type WRRingVariant = 'classic' | 'neon';
+
 export interface WRRingProps {
   percent: number;
   samples: number;
   size?: number;
   label?: string;
+  /**
+   * Visual variant. `classic` (default) is the existing flat ring —
+   * preserves every current call site exactly. `neon` thickens the
+   * progress arc, drop-shadows it in accent, and lays a faint gold
+   * inner ring at 60% radius for the terminal aesthetic.
+   */
+  variant?: WRRingVariant;
 }
 
 const TARGET = 0.65;
@@ -27,16 +36,29 @@ function formatSamples(n: number): string {
   return `n=${n.toLocaleString('en-US')}`;
 }
 
-export function WRRing({ percent, samples, size = 140, label }: WRRingProps) {
+export function WRRing({
+  percent,
+  samples,
+  size = 140,
+  label,
+  variant = 'classic',
+}: WRRingProps) {
   const reactId = useId();
   const animId = `wr-ring-${reactId.replace(/[^a-zA-Z0-9_-]/g, '')}`;
 
   const clamped = Math.max(0, Math.min(1, percent));
-  const strokeWidth = size / 14;
+  // Neon variant uses a chunkier stroke so the glow has something to
+  // hang off — classic remains size / 14 for backward compatibility.
+  const strokeWidth = variant === 'neon' ? size / 10 : size / 14;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const target = circumference * (1 - clamped);
   const stroke = clamped >= TARGET ? 'var(--accent)' : 'var(--fg-3)';
+
+  // Gold inner ring sits at 60% of the progress arc's radius so it
+  // reads as an internal ledger mark, not a second progress track.
+  const innerRadius = radius * 0.6;
+  const innerStroke = Math.max(1, strokeWidth * 0.25);
 
   return (
     <div
@@ -59,6 +81,17 @@ export function WRRing({ percent, samples, size = 140, label }: WRRingProps) {
         className="absolute inset-0 -rotate-90"
         aria-hidden
       >
+        {variant === 'neon' && (
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={innerRadius}
+            fill="none"
+            stroke="var(--gold)"
+            strokeWidth={innerStroke}
+            opacity={0.32}
+          />
+        )}
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -80,6 +113,10 @@ export function WRRing({ percent, samples, size = 140, label }: WRRingProps) {
             strokeDashoffset: target,
             animation: `${animId} 800ms ease-out`,
             transition: 'stroke 200ms ease',
+            filter:
+              variant === 'neon'
+                ? 'drop-shadow(0 0 12px var(--accent))'
+                : undefined,
           }}
         />
       </svg>

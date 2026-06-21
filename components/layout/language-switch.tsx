@@ -1,12 +1,16 @@
 'use client';
 
 /**
- * LanguageSwitch — discreet locale picker for the header.
+ * LanguageSwitch — discreet locale picker for header / footer use.
  *
  * Renders an icon + locale abbreviation button (e.g. `EN ▾`). Click opens a
  * tiny dropdown with the three supported locales; the active locale shows a
  * check. Selection swaps locales via `useRouter().replace` so the URL prefix
  * updates without losing the current path or query string.
+ *
+ * `placement` controls dropdown direction — default `down` for nav contexts,
+ * `up` when the switch lives near a page bottom (the footer) so the menu
+ * doesn't drop off the viewport edge.
  *
  * Keyboard model:
  *  - Tab / Shift-Tab: standard focus traversal in/out
@@ -32,7 +36,11 @@ const LOCALE_ABBR: Record<Locale, string> = {
   fr: 'FR',
 };
 
-export function LanguageSwitch() {
+export function LanguageSwitch({
+  placement = 'down',
+}: {
+  placement?: 'down' | 'up';
+} = {}) {
   const t = useTranslations('languageSwitch');
   const router = useRouter();
   const pathname = usePathname();
@@ -136,24 +144,25 @@ export function LanguageSwitch() {
         aria-expanded={open}
         aria-label={t('label')}
         className={cn(
-          'inline-flex h-9 items-center gap-1.5 rounded-full',
-          'border border-[var(--border)] bg-[var(--surface)]',
-          'px-2.5 text-[var(--fg-2)]',
-          'transition-[background,color,transform] duration-200',
-          'hover:text-[var(--fg)] hover:bg-[var(--surface-2)]',
-          'active:scale-[0.97]',
+          'group inline-flex h-8 items-center gap-1.5',
+          'text-[var(--fg-3)]',
+          'transition-[color,transform] duration-200 ease-out',
+          'hover:text-[var(--fg)] hover:scale-[1.04]',
+          'active:scale-[0.96]',
+          'focus-visible:outline-none focus-visible:ring-2',
+          'focus-visible:ring-[var(--accent)] focus-visible:rounded-md',
         )}
       >
-        <Languages size={15} strokeWidth={1.5} aria-hidden />
+        <Languages size={15} strokeWidth={1.6} aria-hidden />
         <span className="mono tabular text-[11px] font-semibold tracking-[0.08em]">
           {LOCALE_ABBR[active]}
         </span>
         <ChevronDown
-          size={12}
+          size={11}
           strokeWidth={1.75}
           aria-hidden
           className={cn(
-            'transition-transform duration-150',
+            'transition-transform duration-200 ease-out',
             open && 'rotate-180',
           )}
         />
@@ -166,10 +175,14 @@ export function LanguageSwitch() {
           aria-label={t('label')}
           onKeyDown={onMenuKey}
           className={cn(
-            'absolute right-0 top-full mt-2 z-50 min-w-[180px]',
+            'absolute right-0 z-50 min-w-[180px]',
+            placement === 'up' ? 'bottom-full mb-2' : 'top-full mt-2',
             'rounded-xl border border-[var(--border)] bg-[var(--surface)]',
             'shadow-[0_8px_24px_-12px_color-mix(in_oklab,var(--fg)_25%,transparent)]',
             'p-1',
+            // Subtle pop-in so the dropdown feels anchored to the
+            // trigger, not floating in from nowhere.
+            'motion-safe:animate-[locale-menu-in_180ms_cubic-bezier(0.16,1,0.3,1)_both]',
           )}
         >
           {routing.locales.map((locale, index) => {

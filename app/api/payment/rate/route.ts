@@ -1,11 +1,10 @@
 /**
- * GET /api/payment/rate?token=ton|vizzor — live USD-to-token rate
+ * GET /api/payment/rate?token=sol|ton|usdc — live USD-to-token rate
  * for the checkout preview. 60s in-memory cache (see lib/payment/rates.ts).
  *
- * Defaults to `ton` so existing /pay/[tier]/[cadence] callers continue
- * to work without sending the param. Returns 503 with `reason:
- * 'rate_unavailable'` if upstream is unreachable AND no fresh cache
- * exists — the UI then shows "rate unavailable" rather than fabricating.
+ * Defaults to `sol`. Returns 503 with `reason: 'rate_unavailable'` if
+ * upstream is unreachable AND no fresh cache exists — the UI shows
+ * "rate unavailable" rather than fabricating a price.
  */
 
 import { NextResponse } from 'next/server';
@@ -16,7 +15,9 @@ export const runtime = 'nodejs';
 
 function parseToken(url: URL): PriceToken {
   const raw = url.searchParams.get('token');
-  return raw === 'vizzor' ? 'vizzor' : 'ton';
+  if (raw === 'ton') return 'ton';
+  if (raw === 'usdc') return 'usdc';
+  return 'sol';
 }
 
 export async function GET(req: Request) {
