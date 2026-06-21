@@ -44,6 +44,7 @@ import {
   type ReactNode,
 } from 'react';
 import useSWR from 'swr';
+import { useTicker } from '@/lib/api';
 import { ChatBubble } from '@/components/predict/chat-bubble';
 import { CoinIcon } from '@/components/ui/coin-icon';
 import { Link } from '@/i18n/navigation';
@@ -59,7 +60,6 @@ import {
   IconChat,
   IconClose,
   IconHelp,
-  IconHistory,
   IconLock,
   IconMenu,
   IconPaperclip,
@@ -67,10 +67,26 @@ import {
   IconReceipts,
   IconSend,
   IconSettings,
-  IconTools,
 } from './predict-icons';
 import { SlashPalette } from './slash-palette';
 import { SettingsSheet } from './settings-sheet';
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  horizontalListSortingStrategy,
+  sortableKeyboardCoordinates,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const SolanaWalletAdapter = dynamic(
   () => import('@/components/wallet/wallet-provider'),
@@ -143,7 +159,6 @@ function PredictShellInner() {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(
     null,
   );
-  const [slashOpen, setSlashOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Tracks which message ids we've already POSTed to
   // /api/conversations/[id]/messages so a re-render of useChat state
@@ -180,6 +195,22 @@ function PredictShellInner() {
     { revalidateOnFocus: false, keepPreviousData: true },
   );
 
+  // Live ticker — the same SWR hook that backs the global ticker bar.
+  // We expose a {symbol → price} map to the message stream so each
+  // assistant bubble can cross-check any price the engine quotes
+  // against the live reference. Defends against engine-side LLM
+  // hallucinations (a known incident: BTC quoted at $105k while the
+  // resolver was reading $63k) without claiming to fix the root cause.
+  const ticker = useTicker(30_000);
+  const tickerByCoin = useMemo<ReadonlyMap<string, number>>(() => {
+    const m = new Map<string, number>();
+    for (const e of ticker.data) {
+      if (!e.symbol || !Number.isFinite(e.price)) continue;
+      m.set(e.symbol.toUpperCase(), e.price);
+    }
+    return m;
+  }, [ticker.data]);
+
   const signedIn = auth?.signedIn === true;
   const composerLocked =
     !signedIn || (!!quota?.exhausted && !quota?.subscribed);
@@ -196,9 +227,11 @@ function PredictShellInner() {
   // Forward the browser's resolved IANA timezone on every chat request
   // so the engine can speak the user's local time (the Telegram bot
   // already does this via `/tz`). The header is read by
-  // `app/api/predict/route.ts` and forwarded to vizzor-api/v1/chat
-  // alongside the locale (which the engine derives from the
-  // Accept-Language header).
+  // `app/api/predict/route.ts` and forwarded to vizzor-api/v1/chat.
+  // We send the URL-path locale explicitly via `x-vizzor-locale` — the
+  // engine clamps it to en/es/fr and locks the reply language to it
+  // so the chat surface matches the site chrome the user is actually
+  // looking at, not the language they happened to type in this turn.
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
@@ -208,13 +241,16 @@ function PredictShellInner() {
             typeof Intl !== 'undefined'
               ? Intl.DateTimeFormat().resolvedOptions().timeZone
               : 'UTC';
-          return { 'x-vizzor-timezone': tz || 'UTC' };
+          return {
+            'x-vizzor-timezone': tz || 'UTC',
+            'x-vizzor-locale': locale,
+          };
         },
       }),
-    [],
+    [locale],
   );
 
-  const { messages, sendMessage, status, error, setMessages } = useChat({
+  const { messages, sendMessage, status, error, setMessages, stop } = useChat({
     transport,
     onFinish: () => {
       void mutateQuota();
@@ -239,6 +275,21 @@ function PredictShellInner() {
       threadRef.current.scrollTop = threadRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // ⌘/Ctrl+K — global focus shortcut (Claude / Linear / GitHub
+  // convention). Lands the caret in the composer from anywhere on the
+  // page and opens the mobile drawer so the input is actually visible
+  // on narrow widths.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const isStreaming = status === 'streaming' || status === 'submitted';
   const isErrored = status === 'error';
@@ -360,11 +411,6 @@ function PredictShellInner() {
     bumpRecency,
   ]);
 
-  const onOpenTools = useCallback(() => {
-    setSlashOpen(true);
-    setDrawerOpen(false);
-  }, []);
-
   const onOpenReceipts = useCallback(() => {
     // typedRoutes doesn't yet know about hashes — cast through never.
     router.push('/account#payments' as never);
@@ -378,18 +424,15 @@ function PredictShellInner() {
 
   const onSlashPick = useCallback(
     (command: string): void => {
-      setSlashOpen(false);
-      // For commands that take no args, send immediately; otherwise
-      // prefill the composer so the user can finish the line.
+      // Called from the modal mount removed in v0.4 — kept as a
+      // typing-time fallback for any consumer that may still hand the
+      // shell a command directly. Pre-fills the composer instead of
+      // submitting so the user can complete the argument list.
       const trimmed = command.trim();
-      if (/^\/[a-z]+(\s|$)/i.test(trimmed) && !trimmed.includes(' ')) {
-        submitPrompt(trimmed);
-      } else {
-        setInput((v) => (v ? `${v} ${trimmed}` : trimmed));
-        inputRef.current?.focus();
-      }
+      setInput((v) => (v ? `${v} ${trimmed}` : trimmed));
+      inputRef.current?.focus();
     },
-    [submitPrompt],
+    [],
   );
 
   const onInlineReset = async (): Promise<void> => {
@@ -407,6 +450,72 @@ function PredictShellInner() {
     }
     return null;
   }, [messages]);
+
+  // Last user message is editable iff the engine isn't still streaming
+  // a reply for it. Editing pre-fills the composer + trims the pair so
+  // the next submit reads as a regenerate of that turn.
+  const lastEditableUserId = useMemo<string | null>(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m && m.role === 'user') return m.id;
+    }
+    return null;
+  }, [messages]);
+
+  /**
+   * Pull the user message back into the composer + drop both it and
+   * the assistant reply from the thread. The user can then edit and
+   * submit as normal — no special regenerate state machine.
+   */
+  const onEditUserMessage = useCallback(
+    (id: string, text: string): void => {
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => m.id === id);
+        if (idx === -1) return prev;
+        return prev.slice(0, idx);
+      });
+      setInput(text);
+      setTimeout(() => {
+        const el = inputRef.current;
+        if (!el) return;
+        el.focus();
+        const len = el.value.length;
+        el.setSelectionRange(len, len);
+      }, 0);
+    },
+    [setMessages],
+  );
+
+  /**
+   * Retry the last failed turn. Trims the errored assistant slot from
+   * the thread (if any) and re-fires the latest user prompt. Used by
+   * the inline error banner that surfaces engine 5xx responses.
+   */
+  const onRetryLastTurn = useCallback((): void => {
+    let lastUserText: string | null = null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m && m.role === 'user') {
+        lastUserText = m.parts
+          .filter((p) => p.type === 'text')
+          .map((p) => ('text' in p ? (p.text ?? '') : ''))
+          .join('')
+          .trim();
+        break;
+      }
+    }
+    if (!lastUserText) return;
+    setMessages((prev) => {
+      let cut = prev.length;
+      for (let i = prev.length - 1; i >= 0; i--) {
+        const m = prev[i];
+        if (m && m.role === 'user') break;
+        cut = i;
+      }
+      return prev.slice(0, cut);
+    });
+    sendMessage({ text: lastUserText });
+  }, [messages, setMessages, sendMessage]);
 
   return (
     <div
@@ -437,7 +546,6 @@ function PredictShellInner() {
           onPickConversation={(id) => void onPickConversation(id)}
           onDeleteConversation={(id) => void onDeleteConversation(id)}
           onNewChat={onNewChat}
-          onOpenTools={onOpenTools}
           onOpenReceipts={onOpenReceipts}
           onOpenSettings={onOpenSettings}
           signedIn={signedIn}
@@ -481,7 +589,7 @@ function PredictShellInner() {
             {!signedIn ? (
               <WalletGate />
             ) : messages.length === 0 ? (
-              <Welcome />
+              <Welcome onPick={submitPrompt} />
             ) : (
               <div className="mx-auto max-w-[860px] w-full px-4 sm:px-6 py-6 flex flex-col gap-6">
                 {messages.map((m) => (
@@ -489,16 +597,80 @@ function PredictShellInner() {
                     key={m.id}
                     message={m}
                     streaming={isStreaming && m.id === lastAssistantId}
+                    // Only the LAST user message gets the edit
+                    // affordance — editing earlier turns would
+                    // require a branching model we don't have.
+                    onEdit={
+                      !isStreaming && m.id === lastEditableUserId
+                        ? onEditUserMessage
+                        : undefined
+                    }
+                    editLabel={t('shell.composer.edit')}
+                    sourcesLabel={t('shell.composer.sources')}
+                    copyLabel={t('shell.composer.copy')}
+                    copiedLabel={t('shell.composer.copied')}
+                    tickerByCoin={tickerByCoin}
+                    priceCheck={{
+                      label: t('shell.composer.priceCheckLabel'),
+                      body: t('shell.composer.priceCheckBody'),
+                    }}
                   />
                 ))}
                 {isErrored && error && (
-                  <div className="rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-[12px] text-[var(--fg-2)]">
-                    {parseErrorMessage(error)}
+                  // Degraded banner — the engine returned an error
+                  // mid-turn. Surfaces the parsed message and a retry
+                  // CTA that resubmits the last user prompt
+                  // (preserves history; no destructive state). The
+                  // dashed border + accent dot distinguish it from
+                  // the inline tool annotations.
+                  <div
+                    role="alert"
+                    className={cn(
+                      'flex items-start gap-3 px-3 py-2.5',
+                      'rounded-md border border-dashed border-[var(--danger)]',
+                      'bg-[color-mix(in_oklab,var(--danger)_8%,transparent)]',
+                    )}
+                  >
+                    <span
+                      aria-hidden
+                      className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-[var(--danger)] shrink-0"
+                    />
+                    <div className="min-w-0 flex-1 flex flex-col gap-1.5">
+                      <p className="text-[12.5px] text-[var(--fg)] leading-snug">
+                        {parseErrorMessage(error)}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={onRetryLastTurn}
+                        className={cn(
+                          'self-start mono tabular text-[10.5px] uppercase tracking-[0.16em]',
+                          'px-2 py-1 rounded-md',
+                          'border border-[var(--border)] bg-[var(--surface)]',
+                          'text-[var(--fg-2)] hover:text-[var(--fg)] hover:border-[var(--border-hi)]',
+                          'transition-colors',
+                        )}
+                      >
+                        {t('shell.composer.retry')}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
             )}
           </div>
+
+          {/* Quota line — sits above the chip strip so the user always
+              knows where they stand. Reads from the same `/api/quota`
+              SWR cache the rest of the shell uses, so this is the
+              authoritative truth (no second fetch). Hidden while
+              streaming so the foot of the page stays calm during work,
+              and skipped entirely for Elite — paying users with
+              unlimited runs don't need a counter cluttering the
+              surface, and an "Elite · unlimited" chip just reads as
+              chrome. */}
+          {signedIn && !composerLocked && !isStreaming && quota && quota.tier !== 'elite' && (
+            <QuotaLine quota={quota} />
+          )}
 
           {/* Suggestions strip — Vizzor-native quick-pick chips placed
               ABOVE the composer. Reads as "things you can ask right
@@ -506,7 +678,30 @@ function PredictShellInner() {
               the page. Hidden while the engine is streaming a response
               and on the locked/exhausted states. */}
           {signedIn && !composerLocked && !isStreaming && (
-            <ChatTopics onPick={submitPrompt} />
+            <ChatTopics
+              onSubmit={submitPrompt}
+              onInsert={(seed) => {
+                // Token chips pre-fill the composer with the bare
+                // ticker + space so the user can complete the prompt
+                // ("BTC " → user types "4h con funding"). Focusing the
+                // textarea is deferred a tick so React's state commit
+                // lands before the caret moves to end-of-input.
+                setInput((v) => {
+                  // If the textarea is empty, just drop the seed. If
+                  // it already has content, append a space + seed so
+                  // both flow together without surprise reformatting.
+                  if (!v) return seed;
+                  return v.endsWith(' ') ? `${v}${seed}` : `${v} ${seed}`;
+                });
+                setTimeout(() => {
+                  const el = inputRef.current;
+                  if (!el) return;
+                  el.focus();
+                  const len = el.value.length;
+                  el.setSelectionRange(len, len);
+                }, 0);
+              }}
+            />
           )}
 
           {/* Composer footer — no top divider. The composer card
@@ -530,9 +725,12 @@ function PredictShellInner() {
                   value={input}
                   onChange={setInput}
                   onSubmit={onSubmit}
+                  onStop={stop}
                   isStreaming={isStreaming}
                   placeholder={t('shell.composer.placeholder')}
                   sendLabel={t('send')}
+                  stopLabel={t('shell.composer.stop')}
+                  hintLabel={t('shell.composer.kbdHint')}
                 />
               )}
             </div>
@@ -551,36 +749,12 @@ function PredictShellInner() {
           onPickConversation={(id) => void onPickConversation(id)}
           onDeleteConversation={(id) => void onDeleteConversation(id)}
           onNewChat={onNewChat}
-          onOpenTools={onOpenTools}
           onOpenReceipts={onOpenReceipts}
           onOpenSettings={onOpenSettings}
           signedIn={signedIn}
           wallet={auth?.wallet}
           quota={quota}
         />
-      )}
-
-      {slashOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center px-3 pt-[12vh] sm:pt-[18vh]"
-          role="dialog"
-          aria-modal="true"
-          aria-label={t('shell.nav.tools')}
-        >
-          <button
-            type="button"
-            aria-label={t('close')}
-            onClick={() => setSlashOpen(false)}
-            className="absolute inset-0 bg-black/55 backdrop-blur-sm"
-          />
-          <div className="relative z-10 w-full max-w-[520px]">
-            <SlashPalette
-              query=""
-              onPick={onSlashPick}
-              onClose={() => setSlashOpen(false)}
-            />
-          </div>
-        </div>
       )}
 
       {settingsOpen && (
@@ -701,7 +875,6 @@ interface LeftRailProps {
   onPickConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
   onNewChat: () => void;
-  onOpenTools: () => void;
   onOpenReceipts: () => void;
   onOpenSettings: () => void;
   signedIn: boolean;
@@ -724,7 +897,6 @@ function LeftRail({
   onPickConversation,
   onDeleteConversation,
   onNewChat,
-  onOpenTools,
   onOpenReceipts,
   onOpenSettings,
   signedIn,
@@ -827,6 +999,13 @@ function LeftRail({
           )}
           aria-label="Predict navigation"
         >
+          {/* Sidebar nav — v0.4 collapsed to three destinations.
+              The Tools row is gone: the inline `/` palette in the
+              composer is the only commands surface now, opened via the
+              keystroke or by typing `/` directly. The History row is
+              gone too: it had no onClick and only duplicated the
+              "Recent chats" section heading below. What remains is
+              three real destinations — start, current, and receipts. */}
           <NavButton
             icon={<IconPlus size={collapsed ? 20 : 17} />}
             label={t('shell.newChat')}
@@ -837,18 +1016,6 @@ function LeftRail({
             icon={<IconChat size={collapsed ? 20 : 17} />}
             label={t('shell.nav.chat')}
             active
-            collapsed={collapsed}
-          />
-          <NavButton
-            icon={<IconHistory size={collapsed ? 20 : 17} />}
-            label={t('shell.recents.label')}
-            meta={conversations.length > 0 ? String(conversations.length) : undefined}
-            collapsed={collapsed}
-          />
-          <NavButton
-            icon={<IconTools size={collapsed ? 20 : 17} />}
-            label={t('shell.nav.tools')}
-            onClick={onOpenTools}
             collapsed={collapsed}
           />
           <NavButton
@@ -870,11 +1037,25 @@ function LeftRail({
               </span>
             </div>
             {filteredConversations.length === 0 ? (
-              <p className="px-3 mt-1 text-[11.5px] text-[var(--fg-3)] leading-snug">
-                {signedIn
-                  ? t('shell.recents.empty')
-                  : t('shell.recents.signInPrompt')}
-              </p>
+              // Empty state — friendlier than the bare paragraph it
+              // replaced. A small inline icon + uppercase eyebrow
+              // anchors the empty slot, body explains what populates
+              // it next. Matches Claude's "No conversations yet" feel.
+              <div className="mx-3 mt-1 flex flex-col gap-1.5 px-3 py-3 rounded-md border border-dashed border-[var(--border)]">
+                <div className="flex items-center gap-1.5">
+                  <span aria-hidden className="text-[var(--fg-3)]">
+                    <IconDotSmall />
+                  </span>
+                  <span className="mono tabular text-[9.5px] uppercase tracking-[0.18em] font-semibold text-[var(--fg-3)]">
+                    {t('shell.recents.emptyEyebrow')}
+                  </span>
+                </div>
+                <p className="text-[11.5px] text-[var(--fg-3)] leading-snug">
+                  {signedIn
+                    ? t('shell.recents.empty')
+                    : t('shell.recents.signInPrompt')}
+                </p>
+              </div>
             ) : (
               <ul className="flex flex-col gap-0.5">
                 {filteredConversations.slice(0, 12).map((c) => (
@@ -1337,7 +1518,6 @@ function MobileDrawer({
   onPickConversation,
   onDeleteConversation,
   onNewChat,
-  onOpenTools,
   onOpenReceipts,
   onOpenSettings,
   signedIn,
@@ -1352,7 +1532,6 @@ function MobileDrawer({
   onPickConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
   onNewChat: () => void;
-  onOpenTools: () => void;
   onOpenReceipts: () => void;
   onOpenSettings: () => void;
   signedIn: boolean;
@@ -1437,7 +1616,6 @@ function MobileDrawer({
             onPickConversation={onPickConversation}
             onDeleteConversation={onDeleteConversation}
             onNewChat={onNewChat}
-            onOpenTools={onOpenTools}
             onOpenReceipts={onOpenReceipts}
             onOpenSettings={onOpenSettings}
             signedIn={signedIn}
@@ -1459,17 +1637,24 @@ function Composer({
   value,
   onChange,
   onSubmit,
+  onStop,
   isStreaming,
   placeholder,
   sendLabel,
+  stopLabel,
+  hintLabel,
 }: {
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   value: string;
   onChange: (v: string) => void;
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
+  /** Aborts the in-flight engine stream — wired to `useChat().stop()`. */
+  onStop: () => void;
   isStreaming: boolean;
   placeholder: string;
   sendLabel: string;
+  stopLabel: string;
+  hintLabel: string;
 }) {
   // The palette opens whenever the input starts with `/` and a space
   // hasn't been typed yet (i.e. the user is still naming the command).
@@ -1524,17 +1709,21 @@ function Composer({
     <form
       onSubmit={onSubmit}
       className={cn(
-        // Minimalist chrome — translucent surface that lifts to a
-        // proper surface tile when focused. Single hairline border
-        // that picks up contrast on focus. No glow, no halo, no inset
-        // highlight: the border darkening alone signals focus.
+        // Liquid-glass chrome — mirrors the /docs navbar search bar
+        // exactly: fully transparent surface, heavier backdrop blur,
+        // hairline border. Focus tightens the border to var(--fg) but
+        // does NOT solidify the background, so the surface keeps its
+        // glass quality while reading as "active". `backdrop-saturate`
+        // gives the slight chromatic lift you see on iOS / macOS
+        // glass surfaces — what stops it from feeling like a frosted
+        // dialog and starts feeling like a refractive material.
         'relative flex items-end gap-1.5',
         'rounded-3xl px-3 py-2',
-        'bg-[color-mix(in_oklab,var(--surface)_75%,transparent)]',
-        'backdrop-blur-sm',
         'border border-[var(--border)]',
-        'focus-within:bg-[var(--surface)]',
+        'bg-[color-mix(in_oklab,var(--surface)_18%,transparent)]',
+        'backdrop-blur-[10px] backdrop-saturate-[140%]',
         'focus-within:border-[var(--fg)]',
+        'focus-within:bg-[color-mix(in_oklab,var(--surface)_28%,transparent)]',
         'transition-[border-color,background-color] duration-200 ease-out',
         'vz-rise',
       )}
@@ -1552,6 +1741,17 @@ function Composer({
         value={value}
         onChange={(e) => onChange(e.target.value.slice(0, MAX_CHARS))}
         onKeyDown={(e) => {
+          // ⌘/Ctrl + ↵ always submits, regardless of whether the
+          // palette is open — power-user shortcut that matches Claude
+          // / ChatGPT. Plain ↵ submits only when the palette is
+          // closed; with the palette open ↵ inserts the focused row
+          // (handled inside SlashPalette).
+          const cmdEnter = e.key === 'Enter' && (e.metaKey || e.ctrlKey);
+          if (cmdEnter) {
+            e.preventDefault();
+            e.currentTarget.form?.requestSubmit();
+            return;
+          }
           if (e.key === 'Enter' && !e.shiftKey) {
             if (showPalette) return;
             e.preventDefault();
@@ -1577,28 +1777,72 @@ function Composer({
         )}
       />
 
-      <button
-        type="submit"
-        disabled={!canSend}
-        aria-label={sendLabel}
-        className={cn(
-          // 36px target on touch, 32px on sm+. Ghost when input is
-          // empty (so the chrome stays calm), fills + lifts when the
-          // user has something to send. The scale-down on empty makes
-          // the appearance of "ready to send" feel like the button
-          // grows toward the cursor.
-          'shrink-0 inline-flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-full',
-          'self-end mb-px',
-          'transition-[background-color,color,transform,opacity] duration-200 ease-out',
-          canSend
-            ? 'bg-[var(--fg)] text-[var(--bg)] scale-100 opacity-100'
-            : 'bg-transparent text-[var(--fg-3)] scale-90 opacity-70',
-          'disabled:cursor-not-allowed',
-          'hover:enabled:scale-105 active:enabled:scale-95',
-        )}
-      >
-        <IconSend size={13} />
-      </button>
+      {isStreaming ? (
+        // Stop button — replaces send while the engine is streaming so
+        // the user can abort a long response (Claude / ChatGPT
+        // convention). Uses the destructured `useChat().stop` upstream.
+        <button
+          type="button"
+          onClick={onStop}
+          aria-label={stopLabel}
+          className={cn(
+            'shrink-0 inline-flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-full',
+            'self-end mb-px',
+            'bg-[var(--surface-2)] text-[var(--fg)]',
+            'border border-[var(--border-hi)]',
+            'transition-[background-color,color,transform] duration-150 ease-out',
+            'hover:bg-[color-mix(in_oklab,var(--fg)_8%,transparent)]',
+            'active:scale-95',
+          )}
+        >
+          {/* Solid square — universal "stop" glyph */}
+          <span
+            aria-hidden
+            className="block w-2.5 h-2.5 rounded-[2px] bg-[var(--fg)]"
+          />
+        </button>
+      ) : (
+        <button
+          type="submit"
+          disabled={!canSend}
+          aria-label={sendLabel}
+          className={cn(
+            // 36px target on touch, 32px on sm+. Ghost when input is
+            // empty (so the chrome stays calm), fills + lifts when the
+            // user has something to send. The scale-down on empty makes
+            // the appearance of "ready to send" feel like the button
+            // grows toward the cursor.
+            'shrink-0 inline-flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-full',
+            'self-end mb-px',
+            'transition-[background-color,color,transform,opacity] duration-200 ease-out',
+            canSend
+              ? 'bg-[var(--fg)] text-[var(--bg)] scale-100 opacity-100'
+              : 'bg-transparent text-[var(--fg-3)] scale-90 opacity-70',
+            'disabled:cursor-not-allowed',
+            'hover:enabled:scale-105 active:enabled:scale-95',
+          )}
+        >
+          <IconSend size={13} />
+        </button>
+      )}
+
+      {/* Kbd hint — sits as a footer row inside the composer card,
+          mirroring Claude's "↵ to send · ⇧↵ for new line" affordance.
+          Hidden while streaming so the row reads as "active work" not
+          "type here". */}
+      {!isStreaming && (
+        <span
+          aria-hidden
+          className={cn(
+            'absolute left-3 right-12 bottom-[-1.25rem]',
+            'mono tabular text-[9.5px] uppercase tracking-[0.18em] text-[var(--fg-3)]',
+            'pointer-events-none select-none',
+            'opacity-0 focus-within:opacity-100 transition-opacity duration-200',
+          )}
+        >
+          {hintLabel}
+        </span>
+      )}
     </form>
   );
 }
@@ -1629,6 +1873,9 @@ type TopicIconKind =
 interface TopicSpec {
   id: string;
   label: string;
+  /** What lands in the composer / submits. Tokens use the bare ticker
+   *  + space so the user can complete the horizon ("BTC " → user types
+   *  "4h con funding"). Non-token chips carry a full submit-now prompt. */
   prompt: string;
   /** When set, the chip renders `<CoinIcon symbol={ticker}>` as the
    *  prefix. Used for majors so the chip reads as a directional CTA on
@@ -1636,145 +1883,582 @@ interface TopicSpec {
   ticker?: string;
   /** Otherwise, an inline mono SVG drawn by `<TopicIcon kind={icon}>`. */
   icon?: TopicIconKind;
+  /** `'insert'` — prefill the composer + focus, let user complete the
+   *  prompt. Used for token chips so they read as "compose a prediction
+   *  for this asset" rather than "ask the canned thing".
+   *  `'submit'` — fire the prompt immediately. The default for general
+   *  catalysts like "Whale flow" where the canned prompt IS the value. */
+  behavior?: 'insert' | 'submit';
 }
 
 /**
- * Vizzor-native head — these are the engine's first-class concepts
- * (conviction tiers, whale-confirmed flow, just-resolved receipts) not
- * generic Polymarket-style "Hot / New" labels.
+ * Canonical topic catalog — every chip the user can possibly have on
+ * their bar. Ordered as the default-bar layout (Vizzor-native concepts
+ * first, then majors, then catalysts).
+ *
+ * The Vizzor-native head (high-conviction, whale flow, resolved) used
+ * to be a separate constant with a `<li>` separator between it and the
+ * body. v0.4 collapses both into a single catalog because the bar is
+ * now user-reorderable — splitting them stops being meaningful when
+ * the user can intermix freely.
  */
-const TOPICS_HEAD: ReadonlyArray<TopicSpec> = [
-  { id: 'high-conviction', label: 'High conviction', icon: 'spark', prompt: 'Show me current high-conviction predictions' },
-  { id: 'whale', label: 'Whale flow', icon: 'wave', prompt: 'Recent whale-confirmed signals' },
-  { id: 'resolved', label: 'Just resolved', icon: 'check', prompt: 'Show me just-resolved receipts' },
+const TOPICS_CATALOG: ReadonlyArray<TopicSpec> = [
+  // Vizzor-native head (engine's first-class concepts)
+  { id: 'high-conviction', label: 'High conviction', icon: 'spark', prompt: 'Show me current high-conviction predictions', behavior: 'submit' },
+  { id: 'whale', label: 'Whale flow', icon: 'wave', prompt: 'Recent whale-confirmed signals', behavior: 'submit' },
+  { id: 'resolved', label: 'Just resolved', icon: 'check', prompt: 'Show me just-resolved receipts', behavior: 'submit' },
+  // Majors — pre-fill so the user completes the horizon. The bare
+  // ticker + trailing space is what lands in the composer; the user
+  // types "4h", "1d con funding", etc.
+  { id: 'btc', label: 'Bitcoin', ticker: 'BTC', prompt: 'BTC ', behavior: 'insert' },
+  { id: 'eth', label: 'Ethereum', ticker: 'ETH', prompt: 'ETH ', behavior: 'insert' },
+  { id: 'sol', label: 'Solana', ticker: 'SOL', prompt: 'SOL ', behavior: 'insert' },
+  { id: 'ton', label: 'Toncoin', ticker: 'TON', prompt: 'TON ', behavior: 'insert' },
+  // Vizzor-internal surfaces — submit-now
+  { id: 'wr', label: 'Tracked WR', icon: 'target', prompt: '/wr', behavior: 'submit' },
+  { id: 'precisions', label: 'Receipts', icon: 'receipt', prompt: '/precisions', behavior: 'submit' },
+  { id: 'calibration', label: 'Calibration', icon: 'gauge', prompt: 'Show me per-horizon calibration trust', behavior: 'submit' },
+  // Crypto-native sectors
+  { id: 'defi', label: 'DeFi', icon: 'liquid', prompt: 'DeFi sector update', behavior: 'submit' },
+  { id: 'l2', label: 'L2s', icon: 'stack', prompt: 'Layer 2 ecosystem update', behavior: 'submit' },
+  { id: 'memes', label: 'Memes', icon: 'dice', prompt: 'Top memecoins trending now', behavior: 'submit' },
+  { id: 'ai', label: 'AI agents', icon: 'chip', prompt: 'AI agents in crypto', behavior: 'submit' },
+  { id: 'depin', label: 'DePIN', icon: 'mesh', prompt: 'DePIN trends and tokens', behavior: 'submit' },
+  { id: 'rwa', label: 'RWA', icon: 'building', prompt: 'Real-world asset tokens', behavior: 'submit' },
+  { id: 'restaking', label: 'Restaking', icon: 'cycle', prompt: 'Restaking trends and yields', behavior: 'submit' },
+  { id: 'pre-news', label: 'Pre-news', icon: 'radar', prompt: 'Pre-news signals firing now', behavior: 'submit' },
+  // Catalysts that move crypto
+  { id: 'macro', label: 'Macro', icon: 'globe', prompt: 'Macro outlook — Fed, DXY, rates, and crypto impact', behavior: 'submit' },
+  { id: 'etfs', label: 'ETF flows', icon: 'bars', prompt: 'Latest BTC and ETH spot ETF net flows', behavior: 'submit' },
+  { id: 'regulation', label: 'Regulation', icon: 'shield', prompt: 'Crypto regulation watch — SEC, MiCA, Korea', behavior: 'submit' },
+  { id: 'stables', label: 'Stables', icon: 'anchor', prompt: 'Stablecoin supply changes and depeg risk', behavior: 'submit' },
+  { id: 'geopolitics', label: 'Geopolitics', icon: 'flag', prompt: 'Geopolitics and crypto — sanctions, capital flight', behavior: 'submit' },
+  { id: 'stocks', label: 'Stocks tape', icon: 'bars', prompt: 'Crypto-correlated stocks — MSTR, COIN, NVDA', behavior: 'submit' },
 ];
+
+const TOPICS_BY_ID: Record<string, TopicSpec> = Object.fromEntries(
+  TOPICS_CATALOG.map((t) => [t.id, t]),
+);
 
 /**
- * Body — broadened beyond pure-crypto in the Polymarket spirit. The
- * engine is crypto-native, but the *catalysts* it tracks span macro,
- * politics, ETFs, and stocks (MSTR / COIN / NVDA correlation). The
- * chip set surfaces those catalysts as first-class entries instead of
- * burying them under generic "trends".
+ * Default chip order — the user's first-time bar. After v0.4 the user
+ * can drag-reorder, add, and remove; their choices persist in
+ * localStorage under `STORAGE_KEY` below.
  */
-const TOPICS_BODY: ReadonlyArray<TopicSpec> = [
-  // Majors — direct prediction prompts via the engine's `<SYM> <H>` shape
-  { id: 'btc', label: 'Bitcoin', ticker: 'BTC', prompt: 'BTC 4h' },
-  { id: 'eth', label: 'Ethereum', ticker: 'ETH', prompt: 'ETH 4h' },
-  { id: 'sol', label: 'Solana', ticker: 'SOL', prompt: 'SOL 4h' },
-  { id: 'ton', label: 'Toncoin', ticker: 'TON', prompt: 'TON 4h' },
-  // Vizzor-internal surfaces
-  { id: 'wr', label: 'Tracked WR', icon: 'target', prompt: '/wr' },
-  { id: 'precisions', label: 'Receipts', icon: 'receipt', prompt: '/precisions' },
-  { id: 'calibration', label: 'Calibration', icon: 'gauge', prompt: 'Show me per-horizon calibration trust' },
-  // Crypto-native sectors
-  { id: 'defi', label: 'DeFi', icon: 'liquid', prompt: 'DeFi sector update' },
-  { id: 'l2', label: 'L2s', icon: 'stack', prompt: 'Layer 2 ecosystem update' },
-  { id: 'memes', label: 'Memes', icon: 'dice', prompt: 'Top memecoins trending now' },
-  { id: 'ai', label: 'AI agents', icon: 'chip', prompt: 'AI agents in crypto' },
-  { id: 'depin', label: 'DePIN', icon: 'mesh', prompt: 'DePIN trends and tokens' },
-  { id: 'rwa', label: 'RWA', icon: 'building', prompt: 'Real-world asset tokens' },
-  { id: 'restaking', label: 'Restaking', icon: 'cycle', prompt: 'Restaking trends and yields' },
-  { id: 'pre-news', label: 'Pre-news', icon: 'radar', prompt: 'Pre-news signals firing now' },
-  // Polymarket-style catalysts — broader catalysts that move crypto
-  { id: 'macro', label: 'Macro', icon: 'globe', prompt: 'Macro outlook — Fed, DXY, rates, and crypto impact' },
-  { id: 'etfs', label: 'ETF flows', icon: 'bars', prompt: 'Latest BTC and ETH spot ETF net flows' },
-  { id: 'regulation', label: 'Regulation', icon: 'shield', prompt: 'Crypto regulation watch — SEC, MiCA, Korea' },
-  { id: 'stables', label: 'Stables', icon: 'anchor', prompt: 'Stablecoin supply changes and depeg risk' },
-  { id: 'geopolitics', label: 'Geopolitics', icon: 'flag', prompt: 'Geopolitics and crypto — sanctions, capital flight' },
-  { id: 'stocks', label: 'Stocks tape', icon: 'bars', prompt: 'Crypto-correlated stocks — MSTR, COIN, NVDA' },
+const DEFAULT_BAR_IDS: ReadonlyArray<string> = [
+  'high-conviction',
+  'whale',
+  'resolved',
+  'btc',
+  'eth',
+  'sol',
+  'ton',
+  'wr',
+  'precisions',
 ];
 
-function ChatTopics({ onPick }: { onPick: (prompt: string) => void }) {
+const STORAGE_KEY = 'vizzor.predict.topic-bar.v1';
+
+interface StoredBar {
+  v: 1;
+  ids: ReadonlyArray<string>;
+}
+
+/**
+ * Hydrate the chip order from localStorage with strict validation —
+ * unknown ids (catalog evolution between releases) are dropped, the
+ * default list back-fills if the stored payload is empty / corrupt.
+ * Pure read; never throws.
+ */
+function loadBarIds(): string[] {
+  if (typeof window === 'undefined') return [...DEFAULT_BAR_IDS];
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [...DEFAULT_BAR_IDS];
+    const parsed = JSON.parse(raw) as StoredBar | null;
+    if (!parsed || parsed.v !== 1 || !Array.isArray(parsed.ids)) {
+      return [...DEFAULT_BAR_IDS];
+    }
+    const valid = parsed.ids.filter(
+      (id): id is string => typeof id === 'string' && id in TOPICS_BY_ID,
+    );
+    return valid.length > 0 ? valid : [...DEFAULT_BAR_IDS];
+  } catch {
+    return [...DEFAULT_BAR_IDS];
+  }
+}
+
+function saveBarIds(ids: ReadonlyArray<string>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ v: 1, ids } satisfies StoredBar),
+    );
+  } catch {
+    // Best-effort — private mode / quota / etc. The order will just
+    // reset on next mount; not worth a UI error for.
+  }
+}
+
+function ChatTopics({
+  onSubmit,
+  onInsert,
+}: {
+  /** Fire-and-forget submit — used for `behavior: 'submit'` chips. */
+  onSubmit: (prompt: string) => void;
+  /** Pre-fill composer + focus — used for `behavior: 'insert'` chips
+   *  (the token chips). The argument is the bare seed text the chip
+   *  declares; the parent composer drops it into the textarea and
+   *  positions the cursor at the end. */
+  onInsert: (seed: string) => void;
+}) {
+  // Hydrated lazily on mount so SSR doesn't see localStorage and the
+  // first paint matches the default layout. The reorder/add/remove
+  // handlers then mutate this state and persist on every change.
+  const [barIds, setBarIds] = useState<string[]>(() => [...DEFAULT_BAR_IDS]);
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    setBarIds(loadBarIds());
+    setHydrated(true);
+  }, []);
+  useEffect(() => {
+    if (hydrated) saveBarIds(barIds);
+  }, [barIds, hydrated]);
+
+  const [addOpen, setAddOpen] = useState(false);
+  // Closing-phase flag for the (+) add panel — keeps the panel mounted
+  // while the slide-out keyframe plays. Same pattern as the
+  // SlashPalette modal's `slashClosing` previously. The 160ms below
+  // matches the `slash-palette-slide-out` duration in globals.css.
+  const [addClosing, setAddClosing] = useState(false);
+  const dismissAdd = useCallback(() => {
+    setAddClosing(true);
+    window.setTimeout(() => {
+      setAddOpen(false);
+      setAddClosing(false);
+    }, 160);
+  }, []);
+  const toggleAdd = useCallback(() => {
+    if (addOpen) dismissAdd();
+    else setAddOpen(true);
+  }, [addOpen, dismissAdd]);
+
+  // dnd-kit sensors: 6px pointer activation so a regular click still
+  // fires `onSubmit` without accidentally starting a drag. Keyboard
+  // sensor lets Space + arrows reorder the bar for accessibility.
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  const onDragEnd = useCallback((e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    setBarIds((ids) => {
+      const oldIdx = ids.indexOf(String(active.id));
+      const newIdx = ids.indexOf(String(over.id));
+      if (oldIdx === -1 || newIdx === -1) return ids;
+      return arrayMove(ids, oldIdx, newIdx);
+    });
+  }, []);
+
+  const removeChip = useCallback((id: string) => {
+    setBarIds((ids) => ids.filter((x) => x !== id));
+  }, []);
+
+  const addChip = useCallback((id: string) => {
+    setBarIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
+    setAddOpen(false);
+  }, []);
+
+  const available = useMemo(
+    () => TOPICS_CATALOG.filter((t) => !barIds.includes(t.id)),
+    [barIds],
+  );
+
+  const onChipPick = useCallback(
+    (topic: TopicSpec) => {
+      if (topic.behavior === 'insert') {
+        onInsert(topic.prompt);
+      } else {
+        onSubmit(topic.prompt);
+      }
+    },
+    [onInsert, onSubmit],
+  );
+
   return (
     <nav
       aria-label="Prompt suggestions"
-      className="relative shrink-0"
+      className={cn(
+        'relative shrink-0',
+        'mx-auto max-w-[860px] w-full px-3 sm:px-6 pt-2',
+      )}
     >
-      <ul
-        className={cn(
-          'flex items-center gap-1.5 overflow-x-auto',
-          'mx-auto max-w-[860px] w-full px-3 sm:px-6 pt-2',
-          '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
-        )}
-      >
-        {TOPICS_HEAD.map((t, i) => (
-          <li key={t.id} className="shrink-0">
-            <TopicChip topic={t} onPick={onPick} highlighted={i === 0} />
-          </li>
-        ))}
-        <li
-          aria-hidden
-          className="shrink-0 h-4 w-px bg-[var(--border)] mx-1"
-        />
-        {TOPICS_BODY.map((t) => (
-          <li key={t.id} className="shrink-0">
-            <TopicChip topic={t} onPick={onPick} />
-          </li>
-        ))}
-      </ul>
+      {/* The (+) trigger sits OUTSIDE the scrollable `<ul>` so its popover
+          isn't clipped by the carousel's `overflow-x-auto`. The flex row
+          gives the ul the remaining width (min-w-0 lets it actually shrink
+          below content width and scroll) and pins the (+) to the right. */}
+      <div className="flex items-center gap-1.5">
+        <div className="relative flex-1 min-w-0">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+            <SortableContext items={barIds} strategy={horizontalListSortingStrategy}>
+              <ul
+                className={cn(
+                  // Single-line carousel: `flex-nowrap` forbids wrapping
+                  // and `whitespace-nowrap` belts-and-braces against any
+                  // inline descendant that might force a break.
+                  'flex flex-nowrap items-center gap-1.5 overflow-x-auto whitespace-nowrap',
+                  '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+                )}
+              >
+                {barIds.map((id, idx) => {
+                  const topic = TOPICS_BY_ID[id];
+                  if (!topic) return null;
+                  return (
+                    <SortableTopicChip
+                      key={id}
+                      topic={topic}
+                      onPick={onChipPick}
+                      onRemove={removeChip}
+                      highlighted={idx === 0}
+                    />
+                  );
+                })}
+              </ul>
+            </SortableContext>
+          </DndContext>
 
-      {/* Subtle edge fades — sit on the px-3/sm:px-6 inset so the fade
-          starts where the chips do. */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-0 w-6"
-        style={{
-          background:
-            'linear-gradient(to right, var(--bg), color-mix(in oklab, var(--bg) 0%, transparent))',
-        }}
-      />
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-y-0 right-0 w-6"
-        style={{
-          background:
-            'linear-gradient(to left, var(--bg), color-mix(in oklab, var(--bg) 0%, transparent))',
-        }}
-      />
+          {/* Edge fades — anchored to the scroll container, not the (+)
+              region, so they cue overflow on the chips alone. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 left-0 w-6"
+            style={{
+              background:
+                'linear-gradient(to right, var(--bg), color-mix(in oklab, var(--bg) 0%, transparent))',
+            }}
+          />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 right-0 w-6"
+            style={{
+              background:
+                'linear-gradient(to left, var(--bg), color-mix(in oklab, var(--bg) 0%, transparent))',
+            }}
+          />
+        </div>
+
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={toggleAdd}
+            aria-label={addOpen ? 'Close suggestions menu' : 'Add suggestion'}
+            aria-expanded={addOpen}
+            aria-haspopup="menu"
+            className={cn(
+              'inline-flex items-center justify-center',
+              'h-7 w-7 rounded-full',
+              'border border-dashed',
+              'motion-safe:will-change-transform',
+              'transition-[background-color,border-color,color,transform] duration-150 ease-out',
+              'hover:scale-[1.04] active:scale-95',
+              addOpen
+                ? cn(
+                    // Active fill — solid surface flip so the (+) reads
+                    // as "the open trigger" while the panel is mounted.
+                    'border-[var(--fg)] bg-[var(--fg)] text-[var(--bg)]',
+                  )
+                : cn(
+                    'border-[var(--border)] text-[var(--fg-3)]',
+                    'hover:text-[var(--fg)] hover:border-[var(--border-hi)] hover:bg-[var(--surface-2)]',
+                  ),
+            )}
+          >
+            {/* Icon morph: a single + glyph that rotates 45° when the
+                panel is open so it reads as ×. The rotation is on the
+                SVG itself (not the button) so the active-state bg
+                transition doesn't pull the icon out of center. */}
+            <svg
+              width={11}
+              height={11}
+              viewBox="0 0 16 16"
+              fill="none"
+              className={cn(
+                'transition-transform duration-200 ease-out',
+                addOpen ? 'rotate-45' : 'rotate-0',
+              )}
+            >
+              <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
+            </svg>
+          </button>
+          {addOpen && (
+            <TopicAddPanel
+              available={available}
+              onAdd={addChip}
+              onClose={dismissAdd}
+              closing={addClosing}
+            />
+          )}
+        </div>
+      </div>
     </nav>
   );
 }
 
-function TopicChip({
+/**
+ * Each chip is its own dnd-kit sortable. The drag handle is the whole
+ * chip body — pointer activation constraint (6px) lets a quick click
+ * register as `onPick` while a hold-and-drag triggers reorder. The
+ * hover-revealed × is the dedicated remove target so it never conflicts
+ * with either gesture.
+ */
+function SortableTopicChip({
   topic,
   onPick,
+  onRemove,
   highlighted = false,
 }: {
   topic: TopicSpec;
-  onPick: (prompt: string) => void;
+  onPick: (topic: TopicSpec) => void;
+  onRemove: (id: string) => void;
   highlighted?: boolean;
 }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: topic.id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
   return (
-    <button
-      type="button"
-      onClick={() => onPick(topic.prompt)}
-      className={cn(
-        'inline-flex items-center gap-1.5',
-        'h-7 px-2.5 rounded-full',
-        'text-[12.5px] font-medium leading-none whitespace-nowrap',
-        'transition-colors',
-        highlighted
-          ? 'bg-[var(--fg)] text-[var(--bg)]'
-          : 'border border-[var(--border)] text-[var(--fg-2)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)] hover:border-[var(--border-hi)]',
-      )}
-    >
-      <span
-        aria-hidden
+    <li ref={setNodeRef} style={style} className={cn('shrink-0 relative group/chip', isDragging && 'z-10')}>
+      <button
+        type="button"
+        onClick={() => onPick(topic)}
+        {...attributes}
+        {...listeners}
         className={cn(
-          'inline-flex items-center justify-center shrink-0',
-          highlighted ? 'text-[var(--bg)]' : 'text-[var(--fg-3)]',
+          'inline-flex items-center gap-1.5',
+          'h-7 px-2.5 rounded-full',
+          'text-[12.5px] font-medium leading-none whitespace-nowrap',
+          'transition-[background-color,color,border-color,box-shadow,transform] duration-200 ease-out',
+          'motion-safe:will-change-transform',
+          'hover:scale-[1.03] active:scale-95',
+          highlighted
+            ? 'bg-[var(--fg)] text-[var(--bg)]'
+            : 'border border-[var(--border)] text-[var(--fg-2)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)] hover:border-[var(--border-hi)]',
+          isDragging && 'opacity-80 cursor-grabbing shadow-[0_6px_18px_-8px_color-mix(in_oklab,var(--fg)_45%,transparent)]',
         )}
       >
-        {topic.ticker ? (
-          <CoinIcon symbol={topic.ticker} size={14} />
-        ) : topic.icon ? (
-          <TopicIcon kind={topic.icon} size={12} />
-        ) : (
-          <TopicIcon kind="spark" size={12} />
+        <span
+          aria-hidden
+          className={cn(
+            'inline-flex items-center justify-center shrink-0',
+            highlighted ? 'text-[var(--bg)]' : 'text-[var(--fg-3)]',
+          )}
+        >
+          {topic.ticker ? (
+            <CoinIcon symbol={topic.ticker} size={14} />
+          ) : topic.icon ? (
+            <TopicIcon kind={topic.icon} size={12} />
+          ) : (
+            <TopicIcon kind="spark" size={12} />
+          )}
+        </span>
+        <span>{topic.label}</span>
+      </button>
+      <button
+        type="button"
+        aria-label={`Remove ${topic.label}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove(topic.id);
+        }}
+        className={cn(
+          'absolute -top-1.5 -right-1.5',
+          'h-4 w-4 rounded-full',
+          'inline-flex items-center justify-center',
+          'bg-[var(--surface)] border border-[var(--border)] text-[var(--fg-3)]',
+          'opacity-0 group-hover/chip:opacity-100',
+          'hover:bg-[var(--surface-2)] hover:text-[var(--fg)]',
+          'transition-opacity duration-150',
         )}
-      </span>
-      <span>{topic.label}</span>
-    </button>
+      >
+        <svg width={7} height={7} viewBox="0 0 8 8" fill="none">
+          <path d="M1.5 1.5l5 5M6.5 1.5l-5 5" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
+        </svg>
+      </button>
+    </li>
+  );
+}
+
+/**
+ * Tiny dropdown panel anchored to the (+) button. Lists every chip in
+ * the catalog that the user hasn't added yet. Click to add. ESC + click
+ * outside dismiss. Uses the same slide-in keyframes as the slash
+ * palette for visual consistency.
+ */
+function TopicAddPanel({
+  available,
+  onAdd,
+  onClose,
+  closing = false,
+}: {
+  available: ReadonlyArray<TopicSpec>;
+  onAdd: (id: string) => void;
+  onClose: () => void;
+  /** When true, render the slide-out keyframe instead of slide-in. The
+   *  parent keeps the panel mounted for ~160ms so the exit animation
+   *  reads as decisive instead of snapping to unmount. */
+  closing?: boolean;
+}) {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const listRef = useRef<HTMLUListElement | null>(null);
+
+  // Re-clamp the active index if `available` shrinks (the user added a
+  // topic and the panel re-rendered with one fewer row).
+  useEffect(() => {
+    if (activeIdx >= available.length) {
+      setActiveIdx(available.length === 0 ? 0 : available.length - 1);
+    }
+  }, [activeIdx, available.length]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (available.length === 0) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setActiveIdx((i) => Math.min(available.length - 1, i + 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActiveIdx((i) => Math.max(0, i - 1));
+      } else if (e.key === 'Enter') {
+        const picked = available[activeIdx];
+        if (picked) {
+          e.preventDefault();
+          onAdd(picked.id);
+        }
+      }
+    };
+    const onClick = (e: MouseEvent): void => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('[data-topic-add-panel]')) return;
+      // The (+) toggle handles its own dismiss via toggleAdd, so swallow
+      // outside-clicks that land on it to avoid a double-dismiss race.
+      if (target?.closest('[aria-haspopup="menu"]')) return;
+      onClose();
+    };
+    window.addEventListener('keydown', onKey, true);
+    window.addEventListener('pointerdown', onClick);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('pointerdown', onClick);
+    };
+  }, [activeIdx, available, onAdd, onClose]);
+
+  // Scroll the focused row into view as the user arrow-navigates.
+  useEffect(() => {
+    const root = listRef.current;
+    if (!root) return;
+    const el = root.querySelector<HTMLLIElement>(`[data-idx="${activeIdx}"]`);
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, [activeIdx]);
+
+  return (
+    <div
+      data-topic-add-panel
+      role="menu"
+      aria-label="Add topic to bar"
+      className={cn(
+        'absolute z-30',
+        // Anchor: above the (+) trigger, right-aligned to its edge so the
+        // panel grows leftward into the bar — the (+) sits at the
+        // rightmost end of the carousel, and a left-anchored panel would
+        // run off the viewport on narrow widths. Opening above also keeps
+        // the panel out of the composer textarea below.
+        'right-0 bottom-full mb-2',
+        'min-w-[240px] max-h-[280px] overflow-y-auto',
+        // Solid minimalist surface — matches SlashPalette. Transparent
+        // popovers bleed the chips bar through and confuse the reading
+        // hierarchy, so both popovers on this screen stay fully opaque.
+        'rounded-2xl border border-[var(--border)]',
+        'bg-[var(--surface)]',
+        'shadow-[0_12px_36px_-18px_color-mix(in_oklab,#000_85%,transparent)]',
+        'motion-safe:will-change-transform',
+        closing
+          ? 'motion-safe:slash-palette-slide-out'
+          : 'motion-safe:slash-palette-slide-in',
+        'overflow-hidden pb-1',
+      )}
+    >
+      {/* Section stamp — same scale + tracking as the slash palette so
+          both popovers feel like siblings. */}
+      <p className="px-3 pt-3 pb-1.5 text-[10px] uppercase tracking-[0.2em] font-semibold text-[var(--fg-3)]">
+        Add topic
+      </p>
+      {available.length === 0 ? (
+        <p className="px-3 py-2 text-[12.5px] text-[var(--fg-3)]">
+          Every topic is already in the bar.
+        </p>
+      ) : (
+        <ul ref={listRef} className="flex flex-col max-h-[220px] overflow-y-auto">
+          {available.map((t, idx) => {
+            const active = idx === activeIdx;
+            return (
+              <li key={t.id} data-idx={idx}>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onMouseEnter={() => setActiveIdx(idx)}
+                  onClick={() => onAdd(t.id)}
+                  className={cn(
+                    'relative w-full flex items-center gap-2.5 px-3 py-1.5 text-left',
+                    'text-[12.5px] transition-colors',
+                    // Left-edge accent — same focus-cue pattern as the
+                    // slash palette. No heavy background flood.
+                    'before:absolute before:left-0 before:top-1.5 before:bottom-1.5',
+                    'before:w-[2px] before:rounded-r-full',
+                    'before:transition-colors',
+                    active
+                      ? 'bg-[color-mix(in_oklab,var(--fg)_4%,transparent)] text-[var(--fg)] before:bg-[var(--fg)]'
+                      : 'text-[var(--fg-2)] before:bg-transparent hover:text-[var(--fg)] hover:bg-[color-mix(in_oklab,var(--fg)_3%,transparent)]',
+                  )}
+                >
+                  <span aria-hidden className="inline-flex items-center justify-center shrink-0 w-4 text-[var(--fg-3)]">
+                    {t.ticker ? (
+                      <CoinIcon symbol={t.ticker} size={14} />
+                    ) : t.icon ? (
+                      <TopicIcon kind={t.icon} size={12} />
+                    ) : (
+                      <TopicIcon kind="spark" size={12} />
+                    )}
+                  </span>
+                  <span className="flex-1">{t.label}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -1963,10 +2647,170 @@ function TopicIcon({ kind, size = 12 }: { kind: TopicIconKind; size?: number }) 
   }
 }
 
+/* ─────────────────────────── Quota line ─────────────────────────── */
+
+/**
+ * Single-line tier + cap badge that sits above the topic chip bar so
+ * the user always knows where they stand. Reads from the cached
+ * `/api/quota` payload — the same SWR slot the rest of the shell uses
+ * — so no second fetch. Four branches matching the discriminated
+ * QuotaState tier:
+ *   - trial  → "Prueba · {days}d · {used}/{cap} hoy"
+ *   - pro    → "Pro · {used}/{cap} hoy"
+ *   - elite  → "Elite · ilimitado"
+ *   - free   → "Prueba terminada · /pricing"
+ */
+function QuotaLine({ quota }: { quota: QuotaState }) {
+  const t = useTranslations('predict.shell');
+  let body: ReactNode = null;
+  if (quota.tier === 'trial' && quota.trial) {
+    body = t('trialLine', {
+      days: quota.trial.daysRemaining,
+      used: quota.trial.dailyUsed,
+      cap: quota.trial.dailyCap,
+    });
+  } else if (quota.tier === 'pro') {
+    body = t('proLine', { used: quota.used, cap: quota.limit });
+  } else if (quota.tier === 'elite') {
+    body = t('eliteLine');
+  } else {
+    body = t('freeLine');
+  }
+  return (
+    <div className="shrink-0 mx-auto max-w-[860px] w-full px-3 sm:px-6 pt-2">
+      <span
+        className={cn(
+          'inline-flex items-center gap-1.5',
+          'mono tabular text-[10px] uppercase tracking-[0.16em]',
+          'text-[var(--fg-3)]',
+        )}
+      >
+        <span
+          aria-hidden
+          className={cn(
+            'inline-block h-1.5 w-1.5 rounded-full',
+            quota.tier === 'elite' && 'bg-[var(--accent)]',
+            quota.tier === 'pro' && 'bg-[var(--accent)]',
+            quota.tier === 'trial' && 'bg-[var(--fg-2)]',
+            quota.tier === 'free' && 'bg-[var(--danger)]',
+          )}
+        />
+        {body}
+      </span>
+    </div>
+  );
+}
+
+/* ────────────────────────── Example roll ────────────────────────── */
+
+/**
+ * Single-line conversational prompt rotator. One example sits centred
+ * under the subtitle and rolls upward every 4s via the
+ * `vz-example-roll` keyframe (defined in globals.css). The wrapping
+ * button submits the foregrounded prompt on click; hover pauses the
+ * cycle so a slow-moving cursor doesn't trigger a stale example.
+ *
+ * Why a single chip instead of a marquee or a grid:
+ *   - Marquee reads as "ticker" — informational. We want "suggestion".
+ *   - Wrapped grid creates visual noise at the empty state, and the
+ *     full catalog is already a tap away via the topic bar below.
+ *   - A single foregrounded prompt mirrors how the user would phrase
+ *     their first question — a single sentence, one click to send.
+ */
+function ExampleRoll({
+  examples,
+  eyebrow,
+  onPick,
+}: {
+  examples: ReadonlyArray<string>;
+  eyebrow: string;
+  onPick: (text: string) => void;
+}) {
+  const [idx, setIdx] = useState(0);
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    if (examples.length <= 1 || paused) return;
+    const id = window.setInterval(() => {
+      setIdx((i) => (i + 1) % examples.length);
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [examples.length, paused]);
+  const current = examples[idx] ?? '';
+
+  return (
+    <div
+      className="mt-3 flex flex-col items-center gap-2 w-full"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
+    >
+      <span className="mono tabular text-[10px] uppercase tracking-[0.2em] text-[var(--fg-3)]">
+        {eyebrow}
+      </span>
+      <button
+        type="button"
+        onClick={() => onPick(current)}
+        aria-live="polite"
+        aria-label={current}
+        className={cn(
+          'group relative inline-flex items-center justify-center',
+          'min-h-[2.25rem] max-w-[44ch] px-3 py-1.5',
+          'text-[13.5px] leading-snug text-[var(--fg-2)]',
+          'rounded-full',
+          'transition-colors duration-200 ease-out',
+          'hover:text-[var(--fg)]',
+          'hover:bg-[color-mix(in_oklab,var(--fg)_4%,transparent)]',
+        )}
+      >
+        {/* The keyed inner span remounts on every idx change, which
+            re-fires the vz-example-roll animation for a smooth
+            text-up transition. The button shell itself never
+            re-mounts, so the click target stays stable across ticks. */}
+        <span
+          key={current}
+          className="vz-example-roll inline-block text-balance"
+        >
+          {current}
+        </span>
+        {/* Hairline underline that draws in on hover — the only
+            visual chrome on the prompt, so it reads as a hyperlink
+            cue rather than a chip. */}
+        <span
+          aria-hidden
+          className={cn(
+            'pointer-events-none absolute left-3 right-3 bottom-1 h-px',
+            'origin-left scale-x-0 group-hover:scale-x-100',
+            'bg-[color-mix(in_oklab,var(--fg)_50%,transparent)]',
+            'transition-transform duration-300 ease-out',
+          )}
+        />
+      </button>
+    </div>
+  );
+}
+
 /* ─────────────────────────── Welcome ─────────────────────────── */
 
-function Welcome() {
+function Welcome({ onPick }: { onPick: (text: string) => void }) {
   const t = useTranslations('predict.shell.welcome');
+  // Rotating example — a single chip below the subtitle that cycles
+  // through a localized array every 3.5s with a fade. Reads as a
+  // gentle "what should I try" prompt without dragging a full
+  // suggestion grid into the hero. The values come from i18n so the
+  // ES/EN/FR variants can drift independently.
+  const examplesRaw = t('examples');
+  const examples = useMemo<string[]>(() => {
+    if (!examplesRaw) return [];
+    // The key is a `|`-delimited string in messages/*.json so
+    // next-intl returns it verbatim; cheaper than a nested array
+    // (which would need a different message format).
+    return examplesRaw
+      .split('|')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+  }, [examplesRaw]);
+
   return (
     // Full-height container so the title is vertically centred in the
     // available chat area, not just padded from the top. min-h-full
@@ -1997,6 +2841,21 @@ function Welcome() {
         <p className="text-[14.5px] leading-relaxed text-[var(--fg-2)] max-w-[52ch] mx-auto">
           {t('sub')}
         </p>
+        {examples.length > 0 && (
+          // Roll suggestion — a single prompt sits centred and rolls
+          // upward on each tick via the `vz-example-roll` keyframe.
+          // Cubic-bezier easing + a brief 2px blur on the rise gives
+          // the swap a polished, "spoken word" feel instead of the
+          // mechanical scroll of a marquee. The whole row is a button
+          // so a single click submits the foregrounded prompt and
+          // starts the conversation. Hover pauses the rotation so the
+          // click target doesn't morph out from under the cursor.
+          <ExampleRoll
+            examples={examples}
+            eyebrow={t('exampleEyebrow')}
+            onPick={onPick}
+          />
+        )}
       </div>
     </div>
   );
