@@ -16,7 +16,18 @@
 
 import type { ReactElement } from 'react';
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, RotateCw, ExternalLink } from 'lucide-react';
+import useSWR from 'swr';
+import { Check, Copy, RotateCw } from 'lucide-react';
+import { WalletAuthButton } from '@/components/auth/wallet-auth-button';
+
+interface SessionInfo {
+  wallet: string | null;
+}
+
+const sessionFetcher = (url: string): Promise<SessionInfo> =>
+  fetch(url, { credentials: 'include' }).then((r) =>
+    r.ok ? (r.json() as Promise<SessionInfo>) : { wallet: null },
+  );
 
 interface CliPairIslandProps {
   isSignedIn: boolean;
@@ -33,7 +44,19 @@ interface MintResponse {
 }
 
 export function CliPairIsland(props: CliPairIslandProps): ReactElement {
-  const { isSignedIn, walletAddress, code } = props;
+  const { isSignedIn: serverIsSignedIn, walletAddress: serverWallet } = props;
+  // SWR-driven session detection so the page transitions live the
+  // moment WalletAuthButton finishes the SIWS dance — without this,
+  // the operator has to refresh after connecting before the mint UI
+  // appears, which is exactly the UX we're trying to eliminate.
+  const { data: session } = useSWR<SessionInfo>('/api/auth/session', sessionFetcher, {
+    fallbackData: { wallet: serverWallet },
+    refreshInterval: 2000, // poll every 2s while the user is on this page
+    revalidateOnFocus: true,
+  });
+  const isSignedIn = (session?.wallet ?? null) !== null || serverIsSignedIn;
+  const walletAddress = session?.wallet ?? serverWallet;
+
   const [mint, setMint] = useState<MintResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -67,21 +90,21 @@ export function CliPairIsland(props: CliPairIslandProps): ReactElement {
   }, [isSignedIn, requestMint]);
 
   if (!isSignedIn) {
-    const returnTo = `/cli-pair${code ? `?code=${encodeURIComponent(code)}` : ''}`;
-    const connectHref = `/wallet/connect?returnTo=${encodeURIComponent(returnTo)}`;
     return (
       <div className="rounded-lg border border-zinc-700 bg-zinc-900/40 p-6">
         <p className="mb-4 text-sm text-zinc-300">
-          You need to sign in with your wallet before we can mint a CLI token.
-          The site uses Sign-In-With-Solana — no transaction, no gas.
+          Sign in with your wallet to mint a CLI token. The site uses
+          Sign-In-With-Solana — no transaction, no gas. After signing,
+          this page refreshes and the token appears here automatically.
         </p>
-        <a
-          href={connectHref}
-          className="inline-flex items-center gap-2 rounded-md bg-cyan-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-cyan-400"
-        >
-          Connect wallet
-          <ExternalLink className="h-4 w-4" />
-        </a>
+        {/* WalletAuthButton opens its own selector modal + handles the
+            SIWS dance. We pass `useModal` so it shows the picker even
+            without an outer Solana wallet provider on this page. */}
+        <WalletAuthButton useModal />
+        <p className="mt-4 text-xs text-zinc-500">
+          Tip: if the modal doesn't auto-open, click the wallet icon in the
+          page header.
+        </p>
       </div>
     );
   }
