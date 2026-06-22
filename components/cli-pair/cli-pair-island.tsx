@@ -1,24 +1,48 @@
 'use client';
 
 // ---------------------------------------------------------------------------
-// CliPairIsland — client-side bridge between the SIWS session and the
-// /api/cli-pair/mint endpoint. Kept as an island (not the whole page) so
-// the actual token never lands in the server-rendered HTML — we fetch it
-// from the client after first paint.
+// CliPairIsland — bridge between the SIWS session and the
+// /api/cli-pair/mint endpoint. Mirrors the wallet-provider topology used
+// by /predict:
 //
-// Two states:
-//   1. Not signed in  -> "Connect wallet" CTA that redirects to the
-//      site's existing wallet-connect flow with returnTo=/cli-pair so
-//      the operator lands back here automatically after signing.
-//   2. Signed in      -> on mount, POST /api/cli-pair/mint, render the
-//      token in a copy-able code block + manual "Regenerate" button.
+//   <SolanaWalletAdapter autoConnect={false}>  (dynamic, ssr:false)
+//     <CliPairIslandInner />
+//   </SolanaWalletAdapter>
+//
+// And inside the inner shell, the connect CTA is
+// `<WalletAuthButton hasProvider useModal />` so the modal shares this
+// provider context. That single shared context is what fixes:
+//   - Desktop: Phantom extension actually pops the approve popup
+//     (without it, the click hangs on "Open Phantom to approve" and
+//     the modal surfaces a bogus "Phantom isn't installed" error).
+//   - Mobile (iOS/Android): the wallet-adapter's deep-link bridge
+//     can hand off to the Phantom / Solflare app since it's running
+//     inside an authoritative provider tree.
+//
+// Two render states inside:
+//   1. Not signed in  -> WalletAuthButton + instructions.
+//   2. Signed in      -> on mount POST /api/cli-pair/mint and render
+//      the token in a copy-able code block + Regenerate button.
+//
+// Server-side props (`isSignedIn`, `walletAddress`) seed the SWR
+// fallback so first paint is correct; the SWR poll catches the
+// post-connect transition without requiring a page refresh.
 // ---------------------------------------------------------------------------
 
 import type { ReactElement } from 'react';
 import { useCallback, useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import useSWR from 'swr';
 import { Check, Copy, RotateCw } from 'lucide-react';
 import { WalletAuthButton } from '@/components/auth/wallet-auth-button';
+
+// Dynamically import the Solana wallet provider with ssr:false so
+// browser-only deps (window, navigator.solana) don't blow up during
+// the Next.js server render. Same pattern as /predict.
+const SolanaWalletAdapter = dynamic(() => import('@/components/wallet/wallet-provider'), {
+  ssr: false,
+  loading: () => null,
+});
 
 interface SessionInfo {
   wallet: string | null;
@@ -43,7 +67,24 @@ interface MintResponse {
   pairedAt: number;
 }
 
+/**
+ * Outer wrapper that mounts the SolanaWalletAdapter. The actual UI lives
+ * in CliPairIslandInner so it can call hooks that depend on the wallet
+ * provider context (useWallet, useConnection).
+ *
+ * autoConnect=false intentionally — see the comment block at the top of
+ * predict-shell.tsx. Silent auto-connect leaves Phantom in a state that
+ * swallows the next explicit connect() from the selector modal.
+ */
 export function CliPairIsland(props: CliPairIslandProps): ReactElement {
+  return (
+    <SolanaWalletAdapter autoConnect={false}>
+      <CliPairIslandInner {...props} />
+    </SolanaWalletAdapter>
+  );
+}
+
+function CliPairIslandInner(props: CliPairIslandProps): ReactElement {
   const { isSignedIn: serverIsSignedIn, walletAddress: serverWallet } = props;
   // SWR-driven session detection so the page transitions live the
   // moment WalletAuthButton finishes the SIWS dance — without this,
@@ -97,15 +138,14 @@ export function CliPairIsland(props: CliPairIslandProps): ReactElement {
           Sign-In-With-Solana — no transaction, no gas. After signing,
           this page refreshes and the token appears here automatically.
         </p>
-        {/* WalletAuthButton opens its own selector modal + handles the
-            SIWS dance. We intentionally DON'T pass `useModal` here —
-            on this standalone page there is no outer Solana wallet
-            provider mounted, so the modal must mount its own
-            LazyWalletAdapter (which it does when hasOuterProvider=false,
-            the default when useModal isn't forced). Otherwise the
-            modal can't see installed wallets and surfaces a misleading
-            "Phantom isn't installed" error even when it is. */}
-        <WalletAuthButton />
+        {/* We ARE inside a SolanaWalletAdapter provider tree (mounted
+            by the outer CliPairIsland), so pass `hasProvider useModal`
+            exactly like /predict's gated composer does. The modal
+            shares this provider context instead of spawning a nested
+            LazyWalletAdapter — which is what makes Phantom actually
+            pop the extension popup on desktop and what makes the
+            mobile deep-link bridge work on iOS / Android. */}
+        <WalletAuthButton hasProvider useModal />
         <p className="mt-4 text-xs text-zinc-500">
           Tip: if the modal doesn't auto-open, click the wallet icon in the
           page header.
