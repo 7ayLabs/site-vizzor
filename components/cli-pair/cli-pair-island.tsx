@@ -98,9 +98,14 @@ export function CliPairIsland(props: CliPairIslandProps): ReactElement {
           this page refreshes and the token appears here automatically.
         </p>
         {/* WalletAuthButton opens its own selector modal + handles the
-            SIWS dance. We pass `useModal` so it shows the picker even
-            without an outer Solana wallet provider on this page. */}
-        <WalletAuthButton useModal />
+            SIWS dance. We intentionally DON'T pass `useModal` here —
+            on this standalone page there is no outer Solana wallet
+            provider mounted, so the modal must mount its own
+            LazyWalletAdapter (which it does when hasOuterProvider=false,
+            the default when useModal isn't forced). Otherwise the
+            modal can't see installed wallets and surfaces a misleading
+            "Phantom isn't installed" error even when it is. */}
+        <WalletAuthButton />
         <p className="mt-4 text-xs text-zinc-500">
           Tip: if the modal doesn't auto-open, click the wallet icon in the
           page header.
