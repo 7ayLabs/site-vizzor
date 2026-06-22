@@ -146,12 +146,30 @@ export async function POST(req: Request): Promise<Response> {
   } catch (err) {
     clearTimeout(timeout);
     const msg = err instanceof Error ? err.message : String(err);
+    // Dev-mock fallback: when NEXT_PUBLIC_ALLOW_DEV_AUTH=true and the
+    // configured upstream is unreachable (typical when the operator has
+    // VIZZOR_API_URL set to a local engine they haven't started), we
+    // serve the same canned SSE the default-prod-upstream branch above
+    // serves. The point is the operator gets a working chat surface
+    // without having to also stand up an engine.
+    if (isDevAuth) {
+      const lastUser = [...body.messages].reverse().find((m) => m.role === 'user');
+      return devMockSseResponse(walletAddress, tier, lastUser?.content ?? '');
+    }
     return jsonError(503, 'engine_offline', `Vizzor engine unreachable: ${msg}`);
   }
 
   // Re-shape upstream failures into the JSON envelope the CLI expects.
   if (!upstreamRes.ok) {
     clearTimeout(timeout);
+    // Dev-mock fallback for non-200 upstream too — e.g. the operator's
+    // local engine is running but returns 401/403/404 because their DB
+    // doesn't know the wallet. We'd rather give them a working dev
+    // surface than make them wrestle with multi-host auth alignment.
+    if (isDevAuth) {
+      const lastUser = [...body.messages].reverse().find((m) => m.role === 'user');
+      return devMockSseResponse(walletAddress, tier, lastUser?.content ?? '');
+    }
     const text = await upstreamRes.text().catch(() => '');
     if (upstreamRes.status === 401 || upstreamRes.status === 403) {
       return jsonError(401, 'auth_invalid', `Engine rejected the request: ${text}`);
