@@ -96,25 +96,26 @@ export default async function PricingPage({
   const t = await getTranslations('pricing');
 
   return (
-    <section className="relative">
-      {/* Lifetime promo modal — auto-opens once per visitor, 30d
-          suppress on dismiss, re-trigger via floating pill. */}
-      <LifetimePromoIsland />
-      <div className="mx-auto w-full max-w-[1180px] px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
-        {/* Heading — single centered display word, no eyebrow / sub.
-            Ollama-style: the cards do the talking. */}
-        <GsapHeadline
-          as="h1"
-          className="flex flex-col gap-3 text-center items-center"
-          title={t('title')}
-          titleClassName="display text-[var(--fg)] text-balance text-[48px] sm:text-[60px] lg:text-[72px] leading-[1.0] tracking-tight font-semibold"
-        />
+    <ActivePlanIsland>
+      <section className="relative">
+        {/* Lifetime promo modal — auto-opens once per visitor, 30d
+            suppress on dismiss, re-trigger via floating pill. Lives
+            inside the ActivePlanIsland so the pill can hide itself
+            for users who already own the lifetime tier. */}
+        <LifetimePromoIsland />
+        <div className="mx-auto w-full max-w-[1180px] px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
+          {/* Heading — single centered display word, no eyebrow / sub.
+              Ollama-style: the cards do the talking. */}
+          <GsapHeadline
+            as="h1"
+            className="flex flex-col gap-3 text-center items-center"
+            title={t('title')}
+            titleClassName="display text-[var(--fg)] text-balance text-[48px] sm:text-[60px] lg:text-[72px] leading-[1.0] tracking-tight font-semibold"
+          />
 
-        {/* Tier cards — wrapped in ActivePlanIsland so each card's CTA
-            + badges can read the connected wallet's plan via context.
-            Unauthenticated visitors see the page identical to before
-            (the island defaults to a free/no-sub state). */}
-        <ActivePlanIsland>
+          {/* Tier cards — each CTA + trial badge consumes the active
+              plan via context (see ActivePlanIsland). Unauthenticated
+              visitors see the page identical to before. */}
           <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
             {TIERS.map((tier, idx) => (
               <MotionReveal key={tier.key} delay={idx * 80}>
@@ -122,7 +123,6 @@ export default async function PricingPage({
               </MotionReveal>
             ))}
           </div>
-        </ActivePlanIsland>
 
         {/* Trial callout */}
         <MotionReveal delay={120}>
@@ -189,8 +189,9 @@ export default async function PricingPage({
           </div>
         </section>
 
-      </div>
-    </section>
+        </div>
+      </section>
+    </ActivePlanIsland>
   );
 }
 
