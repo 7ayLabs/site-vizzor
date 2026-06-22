@@ -228,6 +228,13 @@ function ConnectGate(): ReactElement {
       w.adapter.readyState === WalletReadyState.Loadable,
   );
 
+  // Dev-only escape hatch — when NEXT_PUBLIC_ALLOW_DEV_AUTH=true is
+  // exported on the host, we can mint a session via /api/auth/dev-sign
+  // and skip the wallet selector modal entirely. Useful while the
+  // Phantom+Brave detection bug is being worked on, and for CI smokes
+  // that can't actually sign with a real wallet.
+  const allowDevAuth = process.env.NEXT_PUBLIC_ALLOW_DEV_AUTH === 'true';
+
   return (
     <div className="rounded-lg border border-zinc-700 bg-zinc-900/40 p-6">
       <p className="mb-4 text-sm text-zinc-300">
@@ -254,6 +261,76 @@ function ConnectGate(): ReactElement {
         unlocking your wallet. (Phantom needs to be unlocked for the
         Wallet Standard registry to populate.)
       </p>
+      {allowDevAuth ? <DevAuthBypass /> : null}
+    </div>
+  );
+}
+
+/**
+ * Dev-only quick-sign that calls /api/auth/dev-sign to mint a session
+ * without going through the wallet selector modal. Only rendered when
+ * `NEXT_PUBLIC_ALLOW_DEV_AUTH=true` is set in the host env. The endpoint
+ * itself double-gates on the same flag + origin allow-list, so even if
+ * someone smuggles this component into prod the endpoint 404s.
+ */
+function DevAuthBypass(): ReactElement {
+  const DEFAULT_DEV_WALLET = 'So11111111111111111111111111111111111111112';
+  const [wallet, setWallet] = useState(DEFAULT_DEV_WALLET);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const trigger = async (): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/auth/dev-sign', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ wallet }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      // The SWR poll on /api/auth/session will pick up the new cookie
+      // within ~2 s and the page will transition automatically.
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-6 rounded-md border border-amber-900/50 bg-amber-950/20 p-4">
+      <p className="mb-2 text-xs uppercase tracking-wider text-amber-300">
+        Dev mode — wallet bypass
+      </p>
+      <p className="mb-3 text-xs text-amber-200/80">
+        NEXT_PUBLIC_ALLOW_DEV_AUTH is on. Skip the wallet selector and
+        mint a session for any address. Dev-only — the endpoint 404s
+        in production.
+      </p>
+      <input
+        type="text"
+        value={wallet}
+        onChange={(e) => setWallet(e.target.value)}
+        placeholder="Solana address (base58)"
+        className="mb-2 w-full rounded-md border border-amber-900/40 bg-zinc-900 px-3 py-2 font-mono text-xs text-zinc-200 outline-none focus:border-amber-700"
+      />
+      <button
+        type="button"
+        onClick={() => void trigger()}
+        disabled={busy || !wallet.trim()}
+        className="inline-flex items-center gap-2 rounded-md bg-amber-700 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-amber-600 disabled:opacity-50"
+      >
+        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+        {busy ? 'Signing…' : 'Dev-sign as this wallet'}
+      </button>
+      {error ? (
+        <p className="mt-2 text-xs text-red-400">{error}</p>
+      ) : null}
     </div>
   );
 }
