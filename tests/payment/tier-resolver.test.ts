@@ -76,7 +76,7 @@ describe('resolveTier', () => {
     if (effective.kind === 'trial') {
       expect(effective.daysRemaining).toBe(7);
       expect(effective.dailyUsed).toBe(0);
-      expect(effective.dailyCap).toBe(10);
+      expect(effective.dailyCap).toBe(5);
     }
   });
 
