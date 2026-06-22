@@ -98,6 +98,19 @@ export async function POST(req: Request): Promise<Response> {
     'https://api.vizzor.ai'
   ).replace(/\/+$/, '');
 
+  // Dev mock short-circuit. When NEXT_PUBLIC_ALLOW_DEV_AUTH=true AND
+  // the upstream is the prod default (which the operator hasn't deployed
+  // locally), return a stub SSE so the operator can validate the wire
+  // end-to-end without standing up a real engine backend. The CLI
+  // HostedProvider can't tell the difference.
+  const isDevAuth = process.env.NEXT_PUBLIC_ALLOW_DEV_AUTH === 'true';
+  const isDefaultUpstream =
+    base === 'https://api.vizzor.ai' || base === 'https://api.vizzor.ai/v1';
+  if (isDevAuth && isDefaultUpstream) {
+    const lastUser = [...body.messages].reverse().find((m) => m.role === 'user');
+    return devMockSseResponse(walletAddress, tier, lastUser?.content ?? '');
+  }
+
   const engineHeaders: Record<string, string> = {
     'content-type': 'application/json',
     accept: 'text/event-stream',
@@ -179,6 +192,48 @@ export async function POST(req: Request): Promise<Response> {
       connection: 'keep-alive',
     },
   });
+}
+
+/**
+ * Dev mock — when NEXT_PUBLIC_ALLOW_DEV_AUTH=true AND no real upstream is
+ * reachable, return a stub SSE stream so the CLI HostedProvider has
+ * something to consume. Lets the operator validate the wire end-to-end
+ * without standing up a real engine backend.
+ */
+function devMockSseResponse(
+  wallet: string,
+  tier: string,
+  userMessage: string,
+): Response {
+  const reply =
+    `Hello from the local /api/v1/chat dev mock.\n\n` +
+    `Wallet: ${truncate(wallet)}\n` +
+    `Tier: ${tier}\n\n` +
+    `You said: "${userMessage}"\n\n` +
+    `In production this proxy forwards to the real Vizzor engine at ` +
+    `VIZZOR_API_URL (default https://api.vizzor.ai). The engine runs the ` +
+    `LLM, picks a model by tier, dispatches tools, and streams the result ` +
+    `back through this proxy to the CLI. The HostedProvider doesn't ` +
+    `notice the difference between mock and real — that's the contract.`;
+
+  const events = [
+    JSON.stringify({ type: 'text', text: reply }),
+    JSON.stringify({ type: 'done' }),
+  ];
+  const body = events.map((e) => `data: ${e}\n\n`).join('');
+  return new Response(body, {
+    status: 200,
+    headers: {
+      'content-type': 'text/event-stream',
+      'cache-control': 'no-cache, no-transform',
+      connection: 'keep-alive',
+    },
+  });
+}
+
+function truncate(addr: string): string {
+  if (addr.length <= 12) return addr;
+  return `${addr.slice(0, 6)}…${addr.slice(-6)}`;
 }
 
 // Tiny helper so every failure path emits the same JSON envelope shape.
