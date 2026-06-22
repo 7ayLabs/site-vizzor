@@ -33,7 +33,9 @@ import type { ReactElement } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import useSWR from 'swr';
-import { Check, Copy, RotateCw } from 'lucide-react';
+import { Check, Copy, RotateCw, Loader2 } from 'lucide-react';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { WalletReadyState } from '@solana/wallet-adapter-base';
 import { WalletAuthButton } from '@/components/auth/wallet-auth-button';
 
 // Dynamically import the Solana wallet provider with ssr:false so
@@ -131,27 +133,7 @@ function CliPairIslandInner(props: CliPairIslandProps): ReactElement {
   }, [isSignedIn, requestMint]);
 
   if (!isSignedIn) {
-    return (
-      <div className="rounded-lg border border-zinc-700 bg-zinc-900/40 p-6">
-        <p className="mb-4 text-sm text-zinc-300">
-          Sign in with your wallet to mint a CLI token. The site uses
-          Sign-In-With-Solana — no transaction, no gas. After signing,
-          this page refreshes and the token appears here automatically.
-        </p>
-        {/* We ARE inside a SolanaWalletAdapter provider tree (mounted
-            by the outer CliPairIsland), so pass `hasProvider useModal`
-            exactly like /predict's gated composer does. The modal
-            shares this provider context instead of spawning a nested
-            LazyWalletAdapter — which is what makes Phantom actually
-            pop the extension popup on desktop and what makes the
-            mobile deep-link bridge work on iOS / Android. */}
-        <WalletAuthButton hasProvider useModal />
-        <p className="mt-4 text-xs text-zinc-500">
-          Tip: if the modal doesn't auto-open, click the wallet icon in the
-          page header.
-        </p>
-      </div>
-    );
+    return <ConnectGate />;
   }
 
   return (
@@ -221,6 +203,57 @@ function CliPairIslandInner(props: CliPairIslandProps): ReactElement {
           </p>
         </>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Connect-wallet gate. Watches the Solana wallet-adapter's `wallets`
+ * array and only renders the actual WalletAuthButton once at least one
+ * adapter has finished Wallet Standard discovery (readyState === Installed
+ * or Loadable). This eliminates the "Phantom isn't installed" false
+ * positive that happens when the user clicks Connect within the first
+ * second of page load — discovery hadn't completed yet and the connect
+ * flow's 6 s timeout was firing before the wallet registered.
+ *
+ * On /predict this works "by accident" because the gate composer is far
+ * below the fold and the user scrolls before clicking. On /cli-pair the
+ * button is the first thing they see, so we make readiness explicit.
+ */
+function ConnectGate(): ReactElement {
+  const { wallets } = useWallet();
+  const hasReady = wallets.some(
+    (w) =>
+      w.adapter.readyState === WalletReadyState.Installed ||
+      w.adapter.readyState === WalletReadyState.Loadable,
+  );
+
+  return (
+    <div className="rounded-lg border border-zinc-700 bg-zinc-900/40 p-6">
+      <p className="mb-4 text-sm text-zinc-300">
+        Sign in with your wallet to mint a CLI token. The site uses
+        Sign-In-With-Solana — no transaction, no gas. After signing, this
+        page automatically swaps to a copyable token.
+      </p>
+      {hasReady ? (
+        <>
+          {/* hasProvider+useModal mirrors /predict so the selector modal
+              shares this provider tree's context, which makes Phantom
+              actually pop the extension popup and lets mobile
+              deep-links work. */}
+          <WalletAuthButton hasProvider useModal />
+        </>
+      ) : (
+        <div className="flex items-center gap-2 text-sm text-zinc-500">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Detecting wallets…
+        </div>
+      )}
+      <p className="mt-4 text-xs text-zinc-500">
+        Tip: if the connect button hangs, refresh the page after
+        unlocking your wallet. (Phantom needs to be unlocked for the
+        Wallet Standard registry to populate.)
+      </p>
     </div>
   );
 }
