@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { createHmac, randomBytes } from 'node:crypto';
 import {
+  signVizzorAuthToken,
   verifyVizzorAuthToken,
   type VizzorAuthPayload,
 } from '@/lib/payment/vizzor-auth';
@@ -112,5 +113,52 @@ describe('lib/payment/vizzor-auth — verifyVizzorAuthToken', () => {
     const result2 = verifyVizzorAuthToken('.', SECRET);
     expect(result2.ok).toBe(false);
     if (!result2.ok) expect(result2.reason).toBe('malformed');
+  });
+
+  describe('signVizzorAuthToken', () => {
+    it('round-trips: token minted here verifies as ok', () => {
+      const now = Math.floor(Date.now() / 1000);
+      const token = signVizzorAuthToken(
+        { wallet: 'TestWallet123', tier: 'elite', iat: now, exp: now + 3600 },
+        SECRET,
+      );
+      const result = verifyVizzorAuthToken(token, SECRET);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.info.walletAddress).toBe('TestWallet123');
+        expect(result.info.tier).toBe('elite');
+      }
+    });
+
+    it('throws when secret is missing', () => {
+      const now = Math.floor(Date.now() / 1000);
+      expect(() =>
+        signVizzorAuthToken(
+          { wallet: 'W', tier: 'pro', iat: now, exp: now + 60 },
+          '',
+        ),
+      ).toThrow();
+    });
+
+    it('throws when tier is not in the union', () => {
+      const now = Math.floor(Date.now() / 1000);
+      expect(() =>
+        signVizzorAuthToken(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          { wallet: 'W', tier: 'platinum' as any, iat: now, exp: now + 60 },
+          SECRET,
+        ),
+      ).toThrow();
+    });
+
+    it('throws when lifetime exceeds the 24h ceiling', () => {
+      const now = Math.floor(Date.now() / 1000);
+      expect(() =>
+        signVizzorAuthToken(
+          { wallet: 'W', tier: 'pro', iat: now, exp: now + 25 * 60 * 60 },
+          SECRET,
+        ),
+      ).toThrow();
+    });
   });
 });

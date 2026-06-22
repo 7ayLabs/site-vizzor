@@ -58,6 +58,42 @@ export interface VerifyError {
     | 'invalid_payload';
 }
 
+/**
+ * Mint a vizzor_auth_v1 token. Used by `/cli-pair` to hand the CLI a
+ * paste-able credential after SIWS succeeds. The on-wire shape matches
+ * what the engine's verifier expects (see the engine's
+ * `signVizzorAuthToken` in `src/api/auth/wallet-auth.ts`).
+ *
+ * Inputs:
+ *   - payload: { wallet, tier, iat, exp }  — v field added automatically.
+ *   - secret:  VIZZOR_AUTH_SECRET (shared with engine).
+ *
+ * Returns:
+ *   `<base64url(payload)>.<base64url(HMAC-SHA256(secret, payload))>`
+ *   (without the `vizzor_auth_v1.` prefix — the engine + CLI strip
+ *   the prefix on read, so adding it here would just be cosmetic).
+ */
+export function signVizzorAuthToken(
+  payload: Omit<VizzorAuthPayload, 'v'>,
+  secret: string,
+): string {
+  if (!secret || secret.length === 0) {
+    throw new Error('signVizzorAuthToken: secret is required');
+  }
+  if (payload.exp - payload.iat > MAX_TOKEN_LIFETIME_SECONDS) {
+    throw new Error(
+      `signVizzorAuthToken: lifetime (${payload.exp - payload.iat}s) exceeds ceiling (${MAX_TOKEN_LIFETIME_SECONDS}s)`,
+    );
+  }
+  if (!TIER_VALUES.has(payload.tier)) {
+    throw new Error(`signVizzorAuthToken: invalid tier "${payload.tier}"`);
+  }
+  const full: VizzorAuthPayload = { ...payload, v: TOKEN_SCHEMA_VERSION };
+  const payloadB64 = Buffer.from(JSON.stringify(full)).toString('base64url');
+  const sig = createHmac('sha256', secret).update(payloadB64).digest('base64url');
+  return `${payloadB64}.${sig}`;
+}
+
 export function verifyVizzorAuthToken(
   token: string,
   secret: string | undefined,
