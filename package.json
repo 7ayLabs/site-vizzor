@@ -37,7 +37,7 @@
     "@tonconnect/ui-react": "^2.4.4",
     "@types/better-sqlite3": "^7.6.13",
     "ai": "^6.0.193",
-    "better-sqlite3": "^12.10.0",
+    "better-sqlite3": "^12.11.1",
     "bs58": "^6.0.0",
     "clsx": "^2.1.1",
     "fumadocs-core": "15.0.18",
@@ -61,7 +61,7 @@
     "swr": "^2.4.1",
     "three": "^0.184.0",
     "tweetnacl": "^1.0.3",
-    "viem": "^2.52.2"
+    "viem": "^2.53.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
