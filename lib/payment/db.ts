@@ -322,7 +322,7 @@ function runV020Migrations(db: DB): void {
    * time-based trial: each wallet gets full Pro-equivalent access for
    * `freeTrialDays()` (default 7) days from `trial_started_at`. A
    * `daily_used` counter (anchored on `daily_used_at`) caps abuse —
-   * default 10 predictions/day for trial wallets, higher for paid
+   * default 5 predictions/day for trial wallets, higher for paid
    * tiers. After expiry the wallet drops to a `free` tier with no LLM
    * access. See `lib/payment/tier-resolver.ts`.
    *

@@ -111,7 +111,7 @@ export async function POST(req: Request) {
    *
    *   1. Prompt size cap  — refuse "novel as a prompt" upfront.
    *   2. Plan gate        — `free` tier wallets refused (402).
-   *   3. Daily cap        — trial @ 10/day, pro @ 1000/day, elite ∞.
+   *   3. Daily cap        — trial @ 5/day, pro @ 1000/day, elite ∞.
    *   4. Burst rate limit — 1 prediction / 5s / wallet.
    *   5. Engine API key   — backstop, 60 req/min on the upstream key.
    *

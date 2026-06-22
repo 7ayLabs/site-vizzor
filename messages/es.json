@@ -223,12 +223,12 @@
   "predict": {
     "meta": {
       "title": "Predecir — Vizzor",
-      "description": "Conecta tu wallet para correr una llamada cripto calibrada contra el mismo motor que usa el bot de Telegram. Prueba Pro de 7 días, 10 predicciones/día. Tracked-live, recibos públicos."
+      "description": "Conecta tu wallet para correr una llamada cripto calibrada contra el mismo motor que usa el bot de Telegram. Prueba Pro de 7 días, 5 predicciones/día. Tracked-live, recibos públicos."
     },
     "gate": {
       "title": "Conecta tu wallet para predecir.",
       "body": "Vizzor ata la prueba a tu wallet, así el contador sobrevive aunque borres cookies. Firma una vez con SIWS — sin email, sin contraseña.",
-      "perk1": "Prueba Pro de 7 días, 10/día",
+      "perk1": "Prueba Pro de 7 días, 5/día",
       "perk2": "Facturación on-chain en SOL",
       "perk3": "Sin tarjeta, sin KYC",
       "perk4": "Mismo motor que el bot",
@@ -260,7 +260,7 @@
       "resetDev": "reiniciar · solo dev",
       "dailyCap": {
         "label": "Tope diario alcanzado",
-        "body": "Llegaste al tope de 10 predicciones de hoy. Se reinicia a las 00:00 UTC. Suscríbete para topes más altos."
+        "body": "Llegaste al tope de 5 predicciones de hoy. Se reinicia a las 00:00 UTC. Suscríbete para topes más altos."
       },
       "trialExpired": {
         "label": "Prueba terminada",
@@ -612,7 +612,7 @@
         "name": "Free",
         "sub": "Prueba Pro 7 días · scanner para siempre",
         "price": "$0",
-        "priceUnit": "Prueba Pro 7 días · 10/día",
+        "priceUnit": "Prueba Pro 7 días · 5/día",
         "cta": "Empezar gratis",
         "commandsLine": "/scan · /price · /trends · /sentiment · /whale-alert · /narrative · /presale · /help",
         "features": {
@@ -633,7 +633,7 @@
             "body": "Nuevos pares DEX · flow de narrativa · tokens trending · spikes de volumen · tracker de presales"
           },
           "trial": {
-            "title": "Prueba Pro de 7 días · 10 predicciones/día",
+            "title": "Prueba Pro de 7 días · 5 predicciones/día",
             "body": "Se activa sola al primer connect — en la web o Telegram. Sin tarjeta, sin KYC, baja a Free después de 7 días."
           }
         }
