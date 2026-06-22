@@ -728,6 +728,12 @@
       "title": "Chaque nouvel utilisateur reçoit Pro pendant 7 jours",
       "body": "À votre premier /start, l'accès Pro complet s'active automatiquement. Après 7 jours, le bot redescend en Free — pas de carte enregistrée, pas de surprise d'expiration, pas de prélèvement."
     },
+    "cta": {
+      "currentPlan": "Plan actuel",
+      "includedInHigher": "Inclus dans Elite",
+      "manage": "Gérer le plan",
+      "trialBadge": "Essai · %days%j"
+    },
     "chains": {
       "eyebrow": "payez en crypto",
       "title": "Deux rails natifs. Un abonnement.",

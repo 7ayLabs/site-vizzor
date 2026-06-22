@@ -728,6 +728,12 @@
       "title": "Cada usuario nuevo recibe Pro durante 7 días",
       "body": "En tu primer /start, el acceso Pro completo se activa automáticamente. Tras 7 días el bot baja a Free — sin tarjeta guardada, sin sorpresas, sin cargo."
     },
+    "cta": {
+      "currentPlan": "Plan actual",
+      "includedInHigher": "Incluido en Elite",
+      "manage": "Gestionar plan",
+      "trialBadge": "Prueba · %days%d"
+    },
     "chains": {
       "eyebrow": "paga con cripto",
       "title": "Dos rails nativos. Una suscripción.",

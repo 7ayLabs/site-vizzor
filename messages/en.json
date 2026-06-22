@@ -738,6 +738,12 @@
       "title": "Every new user gets Pro for 7 days",
       "body": "On your first /start, full Pro access activates automatically. After 7 days the bot auto-downgrades to Free — no card on file, no expiry surprise, no charge."
     },
+    "cta": {
+      "currentPlan": "Current plan",
+      "includedInHigher": "Included in Elite",
+      "manage": "Manage plan",
+      "trialBadge": "Trial · %days%d"
+    },
     "chains": {
       "eyebrow": "pay with crypto",
       "title": "Two native rails. One subscription.",
