@@ -23,7 +23,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
-import { Menu, X, ArrowUpRight } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
+import { TelegramIcon } from '@/components/icons/telegram-icon';
 import { Link, usePathname } from '@/i18n/navigation';
 import type { ComponentProps } from 'react';
 import type { Route } from 'next';
@@ -234,7 +235,7 @@ function MobilePanel({ phase, onClose, nav, cta }: PanelProps) {
             "
           >
             <span>{cta}</span>
-            <ArrowUpRight size={14} strokeWidth={2.2} />
+            <TelegramIcon size={14} />
           </a>
 
           <div className="flex items-center justify-between gap-3 pt-1">

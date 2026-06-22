@@ -23,6 +23,7 @@ import { ThemeToggle } from './theme-toggle';
 import { MobileMenu } from './mobile-menu';
 import { NavLinks } from './nav-links';
 import { WalletAuthButton } from '@/components/auth/wallet-auth-button';
+import { TelegramIcon } from '@/components/icons/telegram-icon';
 
 export async function Header() {
   const t = await getTranslations('header');
@@ -96,12 +97,10 @@ export async function Header() {
               "
             >
               {t('cta')}
-              <span
-                aria-hidden
+              <TelegramIcon
+                size={13}
                 className="transition-transform duration-200 ease-out group-hover:translate-x-0.5"
-              >
-                →
-              </span>
+              />
             </a>
           </span>
           <MobileMenu />
