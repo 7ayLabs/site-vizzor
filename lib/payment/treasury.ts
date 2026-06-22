@@ -21,8 +21,6 @@ import { paymentNetwork } from './network';
 const SOLANA_DEVNET_DEFAULT = '11111111111111111111111111111111';
 /** TON testnet treasury placeholder (the address must start with 'k' or '0'). */
 const TON_TESTNET_DEFAULT = '0QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
-/** EVM testnet treasury placeholder. */
-const EVM_TESTNET_DEFAULT = '0x0000000000000000000000000000000000000000';
 
 export function solanaTreasury(): string {
   const n = paymentNetwork();
@@ -63,32 +61,5 @@ export function tonTreasury(): string {
   );
 }
 
-export function evmTreasury(chain: 'base' | 'arbitrum'): string {
-  const main = paymentNetwork() === 'mainnet';
-  if (chain === 'base') {
-    if (main) {
-      return (
-        process.env.VIZZOR_EVM_TREASURY_BASE_MAINNET ??
-        process.env.VIZZOR_EVM_TREASURY_BASE ??
-        EVM_TESTNET_DEFAULT
-      );
-    }
-    return (
-      process.env.VIZZOR_EVM_TREASURY_BASE_TESTNET ??
-      process.env.VIZZOR_EVM_TREASURY_BASE ??
-      EVM_TESTNET_DEFAULT
-    );
-  }
-  if (main) {
-    return (
-      process.env.VIZZOR_EVM_TREASURY_ARB_MAINNET ??
-      process.env.VIZZOR_EVM_TREASURY_ARB ??
-      EVM_TESTNET_DEFAULT
-    );
-  }
-  return (
-    process.env.VIZZOR_EVM_TREASURY_ARB_TESTNET ??
-    process.env.VIZZOR_EVM_TREASURY_ARB ??
-    EVM_TESTNET_DEFAULT
-  );
-}
+// EVM treasury (Base / Arbitrum) was removed alongside USDC payments
+// in v0.4. Re-introduce here if a future chain expansion needs it.

@@ -91,8 +91,6 @@ function asStatusValue(kind: PurchaseState['kind']): StatusValue {
 
 function chainLabel(chain: PaymentChain): string {
   if (chain === 'ton') return 'TON';
-  if (chain === 'base') return 'Base';
-  if (chain === 'arbitrum') return 'Arbitrum';
   return 'Solana';
 }
 

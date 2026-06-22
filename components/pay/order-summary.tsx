@@ -47,8 +47,11 @@ interface RateResponse {
   reason?: string;
 }
 
-function priceToken(chain: PaymentChain, token: PaymentToken): 'sol' | 'ton' | 'usdc' {
-  if (token === 'usdc') return 'usdc';
+// `token` is now always 'native' (USDC was removed in v0.4). The
+// parameter stays in the signatures so the future re-introduction of a
+// non-native rail re-enters at the same call sites with one
+// discriminator added — no plumbing churn.
+function priceToken(chain: PaymentChain, _token: PaymentToken): 'sol' | 'ton' {
   if (chain === 'ton') return 'ton';
   return 'sol';
 }
@@ -59,17 +62,13 @@ function networkLabel(chain: PaymentChain): string {
 
 function iconConfig(
   chain: PaymentChain,
-  token: PaymentToken,
+  _token: PaymentToken,
 ): { primary: ChainIconId; networkBadge?: ChainIconId } {
-  if (token === 'usdc') {
-    return { primary: 'usdc', networkBadge: chain as ChainIconId };
-  }
   if (chain === 'ton') return { primary: 'ton' };
   return { primary: 'solana' };
 }
 
-function quoteSymbol(chain: PaymentChain, token: PaymentToken): string {
-  if (token === 'usdc') return 'USDC';
+function quoteSymbol(chain: PaymentChain, _token: PaymentToken): string {
   if (chain === 'ton') return 'TON';
   return 'SOL';
 }
@@ -138,10 +137,12 @@ export function OrderSummary({ tier, cadence, chain, token }: OrderSummaryProps)
   const hasDiscount = discountPct > 0;
 
   const symbol = quoteSymbol(chain, token);
+  // Native SOL and TON both render at 4-decimal precision (sub-cent
+  // for prices under ~$100). When USDC returns, branch here on token.
   const tokenAmountLabel = rateLoading
     ? '…'
     : tokenAmount !== null
-      ? `${tokenAmount.toFixed(token === 'usdc' ? 2 : 4)} ${symbol}`
+      ? `${tokenAmount.toFixed(4)} ${symbol}`
       : t('row.tokenUnavailable');
 
   return (

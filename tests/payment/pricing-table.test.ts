@@ -61,15 +61,10 @@ describe('discountBps — per-chain matrix', () => {
     expect(discountBps('elite', 'lifetime', 'ton', 'native')).toBe(1000);
   });
 
-  it('applies 5% on USDC L2 rails', () => {
-    expect(discountBps('pro', 'monthly', 'base', 'usdc')).toBe(500);
-    expect(discountBps('elite', 'lifetime', 'arbitrum', 'usdc')).toBe(500);
-  });
-
-  it('returns 0 for unsupported chain × token pairs', () => {
-    expect(discountBps('pro', 'monthly', 'solana', 'usdc')).toBe(0);
-    expect(discountBps('pro', 'monthly', 'ton', 'usdc')).toBe(0);
-  });
+  // USDC rails (Base / Arbitrum at 5%) were dropped in v0.4 — neither
+  // chain had a settled watcher. If they ever return, restore the
+  // matching `it('applies 5% on USDC L2 rails', …)` block here and
+  // re-add the discount entries in lib/payment/pricing-table.ts.
 });
 
 describe('effectivePriceCents', () => {
@@ -99,15 +94,12 @@ describe('effectivePriceCents', () => {
 
 describe('effectivePriceUsd — display formatting', () => {
   it('formats with two-decimal precision per rail', () => {
-    // Pro monthly $19 base — SOL 15% / TON 10% / USDC 5%
+    // Pro monthly $19 base — SOL 15% / TON 10%
     expect(effectivePriceUsd('pro', 'monthly', 'solana', 'native')).toBe(
       '$16.15',
     );
     expect(effectivePriceUsd('pro', 'monthly', 'ton', 'native')).toBe(
       '$17.10',
-    );
-    expect(effectivePriceUsd('pro', 'monthly', 'base', 'usdc')).toBe(
-      '$18.05',
     );
   });
 });

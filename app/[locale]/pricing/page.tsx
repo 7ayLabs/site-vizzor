@@ -80,7 +80,7 @@ const FEATURE_KEYS: Record<TierKey, readonly string[]> = {
   elite: ['whaleTerminal', 'smartMoney', 'forensics', 'preNews', 'crossVenue', 'api'],
 };
 
-const CHAINS = ['solana', 'ton', 'base', 'arbitrum'] as const;
+const CHAINS = ['solana', 'ton'] as const;
 const FAQ_KEYS = ['trial', 'cancel', 'chains', 'difference', 'refund'] as const;
 
 export default async function PricingPage({

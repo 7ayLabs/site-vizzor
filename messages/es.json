@@ -519,7 +519,7 @@
       },
       "billing": {
         "title": "Facturación on-chain",
-        "description": "Paga en SOL, TON o USDC. Sin tarjeta. Sin KYC. Cada rail trae su descuento — SOL 15%, TON 10%, USDC 5%.",
+        "description": "Paga en SOL o TON. Sin tarjeta. Sin KYC. Cada rail trae su descuento — SOL 15%, TON 10%.",
         "reveal": "Cada pago verificado on-chain — sin Stripe en medio."
       },
       "surfaces": {
@@ -589,7 +589,7 @@
   "pricing": {
     "eyebrow": "tiers · facturación honesta",
     "title": "Precios",
-    "sub": "Cuatro tiers, facturación on-chain en SOL, TON y USDC. Cada rail trae su descuento. Sin tarjetas. Cancela cuando quieras.",
+    "sub": "Tres tiers, facturación on-chain en SOL o TON. Cada rail trae su descuento. Sin tarjetas. Cancela cuando quieras.",
     "mostPopular": "Más popular",
     "orPrefix": "o",
     "promo": {
@@ -730,7 +730,7 @@
     },
     "chains": {
       "eyebrow": "paga con cripto",
-      "title": "Cuatro formas de pagar. Una suscripción.",
+      "title": "Dos rails nativos. Una suscripción.",
       "sub": "Elige el rail que encaje con tu wallet. Cada uno trae su propio descuento incorporado. Sin Stripe, sin datos de tarjeta, sin intermediarios.",
       "items": {
         "solana": {
@@ -744,18 +744,6 @@
           "token": "TON nativo",
           "discount": "ahorra 10%",
           "strategy": "Paga desde tu wallet dentro de Telegram. Confirmación instantánea."
-        },
-        "base": {
-          "name": "Base",
-          "token": "USDC en Base",
-          "discount": "ahorra 5%",
-          "strategy": "USDC de Circle en la L2 de Coinbase. ~$0.01 de gas."
-        },
-        "arbitrum": {
-          "name": "Arbitrum",
-          "token": "USDC en Arbitrum",
-          "discount": "ahorra 5%",
-          "strategy": "USDC de Circle en Arbitrum One. ~$0.01 de gas."
         }
       }
     },
@@ -773,7 +761,7 @@
         },
         "chains": {
           "q": "¿Desde qué cadenas puedo pagar?",
-          "a": "Cuatro rails están en vivo: SOL en Solana (ahorra 15%), TON (ahorra 10%), USDC en Base (ahorra 5%), USDC en Arbitrum (ahorra 5%). SOL se firma en el sitio; los otros tres pasan al bot de Telegram para firmar. Cada pago se verifica on-chain — sin Stripe, sin Plaid, sin datos de tarjeta, sin intermediarios."
+          "a": "Dos rails nativos están en vivo en la web: SOL en Solana (ahorra 15%) y TON (ahorra 10%). SOL se firma en el sitio; TON pasa al bot de Telegram para firmar. Cada pago se verifica on-chain — sin Stripe, sin Plaid, sin datos de tarjeta, sin intermediarios."
         },
         "difference": {
           "q": "¿Cuál es la diferencia práctica entre Free, Pro y Elite?",
@@ -794,7 +782,7 @@
     },
     "eyebrow": "checkout · elige tu rail",
     "title": "Activar {tier}",
-    "sub": "Paga on-chain con SOL, TON o USDC — cada rail tiene su propio descuento integrado. Nunca pedimos tarjeta. Cuando se confirme, tu código de acceso se canjea en el bot de Telegram.",
+    "sub": "Paga on-chain con SOL o TON — cada rail tiene su propio descuento integrado. Nunca pedimos tarjeta. Cuando se confirme, tu código de acceso se canjea en el bot de Telegram.",
     "legalFootnote": "Pago on-chain · cotización fija 5 min · cancela cuando quieras",
     "summary": {
       "label": "Resumen de la orden",
@@ -853,7 +841,7 @@
       "use": "Usar",
       "connect": "Conectar",
       "install": "Instalar",
-      "footer": "MetaMask no es una wallet de Solana — úsala para los rails USDC vía el handoff a Telegram.",
+      "footer": "MetaMask no es una wallet de Solana — el checkout web de Vizzor solo soporta SOL en Solana y TON por ahora.",
       "emptyTitle": "No se detectaron wallets Solana.",
       "emptyHint": "Instala Phantom o Solflare y refresca.",
       "devnet": {
@@ -911,7 +899,7 @@
         "unsupportedChain": "Solo Solana está soportada en este release. Cambia a SOL en Solana.",
         "priceLookup": "No pudimos buscar el precio del tier en el servidor. Refresca la página.",
         "sessionFailed": "Falló la creación de sesión. Reintenta, o abre el bot de Telegram si persiste.",
-        "rpcUnavailable": "El RPC de Solana está rate-limited ahora mismo. Reintenta en un momento, o cambia a TON / USDC.",
+        "rpcUnavailable": "El RPC de Solana está rate-limited ahora mismo. Reintenta en un momento, o cambia a TON.",
         "walletNotConnected": "Conecta una wallet para continuar.",
         "insufficientBalance": "Tu wallet no tiene suficiente SOL para cubrir este pago y la comisión de red. En devnet puedes pedir un airdrop de 1 SOL desde el panel de arriba, o cargar saldo en faucet.solana.com.",
         "invalidDestination": "La dirección del tesoro de destino está mal configurada para esta red. Revisa VIZZOR_SOLANA_TREASURY para el cluster activo."
