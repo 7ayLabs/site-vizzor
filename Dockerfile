@@ -64,6 +64,18 @@ ENV NEXT_PUBLIC_PAYMENT_NETWORK=$NEXT_PUBLIC_PAYMENT_NETWORK
 ARG NEXT_PUBLIC_ALLOW_DEV_AUTH=
 ENV NEXT_PUBLIC_ALLOW_DEV_AUTH=$NEXT_PUBLIC_ALLOW_DEV_AUTH
 
+# Crypto checkout gate — baked at build because the client-side
+# `CheckoutShell` (components/pay/checkout-shell.tsx) consults
+# `acceptSolanaPayments()` to decide between the working Activate-Pro
+# flow and the "infrastructure pending" fallback panel. Without this
+# arg the bundle ships a dead `process.env.NEXT_PUBLIC_ACCEPT_SOLANA_PAYMENTS
+# === 'true'` check that always evaluates false at runtime — there's
+# nothing to read in the client bundle. Default empty so unrelated
+# builds (and prod, until the mainnet treasury + watcher have been
+# validated end-to-end) don't accidentally inherit the open gate.
+ARG NEXT_PUBLIC_ACCEPT_SOLANA_PAYMENTS=
+ENV NEXT_PUBLIC_ACCEPT_SOLANA_PAYMENTS=$NEXT_PUBLIC_ACCEPT_SOLANA_PAYMENTS
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
