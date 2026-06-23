@@ -29,6 +29,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { WalletIdenticon } from './wallet-identicon';
+import { SubscriptionManagementCard } from './subscription-management';
 
 type Cluster = 'mainnet' | 'testnet' | 'devnet';
 
@@ -38,6 +39,10 @@ interface SubscriptionDetail {
   expiresAt: number | null;
   isLifetime: boolean;
   telegramUserId: number | null;
+  /** v0.4 — a scheduled lifecycle transition that takes effect when
+   *  the current period elapses. `null` means the subscription will
+   *  simply lapse to free (default behaviour). */
+  scheduledAction: 'cancel' | 'downgrade_to_pro' | null;
 }
 
 interface WalletLinkDetail {
@@ -278,6 +283,17 @@ export function AccountProfile({
             }
           />
         </div>
+
+        {/* ─── Subscription management (only if there's a sub) ─── */}
+        {subscription && (
+          <SubscriptionManagementCard
+            tier={subscription.tier}
+            cadence={subscription.cadence}
+            expiresAt={subscription.expiresAt}
+            isLifetime={subscription.isLifetime}
+            scheduledAction={subscription.scheduledAction}
+          />
+        )}
 
         {/* ─── Telegram link callout (only if unlinked) ─── */}
         {!walletLink && (

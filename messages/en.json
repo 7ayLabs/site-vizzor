@@ -156,7 +156,20 @@
       "manage": "Manage plan",
       "openBot": "Open in Telegram",
       "emptyBody": "You don't have an active subscription yet. Pick a tier on /pricing — paying in SOL on Solana saves 15% instantly.",
-      "emptyCta": "See pricing"
+      "emptyCta": "See pricing",
+      "manageTitle": "Manage subscription",
+      "manageBody": "No auto-renewal — every period is paid upfront. Cancel any time to stop the next-period nudge; your access continues to the end of the period you already paid for.",
+      "cancel": "Cancel subscription",
+      "downgrade": "Downgrade to Pro",
+      "confirmAgain": "Click again to confirm",
+      "cancelling": "Cancelling…",
+      "downgrading": "Downgrading…",
+      "lifetimeCannotChange": "Lifetime plans are non-refundable and don't expire — there's nothing to cancel or downgrade.",
+      "scheduledNotice": {
+        "cancel": "Cancellation scheduled — your plan continues until %date%, then drops to Free.",
+        "downgrade": "Downgrade scheduled — Elite continues until %date%, then drops to Pro on your next payment."
+      },
+      "error": "Could not update — {reason}. Try again in a moment."
     },
     "telegram": {
       "eyebrow": "telegram link",
