@@ -24,6 +24,8 @@ import { getClientIp, hashClientIp } from './client-ip';
 
 export type AuditEventType =
   | 'subscription.lookup'
+  | 'subscription.cancel'
+  | 'subscription.downgrade'
   | 'grant.redeem'
   | 'wallet_link.create'
   | 'wallet_link.delete'

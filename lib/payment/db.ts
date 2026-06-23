@@ -178,6 +178,13 @@ function runV020Migrations(db: DB): void {
   db.exec(
     `CREATE INDEX IF NOT EXISTS idx_subs_telegram ON subscriptions(telegram_user_id)`,
   );
+  // v0.4 — scheduled plan transition. Null = no schedule; the row
+  // naturally lapses to free at expires_at. 'cancel' = let the period
+  // run out then drop to free (no renewal nudge). 'downgrade_to_pro'
+  // = same lifecycle, but the next paid plan we surface is Pro
+  // rather than the current Elite. Read-only by the tier resolver
+  // (purely a UX surface); written by the cancel + downgrade routes.
+  addColumnIfMissing(db, 'subscriptions', 'scheduled_action', 'TEXT');
   addColumnIfMissing(db, 'auth_sessions', 'telegram_user_id', 'INTEGER');
 
   // Persistent burn-signature replay cache. Replaces the in-memory
@@ -422,6 +429,8 @@ export interface SessionRow {
   created_at: number;
 }
 
+export type ScheduledSubscriptionAction = 'cancel' | 'downgrade_to_pro';
+
 export interface SubscriptionRow {
   id: number;
   wallet_address: string;
@@ -436,6 +445,14 @@ export interface SubscriptionRow {
    * payment. v0.2.0+ column; null on legacy rows.
    */
   telegram_user_id: number | null;
+  /**
+   * v0.4 — pre-scheduled plan transition. The tier resolver does NOT
+   * consult this; it's purely a UX surface so /account can show
+   * "plan continues until {date}, then drops to {target}". The
+   * underlying lifecycle is unchanged — the subscription lapses to
+   * free at `expires_at` regardless. Null on legacy rows.
+   */
+  scheduled_action: ScheduledSubscriptionAction | null;
 }
 
 export interface GrantRow {
@@ -700,7 +717,13 @@ export function redeemGrant(code: string, telegramUserId: number): void {
  * already exists at payment time (the C1 watcher seam).
  */
 export function insertSubscription(
-  row: Omit<SubscriptionRow, 'id' | 'created_at' | 'telegram_user_id'> & {
+  // New subscriptions are always inserted with a clear ledger —
+  // `scheduled_action` only gets set later via the cancel/downgrade
+  // routes, so the caller doesn't need to thread null through.
+  row: Omit<
+    SubscriptionRow,
+    'id' | 'created_at' | 'telegram_user_id' | 'scheduled_action'
+  > & {
     telegram_user_id?: number | null;
   },
 ): number {
@@ -735,6 +758,33 @@ export function findActiveSubscriptionByWallet(
     )
     .get(wallet, now) as SubscriptionRow | undefined;
   return row ?? null;
+}
+
+/**
+ * Stamp a scheduled plan transition on the wallet's currently-active
+ * subscription. The tier resolver doesn't consult this field; it's a
+ * UX-only marker so /account can show "plan continues until {date},
+ * then drops to {target}" and the subscribe CTA on /pricing can hint
+ * at the upcoming change.
+ *
+ * Returns the updated row, or `null` if the wallet has no active
+ * subscription (in which case there's nothing to schedule).
+ *
+ * Idempotent: passing the same `action` twice is a no-op DB-write
+ * but still returns the row. Passing `null` clears any prior
+ * schedule so the user can change their mind.
+ */
+export function setScheduledActionForActiveSubscription(
+  wallet: string,
+  action: ScheduledSubscriptionAction | null,
+  now: number,
+): SubscriptionRow | null {
+  const row = findActiveSubscriptionByWallet(wallet, now);
+  if (!row) return null;
+  getDb()
+    .prepare(`UPDATE subscriptions SET scheduled_action = ? WHERE id = ?`)
+    .run(action, row.id);
+  return { ...row, scheduled_action: action };
 }
 
 /**

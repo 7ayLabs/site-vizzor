@@ -76,6 +76,7 @@ export default async function AccountPage({ params }: PageProps) {
               expiresAt: subscription.expires_at,
               isLifetime: subscription.expires_at === null,
               telegramUserId: subscription.telegram_user_id,
+              scheduledAction: subscription.scheduled_action,
             }
           : null
       }

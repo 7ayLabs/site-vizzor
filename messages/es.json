@@ -146,7 +146,20 @@
       "manage": "Gestionar plan",
       "openBot": "Abrir en Telegram",
       "emptyBody": "Aún no tienes una suscripción activa. Elige un tier en /pricing — pagar en SOL en Solana ahorra 15% al instante.",
-      "emptyCta": "Ver precios"
+      "emptyCta": "Ver precios",
+      "manageTitle": "Gestionar suscripción",
+      "manageBody": "No hay renovación automática — cada período se paga por adelantado. Cancela cuando quieras para detener el aviso de renovación; tu acceso continúa hasta el final del período que ya pagaste.",
+      "cancel": "Cancelar suscripción",
+      "downgrade": "Bajar a Pro",
+      "confirmAgain": "Click de nuevo para confirmar",
+      "cancelling": "Cancelando…",
+      "downgrading": "Bajando…",
+      "lifetimeCannotChange": "Los planes de por vida no son reembolsables y no expiran — no hay nada que cancelar o degradar.",
+      "scheduledNotice": {
+        "cancel": "Cancelación programada — tu plan continúa hasta el %date%, luego baja a Free.",
+        "downgrade": "Bajada programada — Elite continúa hasta el %date%, luego pasa a Pro en tu próximo pago."
+      },
+      "error": "No se pudo actualizar — {reason}. Reintenta en un momento."
     },
     "telegram": {
       "eyebrow": "vínculo con telegram",
