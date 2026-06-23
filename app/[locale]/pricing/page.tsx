@@ -20,6 +20,9 @@ import { Check } from 'lucide-react';
 import { GsapHeadline } from '@/components/ui/gsap-headline';
 import { MotionReveal } from '@/components/ui/motion-reveal';
 import { LifetimePromoIsland } from '@/components/pricing/lifetime-promo-island';
+import { ActivePlanIsland } from '@/components/pricing/active-plan-island';
+import { TierCtaButton } from '@/components/pricing/tier-cta-button';
+import { TrialBadge } from '@/components/pricing/trial-badge';
 
 type Cadence = 'monthly' | 'annual' | 'lifetime';
 type TierKey = 'free' | 'pro' | 'elite';
@@ -80,7 +83,7 @@ const FEATURE_KEYS: Record<TierKey, readonly string[]> = {
   elite: ['whaleTerminal', 'smartMoney', 'forensics', 'preNews', 'crossVenue', 'api'],
 };
 
-const CHAINS = ['solana', 'ton', 'base', 'arbitrum'] as const;
+const CHAINS = ['solana', 'ton'] as const;
 const FAQ_KEYS = ['trial', 'cancel', 'chains', 'difference', 'refund'] as const;
 
 export default async function PricingPage({
@@ -93,28 +96,33 @@ export default async function PricingPage({
   const t = await getTranslations('pricing');
 
   return (
-    <section className="relative">
-      {/* Lifetime promo modal — auto-opens once per visitor, 30d
-          suppress on dismiss, re-trigger via floating pill. */}
-      <LifetimePromoIsland />
-      <div className="mx-auto w-full max-w-[1180px] px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
-        {/* Heading — single centered display word, no eyebrow / sub.
-            Ollama-style: the cards do the talking. */}
-        <GsapHeadline
-          as="h1"
-          className="flex flex-col gap-3 text-center items-center"
-          title={t('title')}
-          titleClassName="display text-[var(--fg)] text-balance text-[48px] sm:text-[60px] lg:text-[72px] leading-[1.0] tracking-tight font-semibold"
-        />
+    <ActivePlanIsland>
+      <section className="relative">
+        {/* Lifetime promo modal — auto-opens once per visitor, 30d
+            suppress on dismiss, re-trigger via floating pill. Lives
+            inside the ActivePlanIsland so the pill can hide itself
+            for users who already own the lifetime tier. */}
+        <LifetimePromoIsland />
+        <div className="mx-auto w-full max-w-[1180px] px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
+          {/* Heading — single centered display word, no eyebrow / sub.
+              Ollama-style: the cards do the talking. */}
+          <GsapHeadline
+            as="h1"
+            className="flex flex-col gap-3 text-center items-center"
+            title={t('title')}
+            titleClassName="display text-[var(--fg)] text-balance text-[48px] sm:text-[60px] lg:text-[72px] leading-[1.0] tracking-tight font-semibold"
+          />
 
-        {/* Tier cards */}
-        <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
-          {TIERS.map((tier, idx) => (
-            <MotionReveal key={tier.key} delay={idx * 80}>
-              <TierCard tier={tier} t={t} featureKeys={FEATURE_KEYS[tier.key]} />
-            </MotionReveal>
-          ))}
-        </div>
+          {/* Tier cards — each CTA + trial badge consumes the active
+              plan via context (see ActivePlanIsland). Unauthenticated
+              visitors see the page identical to before. */}
+          <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
+            {TIERS.map((tier, idx) => (
+              <MotionReveal key={tier.key} delay={idx * 80}>
+                <TierCard tier={tier} t={t} featureKeys={FEATURE_KEYS[tier.key]} />
+              </MotionReveal>
+            ))}
+          </div>
 
         {/* Trial callout */}
         <MotionReveal delay={120}>
@@ -181,8 +189,9 @@ export default async function PricingPage({
           </div>
         </section>
 
-      </div>
-    </section>
+        </div>
+      </section>
+    </ActivePlanIsland>
   );
 }
 
@@ -224,6 +233,13 @@ function TierCard({
             {tierT('priceUnit')}
           </span>
         </div>
+        {/* Wallet-aware trial chip — only renders on the Pro card when
+            the connected wallet is in the 7-day trial window. Pro is
+            the natural mount point because trial wallets get
+            Pro-equivalent tool-use breadth from the engine. */}
+        <div className="mt-1.5">
+          <TrialBadge cardTier={tier.key} template={t('cta.trialBadge')} />
+        </div>
 
         {/* 4. Inline annual / lifetime sub-line — Ollama pattern:
             "or $99/yr billed annually" with the cadence word underlined
@@ -252,29 +268,25 @@ function TierCard({
         )}
       </div>
 
-      {/* 5. Primary CTA — full-width pill button.
-          Free deep-links Telegram in a new tab; paid tiers route to
-          the on-site /pay checkout shell. */}
+      {/* 5. Primary CTA — wallet-aware. Renders the default <a> for
+          unauthenticated visitors and free users; swaps to a disabled
+          "Plan actual" / "Incluido en Elite" pill when the connected
+          wallet's subscription matches or supersedes this card. The
+          default cadence for paid tiers is 'monthly' to match the
+          tier.ctaHref convention (/pay/{tier}/monthly). */}
       <div className="mt-7">
-        <a
-          href={tier.ctaHref}
-          {...(tier.external
-            ? { target: '_blank', rel: 'noopener' }
-            : {})}
-          className={`
-            inline-flex w-full items-center justify-center
-            h-12 rounded-full px-5
-            text-[14px] font-semibold tracking-tight
-            transition-[transform,opacity] duration-150
-            ${
-              tier.ctaVariant === 'primary'
-                ? 'bg-[var(--fg)] text-[var(--bg)] hover:opacity-90 motion-safe:hover:scale-[1.01]'
-                : 'border border-[var(--fg)] text-[var(--fg)] hover:bg-[var(--surface-2)]'
-            }
-          `}
-        >
-          <span>{tierT('cta')}</span>
-        </a>
+        <TierCtaButton
+          cardTier={tier.key}
+          cardCadence="monthly"
+          defaultHref={tier.ctaHref}
+          defaultLabel={tierT('cta')}
+          variant={tier.ctaVariant === 'primary' ? 'primary' : 'outline'}
+          external={tier.external}
+          currentPlanLabel={t('cta.currentPlan')}
+          includedInHigherLabel={t('cta.includedInHigher')}
+          manageLabel={t('cta.manage')}
+          manageHref="/account"
+        />
       </div>
 
       {/* 6. "Everything in Free, plus:" label + check-bulleted feature

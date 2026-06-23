@@ -2,11 +2,16 @@
  * Single source of truth for tier-cadence pricing in cents AND for
  * the per-chain discount math.
  *
- * Discount matrix (per PRICING_MODEL.md strategy doc):
+ * Discount matrix:
  *   - SOL on Solana:        15% off  (primary rail, sub-second finality)
  *   - TON native on TON:    10% off  (in-Telegram wallet UX, instant confirm)
- *   - USDC on Base:          5% off  (Circle USDC, USD-stable, L2 gas)
- *   - USDC on Arbitrum:      5% off  (Circle USDC, USD-stable, L2 gas)
+ *
+ * Stablecoin rails (USDC on Base / Arbitrum) were dropped in the
+ * v0.4 pre-launch pass — neither chain had a settled watcher and
+ * shipping them would have lied about end-to-end coverage. The
+ * `payment_sessions.chain` and `token` columns stay flexible strings
+ * so re-introducing a rail later is non-migrating; just re-add the
+ * discount entry here and the SUPPORTED_PAIRS allowlist in session.ts.
  *
  * Lifetime is Elite-only by product decision.
  */
@@ -56,8 +61,6 @@ export const TIER_PRICES_USD_CENTS: Readonly<
 const CHAIN_DISCOUNT_BPS: Readonly<Record<string, number>> = {
   'solana:native': 1500,
   'ton:native': 1000,
-  'base:usdc': 500,
-  'arbitrum:usdc': 500,
 };
 
 export function priceCents(

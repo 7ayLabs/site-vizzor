@@ -35,19 +35,21 @@ import {
   type SessionRow,
 } from './db';
 import { getRate } from './rates';
-import { evmTreasury, solanaTreasury, tonTreasury } from './treasury';
+import { solanaTreasury, tonTreasury } from './treasury';
 
 export type PaymentTier = 'pro' | 'elite';
 export type PaymentCadence = 'monthly' | 'annual' | 'lifetime';
-export type PaymentChain = 'solana' | 'ton' | 'base' | 'arbitrum';
-export type PaymentToken = 'native' | 'usdc';
+// USDC on Base / Arbitrum dropped in v0.4 — neither chain had a settled
+// watcher. The union stays parameterised so re-introducing a chain
+// later is a one-line edit; the `payment_sessions` schema keeps
+// `chain`/`token` as flexible strings so no migration is needed.
+export type PaymentChain = 'solana' | 'ton';
+export type PaymentToken = 'native';
 
 /** Combinations the checkout shell offers and the engine knows how to settle. */
 export const SUPPORTED_PAIRS = [
   { chain: 'solana', token: 'native' },
   { chain: 'ton', token: 'native' },
-  { chain: 'base', token: 'usdc' },
-  { chain: 'arbitrum', token: 'usdc' },
 ] as const;
 
 export function isSupportedPair(chain: string, token: string): boolean {
@@ -97,26 +99,22 @@ export type SessionFailure =
 
 const SOL_DECIMALS = 9;
 const TON_DECIMALS = 9;
-const USDC_DECIMALS = 6;
 
-function decimalsFor(chain: PaymentChain, token: PaymentToken): number {
-  if (token === 'usdc') return USDC_DECIMALS;
+function decimalsFor(chain: PaymentChain, _token: PaymentToken): number {
   if (chain === 'ton') return TON_DECIMALS;
   return SOL_DECIMALS;
 }
 
 function priceTokenFor(
   chain: PaymentChain,
-  token: PaymentToken,
-): 'sol' | 'ton' | 'usdc' {
-  if (token === 'usdc') return 'usdc';
+  _token: PaymentToken,
+): 'sol' | 'ton' {
   if (chain === 'ton') return 'ton';
   return 'sol';
 }
 
 function destinationFor(chain: PaymentChain): string {
   if (chain === 'ton') return tonTreasury();
-  if (chain === 'base' || chain === 'arbitrum') return evmTreasury(chain);
   return solanaTreasury();
 }
 
