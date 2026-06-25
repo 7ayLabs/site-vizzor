@@ -104,51 +104,49 @@ const HOST_REWRITE_BYPASS_RE =
   /^\/(?:api|_next|_vercel|docs|favicon\.ico|sitemap\.xml|robots\.txt|manifest\.webmanifest)(?:\/|$)/;
 
 /**
- * On `app.vizzor.ai`, rewrite the URL pathname so the visitor lands
- * on `/app/*` without seeing it in the browser bar. Same Next.js
- * process serves the marketing site at `vizzor.ai/`; only the host
- * decides which segment to mount.
+ * On `app.vizzor.ai`, mutate the URL pathname in place so the rest
+ * of the middleware pipeline (geo → next-intl locale negotiation →
+ * security headers) sees the `/app/*` path and routes it through the
+ * `[locale]/app/...` segment correctly. The function returns true if
+ * a rewrite was applied; callers don't need the return value but it's
+ * useful for tests.
  *
- *   app.vizzor.ai/                  → /app/predict
+ *   app.vizzor.ai/                  → (mutated to) /app/predict
  *   app.vizzor.ai/predict           → /app/predict
  *   app.vizzor.ai/predict/abc       → /app/predict/abc
  *   app.vizzor.ai/billing           → /app/billing
  *   app.vizzor.ai/es/predict        → /es/app/predict (locale preserved)
  *
- * Returns null when no rewrite is needed (different host, or path
- * already starts with `/app`).
+ * MUST mutate in place rather than return a terminal NextResponse:
+ * next-intl's localeMiddleware downstream reads req.nextUrl.pathname
+ * to decide whether to inject the default locale prefix. Returning
+ * early with `NextResponse.rewrite(/app/predict)` bypasses next-intl,
+ * leaving the URL without a `[locale]` segment — which 404s because
+ * every route file lives under `app/[locale]/...`.
  */
-function appHostRewrite(req: NextRequest): NextResponse | null {
+function applyAppHostRewriteInPlace(req: NextRequest): boolean {
   const hostHeader = (req.headers.get('host') ?? '').toLowerCase();
-  // Strip any trailing port (`:443`) so localhost forwarding lands too.
   const host = hostHeader.split(':')[0] ?? '';
-  if (!APP_HOSTS.has(host)) return null;
+  if (!APP_HOSTS.has(host)) return false;
 
-  const { pathname, search } = req.nextUrl;
-  if (HOST_REWRITE_BYPASS_RE.test(pathname)) return null;
+  const { pathname } = req.nextUrl;
+  if (HOST_REWRITE_BYPASS_RE.test(pathname)) return false;
 
-  // Detect a leading locale segment (`/es`, `/fr`, …) so we don't
-  // bury it under `/app`. `as-needed` means `/en` is absent at the
-  // root, so the regex only matches the non-default locales.
   const localeMatch = pathname.match(
     new RegExp(`^/(${routing.locales.filter((l) => l !== routing.defaultLocale).join('|')})(?=/|$)`),
   );
   const localePrefix = localeMatch ? localeMatch[0] : '';
   const rest = pathname.slice(localePrefix.length);
+  if (rest.startsWith('/app')) return false;
 
-  // Already in /app? Don't double-prefix.
-  if (rest.startsWith('/app')) return null;
-
-  // Empty rest (visitor hit the bare host) → land at the predict
-  // surface. Non-empty rest gets `/app` prepended.
   const nextRest = rest === '' || rest === '/'
     ? '/app/predict'
     : `/app${rest}`;
 
-  const url = req.nextUrl.clone();
-  url.pathname = `${localePrefix}${nextRest}`;
-  url.search = search;
-  return NextResponse.rewrite(url);
+  const newPathname = `${localePrefix}${nextRest}`;
+  if (newPathname === pathname) return false;
+  req.nextUrl.pathname = newPathname;
+  return true;
 }
 
 /**
@@ -251,12 +249,11 @@ function applySecurityHeaders(res: NextResponse): NextResponse {
 }
 
 export default function middleware(req: NextRequest): NextResponse {
-  // 0. App-host rewrite — when the request arrives at `app.vizzor.ai`
-  //    we rewrite the URL into `/app/*` so the marketing routes never
-  //    serve. Runs BEFORE locale + geo so the rewritten pathname
-  //    flows through both normally.
-  const hostRewrite = appHostRewrite(req);
-  if (hostRewrite) return applySecurityHeaders(hostRewrite);
+  // 0. App-host rewrite — mutates req.nextUrl.pathname in place when
+  //    the visitor is on `app.vizzor.ai`. The rest of the pipeline
+  //    (geo → locale → security headers) then processes the rewritten
+  //    path and next-intl injects the correct `[locale]` segment.
+  applyAppHostRewriteInPlace(req);
 
   // Only run the next-intl locale handler against paths it owns.
   // Everything else flows through unchanged and just collects the
