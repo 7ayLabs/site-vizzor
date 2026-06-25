@@ -33,13 +33,15 @@
 import { useMemo, useState, useRef, useEffect, type ReactNode } from 'react';
 import Image from 'next/image';
 import useSWR from 'swr';
-import { useTranslations } from 'next-intl';
-import { Link, usePathname } from '@/i18n/navigation';
+import { useTranslations, useLocale } from 'next-intl';
+import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { ArrowUpRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { paymentNetwork } from '@/lib/payment/network';
 import { buildSolscanAccountUrl } from '@/lib/explorer/solana';
 import { useConversations } from '@/components/predict/use-conversations';
+import { AlertsModal } from '@/components/predict/alerts-modal';
+import { SettingsSheet } from '@/components/predict/settings-sheet';
 import {
   IconBell,
   IconChat,
@@ -68,6 +70,8 @@ const fetcher = (url: string): Promise<SessionState> =>
 export function ProductSidebar() {
   const t = useTranslations('predict');
   const pathname = usePathname();
+  const router = useRouter();
+  const locale = useLocale();
   const { data: session } = useSWR<SessionState>(
     '/api/auth/session',
     fetcher,
@@ -80,8 +84,21 @@ export function ProductSidebar() {
   const recent = useMemo(() => conversations.slice(0, 12), [conversations]);
 
   const onPredict = /^\/app\/predict(\/|$)/.test(pathname);
-  const onAlerts = /^\/app\/alerts(\/|$)/.test(pathname);
   const onAccount = /^\/account(\/|$)/.test(pathname);
+
+  // Mirror predict-shell action contract: Alerts opens an in-place
+  // modal (same AlertsList the /app/alerts page uses), Settings
+  // opens a SettingsSheet (theme/locale/clear-local), Receipts
+  // navigates to /account#payments. The user gets identical
+  // behavior from this sidebar and from the chat surface's LeftRail.
+  const [alertsOpen, setAlertsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const onOpenAlerts = () => setAlertsOpen(true);
+  const onOpenSettings = () => setSettingsOpen(true);
+  const onOpenReceipts = () => {
+    // typedRoutes doesn't yet know about hashes — cast through never.
+    router.push('/account#payments' as never);
+  };
 
   return (
     <aside
@@ -120,10 +137,12 @@ export function ProductSidebar() {
         </Link>
       </div>
 
-      {/* Primary nav. New run → predict with action=new; Run → predict
-          active thread; Alerts → /app/alerts; Receipts → account
-          page's payments section. Same icon set the predict-shell
-          uses so the vocabulary is identical. */}
+      {/* Primary nav. Matches the action contract of predict-shell's
+          LeftRail exactly: New run → predict?action=new, Run →
+          predict active thread, Alerts → in-place modal, Receipts →
+          /account#payments. Same icons, same vocabulary, same
+          behavior — the only difference is that "Run" deep-links
+          since we're not already on the chat surface. */}
       <nav className="flex flex-col gap-0.5" aria-label="Surfaces">
         <NavLink
           href="/app/predict?action=new"
@@ -137,16 +156,15 @@ export function ProductSidebar() {
           label={t('shell.nav.chat')}
           active={onPredict}
         />
-        <NavLink
-          href="/app/alerts"
+        <NavButton
           icon={<IconBell size={17} />}
           label={t('shell.nav.alerts')}
-          active={onAlerts}
+          onClick={onOpenAlerts}
         />
-        <NavLink
-          href="/account#recent-payments"
+        <NavButton
           icon={<IconReceipts size={17} />}
           label={t('shell.nav.receipts')}
+          onClick={onOpenReceipts}
           active={onAccount}
         />
       </nav>
@@ -205,9 +223,69 @@ export function ProductSidebar() {
           richer version was upgraded in the previous pass; we render
           it here so both surfaces share the same dropdown. */}
       <div className="shrink-0 border-t border-[var(--border)] -mx-4 px-4 py-3 mt-2">
-        <Identity signedIn={signedIn} wallet={wallet} session={session} />
+        <Identity
+          signedIn={signedIn}
+          wallet={wallet}
+          session={session}
+          onOpenSettings={onOpenSettings}
+        />
       </div>
+
+      {/* In-place modals — mirror predict-shell. AlertsModal renders
+          the same AlertsList the standalone surface uses; SettingsSheet
+          owns theme + locale + clear-local-data. Mounted at sidebar
+          level so any page on app.vizzor.ai can summon them without
+          page navigation. */}
+      <AlertsModal open={alertsOpen} onClose={() => setAlertsOpen(false)} />
+      {settingsOpen && (
+        <SettingsSheet
+          locale={locale}
+          signedIn={signedIn}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </aside>
+  );
+}
+
+function NavButton({
+  icon,
+  label,
+  onClick,
+  active = false,
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+  active?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      className={cn(
+        'group w-full flex items-center gap-2.5 text-left',
+        'px-3 py-2 rounded-md text-[13px]',
+        'transition-colors',
+        active
+          ? 'bg-[var(--surface-2)] text-[var(--fg)] font-medium'
+          : 'text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]',
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          'transition-colors',
+          active
+            ? 'text-[var(--fg)]'
+            : 'text-[var(--fg-3)] group-hover:text-[var(--fg)]',
+        )}
+      >
+        {icon}
+      </span>
+      <span className="flex-1 truncate">{label}</span>
+    </button>
   );
 }
 
@@ -265,10 +343,12 @@ function Identity({
   signedIn,
   wallet,
   session,
+  onOpenSettings,
 }: {
   signedIn: boolean;
   wallet: string | undefined;
   session: SessionState | undefined;
+  onOpenSettings: () => void;
 }) {
   const t = useTranslations('predict.shell');
   const tAuth = useTranslations('auth');
@@ -403,11 +483,16 @@ function Identity({
             </div>
           )}
           <div className="p-1">
-            <MenuLink
-              href="/account"
+            {/* Settings opens the same SettingsSheet predict-shell
+                uses (theme + locale + clear-local-data) so the
+                action mirrors the chat surface exactly. */}
+            <MenuButton
               icon={<IconSettings size={15} />}
               label={t('settings')}
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                setOpen(false);
+                onOpenSettings();
+              }}
             />
             {signedIn && (
               <MenuLink
@@ -483,5 +568,37 @@ function MenuLink({
       </span>
       <span className="flex-1 truncate">{label}</span>
     </Link>
+  );
+}
+
+function MenuButton({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className="
+        group w-full flex items-center gap-2.5 text-left
+        h-8 px-2.5 rounded-md text-[13px]
+        text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]
+        transition-colors
+      "
+    >
+      <span
+        aria-hidden
+        className="text-[var(--fg-3)] group-hover:text-[var(--fg)] transition-colors"
+      >
+        {icon}
+      </span>
+      <span className="flex-1 truncate">{label}</span>
+    </button>
   );
 }
