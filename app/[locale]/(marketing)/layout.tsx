@@ -6,8 +6,7 @@ import { Footer } from '@/components/layout/footer';
 import { TickerCarouselServer } from '@/components/layout/ticker-carousel-server';
 import { PageTransition } from '@/components/layout/page-transition';
 import { AppHostTopbar } from '@/components/layout/app-host-topbar';
-import { AppShellProvider } from '@/components/app/app-shell-provider';
-import { AppSidebar } from '@/components/app/app-sidebar';
+import { ProductSidebar } from '@/components/app/product-sidebar';
 
 /**
  * Marketing layout — wraps every public page (home, pricing, manifesto,
@@ -21,14 +20,13 @@ import { AppSidebar } from '@/components/app/app-sidebar';
  * Host swap: when the visitor reaches a marketing route through the
  * product subdomain (e.g. `app.vizzor.ai/account` after clicking the
  * profile dropdown, or `app.vizzor.ai/pricing` from the
- * exhausted-tier upgrade CTA) we mount the full app shell — the same
- * `AppShellProvider` + `AppSidebar` that wraps `/app/*` surfaces. The
- * marketing chrome (ticker tape, capsule navbar, footer) reads as
- * outbound noise on the product host — the user already chose the
- * app, surfacing those pulls them back toward the marketing site.
- * Mounting the real sidebar instead means every page on
- * `app.vizzor.ai` shares the same surface switcher, footer items,
- * status pill, and wallet pill the predict surface uses.
+ * exhausted-tier upgrade CTA) we mount the same predict-shell-style
+ * left rail (`ProductSidebar`) the chat surface uses, so every page
+ * on the product host shares one vocabulary: New run / Run / Alerts
+ * / Receipts / Recent chats / wallet Identity. The marketing chrome
+ * (ticker tape, capsule navbar, footer) reads as outbound noise on
+ * the product host — the user already chose the app, surfacing
+ * those pulls them back toward the marketing site.
  *
  * Mobile (< lg) falls back to a minimal `AppHostTopbar` since the
  * sidebar is desktop-only — the topbar carries the brand + a
@@ -47,16 +45,16 @@ export default async function MarketingLayout({ children }: { children: ReactNod
   if (isAppHost) {
     return (
       <div className="flex min-h-dvh bg-[var(--bg)]">
-        {/* AppShellProvider lazy-loads the Solana wallet adapter with
-            `ssr: false`, so we keep its scope tight to just the
-            sidebar. Wrapping the full layout in it would skip SSR for
-            the marketing children (broken first paint on /pricing,
-            blank /account before hydration). The marketing children
-            don't read `useAppShell()` themselves; only the sidebar's
-            WalletAuthButton needs the wallet context. */}
-        <AppShellProvider>
-          <AppSidebar />
-        </AppShellProvider>
+        {/* ProductSidebar mirrors the predict-shell left rail (New
+            run / Run / Alerts / Receipts / Recent chats / wallet
+            Identity) so every page on the product host shares the
+            same chrome predict uses — not the umbrella AppSidebar
+            with its Surfaces/Whales/Flow vocabulary. It does NOT
+            need the AppShellProvider because the Identity pill reads
+            session state via its own SWR (no wallet-adapter context
+            required for read-only display). Keeping it out of the
+            provider also preserves SSR for the marketing children. */}
+        <ProductSidebar />
         <div className="flex-1 min-w-0 flex flex-col">
           {/* Mobile-only topbar — AppSidebar is `hidden lg:flex`, so
               viewports under `lg` would otherwise lose every escape
