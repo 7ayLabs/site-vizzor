@@ -1,11 +1,11 @@
 /**
- * /[locale]/dashboard/flow — Cross-venue Flow Heatmap (Elite tier).
+ * /[locale]/app/flow — Cross-venue Flow Heatmap (Elite tier).
  *
  * Server-rendered Elite-gated landing for the venue × token capital-
  * flow heatmap advertised on the public pricing page. Same gating
- * sequence as `/dashboard/whales`:
+ * sequence as `/app/whales`:
  *
- *   1. No SIWS session  → /predict?from=dashboard-flow
+ *   1. No SIWS session  → /app/predict?from=flow
  *   2. No subscription  → /pricing?reason=elite
  *   3. Tier != elite    → /pricing?reason=elite
  *   4. Active Elite     → render the heatmap shell
@@ -39,7 +39,7 @@ export default async function FlowHeatmapPage({ params }: PageProps) {
   const { locale } = await params;
 
   const session = await getActiveSession();
-  if (!session) redirect(`/${locale}/predict?from=dashboard-flow`);
+  if (!session) redirect(`/${locale}/app/predict?from=flow`);
 
   const subscription = findActiveSubscriptionByWallet(session.wallet, Date.now());
   const tier = subscription?.tier ?? null;
@@ -73,7 +73,7 @@ export default async function FlowHeatmapPage({ params }: PageProps) {
             </p>
           </div>
           <a
-            href={`/${locale}/predict?from=dashboard-flow`}
+            href={`/${locale}/app/predict?from=flow`}
             className="inline-flex items-center justify-center rounded-md border border-[var(--border)] bg-[var(--fg)] px-4 py-2 text-sm font-medium text-[var(--bg)] transition-opacity hover:opacity-90"
           >
             Open Predictor →

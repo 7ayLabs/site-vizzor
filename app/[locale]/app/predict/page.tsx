@@ -1,8 +1,10 @@
 /**
- * /[locale]/predict — Vizzor chat surface.
+ * /[locale]/app/predict — Vizzor chat surface.
  *
- * Server shell. Locale binding + metadata. The whole interactive shell
- * is a client component (wallet adapter, useChat stream, SWR auth/quota).
+ * Server shell. Locale binding + metadata. The wallet adapter and the
+ * cross-surface SWR context are mounted by the `/app/*` layout, so this
+ * page just renders the client shell directly. The legacy `/predict`
+ * URL redirects here via `next.config.ts`.
  */
 
 import { setRequestLocale, getTranslations } from 'next-intl/server';
@@ -30,9 +32,5 @@ export default async function PredictPage({
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
-  return (
-    <main className="relative isolate bg-[var(--bg)]">
-      <PredictShell />
-    </main>
-  );
+  return <PredictShell />;
 }

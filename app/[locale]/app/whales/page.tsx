@@ -1,10 +1,10 @@
 /**
- * /[locale]/dashboard/whales — Whale Terminal (Elite tier).
+ * /[locale]/app/whales — Whale Terminal (Elite tier).
  *
  * Server-rendered Elite-gated landing for the on-chain whale terminal
  * advertised on the public pricing page. Gating order:
  *
- *   1. No SIWS session  → redirect to /predict?from=dashboard-whales
+ *   1. No SIWS session  → redirect to /app/predict?from=whales
  *      (the predict page surfaces the sign-in flow)
  *   2. No subscription  → redirect to /pricing?reason=elite
  *   3. Subscription tier != elite → redirect to /pricing?reason=elite
@@ -43,7 +43,7 @@ export default async function WhaleTerminalPage({ params }: PageProps) {
   const { locale } = await params;
 
   const session = await getActiveSession();
-  if (!session) redirect(`/${locale}/predict?from=dashboard-whales`);
+  if (!session) redirect(`/${locale}/app/predict?from=whales`);
 
   const subscription = findActiveSubscriptionByWallet(session.wallet, Date.now());
   const tier = subscription?.tier ?? null;
