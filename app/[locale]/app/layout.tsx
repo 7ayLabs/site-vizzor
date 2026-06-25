@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { headers } from 'next/headers';
 import { Toaster } from 'sonner';
 import { AppShellProvider } from '@/components/app/app-shell-provider';
 import { AppSidebar } from '@/components/app/app-sidebar';
@@ -6,6 +7,16 @@ import { CommandPaletteProvider } from '@/components/app/command-palette-context
 import { CommandPalette } from '@/components/app/command-palette';
 import { OnboardingStepper } from '@/components/app/onboarding-stepper';
 import { OnboardingControlsProvider } from '@/components/app/onboarding-context';
+
+/**
+ * Hosts that mount the product as the entire site (no marketing chrome).
+ * On these hosts the outer surface rail is suppressed: the predict-shell
+ * is the only meaningful surface for the v0.4 cut, and stacking the app
+ * sidebar on top of predict-shell's own conversation rail produces the
+ * double-rail layout the user flagged on `app.vizzor.ai`. Keep this list
+ * aligned with `APP_HOSTS` in `middleware.ts`.
+ */
+const APP_ONLY_HOSTS = new Set<string>(['app.vizzor.ai']);
 
 /**
  * App shell layout — wraps every `/app/*` surface (Chat, Whales, Flow,
@@ -27,13 +38,22 @@ import { OnboardingControlsProvider } from '@/components/app/onboarding-context'
  *   └─ OnboardingControlsProvider — exposes onboarding.open() to peers
  *      └─ CommandPaletteProvider  — global Cmd+K toggle
  */
-export default function AppLayout({ children }: { children: ReactNode }) {
+export default async function AppLayout({ children }: { children: ReactNode }) {
+  // Read the Host header server-side so the suppression decision happens
+  // before the client hydrates. Doing this on the client would create a
+  // hydration mismatch (server URL is the rewritten `/app/predict`, browser
+  // URL is still `/`, so `usePathname()` disagrees about whether the
+  // suppression regex matches — the symptom Zaid saw on app.vizzor.ai).
+  const reqHeaders = await headers();
+  const host = (reqHeaders.get('host') ?? '').split(':')[0]?.toLowerCase() ?? '';
+  const isAppOnlyHost = APP_ONLY_HOSTS.has(host);
+
   return (
     <AppShellProvider>
       <OnboardingControlsProvider>
         <CommandPaletteProvider>
           <div className="flex min-h-dvh bg-[var(--bg)]">
-            <AppSidebar />
+            {!isAppOnlyHost && <AppSidebar />}
             <main className="flex-1 min-w-0">{children}</main>
           </div>
           <CommandPalette />
