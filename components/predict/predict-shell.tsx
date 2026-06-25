@@ -1819,7 +1819,12 @@ function MobileDrawer({
             <IconClose size={18} />
           </button>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto p-2">
+        {/* The drawer wrapper itself stays paddingless so LeftRail can
+            own the horizontal rhythm. Letting LeftRail keep its default
+            `p-4` gives nav items breathing room from the drawer edge
+            (16px) instead of jamming them against it (the alignment
+            issue flagged on mobile). */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <LeftRail
             search={search}
             onSearch={onSearch}
@@ -1835,7 +1840,7 @@ function MobileDrawer({
             wallet={wallet}
             quota={quota}
             embedded
-            className="flex h-full border-0 p-0 bg-transparent shadow-none backdrop-blur-none"
+            className="flex h-full border-0 bg-transparent shadow-none backdrop-blur-none"
           />
         </div>
       </div>
@@ -3428,6 +3433,11 @@ function ExhaustedBanner({
         {t(bodyKey as 'exhaustedBanner.body')}
       </p>
       <div className="mt-1 flex flex-wrap items-center gap-3">
+        {/* Upgrade CTA — `/pricing` is a marketing route that the
+            middleware bypasses on the product host, so this link stays
+            on `app.vizzor.ai/pricing` (no marketing-site bounce) and
+            falls through to the regular checkout shell at /pay/[tier]/
+            [cadence]. */}
         <Link
           href="/pricing"
           className={cn(
@@ -3437,21 +3447,8 @@ function ExhaustedBanner({
             'hover:opacity-90 transition-opacity',
           )}
         >
-          {t('subscribe.cta')}
+          {t('exhaustedBanner.upgradeCta')}
         </Link>
-        <a
-          href="https://t.me/vizzorai_bot"
-          target="_blank"
-          rel="noopener"
-          className={cn(
-            'inline-flex items-center gap-1.5 h-9 px-4 rounded-full',
-            'border border-[var(--border-hi)] text-[var(--fg)]',
-            'text-[12.5px] font-semibold tracking-tight',
-            'hover:bg-[var(--surface-2)] transition-colors',
-          )}
-        >
-          {t('exhaustedBanner.telegramCta')}
-        </a>
         {IS_DEV && (
           <button
             type="button"

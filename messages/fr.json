@@ -477,8 +477,8 @@
     },
     "exhaustedBanner": {
       "label": "Tier gratuit épuisé",
-      "body": "Essai gratuit terminé. Abonne-toi pour continuer — ou passe sur Telegram.",
-      "telegramCta": "Ouvrir dans Telegram",
+      "body": "Tes prédictions gratuites sont épuisées. Passe au tier supérieur pour continuer on-chain en SOL — même moteur, limites plus hautes, sans carte.",
+      "upgradeCta": "Mettre à niveau",
       "resetDev": "réinitialiser · dev seulement",
       "dailyCap": {
         "label": "Limite journalière atteinte",

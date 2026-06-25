@@ -235,7 +235,7 @@ export function IconPlus({ size = 16, ...props }: IconProps) {
 export function IconMenu({ size = 16, ...props }: IconProps) {
   return (
     <svg {...base(size, props)}>
-      <path d="M2.5 5h11M2.5 10h11" />
+      <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" />
     </svg>
   );
 }

@@ -477,8 +477,8 @@
     },
     "exhaustedBanner": {
       "label": "Tier gratis agotado",
-      "body": "Prueba gratis agotada. Suscríbete para seguir — o pásate a Telegram.",
-      "telegramCta": "Abrir en Telegram",
+      "body": "Se agotaron tus predicciones gratis. Actualiza para seguir on-chain en SOL — mismo motor, topes más altos, sin tarjeta.",
+      "upgradeCta": "Mejorar plan",
       "resetDev": "reiniciar · solo dev",
       "dailyCap": {
         "label": "Tope diario alcanzado",

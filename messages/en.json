@@ -487,8 +487,8 @@
     },
     "exhaustedBanner": {
       "label": "Free tier done",
-      "body": "Free trial used up. Subscribe to keep going — or move to Telegram.",
-      "telegramCta": "Open in Telegram",
+      "body": "Your free predictions are used up. Upgrade to keep running on-chain in SOL — same engine, higher caps, no card.",
+      "upgradeCta": "Upgrade plan",
       "resetDev": "reset · dev only",
       "dailyCap": {
         "label": "Daily cap reached",

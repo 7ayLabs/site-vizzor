@@ -31,7 +31,6 @@ import { Link, usePathname } from '@/i18n/navigation';
 import Image from 'next/image';
 import { WalletAuthButton } from '@/components/auth/wallet-auth-button';
 import { StatusPill } from './status-pill';
-import { TelegramIcon } from '@/components/icons/telegram-icon';
 
 type SurfaceKey = 'predict' | 'whales' | 'flow';
 
@@ -163,42 +162,6 @@ export function AppSidebar() {
           );
         })}
       </nav>
-
-      {/* ── Peer channel: Telegram ───────────────────────────────────
-          Telegram is the #2 product surface — same engine, same
-          tiers, parallel channel. Surfacing it here (not buried in
-          the utility footer) signals platform parity: "the product
-          you're using ALSO lives on Telegram", not "Telegram is for
-          users we couldn't onboard to the web". The pill is the
-          accented brand color so it reads as a peer call-to-action
-          to the surface list above. */}
-      <div className="px-3 py-3 border-t border-[var(--border)] flex flex-col gap-2">
-        <p className="mono tabular text-[10px] uppercase tracking-[0.18em] text-[var(--fg-3)] px-1">
-          {t('section.alsoOn')}
-        </p>
-        <a
-          href="https://t.me/vizzorai_bot"
-          target="_blank"
-          rel="noopener"
-          className="
-            group inline-flex h-9 items-center justify-between gap-2
-            rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3
-            text-[12px] font-medium text-[var(--fg)]
-            hover:bg-[var(--fg)] hover:text-[var(--bg)] hover:border-transparent
-            transition-colors
-            focus-visible:outline-none focus-visible:ring-2
-            focus-visible:ring-[var(--accent)]
-          "
-        >
-          <span className="inline-flex items-center gap-2">
-            <TelegramIcon size={13} />
-            <span>{t('telegram.label')}</span>
-          </span>
-          <span aria-hidden className="mono tabular text-[10px] uppercase tracking-[0.14em] opacity-60 group-hover:opacity-100">
-            ↗
-          </span>
-        </a>
-      </div>
 
       {/* ── Bottom: utility links ────────────────────────────────── */}
       <div className="px-2 py-3 border-t border-[var(--border)] flex flex-col gap-0.5">
