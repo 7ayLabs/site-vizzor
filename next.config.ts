@@ -20,6 +20,27 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'icons.llamao.fi', pathname: '/icons/**' },
     ],
   },
+  // Legacy app-surface URLs → new /app/* umbrella. 308 (permanent)
+  // preserves SEO + browser history; handled at the edge before any
+  // route resolution. Per-locale variants explicit because next-intl's
+  // `as-needed` localePrefix puts `en` at the root.
+  async redirects() {
+    return [
+      // English (root) — preserves the canonical /predict, /dashboard/*
+      // URLs that have been live since v0.1.0.
+      { source: '/predict', destination: '/app/predict', permanent: true },
+      { source: '/dashboard', destination: '/app', permanent: true },
+      { source: '/dashboard/flow', destination: '/app/flow', permanent: true },
+      { source: '/dashboard/whales', destination: '/app/whales', permanent: true },
+      // Localized variants (es, fr) — must enumerate per next-intl
+      // `as-needed` strategy; we don't redirect for unknown locales so
+      // a typo doesn't 308 into a 404 trap.
+      { source: '/:locale(es|fr)/predict', destination: '/:locale/app/predict', permanent: true },
+      { source: '/:locale(es|fr)/dashboard', destination: '/:locale/app', permanent: true },
+      { source: '/:locale(es|fr)/dashboard/flow', destination: '/:locale/app/flow', permanent: true },
+      { source: '/:locale(es|fr)/dashboard/whales', destination: '/:locale/app/whales', permanent: true },
+    ];
+  },
 };
 
 // Order matters: fumadocs-mdx augments webpack with MDX loaders + the .source
