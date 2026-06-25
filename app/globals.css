@@ -301,6 +301,102 @@
   }
 
   /*
+   * Hero floating-card drift loops. Each card uses a slightly
+   * different period + phase so the three cards never sync up and
+   * read as "alive desk", not "synchronized animation". Y-axis only,
+   * 3-5px amplitude — visible but not distracting. Combined with the
+   * static lg:rotate-Z(±N°) on each card the result is a stack of
+   * trading screens floating with subtle wobble.
+   *
+   * Each keyframe preserves the underlying static rotation (set via
+   * Tailwind `lg:[transform:rotate(...)]`) by NOT writing to transform
+   * at all here — we drive Y via translate3d on a CSS variable so the
+   * static rotation persists. Wait — that's not actually possible
+   * inside a keyframe without overriding transform. Instead we let the
+   * keyframe author the full transform with the rotation baked in.
+   *
+   * If you change the rotation on a card in TSX, mirror it here.
+   */
+  @keyframes hero-card-drift-a {
+    0%, 100% { transform: rotate(-1.2deg) translate3d(0, 0, 0); }
+    50%      { transform: rotate(-1.2deg) translate3d(0, -4px, 0); }
+  }
+  @keyframes hero-card-drift-b {
+    0%, 100% { transform: rotate(0.8deg) translate3d(0, 0, 0); }
+    50%      { transform: rotate(0.8deg) translate3d(0, -3px, 0); }
+  }
+  @keyframes hero-card-drift-c {
+    0%, 100% { transform: rotate(-0.6deg) translate3d(0, 0, 0); }
+    50%      { transform: rotate(-0.6deg) translate3d(0, -5px, 0); }
+  }
+
+  /*
+   * Ticker Δ-chevron flash. Fires when the chevron's React key
+   * changes (the displayed magnitude or the direction sign updated).
+   * Brief scale + opacity dip, mono — the chevron color itself stays
+   * --up / --down per the scoped direction-token policy.
+   *
+   * Two variants:
+   *   .hero-delta-flash       — magnitude change, same direction
+   *   .hero-delta-flash-flip  — direction reversal (▲ ↔ ▼)
+   * The flip variant lifts harder so reversals read at a glance.
+   */
+  @keyframes hero-delta-flash {
+    0%   { transform: scale(1); opacity: 1; }
+    35%  { transform: scale(1.25); opacity: 0.6; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes hero-delta-flash-flip {
+    0%   { transform: scale(1); opacity: 1; }
+    35%  { transform: scale(1.4); opacity: 0.55; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /*
+   * Receipt-badge swap — fades the new outcome glyph in when a
+   * prediction resolves (pending → hit / miss / neutral). Keyed by
+   * predictionId + status in TSX so a single row resolving doesn't
+   * trigger the keyframe on its siblings.
+   */
+  @keyframes hero-badge-swap {
+    from { opacity: 0; transform: translateY(2px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /*
+   * Compact-bubble scrollbar — slim, mono, fades to fg-3 so the
+   * scrollbar reads as part of the bubble chrome rather than the
+   * browser's. Applied to the assistant bubble body when the per-
+   * bubble compact toggle is on.
+   */
+  .vz-compact-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--fg) 25%, transparent) transparent;
+  }
+  .vz-compact-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .vz-compact-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .vz-compact-scroll::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--fg) 22%, transparent);
+    border-radius: 999px;
+  }
+  .vz-compact-scroll::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--fg) 40%, transparent);
+  }
+
+  /*
+   * TypingTerminal cursor blink — step-end at 1s gives the classic
+   * solid-then-gone cadence that reads as "terminal idle" rather than
+   * a smooth fade (which would read as a loading spinner).
+   */
+  @keyframes typing-terminal-blink {
+    50% { opacity: 0; }
+  }
+
+  /*
    * WalletSelectorModal. Enter/exit symmetry: backdrop fades, card
    * slides + fades. `animation-fill-mode: forwards` keeps the end state
    * pinned so the exit animation does not snap before unmount.

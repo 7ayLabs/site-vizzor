@@ -38,13 +38,27 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const WATCHER_STALE_THRESHOLD_MS = 30_000;
+// Engine probe is HEAD-only and cached aggressively — `/api/health` is
+// hit by Docker every 30 s, by the deploy smoke 8× per cut, and by the
+// in-app status pill every 30 s per active tab. We never want one of
+// those to fan out into a real upstream call.
+const ENGINE_PROBE_CACHE_MS = 30_000;
+const ENGINE_PROBE_TIMEOUT_MS = 2_000;
 
 interface SubsystemStatus {
   ok: boolean;
   detail?: string;
   lastTickAt?: number | null;
   stale?: boolean;
+  latencyMs?: number;
+  status?: number;
 }
+
+interface EngineProbeCache {
+  expiresAt: number;
+  result: SubsystemStatus;
+}
+let engineProbeCache: EngineProbeCache | null = null;
 
 function probeSqlite(): SubsystemStatus {
   try {
@@ -80,9 +94,69 @@ function probeWatcher(): SubsystemStatus {
   return { ok: !stale, lastTickAt, stale };
 }
 
+/**
+ * Engine liveness — HEAD the upstream Vizzor API. Result cached for
+ * `ENGINE_PROBE_CACHE_MS` so health checks don't fan out into a real
+ * upstream RTT on every poll. Any 2xx/3xx/4xx counts as "reachable"
+ * (the engine may not expose `/health`; a 404 from a working server
+ * is still proof of life). Only network errors and timeouts mark down.
+ */
+async function probeEngine(): Promise<SubsystemStatus> {
+  const now = Date.now();
+  if (engineProbeCache && engineProbeCache.expiresAt > now) {
+    return engineProbeCache.result;
+  }
+
+  const base =
+    process.env.VIZZOR_API_URL ??
+    process.env.NEXT_PUBLIC_VIZZOR_API_URL ??
+    'https://api.vizzor.ai';
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ENGINE_PROBE_TIMEOUT_MS);
+  const startedAt = Date.now();
+  let result: SubsystemStatus;
+  try {
+    const res = await fetch(`${base}/`, {
+      method: 'HEAD',
+      signal: ctrl.signal,
+      // Don't send credentials or fancy headers — the probe should not
+      // count against any per-key rate budget upstream.
+      cache: 'no-store',
+    });
+    const latencyMs = Date.now() - startedAt;
+    // Any HTTP response counts as reachable. 5xx is still "the server
+    // answered" — a separate concern from network outage.
+    result = {
+      ok: res.status < 500,
+      status: res.status,
+      latencyMs,
+      ...(res.status >= 500 ? { detail: `upstream_${res.status}` } : {}),
+    };
+  } catch (e) {
+    const err = e as Error;
+    const detail = err.name === 'AbortError' ? 'timeout' : err.message.slice(0, 80);
+    result = { ok: false, detail };
+  } finally {
+    clearTimeout(timer);
+  }
+
+  engineProbeCache = {
+    expiresAt: now + ENGINE_PROBE_CACHE_MS,
+    result,
+  };
+  return result;
+}
+
 export async function GET() {
   const sqlite = probeSqlite();
   const watcher = probeWatcher();
+  const engine = await probeEngine();
+  // Overall `status` reflects "this container can serve traffic" — the
+  // deploy smoke-test gates on it (see `.github/workflows/deploy.yml`).
+  // Engine reachability is reported but NOT folded in: an upstream
+  // outage is a user-facing degradation surfaced by the status pill,
+  // but it shouldn't fail a site-vizzor deploy or trip uptime alerts.
   const allOk = sqlite.ok && watcher.ok;
   const status: 'healthy' | 'degraded' = allOk ? 'healthy' : 'degraded';
 
@@ -98,6 +172,7 @@ export async function GET() {
       subsystems: {
         sqlite,
         watcher,
+        engine,
       },
     },
     {

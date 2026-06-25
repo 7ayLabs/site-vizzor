@@ -4,11 +4,6 @@ import { NextIntlClientProvider, hasLocale } from 'next-intl';
 import { getMessages, setRequestLocale } from 'next-intl/server';
 import { sans, mono } from '../fonts';
 import { ThemeProvider, themeBootScript } from '@/components/layout/theme-provider';
-import { Header } from '@/components/layout/header';
-import { Footer } from '@/components/layout/footer';
-import { TickerCarouselServer } from '@/components/layout/ticker-carousel-server';
-import { ChromeGate } from '@/components/layout/chrome-gate';
-import { PageTransition } from '@/components/layout/page-transition';
 import { routing } from '@/i18n/routing';
 import '../globals.css';
 
@@ -48,9 +43,6 @@ export const metadata: Metadata = {
       'Calibrated crypto forecasts. Six signal families. Tracked win rate on every horizon.',
   },
   icons: {
-    // SVG is the primary — its embedded <style> swaps to a white mark
-    // under `prefers-color-scheme: dark`. Chrome and Firefox honour it
-    // directly; Safari falls back to the .ico.
     icon: [
       { url: '/favicon.svg', type: 'image/svg+xml' },
       { url: '/favicon-96x96.png', sizes: '96x96', type: 'image/png' },
@@ -74,6 +66,13 @@ export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
 }
 
+/**
+ * Root locale layout — owns html/body/head + cross-cutting providers
+ * (next-intl, theme). Chrome (header, footer, ticker) lives in the
+ * `(marketing)` route-group layout; app shell lives in `app/layout.tsx`.
+ * This split lets `/app/*` render without marketing chrome and lets
+ * marketing pages keep their full layout without per-route conditionals.
+ */
 export default async function LocaleLayout({
   children,
   params,
@@ -101,27 +100,13 @@ export default async function LocaleLayout({
           dangerouslySetInnerHTML={{ __html: themeBootScript }}
         />
       </head>
-      {/* `suppressHydrationWarning` on <body> because some browser
-          extensions (ColorZilla → `cz-shortcut-listen`, Grammarly,
-          1Password, etc.) inject attributes onto <body> before React
-          hydrates. Those are out of our control and never affect the
-          tree underneath, but React would otherwise log a noisy
-          hydration mismatch on every page load for users running
-          those extensions. */}
+      {/* suppressHydrationWarning on <body> because some browser
+          extensions inject attributes onto <body> before React hydrates
+          (ColorZilla, Grammarly, 1Password, etc.) — those are out of
+          our control and never affect the tree underneath. */}
       <body className="min-h-dvh antialiased" suppressHydrationWarning>
         <NextIntlClientProvider locale={locale} messages={messages}>
-          <ThemeProvider>
-            <TickerCarouselServer />
-            <ChromeGate>
-              <Header />
-            </ChromeGate>
-            <main>
-              <PageTransition>{children}</PageTransition>
-            </main>
-            <ChromeGate>
-              <Footer />
-            </ChromeGate>
-          </ThemeProvider>
+          <ThemeProvider>{children}</ThemeProvider>
         </NextIntlClientProvider>
       </body>
     </html>
