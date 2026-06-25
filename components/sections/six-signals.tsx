@@ -15,7 +15,6 @@
  */
 import { getTranslations } from 'next-intl/server';
 import { SectionEyebrow } from '@/components/ui/section-eyebrow';
-import { ScanlineOverlay } from '@/components/ui/scanline-overlay';
 import { GsapHeadline } from '@/components/ui/gsap-headline';
 import { SixSignalsClient, type SixSignalsRowCopy } from './six-signals.client';
 
@@ -42,25 +41,20 @@ export async function SixSignals() {
   return (
     <section
       aria-labelledby="six-signals-title"
-      className="relative isolate"
+      className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8 py-24 lg:py-32"
     >
-      <ScanlineOverlay opacity={0.4} />
+      <GsapHeadline
+        className="flex flex-col gap-4 max-w-[60ch]"
+        eyebrow={<SectionEyebrow>{t('eyebrow')}</SectionEyebrow>}
+        title={t('title')}
+        sub={t('lede')}
+        titleId="six-signals-title"
+        titleClassName="display text-[var(--fg)] text-balance text-[28px] sm:text-[36px] lg:text-[44px] leading-[1.05] tracking-[-0.02em] font-semibold"
+        subClassName="text-[var(--fg-2)] max-w-[58ch] leading-relaxed text-[15px] sm:text-[16px]"
+      />
 
-      <div className="relative z-10 mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 py-32 lg:py-40">
-        <GsapHeadline
-          glitch
-          className="flex flex-col gap-4 max-w-[60ch]"
-          eyebrow={<SectionEyebrow>{t('eyebrow')}</SectionEyebrow>}
-          title={t('title')}
-          sub={t('lede')}
-          titleId="six-signals-title"
-          titleClassName="text-3xl lg:text-5xl font-bold tracking-tight text-[var(--fg)]"
-          subClassName="text-[var(--fg-2)] max-w-[58ch] leading-relaxed"
-        />
-
-        <div className="mt-20">
-          <SixSignalsClient rows={rows} />
-        </div>
+      <div className="mt-16">
+        <SixSignalsClient rows={rows} />
       </div>
     </section>
   );

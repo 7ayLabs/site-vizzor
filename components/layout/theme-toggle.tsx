@@ -56,9 +56,9 @@ export function ThemeToggle() {
       }
       className="
         group relative inline-flex h-8 w-8 items-center justify-center
-        text-[var(--fg-3)]
+        text-[var(--pref-trigger,var(--fg-3))]
         transition-[color,transform] duration-200 ease-out
-        hover:text-[var(--fg)] hover:scale-[1.06]
+        hover:text-[var(--pref-trigger-hover,var(--fg))] hover:scale-[1.06]
         active:scale-[0.94]
         focus-visible:outline-none focus-visible:ring-2
         focus-visible:ring-[var(--accent)] focus-visible:rounded-md

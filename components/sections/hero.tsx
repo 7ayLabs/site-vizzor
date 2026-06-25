@@ -1,106 +1,151 @@
 /**
- * Hero — Ollama-shaped, demo-first.
+ * Hero — asymmetric terminal-dashboard composition.
  *
- * Vertical axis, narrow column. Top-to-bottom:
- *   1. Brand mark
- *   2. Big headline
- *   3. Sub
- *   4. Primary CTA — "Try Vizzor" → /predict (the on-site demo).
- *      This is the mass-market path; the navbar already pins the
- *      Telegram bot link so we deliberately don't repeat it here.
- *   5. Install command — the Ollama-style centerpiece for the
- *      power-user / self-host path. Click the card to copy.
- *   6. Helper line — one inline link to the CLI docs for context.
+ * Replaces the previous centered/vertical Ollama-shaped hero. The new
+ * layout follows the reference dashboard pattern (headline + CTAs left,
+ * floating data cards right) but renders through Vizzor's strict
+ * monochrome aesthetic — corner brackets, scanlines, hairline borders,
+ * mono typography. The cards display real live data via the same SWR
+ * hooks the rest of the site uses, so the hero is genuine product
+ * evidence, not decorative imagery.
  *
- * Pure neutrals. The headline is the only block of large type on the
- * page; everything else is muted.
+ * Composition (desktop ≥lg):
+ *   ┌────────────────────────────────────────────────────────────┐
+ *   │ EYEBROW (live ribbon)        ┌────────────────────────┐    │
+ *   │                              │  TRACKER WR (ring)     │    │
+ *   │ HUGE DISPLAY HEADLINE        │                        │    │
+ *   │ Predict. Resolve. Score.     └────────────────────────┘    │
+ *   │                                                             │
+ *   │ Sub copy (2 lines)           ┌──────────────────────┐      │
+ *   │                              │  LIVE MARKET FEED    │      │
+ *   │ [Open App ↗]  [Manifesto]    │  BTC ETH SOL ...     │      │
+ *   │                              └──────────────────────┘      │
+ *   │ Mono stat strip · chains ·                                  │
+ *   │ signal families · cli         ┌──────────────────────────┐  │
+ *   │                               │  RECEIPTS (last N)       │  │
+ *   │                               └──────────────────────────┘  │
+ *   └────────────────────────────────────────────────────────────┘
+ *
+ * Mobile: cards stack BELOW the headline column, condensed.
+ *
+ * Server shell + client `HeroDataCards` (live SWR). The shell stays a
+ * server component so static SSG of the locale page keeps working.
  */
 
 import { getTranslations } from 'next-intl/server';
-import Image from 'next/image';
 import { GsapHeadline } from '@/components/ui/gsap-headline';
-import { InstallCommand } from '@/components/ui/install-command';
 import { MotionReveal } from '@/components/ui/motion-reveal';
 import { Link } from '@/i18n/navigation';
-
-const INSTALL_COMMAND = 'npm i -g @vizzor/cli';
+import { getAppLinkTarget } from '@/lib/app-url';
+import { HeroDataCards } from './hero-data-cards';
 
 export async function Hero() {
   const t = await getTranslations('hero');
+  const appLink = getAppLinkTarget();
+  const primaryCtaClasses = `
+    group inline-flex items-center justify-center gap-2 h-12 px-6
+    rounded-full bg-[var(--fg)] text-[var(--bg)]
+    text-[14px] font-semibold tracking-tight
+    transition-transform duration-150 ease-out
+    hover:scale-[1.02] active:scale-[0.99]
+    focus-visible:outline-none focus-visible:ring-2
+    focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2
+    focus-visible:ring-offset-[var(--bg)]
+  `;
+  // Arrow glyph differs by destination — `↗` reinforces "leaves this
+  // site" when external; `→` reads as same-site navigation in dev.
+  const primaryCtaContent = (
+    <>
+      <span>{t('primaryCta')}</span>
+      <span
+        aria-hidden
+        className="transition-transform duration-150 ease-out group-hover:translate-x-0.5"
+      >
+        {appLink.external ? '↗' : '→'}
+      </span>
+    </>
+  );
 
   return (
     <section className="relative overflow-hidden">
-      <div className="mx-auto max-w-[760px] px-4 sm:px-6 lg:px-8 py-28 lg:py-36 text-center">
-        {/* 1. Brand mark */}
-        <MotionReveal>
-          <div className="mx-auto mb-10 flex h-24 items-center justify-center">
-            <Image
-              src="/brand/vizzor_darkicon.png"
-              alt="Vizzor"
-              width={364}
-              height={535}
-              priority
-              className="block dark:hidden h-24 w-auto"
+      {/* Atmospheric backdrop — subtle radial luminance behind the
+          headline column so the page doesn't feel like a flat slab.
+          Monochrome (no chromatic accent). */}
+      <div
+        aria-hidden
+        className="absolute inset-0 pointer-events-none opacity-60"
+        style={{
+          backgroundImage: `
+            radial-gradient(ellipse 50% 40% at 18% 30%,
+              color-mix(in oklab, var(--fg) 6%, transparent) 0%,
+              transparent 60%)
+          `,
+        }}
+      />
+
+      <div className="relative mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8 pt-14 pb-20 lg:pt-20 lg:pb-32">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
+          {/* ── LEFT: headline + CTAs ─────────────────────────────── */}
+          <div className="lg:col-span-7 flex flex-col">
+            {/* Headline + sub. The display-class typography is the
+                only block of large type on the page; the rest of the
+                hero (and the page below it) stays muted by comparison. */}
+            <GsapHeadline
+              as="h1"
+              title={t('headline')}
+              sub={t('sub')}
+              titleClassName="display text-[var(--fg)] text-balance text-[44px] sm:text-[60px] lg:text-[80px] leading-[0.98] tracking-[-0.035em] font-semibold"
+              subClassName="mt-6 text-[16px] sm:text-[17px] leading-relaxed text-[var(--fg-2)] max-w-[52ch]"
             />
-            <Image
-              src="/brand/vizzor_icon.png"
-              alt="Vizzor"
-              width={364}
-              height={535}
-              priority
-              className="hidden dark:block h-24 w-auto"
-            />
+
+            {/* CTA cluster — primary into the product, secondary into
+                the brand essay. Open-App is filled (the product is the
+                conversion target); Manifesto is outline-only. URL +
+                target resolved by `getAppLinkTarget()` — external in
+                prod (new tab), internal locale-aware Link in dev. */}
+            <MotionReveal delay={140}>
+              <div className="mt-8 flex flex-wrap items-center gap-3">
+                {appLink.external ? (
+                  <a
+                    href={appLink.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`${t('primaryCta')} (opens in a new tab)`}
+                    className={primaryCtaClasses}
+                  >
+                    {primaryCtaContent}
+                  </a>
+                ) : (
+                  <Link
+                    href={appLink.href as '/app/predict'}
+                    className={primaryCtaClasses}
+                  >
+                    {primaryCtaContent}
+                  </Link>
+                )}
+                <Link
+                  href="/manifesto"
+                  className="
+                    inline-flex items-center justify-center h-12 px-5
+                    rounded-full border border-[var(--border)] bg-transparent
+                    text-[13.5px] font-medium text-[var(--fg-2)]
+                    hover:text-[var(--fg)] hover:bg-[var(--surface-2)] hover:border-[var(--border-hi)]
+                    transition-colors
+                  "
+                >
+                  {t('secondaryCta')}
+                </Link>
+              </div>
+            </MotionReveal>
           </div>
-        </MotionReveal>
 
-        {/* 2. Headline + 3. Sub */}
-        <GsapHeadline
-          as="h1"
-          title={t('headline')}
-          sub={t('sub')}
-          titleClassName="display text-[var(--fg)] text-balance text-[44px] sm:text-[60px] lg:text-[72px] leading-[1.02] tracking-tight font-semibold"
-          subClassName="mt-6 text-[16px] sm:text-[17px] leading-relaxed text-[var(--fg-2)] max-w-[40ch] mx-auto"
-        />
-
-        {/* 4. Primary CTA + 5. install card.
-            A tight `or` rule sits between them so the two paths (demo
-            vs CLI) read as a deliberate split, not two stacked CTAs. */}
-        <MotionReveal delay={140}>
-          <div className="mt-10 mx-auto max-w-[420px] flex flex-col items-stretch gap-4">
-            <Link
-              href="/predict"
-              className="
-                group inline-flex items-center justify-center gap-2 h-12 px-6
-                rounded-full bg-[var(--fg)] text-[var(--bg)]
-                text-[14px] font-semibold tracking-tight
-                transition-transform duration-150 ease-out
-                hover:scale-[1.02] active:scale-[0.99]
-              "
-            >
-              <span>{t('tryCta')}</span>
-              <span
-                aria-hidden
-                className="transition-transform duration-150 ease-out group-hover:translate-x-0.5"
-              >
-                →
-              </span>
-            </Link>
-
-            <div
-              aria-hidden
-              className="flex items-center gap-3 text-[var(--fg-3)]"
-            >
-              <span className="h-px flex-1 bg-[var(--border)]" />
-              <span className="mono tabular text-[10.5px] uppercase tracking-[0.18em]">
-                {t('orLabel')}
-              </span>
-              <span className="h-px flex-1 bg-[var(--border)]" />
-            </div>
-
-            <InstallCommand command={INSTALL_COMMAND} />
+          {/* ── RIGHT: floating data cards ─────────────────────────── */}
+          <div className="lg:col-span-5 relative">
+            <HeroDataCards />
           </div>
-        </MotionReveal>
+        </div>
       </div>
     </section>
   );
 }
+

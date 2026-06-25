@@ -15,10 +15,9 @@
  */
 import { getTranslations } from 'next-intl/server';
 import { SectionEyebrow } from '@/components/ui/section-eyebrow';
-import { TerminalBlock } from '@/components/ui/terminal-block';
+import { TypingTerminal } from '@/components/ui/typing-terminal';
 import { CtaSecondary } from '@/components/ui/cta-secondary';
 import { GsapHeadline } from '@/components/ui/gsap-headline';
-import { LiveBadge } from '@/components/ui/live-badge';
 import { SurfaceCompareTabs } from './surface-compare.client';
 import { cn } from '@/lib/utils';
 
@@ -47,45 +46,49 @@ const DASHBOARD_CODE = [
 
 interface SurfaceCardProps {
   title: string;
-  badgeTone: 'mint' | 'gold' | 'whale';
   code: string;
   lang: string;
   showPrompt?: boolean;
   cta: React.ReactNode;
   pill?: string;
+  /** Per-card typing delay so the three terminals don't all type
+   *  simultaneously on first scroll. */
+  durationMs?: number;
 }
 
 function SurfaceCard({
   title,
-  badgeTone,
   code,
   lang,
   showPrompt,
   cta,
   pill,
+  durationMs,
 }: SurfaceCardProps) {
   return (
     <div
       className={cn(
         'relative flex flex-col gap-4 h-full',
-        'rounded-lg bg-[var(--surface)] vt-bracket border border-[var(--border-hi)] p-5',
+        'rounded-2xl bg-[var(--surface)] vt-bracket border border-[var(--border)] p-5',
       )}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-baseline gap-2 min-w-0">
-          <h3 className="text-[15px] font-semibold tracking-tight text-[var(--fg)] truncate">
-            {title}
-          </h3>
-          {pill && (
-            <span className="mono tabular text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--accent)] leading-none">
-              · {pill}
-            </span>
-          )}
-        </div>
-        <LiveBadge tone={badgeTone} />
+      <div className="flex items-baseline gap-2 min-w-0">
+        <h3 className="text-[15px] font-semibold tracking-tight text-[var(--fg)] truncate">
+          {title}
+        </h3>
+        {pill && (
+          <span className="mono tabular text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--fg-3)] leading-none">
+            · {pill}
+          </span>
+        )}
       </div>
 
-      <TerminalBlock code={code} lang={lang} showPrompt={showPrompt} />
+      <TypingTerminal
+        code={code}
+        lang={lang}
+        showPrompt={showPrompt}
+        durationMs={durationMs}
+      />
 
       <div className="mt-auto pt-1">{cta}</div>
     </div>
@@ -99,9 +102,9 @@ export async function SurfaceCompare() {
     <SurfaceCard
       title={t('telegram.title')}
       pill={t('telegram.pill')}
-      badgeTone="mint"
       code={TELEGRAM_CODE}
       lang="telegram"
+      durationMs={1600}
       cta={
         <CtaSecondary
           href="https://t.me/vizzorai_bot"
@@ -117,10 +120,10 @@ export async function SurfaceCompare() {
   const cliPanel = (
     <SurfaceCard
       title={t('cli.title')}
-      badgeTone="gold"
       code={CLI_CODE}
       lang="shell"
       showPrompt={false}
+      durationMs={1700}
       cta={
         <CtaSecondary href="/docs/cli" size="sm">
           {t('cli.cta')}
@@ -132,10 +135,10 @@ export async function SurfaceCompare() {
   const dashboardPanel = (
     <SurfaceCard
       title={t('dashboard.title')}
-      badgeTone="whale"
       code={DASHBOARD_CODE}
       lang={t('dashboard.mockup.chrome')}
       showPrompt={false}
+      durationMs={1900}
       cta={
         <CtaSecondary href="/docs" size="sm">
           {t('dashboard.cta')}
@@ -147,7 +150,7 @@ export async function SurfaceCompare() {
   return (
     <section
       aria-labelledby="surface-compare-title"
-      className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 py-32 lg:py-40"
+      className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8 py-24 lg:py-32"
     >
       <GsapHeadline
         className="flex flex-col gap-4 max-w-[58ch]"
@@ -155,8 +158,8 @@ export async function SurfaceCompare() {
         title={t('title')}
         sub={t('lede')}
         titleId="surface-compare-title"
-        titleClassName="text-3xl lg:text-5xl font-bold tracking-tight text-[var(--fg)]"
-        subClassName="text-[var(--fg-2)] leading-relaxed max-w-[58ch]"
+        titleClassName="display text-[var(--fg)] text-balance text-[28px] sm:text-[36px] lg:text-[44px] leading-[1.05] tracking-[-0.02em] font-semibold"
+        subClassName="text-[var(--fg-2)] leading-relaxed max-w-[58ch] text-[15px] sm:text-[16px]"
       />
 
       <div className="mt-20">
