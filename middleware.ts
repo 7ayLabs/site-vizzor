@@ -81,6 +81,77 @@ function geoRedirect(req: NextRequest): NextResponse | null {
 const PROD = process.env.NODE_ENV === 'production';
 
 /**
+ * Hostnames that route the visitor directly into the product shell
+ * (`/app/*`) instead of the marketing surface. The single Next.js
+ * process serves both — this middleware just rewrites the requested
+ * path into the `/app/*` segment for these hosts.
+ *
+ * Configurable via `APP_HOSTS` env (comma-separated) so staging can
+ * use a different subdomain (e.g. `app.staging.vizzor.ai`) without
+ * a code change.
+ */
+const DEFAULT_APP_HOSTS = ['app.vizzor.ai'];
+const APP_HOSTS = new Set(
+  (process.env.APP_HOSTS ?? DEFAULT_APP_HOSTS.join(','))
+    .split(',')
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean),
+);
+
+/** Path prefixes the host-rewrite must NOT touch — even on app.*
+ *  these should pass through unchanged. */
+const HOST_REWRITE_BYPASS_RE =
+  /^\/(?:api|_next|_vercel|docs|favicon\.ico|sitemap\.xml|robots\.txt|manifest\.webmanifest)(?:\/|$)/;
+
+/**
+ * On `app.vizzor.ai`, rewrite the URL pathname so the visitor lands
+ * on `/app/*` without seeing it in the browser bar. Same Next.js
+ * process serves the marketing site at `vizzor.ai/`; only the host
+ * decides which segment to mount.
+ *
+ *   app.vizzor.ai/                  → /app/predict
+ *   app.vizzor.ai/predict           → /app/predict
+ *   app.vizzor.ai/predict/abc       → /app/predict/abc
+ *   app.vizzor.ai/billing           → /app/billing
+ *   app.vizzor.ai/es/predict        → /es/app/predict (locale preserved)
+ *
+ * Returns null when no rewrite is needed (different host, or path
+ * already starts with `/app`).
+ */
+function appHostRewrite(req: NextRequest): NextResponse | null {
+  const hostHeader = (req.headers.get('host') ?? '').toLowerCase();
+  // Strip any trailing port (`:443`) so localhost forwarding lands too.
+  const host = hostHeader.split(':')[0] ?? '';
+  if (!APP_HOSTS.has(host)) return null;
+
+  const { pathname, search } = req.nextUrl;
+  if (HOST_REWRITE_BYPASS_RE.test(pathname)) return null;
+
+  // Detect a leading locale segment (`/es`, `/fr`, …) so we don't
+  // bury it under `/app`. `as-needed` means `/en` is absent at the
+  // root, so the regex only matches the non-default locales.
+  const localeMatch = pathname.match(
+    new RegExp(`^/(${routing.locales.filter((l) => l !== routing.defaultLocale).join('|')})(?=/|$)`),
+  );
+  const localePrefix = localeMatch ? localeMatch[0] : '';
+  const rest = pathname.slice(localePrefix.length);
+
+  // Already in /app? Don't double-prefix.
+  if (rest.startsWith('/app')) return null;
+
+  // Empty rest (visitor hit the bare host) → land at the predict
+  // surface. Non-empty rest gets `/app` prepended.
+  const nextRest = rest === '' || rest === '/'
+    ? '/app/predict'
+    : `/app${rest}`;
+
+  const url = req.nextUrl.clone();
+  url.pathname = `${localePrefix}${nextRest}`;
+  url.search = search;
+  return NextResponse.rewrite(url);
+}
+
+/**
  * Build the CSP directive string. Keeps the allowlist in one place so
  * Phase 2 (promotion to enforcing) is a one-line flip.
  *
@@ -180,6 +251,13 @@ function applySecurityHeaders(res: NextResponse): NextResponse {
 }
 
 export default function middleware(req: NextRequest): NextResponse {
+  // 0. App-host rewrite — when the request arrives at `app.vizzor.ai`
+  //    we rewrite the URL into `/app/*` so the marketing routes never
+  //    serve. Runs BEFORE locale + geo so the rewritten pathname
+  //    flows through both normally.
+  const hostRewrite = appHostRewrite(req);
+  if (hostRewrite) return applySecurityHeaders(hostRewrite);
+
   // Only run the next-intl locale handler against paths it owns.
   // Everything else flows through unchanged and just collects the
   // security headers on its way out.
