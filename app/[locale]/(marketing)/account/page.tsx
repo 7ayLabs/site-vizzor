@@ -11,7 +11,7 @@
  *   - Recent payment sessions (last 10, status, chain, amount)
  *
  * The page is signed-in-only. Anonymous visitors are redirected to
- * /predict where the navbar wallet button surfaces the sign-in flow.
+ * /app/predict where the navbar wallet button surfaces the sign-in flow.
  *
  * Color discipline: this page uses only the neutral token set
  * (--bg / --surface / --surface-2 / --border / --fg{,2,3}). Status
@@ -52,7 +52,7 @@ export default async function AccountPage({ params }: PageProps) {
   const { locale } = await params;
   const session = await getActiveSession();
   if (!session) {
-    redirect(`/${locale}/predict?from=account`);
+    redirect(`/${locale}/app/predict?from=account`);
   }
 
   const wallet = session.wallet;

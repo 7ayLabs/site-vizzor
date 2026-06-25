@@ -1,7 +1,7 @@
 /**
  * /[locale] — composed home page.
  * Section order: hero → how-it-works → whats-in-it → surface-compare
- * → six-signals → trust-because-tracked → cta-block.
+ * → six-signals → cta-block.
  *
  * The page is statically generated per locale (see generateStaticParams in
  * the layout); we call `setRequestLocale` here so any nested server
@@ -14,7 +14,6 @@ import { HowItWorks } from '@/components/sections/how-it-works';
 import { WhatsInIt } from '@/components/sections/whats-in-it';
 import { SurfaceCompare } from '@/components/sections/surface-compare';
 import { SixSignals } from '@/components/sections/six-signals';
-import { TrustBecauseTracked } from '@/components/sections/trust-because-tracked';
 import { CtaBlock } from '@/components/sections/cta-block';
 
 export default async function HomePage({
@@ -32,7 +31,6 @@ export default async function HomePage({
       <WhatsInIt />
       <SurfaceCompare />
       <SixSignals />
-      <TrustBecauseTracked />
       <CtaBlock />
     </>
   );
