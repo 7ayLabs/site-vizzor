@@ -1,11 +1,13 @@
 {
   "header": {
     "nav": {
-      "predict": "Prédire",
-      "surfaces": "Surfaces",
+      "openApp": "Ouvrir l'app",
+      "manifesto": "Manifeste",
       "pricing": "Tarifs",
+      "changelog": "Nouveautés",
       "docs": "Docs"
     },
+    "openApp": "Ouvrir l'app",
     "cta": "Ouvrir dans Telegram",
     "mobileMenu": {
       "label": "Navigation du site",
@@ -20,12 +22,211 @@
       }
     }
   },
+  "app": {
+    "sidebar": {
+      "section": {
+        "surfaces": "Surfaces",
+        "alsoOn": "Aussi sur"
+      },
+      "surface": {
+        "predict": "Chat",
+        "whales": "Baleines",
+        "flow": "Flux"
+      },
+      "tier": { "elite": "ELITE" },
+      "telegram": {
+        "label": "Ouvrir sur Telegram"
+      },
+      "footer": {
+        "alerts": "Alertes",
+        "settings": "Paramètres",
+        "billing": "Facturation",
+        "pricing": "Tarifs",
+        "docs": "Docs"
+      }
+    },
+    "statusPill": {
+      "healthy": "Tous les systèmes opérationnels",
+      "degraded": "Dégradé — voir détails",
+      "loading": "Vérification…",
+      "down": "Sonde de santé hors ligne",
+      "subsystem": { "engine": "Moteur", "rpc": "RPC Solana", "sqlite": "Base de données" },
+      "build": "Build"
+    },
+    "walletMenu": {
+      "chainPill": "Solana {network}",
+      "viewOnExplorer": "Voir sur l'explorateur",
+      "switchWallet": "Changer de portefeuille",
+      "disconnect": "Déconnecter",
+      "toast": {
+        "switching": "Changement de portefeuille…",
+        "disconnected": "Portefeuille déconnecté",
+        "disconnectFailed": "Échec de la déconnexion"
+      }
+    },
+    "commandPalette": {
+      "label": "Palette de commandes",
+      "dismiss": "Fermer la palette",
+      "placeholder": "Rechercher commandes, surfaces, paramètres…",
+      "empty": "Aucune commande ne correspond.",
+      "confirmHint": "Appuyez à nouveau sur Entrée pour confirmer.",
+      "footer": {
+        "navigate": "↑↓ naviguer · ↵ sélectionner",
+        "dismiss": "esc fermer · ⌘K basculer"
+      }
+    },
+    "onboarding": {
+      "aria": {
+        "dialog": "Bienvenue sur Vizzor",
+        "dismiss": "Fermer la bienvenue"
+      },
+      "connect": {
+        "eyebrow": "Étape 1 sur 3",
+        "title": "Connectez votre portefeuille",
+        "body": "Vizzor associe votre essai à votre portefeuille — pas d'email, pas de mot de passe. Compatible avec Phantom, Solflare et tout portefeuille au standard Solana Wallet.",
+        "skip": "Passer pour l'instant"
+      },
+      "siws": {
+        "eyebrow": "Étape 2 sur 3",
+        "title": "Signez le message de bienvenue",
+        "body": "Nous utilisons Sign-In With Solana (SIWS) pour vérifier que c'est bien vous. La signature reste sur votre appareil — aucun fonds n'est déplacé, aucune transaction n'est envoyée.",
+        "waiting": "En attente de la signature…",
+        "skip": "Passer pour l'instant"
+      },
+      "trialIntro": {
+        "eyebrow": "Étape 3 sur 3",
+        "title": "Votre essai Pro de {days} jours est actif",
+        "body": "Jusqu'à {dailyCap} prédictions par jour pendant les 7 prochains jours — chaque famille de signaux, chaque horizon. Sans carte. Annulez en ne vous abonnant pas, simplement.",
+        "cta": "Commencer à prédire"
+      }
+    },
+    "billing": {
+      "meta": {
+        "title": "Facturation",
+        "description": "Paiements on-chain confirmés pour votre abonnement Vizzor."
+      },
+      "eyebrow": "Facturation · Compte",
+      "title": "Historique des paiements",
+      "body": "Chaque paiement on-chain confirmé depuis votre portefeuille actif, du plus récent au plus ancien. Cliquez sur le lien explorateur pour la vue canonique de la transaction sur Solscan ou Tonviewer.",
+      "history": {
+        "title": "Paiements récents",
+        "loading": "Chargement de l'historique…",
+        "error": "Impossible de charger l'historique.",
+        "empty": "Aucun paiement confirmé pour l'instant — lorsqu'un abonnement sera réglé on-chain, il apparaîtra ici.",
+        "row": {
+          "title": "{tier} · {cadence}",
+          "explorer": "Voir sur l'explorateur"
+        }
+      }
+    },
+    "alerts": {
+      "meta": {
+        "title": "Alertes",
+        "description": "Déclencheurs de prix armés et notifications envoyées pour votre portefeuille."
+      },
+      "eyebrow": "Alertes · En direct",
+      "title": "Alertes",
+      "body": "Chaque plan que le prédicteur émet arme automatiquement les alertes entry, TP et SL. Gérez-les ici ; le bot Telegram envoie la notification quand chaque niveau est atteint.",
+      "loading": "Chargement des alertes…",
+      "sections": {
+        "armed": {
+          "eyebrow": "Actives",
+          "title": "Armées",
+          "empty": "Aucun déclencheur armé pour l'instant."
+        },
+        "triggered": {
+          "eyebrow": "Dernières 24h",
+          "title": "Déclenchées",
+          "empty": "Rien n'a été déclenché ces dernières 24 heures."
+        },
+        "resolved": {
+          "eyebrow": "Derniers 7j",
+          "title": "Résolues",
+          "empty": "Aucune alerte clôturée ces 7 derniers jours."
+        }
+      },
+      "empty": {
+        "signedOut": {
+          "title": "Connectez-vous pour voir vos alertes",
+          "body": "Les alertes sont liées à votre portefeuille. Ouvrez le chat et complétez la connexion pour les charger ici."
+        },
+        "tier": {
+          "title": "Les alertes font partie de Pro",
+          "body": "Les alertes armées illimitées sont incluses avec le tier Pro. Abonnez-vous une fois et chaque plan arme automatiquement entry, TP et SL."
+        },
+        "none": {
+          "title": "Aucune alerte armée pour l'instant",
+          "body": "Quand le prédicteur émet un plan, il arme automatiquement entry, TP1, TP2 et SL. Vous pouvez aussi armer une alerte manuelle depuis le bot Telegram.",
+          "cta": "Armer une alerte sur Telegram"
+        },
+        "error": {
+          "title": "Impossible de charger les alertes",
+          "body": "Le moteur est injoignable pour l'instant. La page réessaiera toutes les 30 secondes."
+        },
+        "staleHint": "Affichage du cache"
+      },
+      "modal": {
+        "close": "Fermer les alertes"
+      },
+      "row": {
+        "live": "En direct",
+        "entry": "Entrée",
+        "leverage": "{x}x",
+        "firedAt": "Déclenchée @ ${price}"
+      },
+      "banner": {
+        "title": "Alerte {kind} sur {symbol} déclenchée",
+        "body": "Prix {direction} ${price}"
+      },
+      "arm": {
+        "eyebrow": "Armer une alerte",
+        "title": "Définir un déclencheur de prix",
+        "symbol": "Symbole",
+        "kind": "Type",
+        "direction": "Direction",
+        "up": "Franchit à la hausse",
+        "down": "Franchit à la baisse",
+        "price": "Prix de déclenchement",
+        "arm": "Armer",
+        "arming": "Armement…",
+        "success": "Alerte armée",
+        "errors": {
+          "price": "Saisir un prix valide",
+          "invalid": "Données d'alerte invalides",
+          "unauthenticated": "Connectez-vous pour armer des alertes",
+          "engineUnavailable": "Moteur indisponible, réessayez",
+          "generic": "Impossible d'armer l'alerte"
+        }
+      },
+      "cancel": {
+        "label": "Annuler l'alerte",
+        "success": "Alerte annulée",
+        "notFound": "L'alerte n'existe plus",
+        "engineUnavailable": "Moteur indisponible, réessayez",
+        "error": "Impossible d'annuler l'alerte"
+      }
+    },
+    "settings": {
+      "meta": {
+        "title": "Paramètres",
+        "description": "Gérez votre compte Vizzor, votre portefeuille et vos préférences."
+      },
+      "title": "Paramètres",
+      "body": "Contrôles de compte pour votre session Vizzor. La gestion du portefeuille se trouve en haut de la barre latérale ; la facturation et l'historique des paiements se trouvent dans Facturation.",
+      "accountLink": {
+        "label": "Profil du compte",
+        "cta": "Ouvrir le profil du compte →"
+      }
+    }
+  },
   "auth": {
     "connect": "Connecter portefeuille",
     "connecting": "Connexion…",
     "sign": "Se connecter",
     "signing": "Signature…",
     "signedInAs": "Connecté en tant que",
+    "network": "Réseau",
+    "viewOnExplorer": "Voir sur l'explorateur",
     "subscription": "Abonnement",
     "lifetime": "À vie",
     "expiresOn": "Expire le {date}",
@@ -238,6 +439,14 @@
       "title": "Prédire — Vizzor",
       "description": "Connecte ton wallet pour lancer un call crypto calibré contre le même moteur que le bot Telegram. Essai Pro 7 jours, 5 prédictions/jour. Tracked-live, reçus publics."
     },
+    "share": {
+      "label": "Partager",
+      "aria": "Copier un lien partageable vers cette conversation",
+      "copied": "Lien copié",
+      "copyFailed": "Impossible de copier le lien",
+      "unsavedTitle": "Sauvegarde d'abord le chat",
+      "unsavedBody": "Envoie un message pour ouvrir la conversation, puis tu pourras la partager."
+    },
     "gate": {
       "title": "Connecte ton wallet pour prédire.",
       "body": "Vizzor lie l'essai à ton wallet : le compteur survit aux cookies effacés. Signe une fois avec SIWS — sans email, sans mot de passe.",
@@ -302,6 +511,7 @@
       "freeLine": "Essai terminé · /pricing",
       "nav": {
         "chat": "Lancer",
+        "alerts": "Alertes",
         "library": "Reçus",
         "libraryHint": "/precisions",
         "receipts": "Reçus",
@@ -335,6 +545,12 @@
         "sources": "Sources",
         "copy": "Copier",
         "copied": "Copié",
+        "quote": "Citer",
+        "quoted": "Cité",
+        "share": "Partager",
+        "shared": "Partagé",
+        "compact": "Compacter",
+        "compacted": "Développer",
         "retry": "Réessayer",
         "priceCheckLabel": "Prix incertain — fie-toi au ticker",
         "priceCheckBody": "%symbol% : le modèle indique %quoted%, ticker en direct %live% (%delta%).",
@@ -382,10 +598,18 @@
   },
   "hero": {
     "ribbon": "{version} · en route vers {target}% sur le tableau public",
+    "eyebrow": "EN DIRECT · TRACKED · PUBLIC",
     "headline": "Prédit. Résout. Note.",
     "sub": "Vizzor appelle le mouvement, montre le smart money derrière, et trace chaque taux de réussite en public. Des reçus que vous pouvez auditer — pas des vibes.",
+    "primaryCta": "Commencer à prédire",
+    "secondaryCta": "Lire le manifeste",
     "tryCta": "Essayer Vizzor",
     "orLabel": "ou en local",
+    "stats": {
+      "chains": { "label": "Chaînes en direct", "value": "11" },
+      "signals": { "label": "Familles de signaux", "value": "6" },
+      "license": { "label": "Licence", "value": "BUSL · auto-héb." }
+    },
     "badges": {
       "chains": "11 chaînes en direct",
       "signals": "6 familles de signaux",
@@ -410,17 +634,17 @@
     "footer": "Voir ce qui tourne en dessous",
     "steps": {
       "fetch": {
-        "title": "01. Demandez",
+        "title": "Demandez",
         "description": "Tapez une crypto. Choisissez un horizon. C'est tout.",
         "ariaLabel": "Étape un : tapez un symbole et un horizon pour demander un call à Vizzor"
       },
       "fuse": {
-        "title": "02. Recevez un call",
+        "title": "Recevez un call",
         "description": "Une direction claire, un chiffre de confiance et les raisons derrière. En quelques secondes.",
         "ariaLabel": "Étape deux : recevez un call directionnel avec une confiance calibrée"
       },
       "emit": {
-        "title": "03. Suivez le résultat",
+        "title": "Suivez le résultat",
         "description": "Chaque call est inscrit au tableau public. Vous voyez les wins. Vous voyez les misses. Aucune retouche.",
         "ariaLabel": "Étape trois : chaque call atterrit sur un tableau public, wins et misses ensemble"
       }

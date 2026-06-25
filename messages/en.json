@@ -1,11 +1,13 @@
 {
   "header": {
     "nav": {
-      "predict": "Predict",
-      "surfaces": "Surfaces",
+      "openApp": "Open App",
+      "manifesto": "Manifesto",
       "pricing": "Pricing",
+      "changelog": "Changelog",
       "docs": "Docs"
     },
+    "openApp": "Open App",
     "cta": "Open in Telegram",
     "mobileMenu": {
       "label": "Site navigation",
@@ -20,12 +22,211 @@
       }
     }
   },
+  "app": {
+    "sidebar": {
+      "section": {
+        "surfaces": "Surfaces",
+        "alsoOn": "Also on"
+      },
+      "surface": {
+        "predict": "Chat",
+        "whales": "Whales",
+        "flow": "Flow"
+      },
+      "tier": { "elite": "ELITE" },
+      "telegram": {
+        "label": "Open on Telegram"
+      },
+      "footer": {
+        "alerts": "Alerts",
+        "settings": "Settings",
+        "billing": "Billing",
+        "pricing": "Pricing",
+        "docs": "Docs"
+      }
+    },
+    "statusPill": {
+      "healthy": "All systems operational",
+      "degraded": "Degraded — see details",
+      "loading": "Checking…",
+      "down": "Health probe offline",
+      "subsystem": { "engine": "Engine", "rpc": "Solana RPC", "sqlite": "Database" },
+      "build": "Build"
+    },
+    "walletMenu": {
+      "chainPill": "Solana {network}",
+      "viewOnExplorer": "View on Explorer",
+      "switchWallet": "Switch wallet",
+      "disconnect": "Disconnect",
+      "toast": {
+        "switching": "Switching wallets…",
+        "disconnected": "Wallet disconnected",
+        "disconnectFailed": "Disconnect failed"
+      }
+    },
+    "commandPalette": {
+      "label": "Command palette",
+      "dismiss": "Dismiss palette",
+      "placeholder": "Search commands, surfaces, settings…",
+      "empty": "No command matches that query.",
+      "confirmHint": "Press Enter again to confirm.",
+      "footer": {
+        "navigate": "↑↓ navigate · ↵ select",
+        "dismiss": "esc dismiss · ⌘K toggle"
+      }
+    },
+    "onboarding": {
+      "aria": {
+        "dialog": "Welcome to Vizzor",
+        "dismiss": "Dismiss welcome"
+      },
+      "connect": {
+        "eyebrow": "Step 1 of 3",
+        "title": "Connect your wallet",
+        "body": "Vizzor binds your trial to your wallet — no email, no password. Phantom, Solflare, and any Solana Wallet Standard wallet work.",
+        "skip": "Skip for now"
+      },
+      "siws": {
+        "eyebrow": "Step 2 of 3",
+        "title": "Sign the welcome message",
+        "body": "We use Sign-In With Solana (SIWS) to verify it's really you. The signature stays on-device — no funds move and no transaction is sent.",
+        "waiting": "Waiting for the signature prompt…",
+        "skip": "Skip for now"
+      },
+      "trialIntro": {
+        "eyebrow": "Step 3 of 3",
+        "title": "Your {days}-day Pro trial is live",
+        "body": "Get up to {dailyCap} predictions per day for the next 7 days — every signal family, every horizon. No card on file. Cancel by simply not subscribing.",
+        "cta": "Start predicting"
+      }
+    },
+    "billing": {
+      "meta": {
+        "title": "Billing",
+        "description": "Confirmed on-chain payments for your Vizzor subscription."
+      },
+      "eyebrow": "Billing · Account",
+      "title": "Payment history",
+      "body": "Every confirmed on-chain payment from your active wallet, newest first. Click a row's explorer link for the canonical transaction view on Solscan or Tonviewer.",
+      "history": {
+        "title": "Recent payments",
+        "loading": "Loading payment history…",
+        "error": "Could not load payment history.",
+        "empty": "No confirmed payments yet — once a wallet subscription settles on-chain, it will appear here.",
+        "row": {
+          "title": "{tier} · {cadence}",
+          "explorer": "View on explorer"
+        }
+      }
+    },
+    "alerts": {
+      "meta": {
+        "title": "Alerts",
+        "description": "Armed price triggers and fired notifications for your wallet."
+      },
+      "eyebrow": "Alerts · Live",
+      "title": "Alerts",
+      "body": "Every trade plan the predictor emits auto-arms entry, TP, and SL alerts. Manage them here; the Telegram bot fires the notification when each level hits.",
+      "loading": "Loading alerts…",
+      "sections": {
+        "armed": {
+          "eyebrow": "Active",
+          "title": "Armed",
+          "empty": "No armed triggers right now."
+        },
+        "triggered": {
+          "eyebrow": "Last 24h",
+          "title": "Triggered",
+          "empty": "Nothing fired in the last 24 hours."
+        },
+        "resolved": {
+          "eyebrow": "Last 7d",
+          "title": "Resolved",
+          "empty": "No closed alerts in the last 7 days."
+        }
+      },
+      "empty": {
+        "signedOut": {
+          "title": "Sign in to see your alerts",
+          "body": "Alerts are bound to your wallet. Open the chat surface and complete the sign-in flow to load them here."
+        },
+        "tier": {
+          "title": "Alerts are part of Pro",
+          "body": "Unlimited armed alerts ship with the Pro tier. Upgrade once and every trade plan auto-arms entry, TP, and SL."
+        },
+        "none": {
+          "title": "No alerts armed yet",
+          "body": "When the predictor emits a trade plan it auto-arms entry, TP1, TP2, and SL. You can also arm a manual alert from the Telegram bot.",
+          "cta": "Arm an alert on Telegram"
+        },
+        "error": {
+          "title": "Could not load alerts",
+          "body": "The engine is unreachable right now. The page will retry every 30 seconds."
+        },
+        "staleHint": "Showing cached data"
+      },
+      "modal": {
+        "close": "Close alerts"
+      },
+      "row": {
+        "live": "Live",
+        "entry": "Entry",
+        "leverage": "{x}x",
+        "firedAt": "Fired @ ${price}"
+      },
+      "banner": {
+        "title": "{symbol} {kind} alert triggered",
+        "body": "Price {direction} ${price}"
+      },
+      "arm": {
+        "eyebrow": "Arm new alert",
+        "title": "Set a price trigger",
+        "symbol": "Symbol",
+        "kind": "Kind",
+        "direction": "Direction",
+        "up": "Crosses above",
+        "down": "Crosses below",
+        "price": "Trigger price",
+        "arm": "Arm",
+        "arming": "Arming…",
+        "success": "Alert armed",
+        "errors": {
+          "price": "Enter a valid trigger price",
+          "invalid": "Invalid alert input",
+          "unauthenticated": "Sign in to arm alerts",
+          "engineUnavailable": "Engine unavailable, try again",
+          "generic": "Could not arm alert"
+        }
+      },
+      "cancel": {
+        "label": "Cancel alert",
+        "success": "Alert cancelled",
+        "notFound": "Alert no longer exists",
+        "engineUnavailable": "Engine unavailable, try again",
+        "error": "Could not cancel alert"
+      }
+    },
+    "settings": {
+      "meta": {
+        "title": "Settings",
+        "description": "Manage your Vizzor account, wallet, and preferences."
+      },
+      "title": "Settings",
+      "body": "Account-level controls for your Vizzor session. Wallet management lives at the top of the sidebar; billing and payment history live under Billing.",
+      "accountLink": {
+        "label": "Account profile",
+        "cta": "Open account profile →"
+      }
+    }
+  },
   "auth": {
     "connect": "Connect wallet",
     "connecting": "Connecting…",
     "sign": "Sign in",
     "signing": "Signing…",
     "signedInAs": "Signed in as",
+    "network": "Network",
+    "viewOnExplorer": "View on explorer",
     "subscription": "Subscription",
     "lifetime": "Lifetime",
     "expiresOn": "Expires {date}",
@@ -248,6 +449,14 @@
       "title": "Predict — Vizzor",
       "description": "Connect your wallet to run a calibrated crypto call against the same engine the Telegram bot uses. 7-day Pro trial, 5 predictions/day. Tracked-live, receipts public."
     },
+    "share": {
+      "label": "Share",
+      "aria": "Copy a sharable link to this conversation",
+      "copied": "Link copied",
+      "copyFailed": "Could not copy link",
+      "unsavedTitle": "Save the chat first",
+      "unsavedBody": "Send a message to open the conversation, then you can share it."
+    },
     "gate": {
       "title": "Connect your wallet to predict.",
       "body": "Vizzor binds the trial to your wallet so the counter survives cookie clears. Sign once with SIWS — no email, no password.",
@@ -312,6 +521,7 @@
       "freeLine": "Trial expired · /pricing",
       "nav": {
         "chat": "Run",
+        "alerts": "Alerts",
         "library": "Receipts",
         "libraryHint": "/precisions",
         "receipts": "Receipts",
@@ -345,6 +555,12 @@
         "sources": "Sources",
         "copy": "Copy",
         "copied": "Copied",
+        "quote": "Quote",
+        "quoted": "Quoted",
+        "share": "Share",
+        "shared": "Shared",
+        "compact": "Compact",
+        "compacted": "Expand",
         "retry": "Retry",
         "priceCheckLabel": "Price looks off — trust the ticker",
         "priceCheckBody": "%symbol%: model quoted %quoted%, live ticker %live% (%delta%).",
@@ -392,10 +608,18 @@
   },
   "hero": {
     "ribbon": "{version} · climbing toward {target}% on the record",
+    "eyebrow": "LIVE · TRACKED · PUBLIC",
     "headline": "Predict. Resolve. Score.",
     "sub": "Vizzor calls the move, shows the smart money behind it, and tracks every win rate in public. Receipts you can audit — not vibes.",
+    "primaryCta": "Start predicting",
+    "secondaryCta": "Read the manifesto",
     "tryCta": "Try Vizzor",
     "orLabel": "or run it locally",
+    "stats": {
+      "chains": { "label": "Chains live", "value": "11" },
+      "signals": { "label": "Signal families", "value": "6" },
+      "license": { "label": "License", "value": "BUSL · self-host" }
+    },
     "badges": {
       "chains": "11 chains live",
       "signals": "6 signal families",
@@ -420,17 +644,17 @@
     "footer": "See what runs under the hood",
     "steps": {
       "fetch": {
-        "title": "01. Ask",
+        "title": "Ask",
         "description": "Type a coin. Pick a timeframe. That's it.",
         "ariaLabel": "Step one: type a symbol and a timeframe to ask Vizzor for a call"
       },
       "fuse": {
-        "title": "02. Get a call",
+        "title": "Get a call",
         "description": "A clear direction, a confidence number, and the reasons behind it. In seconds.",
         "ariaLabel": "Step two: receive a directional call with a calibrated confidence number"
       },
       "emit": {
-        "title": "03. Track the result",
+        "title": "Track the result",
         "description": "Every call is logged on a public scoreboard. You see the wins. You see the misses. No edits.",
         "ariaLabel": "Step three: every call lands on a public scoreboard, wins and misses both"
       }
