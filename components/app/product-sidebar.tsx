@@ -128,8 +128,14 @@ export function ProductSidebar() {
   return (
     <aside
       className={cn(
+        // Mirror predict-shell's LeftRail: NO `--surface` fill (so the
+        // aside reads as a continuation of the page, not a separate
+        // panel), a single hairline `border-r` to separate it from the
+        // main column. Same width / collapsed-width as predict-shell:
+        // 280px / 64px. Sticky to the viewport so the rail stays put
+        // while the main content scrolls.
         'hidden lg:flex flex-col shrink-0 h-dvh sticky top-0',
-        'border-r border-[var(--border)] bg-[var(--surface)]',
+        'border-r border-[var(--border)]',
         collapsed ? 'w-[64px] py-3 px-2 items-center' : 'w-[280px] p-4',
       )}
       aria-label="Vizzor product navigation"
