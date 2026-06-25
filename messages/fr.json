@@ -23,6 +23,10 @@
     }
   },
   "app": {
+    "hostTopbar": {
+      "home": "Accueil Vizzor",
+      "backToPredict": "Retour à Predict"
+    },
     "sidebar": {
       "section": {
         "surfaces": "Surfaces",
