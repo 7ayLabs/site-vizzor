@@ -347,10 +347,15 @@ function AssistantBubble({
   actionLabels: ActionLabels;
 }) {
   // Per-bubble compact toggle — each assistant answer can collapse to
-  // tighter density independently. Local state (no parent prop, no
-  // localStorage) so the compaction is scoped to the message being
-  // read. Default is expanded; user opts in per bubble.
-  const [compact, setCompact] = useState(false);
+  // tighter density independently. State is keyed by `messageId` and
+  // persisted in localStorage so:
+  //   - switching conversations and coming back restores the per-
+  //     bubble compact state
+  //   - reload / tab close / browser restart preserves the choice
+  //   - the same message id rendered in another tab follows along on
+  //     next focus revalidation
+  // Default is expanded; user opts in per bubble.
+  const [compact, setCompact] = useCompactBubble(messageId);
   const lines = formatLines(text);
   const hasContent = lines.length > 0;
   // Gather unique tool names from inline `[tool:…]` / `[run:…]` markers
@@ -1003,6 +1008,128 @@ function stripToolWrap(line: string): string {
   const match = line.match(/\[(?:tool|run)[:\s]+[a-zA-Z0-9_-]+\s*(.*?)\]/);
   const rest = match && match[1] ? match[1].trim() : '';
   return rest;
+}
+
+/* ────────────── persisted compact state ────────────── */
+
+/**
+ * useCompactBubble — persistent per-bubble compact toggle.
+ *
+ * Storage shape: `{ v: 1, ids: string[] }` under
+ * `vizzor.predict.compact-bubbles.v1`. The array preserves toggle
+ * order so the cap-eviction policy (drop the oldest when > MAX)
+ * works without timestamps.
+ *
+ * Read path: in-module Set cache hydrated once per page load. Every
+ * subsequent bubble mount hits the cache (O(1)) instead of re-parsing
+ * JSON. The hook returns the stable boolean for `messageId` plus a
+ * setter that writes through to localStorage + the cache.
+ *
+ * Cross-tab: a `storage` event listener invalidates the cache so a
+ * compact toggle in one tab is reflected on the next render in
+ * another tab on the same origin.
+ *
+ * SSR: the initial render uses `false` (expanded) so server + client
+ * agree; the persisted value is applied in a `useEffect` after mount
+ * to avoid hydration mismatch on bubbles that boot up collapsed.
+ */
+const COMPACT_STORAGE_KEY = 'vizzor.predict.compact-bubbles.v1';
+const COMPACT_STORAGE_MAX = 500;
+
+interface StoredCompactBubbles {
+  v: 1;
+  ids: ReadonlyArray<string>;
+}
+
+let compactCache: { set: Set<string>; order: string[] } | null = null;
+let compactListenerWired = false;
+
+function loadCompactStore(): { set: Set<string>; order: string[] } {
+  if (compactCache) return compactCache;
+  if (typeof window === 'undefined') {
+    return { set: new Set(), order: [] };
+  }
+  let order: string[] = [];
+  try {
+    const raw = window.localStorage.getItem(COMPACT_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as StoredCompactBubbles | null;
+      if (parsed && parsed.v === 1 && Array.isArray(parsed.ids)) {
+        order = parsed.ids.filter((id): id is string => typeof id === 'string');
+      }
+    }
+  } catch {
+    order = [];
+  }
+  const cache = { set: new Set(order), order };
+  compactCache = cache;
+  if (!compactListenerWired) {
+    compactListenerWired = true;
+    window.addEventListener('storage', (e) => {
+      if (e.key === COMPACT_STORAGE_KEY) {
+        // Drop the cache so the next read re-hydrates from the
+        // value the other tab just wrote.
+        compactCache = null;
+      }
+    });
+  }
+  return cache;
+}
+
+function saveCompactStore(cache: { set: Set<string>; order: string[] }): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      COMPACT_STORAGE_KEY,
+      JSON.stringify({ v: 1, ids: cache.order } satisfies StoredCompactBubbles),
+    );
+  } catch {
+    // Best-effort — private mode / quota. State stays in-memory.
+  }
+}
+
+function useCompactBubble(messageId: string): [boolean, (next: boolean | ((prev: boolean) => boolean)) => void] {
+  // Default to expanded on first paint so server + client renders
+  // agree; hydrate the persisted state after mount.
+  const [compact, setCompactState] = useState(false);
+
+  useEffect(() => {
+    const store = loadCompactStore();
+    setCompactState(store.set.has(messageId));
+  }, [messageId]);
+
+  const setCompact = useCallback(
+    (next: boolean | ((prev: boolean) => boolean)) => {
+      setCompactState((prev) => {
+        const resolved = typeof next === 'function' ? next(prev) : next;
+        const store = loadCompactStore();
+        // If the user is toggling, keep cache + storage in sync.
+        if (resolved) {
+          if (!store.set.has(messageId)) {
+            store.set.add(messageId);
+            store.order.push(messageId);
+            // Cap eviction: drop the oldest until under the limit.
+            while (store.order.length > COMPACT_STORAGE_MAX) {
+              const drop = store.order.shift();
+              if (drop) store.set.delete(drop);
+            }
+            saveCompactStore(store);
+          }
+        } else {
+          if (store.set.has(messageId)) {
+            store.set.delete(messageId);
+            const idx = store.order.indexOf(messageId);
+            if (idx !== -1) store.order.splice(idx, 1);
+            saveCompactStore(store);
+          }
+        }
+        return resolved;
+      });
+    },
+    [messageId],
+  );
+
+  return [compact, setCompact];
 }
 
 /* ────────────── streaming dots ────────────── */

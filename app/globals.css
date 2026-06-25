@@ -397,6 +397,59 @@
   }
 
   /*
+   * TickerBanner — financial micro-animations.
+   *
+   * `vz-price-tick`: a brief brightness pulse + sub-pixel scale on
+   * each price update. Reads as "the number just refreshed" without
+   * the busyness of an explicit flip animation. Triggered by giving
+   * the price node a fresh `key={price}` so React remounts and the
+   * keyframe replays.
+   *
+   * `vz-spark-draw`: stroke-dashoffset reveal for the sparkline path.
+   * Plays once on mount so the chart "draws itself in" instead of
+   * snapping. Replays on remount (key={sample-count}) which we
+   * intentionally avoid — we only want the one-time intro, not a
+   * redraw on every poll.
+   *
+   * Both collapse to instant under reduced-motion via the global
+   * media query at the bottom of this file.
+   */
+  .vz-price-tick {
+    animation: vz-price-tick 520ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    will-change: transform, filter;
+  }
+  @keyframes vz-price-tick {
+    0%   { filter: brightness(1.6); transform: translateY(-1px); }
+    40%  { filter: brightness(1.2); transform: translateY(0); }
+    100% { filter: brightness(1);   transform: translateY(0); }
+  }
+
+  .vz-spark-draw {
+    stroke-dasharray: 1000;
+    stroke-dashoffset: 1000;
+    animation: vz-spark-draw 900ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+  @keyframes vz-spark-draw {
+    to { stroke-dashoffset: 0; }
+  }
+
+  /* Soft directional glow under the price node — tints toward --up
+   * or --down depending on the parent's color context. Cheap radial
+   * gradient pseudo-element, no JS animation. */
+  .vz-banner-glow::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(
+      120% 80% at 65% 50%,
+      color-mix(in oklab, var(--vz-glow, transparent) 18%, transparent),
+      transparent 70%
+    );
+    opacity: 0.55;
+  }
+
+  /*
    * WalletSelectorModal. Enter/exit symmetry: backdrop fades, card
    * slides + fades. `animation-fill-mode: forwards` keeps the end state
    * pinned so the exit animation does not snap before unmount.

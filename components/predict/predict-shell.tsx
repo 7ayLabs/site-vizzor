@@ -46,6 +46,7 @@ import useSWR from 'swr';
 import { toast } from 'sonner';
 import { useTicker } from '@/lib/api';
 import { ChatBubble } from '@/components/predict/chat-bubble';
+import { TickerStack } from '@/components/predict/ticker-banner';
 import { CoinIcon } from '@/components/ui/coin-icon';
 import { Link } from '@/i18n/navigation';
 import { WalletAuthButton } from '@/components/auth/wallet-auth-button';
@@ -214,7 +215,7 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
   // against the live reference. Defends against engine-side LLM
   // hallucinations (a known incident: BTC quoted at $105k while the
   // resolver was reading $63k) without claiming to fix the root cause.
-  const ticker = useTicker(30_000);
+  const ticker = useTicker(15_000);
   const tickerByCoin = useMemo<ReadonlyMap<string, number>>(() => {
     const m = new Map<string, number>();
     for (const e of ticker.data) {
@@ -222,6 +223,60 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
       m.set(e.symbol.toUpperCase(), e.price);
     }
     return m;
+  }, [ticker.data]);
+
+  // Full ticker entry map — used by TickerBanner to render name +
+  // price + 24h delta in a single lookup.
+  const tickerEntryBySymbol = useMemo(() => {
+    const m = new Map<string, { price: number; changePct: number }>();
+    for (const e of ticker.data) {
+      if (!e.symbol || !Number.isFinite(e.price)) continue;
+      m.set(e.symbol.toUpperCase(), { price: e.price, changePct: e.changePct });
+    }
+    return m;
+  }, [ticker.data]);
+
+  // In-session price history per symbol. We append one sample on
+  // every ticker poll (≈30s) and keep the last 30 — enough for a
+  // smooth ~15min sparkline without ballooning memory. Stored in a
+  // ref-backed state so React re-renders banners as samples accrue,
+  // but the writes are O(1) and don't churn anything else.
+  const [priceHistory, setPriceHistory] = useState<ReadonlyMap<string, readonly number[]>>(
+    () => new Map(),
+  );
+  useEffect(() => {
+    if (!ticker.data || ticker.data.length === 0) return;
+    setPriceHistory((prev) => {
+      const next = new Map(prev);
+      for (const e of ticker.data) {
+        if (!e.symbol || !Number.isFinite(e.price) || e.price <= 0) continue;
+        const sym = e.symbol.toUpperCase();
+        const tail = next.get(sym) ?? [];
+        // First sample for this symbol: seed the history with the
+        // derived 24h-open price + current price so the banner can
+        // render a meaningful 2-point curve immediately instead of
+        // waiting 30s for the second poll. The open is engine-
+        // authoritative (price / (1 + changePct)) so the seed
+        // doesn't lie about the trajectory.
+        if (tail.length === 0) {
+          const denom = 1 + (e.changePct ?? 0);
+          const open = denom > 0 ? e.price / denom : null;
+          const seeded =
+            open && Number.isFinite(open) && open > 0 && open !== e.price
+              ? [open, e.price]
+              : [e.price];
+          next.set(sym, seeded);
+          continue;
+        }
+        // Skip dedup-equal back-to-back samples on subsequent polls
+        // to keep the line honest when the ticker returns the same
+        // price twice.
+        if (tail[tail.length - 1] === e.price) continue;
+        const updated = [...tail, e.price].slice(-30);
+        next.set(sym, updated);
+      }
+      return next;
+    });
   }, [ticker.data]);
 
   const signedIn = auth?.signedIn === true;
@@ -703,38 +758,74 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
               <Welcome onPick={submitPrompt} />
             ) : (
               <div className="mx-auto max-w-[860px] w-full px-4 sm:px-6 py-6 flex flex-col gap-6">
-                {messages.map((m) => (
-                  <ChatBubble
-                    key={m.id}
-                    message={m}
-                    streaming={isStreaming && m.id === lastAssistantId}
-                    // Only the LAST user message gets the edit
-                    // affordance — editing earlier turns would
-                    // require a branching model we don't have.
-                    onEdit={
-                      !isStreaming && m.id === lastEditableUserId
-                        ? onEditUserMessage
-                        : undefined
-                    }
-                    onQuote={onQuoteMessage}
-                    onShare={onShareMessage}
-                    editLabel={t('shell.composer.edit')}
-                    sourcesLabel={t('shell.composer.sources')}
-                    copyLabel={t('shell.composer.copy')}
-                    copiedLabel={t('shell.composer.copied')}
-                    quoteLabel={t('shell.composer.quote')}
-                    quotedLabel={t('shell.composer.quoted')}
-                    shareLabel={t('shell.composer.share')}
-                    sharedLabel={t('shell.composer.shared')}
-                    compactLabel={t('shell.composer.compact')}
-                    compactedLabel={t('shell.composer.compacted')}
-                    tickerByCoin={tickerByCoin}
-                    priceCheck={{
-                      label: t('shell.composer.priceCheckLabel'),
-                      body: t('shell.composer.priceCheckBody'),
-                    }}
-                  />
-                ))}
+                {messages.map((m) => {
+                  // For user turns, surface a TickerBanner per ticker
+                  // mentioned in the prompt. The banner sits BETWEEN
+                  // the user bubble and the assistant bubble (= "ground
+                  // truth before the model adds its analysis"). Web3
+                  // UX precedent: DexScreener / Phantom / Etherscan
+                  // pin live market context to the top of any ticker
+                  // query. Banners only render for symbols the live
+                  // ticker recognizes (avoids false positives like
+                  // "TO" or "AND" matching the bare-ticker regex).
+                  const isUserTurn = m.role === 'user';
+                  const userText = isUserTurn
+                    ? m.parts
+                        .filter((p) => p.type === 'text')
+                        .map((p) => ('text' in p ? p.text : ''))
+                        .join(' ')
+                    : '';
+                  const detectedSymbols = isUserTurn
+                    ? extractTickersFromText(
+                        userText,
+                        new Set(tickerEntryBySymbol.keys()),
+                      )
+                    : [];
+                  return (
+                    <div key={m.id} className="flex flex-col gap-3">
+                      <ChatBubble
+                        message={m}
+                        streaming={isStreaming && m.id === lastAssistantId}
+                        onEdit={
+                          !isStreaming && m.id === lastEditableUserId
+                            ? onEditUserMessage
+                            : undefined
+                        }
+                        onQuote={onQuoteMessage}
+                        onShare={onShareMessage}
+                        editLabel={t('shell.composer.edit')}
+                        sourcesLabel={t('shell.composer.sources')}
+                        copyLabel={t('shell.composer.copy')}
+                        copiedLabel={t('shell.composer.copied')}
+                        quoteLabel={t('shell.composer.quote')}
+                        quotedLabel={t('shell.composer.quoted')}
+                        shareLabel={t('shell.composer.share')}
+                        sharedLabel={t('shell.composer.shared')}
+                        compactLabel={t('shell.composer.compact')}
+                        compactedLabel={t('shell.composer.compacted')}
+                        tickerByCoin={tickerByCoin}
+                        priceCheck={{
+                          label: t('shell.composer.priceCheckLabel'),
+                          body: t('shell.composer.priceCheckBody'),
+                        }}
+                      />
+                      {detectedSymbols.length > 0 && (
+                        <TickerStack
+                          entries={detectedSymbols.map((sym) => {
+                            const entry = tickerEntryBySymbol.get(sym);
+                            return {
+                              symbol: sym,
+                              name: tickerDisplayName(sym),
+                              price: entry?.price,
+                              changePct: entry?.changePct,
+                              history: priceHistory.get(sym),
+                            };
+                          })}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
                 {isErrored && error && (
                   // Degraded banner — the engine returned an error
                   // mid-turn. Surfaces the parsed message and a retry
@@ -2123,6 +2214,159 @@ function saveBarIds(ids: ReadonlyArray<string>): void {
   }
 }
 
+/* ─────────────────────── custom tokens ─────────────────────── */
+
+/**
+ * User-defined tokens. Stored separately from the catalog so the
+ * built-in topic list can evolve between releases without colliding
+ * with whatever ticker the user typed in. Persisted under a versioned
+ * key for the same forward-compat reason as the bar order.
+ *
+ * The id namespace is `custom-<SYMBOL>` so it never overlaps with the
+ * built-in ids; the merge helper below dedupes by id when surfacing
+ * them in the catalog.
+ */
+const CUSTOM_TOKENS_KEY = 'vizzor.predict.custom-tokens.v1';
+const CUSTOM_TOKEN_SYMBOL_RE = /^[A-Z0-9]{2,10}$/;
+
+interface StoredCustomTokens {
+  v: 1;
+  symbols: ReadonlyArray<string>;
+}
+
+function loadCustomTokens(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_TOKENS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as StoredCustomTokens | null;
+    if (!parsed || parsed.v !== 1 || !Array.isArray(parsed.symbols)) return [];
+    const valid: string[] = [];
+    const seen = new Set<string>();
+    for (const s of parsed.symbols) {
+      if (typeof s !== 'string') continue;
+      const up = s.toUpperCase();
+      if (!CUSTOM_TOKEN_SYMBOL_RE.test(up)) continue;
+      if (seen.has(up)) continue;
+      seen.add(up);
+      valid.push(up);
+    }
+    return valid;
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomTokens(symbols: ReadonlyArray<string>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      CUSTOM_TOKENS_KEY,
+      JSON.stringify({ v: 1, symbols } satisfies StoredCustomTokens),
+    );
+  } catch {
+    // Best-effort.
+  }
+}
+
+/* ─────────────────────── ticker extraction ─────────────────────── */
+
+/**
+ * Friendly name → uppercase symbol. Used by `extractTickersFromText`
+ * so a prompt like "What about Bitcoin today?" still surfaces the BTC
+ * banner. Symbols not in this map only match via the `$BTC` or bare
+ * uppercase pattern.
+ */
+const TICKER_NAME_MAP: Record<string, string> = {
+  bitcoin: 'BTC',
+  btc: 'BTC',
+  ethereum: 'ETH',
+  eth: 'ETH',
+  solana: 'SOL',
+  sol: 'SOL',
+  toncoin: 'TON',
+  ton: 'TON',
+  hyperliquid: 'HYPE',
+  hype: 'HYPE',
+  pyth: 'PYTH',
+  jup: 'JUP',
+  jupiter: 'JUP',
+};
+
+const DOLLAR_TICKER_RE = /\$([A-Z0-9]{2,10})\b/gi;
+const BARE_TICKER_RE = /\b([A-Z]{2,10})\b/g;
+
+/**
+ * Pull a deduped list of ticker symbols out of a user message.
+ *
+ *   1. `$BTC` / `$eth` — explicit ticker mentions (case-insensitive
+ *      thanks to the `i` flag on DOLLAR_TICKER_RE).
+ *   2. Bare uppercase `BTC` — only when the symbol is in
+ *      `knownSymbols` so "TO" or "AND" don't trigger banners.
+ *   3. Friendly names (`bitcoin`, `Solana`) → mapped via
+ *      TICKER_NAME_MAP.
+ *
+ * Order preserved (first mention wins) so banners stack in the order
+ * the user thought about them.
+ */
+function extractTickersFromText(
+  text: string,
+  knownSymbols: ReadonlySet<string>,
+): string[] {
+  if (!text) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (sym: string): void => {
+    const up = sym.toUpperCase();
+    if (seen.has(up)) return;
+    if (!knownSymbols.has(up)) return;
+    seen.add(up);
+    out.push(up);
+  };
+  // $TICKER pattern — case-insensitive.
+  for (const m of text.matchAll(DOLLAR_TICKER_RE)) {
+    if (m[1]) push(m[1]);
+  }
+  // Bare uppercase ticker — exact case to avoid false positives.
+  for (const m of text.matchAll(BARE_TICKER_RE)) {
+    if (m[1]) push(m[1]);
+  }
+  // Friendly names — case-insensitive whole-word scan.
+  const lower = text.toLowerCase();
+  for (const [name, sym] of Object.entries(TICKER_NAME_MAP)) {
+    const re = new RegExp(`\\b${name}\\b`, 'i');
+    if (re.test(lower)) push(sym);
+  }
+  return out;
+}
+
+/** Friendly display name for a banner — falls back to the symbol. */
+function tickerDisplayName(symbol: string): string {
+  const up = symbol.toUpperCase();
+  const inverted: Record<string, string> = {
+    BTC: 'Bitcoin',
+    ETH: 'Ethereum',
+    SOL: 'Solana',
+    TON: 'Toncoin',
+    HYPE: 'Hyperliquid',
+    PYTH: 'Pyth Network',
+    JUP: 'Jupiter',
+  };
+  return inverted[up] ?? up;
+}
+
+/** Produce a TopicSpec for a user-defined token symbol. */
+function customTokenToSpec(symbol: string): TopicSpec {
+  const up = symbol.toUpperCase();
+  return {
+    id: `custom-${up}`,
+    label: up,
+    ticker: up,
+    prompt: `${up} `,
+    behavior: 'insert',
+  };
+}
+
 function ChatTopics({
   onSubmit,
   onInsert,
@@ -2139,14 +2383,47 @@ function ChatTopics({
   // first paint matches the default layout. The reorder/add/remove
   // handlers then mutate this state and persist on every change.
   const [barIds, setBarIds] = useState<string[]>(() => [...DEFAULT_BAR_IDS]);
+  const [customTokens, setCustomTokens] = useState<string[]>(() => []);
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
     setBarIds(loadBarIds());
+    setCustomTokens(loadCustomTokens());
     setHydrated(true);
   }, []);
   useEffect(() => {
     if (hydrated) saveBarIds(barIds);
   }, [barIds, hydrated]);
+  useEffect(() => {
+    if (hydrated) saveCustomTokens(customTokens);
+  }, [customTokens, hydrated]);
+
+  // Live ticker — used to render price + delta on ticker chips. One
+  // subscription at this scope is cheaper than per-chip useSWR; the
+  // map below makes lookups O(1) in the render path.
+  const { data: tickerData } = useTicker();
+  const priceBySymbol = useMemo(() => {
+    const map = new Map<string, { price: number; changePct: number }>();
+    (tickerData ?? []).forEach((t) => {
+      map.set(t.symbol.toUpperCase(), {
+        price: t.price,
+        changePct: t.changePct,
+      });
+    });
+    return map;
+  }, [tickerData]);
+
+  // Merge built-in catalog with user-defined tokens. Custom tokens
+  // get appended (catalog-first ordering) so the built-in head stays
+  // recognizable; the panel renders them in their own section.
+  const customSpecs = useMemo(
+    () => customTokens.map(customTokenToSpec),
+    [customTokens],
+  );
+  const allTopicsById = useMemo(() => {
+    const merged: Record<string, TopicSpec> = { ...TOPICS_BY_ID };
+    for (const spec of customSpecs) merged[spec.id] = spec;
+    return merged;
+  }, [customSpecs]);
 
   const [addOpen, setAddOpen] = useState(false);
   // Closing-phase flag for the (+) add panel — keeps the panel mounted
@@ -2198,10 +2475,35 @@ function ChatTopics({
     setAddOpen(false);
   }, []);
 
-  const available = useMemo(
-    () => TOPICS_CATALOG.filter((t) => !barIds.includes(t.id)),
-    [barIds],
+  /** Add a user-defined token by symbol. The symbol is upper-cased
+   *  and validated (2-10 alphanumeric chars) before being persisted.
+   *  Returns the spec id when successful so the caller can also drop
+   *  the new chip directly into the bar. */
+  const addCustomToken = useCallback(
+    (rawSymbol: string): string | null => {
+      const up = rawSymbol.trim().toUpperCase().replace(/^\$/, '');
+      if (!CUSTOM_TOKEN_SYMBOL_RE.test(up)) return null;
+      const spec = customTokenToSpec(up);
+      // If a built-in already exists for this symbol, just add it to
+      // the bar (don't duplicate as a custom).
+      const builtin = TOPICS_CATALOG.find(
+        (t) => t.ticker?.toUpperCase() === up,
+      );
+      if (builtin) {
+        setBarIds((ids) => (ids.includes(builtin.id) ? ids : [...ids, builtin.id]));
+        return builtin.id;
+      }
+      setCustomTokens((list) => (list.includes(up) ? list : [...list, up]));
+      setBarIds((ids) => (ids.includes(spec.id) ? ids : [...ids, spec.id]));
+      return spec.id;
+    },
+    [],
   );
+
+  const available = useMemo(() => {
+    const merged = [...TOPICS_CATALOG, ...customSpecs];
+    return merged.filter((t) => !barIds.includes(t.id));
+  }, [barIds, customSpecs]);
 
   const onChipPick = useCallback(
     (topic: TopicSpec) => {
@@ -2240,8 +2542,10 @@ function ChatTopics({
                 )}
               >
                 {barIds.map((id, idx) => {
-                  const topic = TOPICS_BY_ID[id];
+                  const topic = allTopicsById[id];
                   if (!topic) return null;
+                  const ticker = topic.ticker?.toUpperCase();
+                  const live = ticker ? priceBySymbol.get(ticker) : undefined;
                   return (
                     <SortableTopicChip
                       key={id}
@@ -2249,6 +2553,8 @@ function ChatTopics({
                       onPick={onChipPick}
                       onRemove={removeChip}
                       highlighted={idx === 0}
+                      livePrice={live?.price}
+                      liveChangePct={live?.changePct}
                     />
                   );
                 })}
@@ -2323,6 +2629,7 @@ function ChatTopics({
             <TopicAddPanel
               available={available}
               onAdd={addChip}
+              onAddCustom={addCustomToken}
               onClose={dismissAdd}
               closing={addClosing}
             />
@@ -2345,11 +2652,18 @@ function SortableTopicChip({
   onPick,
   onRemove,
   highlighted = false,
+  livePrice,
+  liveChangePct,
 }: {
   topic: TopicSpec;
   onPick: (topic: TopicSpec) => void;
   onRemove: (id: string) => void;
   highlighted?: boolean;
+  /** Live spot price for the chip's ticker, when available. Ignored
+   *  for non-ticker chips. */
+  livePrice?: number;
+  /** Fractional 24h change (e.g. -0.021 = -2.1%). */
+  liveChangePct?: number;
 }) {
   const {
     attributes,
@@ -2365,6 +2679,15 @@ function SortableTopicChip({
     transition,
   };
 
+  // Ticker chips with a live price render in a "compact instrument"
+  // layout — icon + symbol + price + signed delta — instead of the
+  // long label. Minimalist, single-line, no busy chart. Falls back to
+  // the label layout when no price is wired yet (initial load).
+  const showLivePrice =
+    Boolean(topic.ticker) && typeof livePrice === 'number' && livePrice > 0;
+  const deltaPct = typeof liveChangePct === 'number' ? liveChangePct * 100 : null;
+  const isUp = (deltaPct ?? 0) >= 0;
+
   return (
     <li ref={setNodeRef} style={style} className={cn('shrink-0 relative group/chip', isDragging && 'z-10')}>
       <button
@@ -2375,9 +2698,6 @@ function SortableTopicChip({
         className={cn(
           'inline-flex items-center gap-1.5',
           'h-7 px-2.5 rounded-full',
-          // Home-page CTA vocabulary: semibold + tight tracking. Reads
-          // as a pill button (same scale as the hero "Open app" CTA),
-          // not a generic chip.
           'text-[12.5px] font-semibold tracking-tight leading-none whitespace-nowrap',
           'transition-[background-color,color,border-color,box-shadow,transform] duration-200 ease-out',
           'motion-safe:will-change-transform',
@@ -2403,7 +2723,37 @@ function SortableTopicChip({
             <TopicIcon kind="spark" size={12} />
           )}
         </span>
-        <span>{topic.label}</span>
+        {showLivePrice && typeof livePrice === 'number' ? (
+          <>
+            <span className="mono tabular">{topic.ticker}</span>
+            <span
+              className={cn(
+                'mono tabular font-medium',
+                highlighted ? 'text-[var(--bg)]/85' : 'text-[var(--fg-3)]',
+              )}
+            >
+              {formatChipPrice(livePrice)}
+            </span>
+            {deltaPct !== null && Number.isFinite(deltaPct) && (
+              <span
+                className={cn(
+                  'mono tabular text-[10.5px] font-semibold',
+                  highlighted
+                    ? 'text-[var(--bg)]/85'
+                    : isUp
+                      ? 'text-[var(--up)]'
+                      : 'text-[var(--down)]',
+                )}
+                aria-label={`24h change ${deltaPct.toFixed(2)} percent`}
+              >
+                <span aria-hidden>{isUp ? '▲' : '▼'}</span>
+                {Math.abs(deltaPct).toFixed(1)}%
+              </span>
+            )}
+          </>
+        ) : (
+          <span>{topic.label}</span>
+        )}
       </button>
       <button
         type="button"
@@ -2430,6 +2780,17 @@ function SortableTopicChip({
   );
 }
 
+/** Compact price formatter for the chip strip — keeps the chip narrow
+ *  so the carousel fits more entries without horizontal scrolling. */
+function formatChipPrice(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return '—';
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 10_000) return `$${(n / 1000).toFixed(1)}k`;
+  if (n >= 1) return `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+  if (n >= 0.01) return `$${n.toFixed(3)}`;
+  return `$${n.toFixed(6)}`;
+}
+
 /**
  * Tiny dropdown panel anchored to the (+) button. Lists every chip in
  * the catalog that the user hasn't added yet. Click to add. ESC + click
@@ -2439,11 +2800,15 @@ function SortableTopicChip({
 function TopicAddPanel({
   available,
   onAdd,
+  onAddCustom,
   onClose,
   closing = false,
 }: {
   available: ReadonlyArray<TopicSpec>;
   onAdd: (id: string) => void;
+  /** Add a user-defined token by symbol. Returns the spec id on
+   *  success, null when the symbol failed validation. */
+  onAddCustom: (rawSymbol: string) => string | null;
   onClose: () => void;
   /** When true, render the slide-out keyframe instead of slide-in. The
    *  parent keeps the panel mounted for ~160ms so the exit animation
@@ -2452,6 +2817,21 @@ function TopicAddPanel({
 }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const listRef = useRef<HTMLUListElement | null>(null);
+  const [customInput, setCustomInput] = useState('');
+  const [customError, setCustomError] = useState(false);
+
+  const submitCustom = useCallback(() => {
+    const trimmed = customInput.trim();
+    if (!trimmed) return;
+    const id = onAddCustom(trimmed);
+    if (id) {
+      setCustomInput('');
+      setCustomError(false);
+      onClose();
+    } else {
+      setCustomError(true);
+    }
+  }, [customInput, onAddCustom, onClose]);
 
   // Re-clamp the active index if `available` shrinks (the user added a
   // topic and the panel re-rendered with one fewer row).
@@ -2466,6 +2846,12 @@ function TopicAddPanel({
       if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
+        return;
+      }
+      // Don't hijack keystrokes when the user is typing in the custom
+      // token input — Enter there submits the input, not a menu pick.
+      const target = e.target as HTMLElement | null;
+      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') {
         return;
       }
       if (available.length === 0) return;
@@ -2540,6 +2926,62 @@ function TopicAddPanel({
       <p className="px-3 pt-3 pb-1.5 mono tabular text-[10px] uppercase tracking-[0.2em] font-semibold text-[var(--fg-3)]">
         Add topic
       </p>
+      {/* Custom token entry — type any symbol the engine knows (BTC,
+          HYPE, etc.). The chip is added immediately and persists in
+          localStorage so the user's bar feels theirs. Validation
+          lives in the parent (CUSTOM_TOKEN_SYMBOL_RE); we only flash
+          a hairline error when the parent rejects. */}
+      <div className="px-2 pb-2 border-b border-[var(--border)]/60">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitCustom();
+          }}
+          className={cn(
+            'flex items-center gap-1.5 h-8 px-2 rounded-md border',
+            'bg-[var(--surface-2)] transition-colors',
+            customError
+              ? 'border-[var(--danger)]'
+              : 'border-[var(--border)] focus-within:border-[var(--border-hi)]',
+          )}
+        >
+          <span aria-hidden className="mono tabular text-[11px] text-[var(--fg-3)] shrink-0">$</span>
+          <input
+            type="text"
+            value={customInput}
+            onChange={(e) => {
+              setCustomInput(e.target.value);
+              if (customError) setCustomError(false);
+            }}
+            placeholder="Add token — e.g. HYPE"
+            aria-label="Add custom token"
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="characters"
+            className={cn(
+              'flex-1 min-w-0 bg-transparent outline-none',
+              'mono tabular text-[12px] uppercase tracking-tight text-[var(--fg)]',
+              'placeholder:text-[var(--fg-3)] placeholder:normal-case placeholder:tracking-normal placeholder:font-normal',
+            )}
+            maxLength={11}
+          />
+          <button
+            type="submit"
+            disabled={!customInput.trim()}
+            aria-label="Add token"
+            className={cn(
+              'shrink-0 inline-flex items-center justify-center h-6 w-6 rounded-full',
+              'text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface)]',
+              'transition-colors',
+              'disabled:opacity-40 disabled:pointer-events-none',
+            )}
+          >
+            <svg width={10} height={10} viewBox="0 0 16 16" fill="none" aria-hidden>
+              <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" />
+            </svg>
+          </button>
+        </form>
+      </div>
       {available.length === 0 ? (
         <p className="px-3 py-2 text-[12.5px] leading-snug text-[var(--fg-3)]">
           Every topic is already in the bar.
