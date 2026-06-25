@@ -49,13 +49,7 @@ export function assertRequiredEnv(
   // present. The same module loaded at request time WILL see the
   // injected env and assert correctly.
   if (process.env.NEXT_PHASE === 'phase-production-build') return;
-  const missing: EnvRequirement[] = [];
-  for (const req of required) {
-    const val = process.env[req.name];
-    if (val === undefined || val === null || val === '') {
-      missing.push(req);
-    }
-  }
+  const missing = missingRequiredEnv(required);
   if (missing.length === 0) return;
   const lines = missing.map((m) => `  - ${m.name}: ${m.rationale}`);
   throw new Error(
@@ -63,6 +57,29 @@ export function assertRequiredEnv(
       lines.join('\n') +
       '\nSee docs/ops/secrets.md for provisioning instructions.',
   );
+}
+
+/**
+ * Non-throwing variant — returns the list of missing requirements
+ * instead of throwing. Route handlers use this at request time so a
+ * misconfigured prod returns a structured JSON error (with a clear
+ * `payment_misconfigured` reason and the missing var names) rather
+ * than crashing module load and serving a raw "Internal Server
+ * Error" with no JSON body. The asserting variant stays as the
+ * defense-in-depth signal for deploys that wire the route module in
+ * at boot — when missing-env conditions are surfaced loudly to ops.
+ */
+export function missingRequiredEnv(
+  required: readonly EnvRequirement[],
+): EnvRequirement[] {
+  const missing: EnvRequirement[] = [];
+  for (const req of required) {
+    const val = process.env[req.name];
+    if (val === undefined || val === null || val === '') {
+      missing.push(req);
+    }
+  }
+  return missing;
 }
 
 /* ------------------------------------------------------------------ *\

@@ -1146,6 +1146,8 @@
         "unsupportedChain": "Seule Solana est prise en charge dans cette version. Passez à SOL sur Solana.",
         "priceLookup": "Impossible de récupérer le prix du tier sur le serveur. Rafraîchissez la page.",
         "sessionFailed": "Échec de la création de session. Réessayez, ou ouvrez le bot Telegram si le problème persiste.",
+        "paymentMisconfigured": "Le service de paiement est en cours de configuration. Réessayez dans un instant, ou utilisez le bot Telegram pour t'abonner en attendant.",
+        "internalError": "Le service de paiement a rencontré une erreur inattendue. Réessayez, ou utilisez le bot Telegram pour t'abonner si le problème persiste.",
         "rpcUnavailable": "Le RPC Solana est rate-limited en ce moment. Réessayez sous peu, ou passez à TON.",
         "walletNotConnected": "Connectez un portefeuille pour continuer.",
         "insufficientBalance": "Votre portefeuille n'a pas assez de SOL pour couvrir ce paiement et les frais réseau. Sur devnet vous pouvez demander un airdrop de 1 SOL depuis le panneau ci-dessus, ou recharger via faucet.solana.com.",

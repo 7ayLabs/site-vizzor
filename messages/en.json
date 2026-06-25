@@ -1163,6 +1163,8 @@
       "unsupportedChain": "Only Solana is supported in this release. Switch to SOL on Solana.",
       "priceLookup": "Couldn't look up the tier price on the server. Refresh the page.",
       "sessionFailed": "Session creation failed. Retry, or open the Telegram bot if it persists.",
+      "paymentMisconfigured": "Payment service is being configured. Try again shortly, or use the Telegram bot to subscribe in the meantime.",
+      "internalError": "Payment service hit an unexpected error. Retry, or use the Telegram bot to subscribe if the issue persists.",
       "walletNotConnected": "Connect a wallet to continue.",
       "insufficientBalance": "Your wallet doesn't have enough SOL to cover this payment plus the network fee. On devnet you can airdrop 1 SOL from the panel above, or top up at faucet.solana.com.",
       "invalidDestination": "The destination treasury address is misconfigured for this network. Check VIZZOR_SOLANA_TREASURY for the active cluster.",

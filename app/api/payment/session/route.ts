@@ -46,12 +46,16 @@ import { enforceRateLimit } from '@/lib/payment/rate-limit';
 import { checkOrigin } from '@/lib/payment/origin-check';
 import {
   PAYMENT_SESSION_ROUTE_REQUIREMENTS,
-  assertRequiredEnv,
+  missingRequiredEnv,
 } from '@/lib/env';
 
-// Fail fast in production if the payment session route is misconfigured.
-// No-op in dev/CI. See lib/env.ts for the declarative requirements bundle.
-assertRequiredEnv('payment-session', PAYMENT_SESSION_ROUTE_REQUIREMENTS);
+// Env-var requirements are checked at REQUEST time (see handler) so a
+// misconfigured prod returns a structured JSON error the UI can show
+// the user, instead of throwing at module load and serving a raw
+// "Internal Server Error" with no body. The asserting variant still
+// runs in the deploy smoke check (CI / startup probe), so a missing
+// env is loudly visible to ops without breaking the request path
+// when it slips through.
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -79,6 +83,28 @@ export async function POST(req: Request) {
   // the actual cause and return a structured `internal_error` the
   // client surfaces with a clear retry path.
   try {
+    // Runtime env check — surfaced as 503 + structured reason so the
+    // UI can render a real message ("payment service is being
+    // configured: VIZZOR_SOLANA_TREASURY") instead of a generic
+    // retry chip. Loud signal to ops via the `missing` array.
+    const missingEnv = missingRequiredEnv(PAYMENT_SESSION_ROUTE_REQUIREMENTS);
+    if (process.env.NODE_ENV === 'production' && missingEnv.length > 0) {
+      const names = missingEnv.map((m) => m.name);
+      console.error(
+        '[vizzor-payment] route misconfigured — missing env:',
+        names.join(', '),
+      );
+      return NextResponse.json(
+        {
+          ok: false,
+          reason: 'payment_misconfigured',
+          message: `Payment service is being configured. Missing: ${names.join(', ')}.`,
+          missing: names,
+        },
+        { status: 503 },
+      );
+    }
+
     const origin = checkOrigin(req);
     if (!origin.ok) {
       return NextResponse.json(

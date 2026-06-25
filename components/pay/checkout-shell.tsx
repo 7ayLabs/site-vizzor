@@ -152,12 +152,34 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
           token: selectorRef.current.token,
         }),
       });
-      const data = (await res.json()) as SessionApiResponse;
-      if (!data.ok || !data.session) {
+      // Defensive parse: a module-load throw or a non-Next-handled
+      // 500 returns plain text ("Internal Server Error") and the old
+      // unconditional `.json()` was throwing on that body — the
+      // catch fell through and the user saw a generic 'Something
+      // went wrong' chip with no actionable cause. Read as text
+      // first, attempt JSON parse, fall back to surfacing the raw
+      // status + first line of the body when JSON parsing fails.
+      const raw = await res.text();
+      type ParsedResponse = SessionApiResponse & { message?: string };
+      let data: ParsedResponse | null = null;
+      try {
+        data = raw ? (JSON.parse(raw) as ParsedResponse) : null;
+      } catch {
+        // Non-JSON body — surface the HTTP status + first line.
+        const head = raw.split('\n')[0]?.slice(0, 200) ?? '';
         dispatch({
           type: 'session-create-failed',
-          reason: data.reason ?? 'session_failed',
+          reason: `http_${res.status}${head ? `: ${head}` : ''}`,
         });
+        return;
+      }
+      if (!res.ok || !data || !data.ok || !data.session) {
+        // Prefer the structured message field when the server set it
+        // (e.g. payment_misconfigured carries the missing env names);
+        // fall back to `reason`, then to a generic placeholder.
+        const reason =
+          data?.message ?? data?.reason ?? `http_${res.status}`;
+        dispatch({ type: 'session-create-failed', reason });
         return;
       }
       dispatch({ type: 'session-created', session: data.session });

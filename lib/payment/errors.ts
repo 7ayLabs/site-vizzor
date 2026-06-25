@@ -48,6 +48,8 @@ export type PaymentReason =
   | 'session_failed'
   | 'feature_disabled'
   | 'rate_unavailable'
+  | 'payment_misconfigured'
+  | 'internal_error'
   // Session-poll reasons (GET /api/payment/session/[id]).
   | 'engine_marked_failed'
   // Legacy v0.1.0 names that pre-date site-owned sessions but might
@@ -87,10 +89,19 @@ const REASON_TABLE: Readonly<Record<PaymentReason, ReasonDescriptor>> = {
     copyKey: 'mintNotConfigured',
     klass: 'infra-pending',
   },
+  // Operator hasn't provisioned the env vars the route depends on
+  // (treasury / DB path / RPC). Treat as infra-pending so the
+  // banner copy nudges users to the Telegram fallback instead of
+  // making them think they did something wrong.
+  payment_misconfigured: {
+    copyKey: 'paymentMisconfigured',
+    klass: 'infra-pending',
+  },
 
   // Transient: retry is the right action.
   rate_unavailable: { copyKey: 'rateUnavailable', klass: 'transient' },
   session_failed: { copyKey: 'sessionFailed', klass: 'transient' },
+  internal_error: { copyKey: 'internalError', klass: 'transient' },
   engine_marked_failed: {
     copyKey: 'engineMarkedFailed',
     klass: 'transient',
