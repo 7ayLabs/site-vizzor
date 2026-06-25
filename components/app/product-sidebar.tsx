@@ -100,79 +100,135 @@ export function ProductSidebar() {
     router.push('/account#payments' as never);
   };
 
+  // Collapse state — shares the same localStorage key as the predict
+  // shell so toggling the rail on /predict carries over to /account
+  // and vice versa. Default uncollapsed; hydrated in an effect so SSR
+  // matches the first client paint.
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem('vizzor.predict.sidebarCollapsed');
+      if (stored === '1') setCollapsed(true);
+    } catch {
+      /* localStorage blocked — accept the default */
+    }
+  }, []);
+  const toggleCollapsed = () => {
+    setCollapsed((v) => {
+      const next = !v;
+      try {
+        window.localStorage.setItem('vizzor.predict.sidebarCollapsed', next ? '1' : '0');
+      } catch {
+        /* localStorage blocked — ephemeral toggle, that's fine */
+      }
+      return next;
+    });
+  };
+
   return (
     <aside
-      className="
-        hidden lg:flex flex-col
-        w-[280px] shrink-0 h-dvh sticky top-0
-        border-r border-[var(--border)] bg-[var(--surface)]
-        p-4
-      "
+      className={cn(
+        'hidden lg:flex flex-col shrink-0 h-dvh sticky top-0',
+        'border-r border-[var(--border)] bg-[var(--surface)]',
+        collapsed ? 'w-[64px] py-3 px-2 items-center' : 'w-[280px] p-4',
+      )}
       aria-label="Vizzor product navigation"
+      data-collapsed={collapsed ? 'true' : 'false'}
     >
-      {/* Brand — same treatment as predict-shell LeftRail. */}
-      <div className="flex items-center justify-between mb-3">
-        <Link
-          href="/app/predict"
-          aria-label="Vizzor home"
-          className="inline-flex items-center gap-2.5 text-[17px] font-semibold tracking-tight text-[var(--fg)] hover:opacity-80 transition-opacity leading-none"
+      {/* Brand row — collapse toggle on the right (or centered when
+          collapsed). Mirrors LeftRail in predict-shell exactly. */}
+      <div
+        className={cn(
+          'flex items-center mb-3',
+          collapsed ? 'justify-center w-full' : 'justify-between',
+        )}
+      >
+        {!collapsed && (
+          <Link
+            href="/app/predict"
+            aria-label="Vizzor home"
+            className="inline-flex items-center gap-2.5 text-[17px] font-semibold tracking-tight text-[var(--fg)] hover:opacity-80 transition-opacity leading-none"
+          >
+            <Image
+              src="/brand/vizzor_darkicon.png"
+              alt=""
+              width={364}
+              height={535}
+              priority
+              className="block dark:hidden h-7 w-auto"
+            />
+            <Image
+              src="/brand/vizzor_icon.png"
+              alt=""
+              width={364}
+              height={535}
+              priority
+              className="hidden dark:block h-7 w-auto"
+            />
+            <span>vizzor</span>
+          </Link>
+        )}
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? t('shell.openSidebar') : t('shell.collapseSidebar')}
+          aria-pressed={!collapsed}
+          className={cn(
+            'inline-flex items-center justify-center rounded-lg',
+            collapsed ? 'h-12 w-12' : 'h-10 w-10',
+            'text-[var(--fg-2)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)]',
+            'transition-colors',
+          )}
         >
-          <Image
-            src="/brand/vizzor_darkicon.png"
-            alt=""
-            width={364}
-            height={535}
-            priority
-            className="block dark:hidden h-7 w-auto"
-          />
-          <Image
-            src="/brand/vizzor_icon.png"
-            alt=""
-            width={364}
-            height={535}
-            priority
-            className="hidden dark:block h-7 w-auto"
-          />
-          <span>vizzor</span>
-        </Link>
+          <IconSidebar collapsed={collapsed} size={collapsed ? 23 : 19} />
+        </button>
       </div>
 
       {/* Primary nav. Matches the action contract of predict-shell's
           LeftRail exactly: New run → predict?action=new, Run →
           predict active thread, Alerts → in-place modal, Receipts →
-          /account#payments. Same icons, same vocabulary, same
-          behavior — the only difference is that "Run" deep-links
-          since we're not already on the chat surface. */}
-      <nav className="flex flex-col gap-0.5" aria-label="Surfaces">
+          /account#payments. Icons jump to 20px in collapsed mode so
+          the 64px gutter reads at a glance. */}
+      <nav
+        className={cn(
+          'flex flex-col',
+          collapsed ? 'gap-1 items-center w-full' : 'gap-0.5',
+        )}
+        aria-label="Surfaces"
+      >
         <NavLink
           href="/app/predict?action=new"
-          icon={<IconPlus size={17} />}
+          icon={<IconPlus size={collapsed ? 20 : 17} />}
           label={t('shell.newChat')}
           active={false}
+          collapsed={collapsed}
         />
         <NavLink
           href="/app/predict"
-          icon={<IconChat size={17} />}
+          icon={<IconChat size={collapsed ? 20 : 17} />}
           label={t('shell.nav.chat')}
           active={onPredict}
+          collapsed={collapsed}
         />
         <NavButton
-          icon={<IconBell size={17} />}
+          icon={<IconBell size={collapsed ? 20 : 17} />}
           label={t('shell.nav.alerts')}
           onClick={onOpenAlerts}
+          collapsed={collapsed}
         />
         <NavButton
-          icon={<IconReceipts size={17} />}
+          icon={<IconReceipts size={collapsed ? 20 : 17} />}
           label={t('shell.nav.receipts')}
           onClick={onOpenReceipts}
           active={onAccount}
+          collapsed={collapsed}
         />
       </nav>
 
-      {/* Recent chats — fetched via the same SWR key the predict
-          shell uses, so the lists agree across surfaces. Each row
-          deep-links into /app/predict?conversation=<id>. Empty
-          state mirrors the predict shell's dashed-border card. */}
+      {/* Recent chats — hidden in the collapsed gutter. Same SWR key
+          the predict shell uses so the lists agree across surfaces.
+          Each row deep-links into /app/predict?conversation=<id>. */}
+      {!collapsed && (
       <div className="mt-5 flex-1 min-h-0 overflow-y-auto flex flex-col gap-1">
         <div className="flex items-center justify-between px-3">
           <span className="text-[10.5px] uppercase tracking-[0.16em] text-[var(--fg-3)] font-semibold">
@@ -217,17 +273,30 @@ export function ProductSidebar() {
           </ul>
         )}
       </div>
+      )}
+
+      {/* Collapsed gutter — fill the empty space below the icon nav so
+          the Identity pill stays anchored to the bottom of the rail. */}
+      {collapsed && <div className="flex-1" aria-hidden />}
 
       {/* Identity dropdown — same composition the predict-shell uses
           (wallet header → subscription → network → actions). The
           richer version was upgraded in the previous pass; we render
           it here so both surfaces share the same dropdown. */}
-      <div className="shrink-0 border-t border-[var(--border)] -mx-4 px-4 py-3 mt-2">
+      <div
+        className={cn(
+          'shrink-0 border-t border-[var(--border)] flex items-center',
+          collapsed
+            ? '-mx-2 px-2 py-3 justify-center'
+            : '-mx-4 px-4 py-3 mt-2',
+        )}
+      >
         <Identity
           signedIn={signedIn}
           wallet={wallet}
           session={session}
           onOpenSettings={onOpenSettings}
+          collapsed={collapsed}
         />
       </div>
 
@@ -253,12 +322,45 @@ function NavButton({
   label,
   onClick,
   active = false,
+  collapsed = false,
 }: {
   icon: ReactNode;
   label: string;
   onClick: () => void;
   active?: boolean;
+  collapsed?: boolean;
 }) {
+  const tonal = active
+    ? 'bg-[var(--surface-2)] text-[var(--fg)] font-medium'
+    : 'text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]';
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-current={active ? 'page' : undefined}
+        aria-label={label}
+        title={label}
+        className={cn(
+          'group inline-flex items-center justify-center',
+          'h-11 w-11 rounded-lg transition-colors',
+          tonal,
+        )}
+      >
+        <span
+          aria-hidden
+          className={cn(
+            'transition-colors',
+            active
+              ? 'text-[var(--fg)]'
+              : 'text-[var(--fg-3)] group-hover:text-[var(--fg)]',
+          )}
+        >
+          {icon}
+        </span>
+      </button>
+    );
+  }
   return (
     <button
       type="button"
@@ -266,11 +368,8 @@ function NavButton({
       aria-current={active ? 'page' : undefined}
       className={cn(
         'group w-full flex items-center gap-2.5 text-left',
-        'px-3 py-2 rounded-md text-[13px]',
-        'transition-colors',
-        active
-          ? 'bg-[var(--surface-2)] text-[var(--fg)] font-medium'
-          : 'text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]',
+        'px-3 py-2 rounded-md text-[13px] transition-colors',
+        tonal,
       )}
     >
       <span
@@ -294,23 +393,52 @@ function NavLink({
   icon,
   label,
   active,
+  collapsed = false,
 }: {
   href: string;
   icon: ReactNode;
   label: string;
   active: boolean;
+  collapsed?: boolean;
 }) {
+  const tonal = active
+    ? 'bg-[var(--surface-2)] text-[var(--fg)] font-medium'
+    : 'text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]';
+  if (collapsed) {
+    return (
+      <Link
+        href={href as never}
+        aria-current={active ? 'page' : undefined}
+        aria-label={label}
+        title={label}
+        className={cn(
+          'group inline-flex items-center justify-center',
+          'h-11 w-11 rounded-lg transition-colors',
+          tonal,
+        )}
+      >
+        <span
+          aria-hidden
+          className={cn(
+            'transition-colors',
+            active
+              ? 'text-[var(--fg)]'
+              : 'text-[var(--fg-3)] group-hover:text-[var(--fg)]',
+          )}
+        >
+          {icon}
+        </span>
+      </Link>
+    );
+  }
   return (
     <Link
       href={href as never}
       aria-current={active ? 'page' : undefined}
       className={cn(
         'group w-full flex items-center gap-2.5 text-left',
-        'px-3 py-2 rounded-md text-[13px]',
-        'transition-colors',
-        active
-          ? 'bg-[var(--surface-2)] text-[var(--fg)] font-medium'
-          : 'text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]',
+        'px-3 py-2 rounded-md text-[13px] transition-colors',
+        tonal,
       )}
     >
       <span
@@ -344,11 +472,13 @@ function Identity({
   wallet,
   session,
   onOpenSettings,
+  collapsed = false,
 }: {
   signedIn: boolean;
   wallet: string | undefined;
   session: SessionState | undefined;
   onOpenSettings: () => void;
+  collapsed?: boolean;
 }) {
   const t = useTranslations('predict.shell');
   const tAuth = useTranslations('auth');
@@ -406,7 +536,14 @@ function Identity({
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="w-full flex items-center gap-2.5 rounded-lg px-2 py-2 text-left hover:bg-[var(--surface-2)] transition-colors"
+        aria-label={`${short} menu`}
+        title={collapsed ? `${short} · ${meta}` : undefined}
+        className={cn(
+          'w-full flex items-center gap-2.5 rounded-lg transition-colors',
+          collapsed
+            ? 'h-10 w-10 justify-center p-0'
+            : 'px-2 py-2 text-left hover:bg-[var(--surface-2)]',
+        )}
       >
         <span
           aria-hidden
@@ -414,24 +551,28 @@ function Identity({
         >
           V
         </span>
-        <span className="min-w-0 flex flex-col leading-tight flex-1 text-left">
-          <span className="text-[12.5px] font-semibold text-[var(--fg)] truncate mono tabular">
-            {short}
+        {!collapsed && (
+          <span className="min-w-0 flex flex-col leading-tight flex-1 text-left">
+            <span className="text-[12.5px] font-semibold text-[var(--fg)] truncate mono tabular">
+              {short}
+            </span>
+            <span className="text-[11px] text-[var(--fg-3)] truncate">{meta}</span>
           </span>
-          <span className="text-[11px] text-[var(--fg-3)] truncate">{meta}</span>
-        </span>
+        )}
       </button>
 
       {open && (
         <div
           role="menu"
-          className="
-            absolute z-50 w-[min(280px,calc(100vw-24px))]
-            left-0 bottom-full mb-2
-            rounded-2xl border border-[var(--border)] bg-[var(--surface)]
-            shadow-[0_24px_60px_-12px_rgba(0,0,0,0.45)]
-            overflow-hidden
-          "
+          className={cn(
+            'absolute z-50 w-[min(280px,calc(100vw-24px))]',
+            collapsed
+              ? 'left-full ml-2 bottom-0'
+              : 'left-0 bottom-full mb-2',
+            'rounded-2xl border border-[var(--border)] bg-[var(--surface)]',
+            'shadow-[0_24px_60px_-12px_rgba(0,0,0,0.45)]',
+            'overflow-hidden',
+          )}
         >
           {signedIn && wallet && (
             <div className="px-4 py-3 border-b border-[var(--border)]">
@@ -600,5 +741,38 @@ function MenuButton({
       </span>
       <span className="flex-1 truncate">{label}</span>
     </button>
+  );
+}
+
+/** IconSidebar — collapse/expand arrow inside a rounded-rect outline.
+ *  Identical to the helper inside predict-shell's LeftRail so both
+ *  rails carry the same affordance. */
+function IconSidebar({
+  collapsed,
+  size = 15,
+}: {
+  collapsed: boolean;
+  size?: number;
+}) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="2.5" y="3" width="11" height="10" rx="2" />
+      <line x1="6" y1="3" x2="6" y2="13" />
+      {collapsed ? (
+        <path d="M9 6l2 2-2 2" />
+      ) : (
+        <path d="M11 6l-2 2 2 2" />
+      )}
+    </svg>
   );
 }
