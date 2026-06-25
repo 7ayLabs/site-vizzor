@@ -74,10 +74,13 @@ function withFallback<T>(
  * Public hooks
  * ----------------------------------------------------------------------- */
 
-export function useTicker(refreshIntervalMs = 30_000): LiveResult<TickerEntry[]> {
-  // Internal proxy to CoinGecko (see `app/api/ticker/route.ts`). The proxy
-  // already falls back to the snapshot on upstream failure, so the SWR
-  // call here just needs the snapshot as a no-flicker SSR fallback.
+export function useTicker(refreshIntervalMs = 15_000): LiveResult<TickerEntry[]> {
+  // Internal proxy to the Vizzor engine's `/v1/market/prices` (see
+  // `app/api/ticker/route.ts`) — same Binance-backed prices the AI
+  // sees. 15s matches the engine's aggregator cache, so polling more
+  // often would just hit a warm cache (wasted bandwidth, no fresher
+  // data); polling less often makes the widget drift away from what
+  // the assistant quotes in the same turn.
   const swr = useSWR<TickerEntry[]>(
     '/api/ticker',
     fetcher,
