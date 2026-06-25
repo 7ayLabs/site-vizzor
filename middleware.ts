@@ -99,9 +99,14 @@ const APP_HOSTS = new Set(
 );
 
 /** Path prefixes the host-rewrite must NOT touch — even on app.*
- *  these should pass through unchanged. */
+ *  these should pass through unchanged. `account`, `pricing`, and `pay`
+ *  belong to the marketing route group but are reachable from inside
+ *  the product (profile dropdown, exhausted-banner upgrade CTA), so the
+ *  visitor stays on `app.vizzor.ai` while we lazily duplicate them into
+ *  the app shell. Without these bypasses the rewrite sends `/account`
+ *  to `/app/account` and Next 404s. */
 const HOST_REWRITE_BYPASS_RE =
-  /^\/(?:api|_next|_vercel|docs|favicon\.ico|sitemap\.xml|robots\.txt|manifest\.webmanifest)(?:\/|$)/;
+  /^\/(?:api|_next|_vercel|docs|favicon\.ico|sitemap\.xml|robots\.txt|manifest\.webmanifest|account|pricing|pay)(?:\/|$)/;
 
 /**
  * On `app.vizzor.ai`, mutate the URL pathname in place so the rest
