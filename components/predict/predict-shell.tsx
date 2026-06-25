@@ -29,7 +29,6 @@
  * Predict surface.
  */
 
-import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
@@ -44,6 +43,7 @@ import {
   type ReactNode,
 } from 'react';
 import useSWR from 'swr';
+import { toast } from 'sonner';
 import { useTicker } from '@/lib/api';
 import { ChatBubble } from '@/components/predict/chat-bubble';
 import { CoinIcon } from '@/components/ui/coin-icon';
@@ -56,11 +56,12 @@ import {
   useConversations,
   type ConversationSummary,
 } from './use-conversations';
+import { Check, Wallet } from 'lucide-react';
 import {
+  IconBell,
   IconChat,
   IconClose,
   IconHelp,
-  IconLock,
   IconMenu,
   IconPaperclip,
   IconPlus,
@@ -70,6 +71,8 @@ import {
 } from './predict-icons';
 import { SlashPalette } from './slash-palette';
 import { SettingsSheet } from './settings-sheet';
+import { AlertsModal } from './alerts-modal';
+import { AlertsWatcher } from './alerts-watcher';
 import {
   DndContext,
   PointerSensor,
@@ -87,11 +90,6 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-
-const SolanaWalletAdapter = dynamic(
-  () => import('@/components/wallet/wallet-provider'),
-  { ssr: false, loading: () => null },
-);
 
 interface QuotaState {
   connected: boolean;
@@ -126,28 +124,30 @@ const MAX_CHARS = 3000;
 
 /* ─────────────────────────── Shell ─────────────────────────── */
 
-export function PredictShell() {
-  // autoConnect intentionally OFF.
-  //
-  // The wallet-adapter library's autoConnect=true issues a silent
-  // `connect({ silent: true })` on mount. That silent call leaves the
-  // Phantom adapter in an intermediate state that swallows the next
-  // explicit `connect()` from the selector modal — the extension popup
-  // never appears (manifesting as "Open Phantom to approve" stuck
-  // forever, both on Chrome and Brave).
-  //
-  // The connect flow inside `wallet-connect-flow.tsx` is built around
-  // `autoConnect=false` (its comment in Step 1 explicitly notes this).
-  // Sharing one provider context across the shell + the modal requires
-  // honouring that contract, so autoConnect stays off here.
-  return (
-    <SolanaWalletAdapter autoConnect={false}>
-      <PredictShellInner />
-    </SolanaWalletAdapter>
-  );
+/**
+ * PredictShell — wallet adapter is owned by the parent `/app/*` layout
+ * (`AppShellProvider`), so this component just consumes `useWallet()`
+ * via the surrounding provider context. Mounting here would create a
+ * nested provider tree and break SIWS continuity across surface
+ * switches; see `components/app/app-shell-provider.tsx` for the
+ * canonical mount point + the `autoConnect={false}` rationale (Phantom
+ * silent-connect bug).
+ *
+ * `initialConversation` opt-in hydrates the shell with a pre-loaded
+ * thread (deep-link path `/app/predict/[conversationId]`). When absent
+ * the shell behaves as the canonical /app/predict landing.
+ */
+export interface InitialConversation {
+  id: string;
+  title: string;
+  messages: Array<{ id: string; role: 'user' | 'assistant'; content: string }>;
 }
 
-function PredictShellInner() {
+export interface PredictShellProps {
+  initialConversation?: InitialConversation;
+}
+
+export function PredictShell({ initialConversation }: PredictShellProps = {}) {
   const t = useTranslations('predict');
   const router = useRouter();
   const locale = useLocale();
@@ -157,9 +157,10 @@ function PredictShellInner() {
   const [search, setSearch] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(
-    null,
+    initialConversation?.id ?? null,
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [alertsOpen, setAlertsOpen] = useState(false);
   // Tracks which message ids we've already POSTed to
   // /api/conversations/[id]/messages so a re-render of useChat state
   // doesn't double-persist. Pre-populated when loading a past chat so
@@ -192,7 +193,19 @@ function PredictShellInner() {
   const { data: quota, mutate: mutateQuota } = useSWR<QuotaState>(
     '/api/quota',
     jsonFetcher,
-    { revalidateOnFocus: false, keepPreviousData: true },
+    {
+      // Mobile users returning to a backgrounded /predict tab were
+      // seeing a stale counter until they reloaded. SWR's defaults
+      // assume an active desktop focus event will trigger revalidation;
+      // mobile browsers don't fire that reliably. Belt-and-braces:
+      // poll every 15s, plus refetch on tab-foreground and network
+      // reconnect. /api/quota is unrate-limited and reads SQLite —
+      // cheap enough to poll without churn.
+      refreshInterval: 15_000,
+      revalidateOnFocus: true,
+      revalidateOnReconnect: true,
+      keepPreviousData: true,
+    },
   );
 
   // Live ticker — the same SWR hook that backs the global ticker bar.
@@ -256,6 +269,29 @@ function PredictShellInner() {
       void mutateQuota();
     },
   });
+
+  // Deep-link hydration — when the page is /app/predict/[conversationId]
+  // the server pre-loads the thread and passes it down. We seed useChat
+  // exactly once on mount and prime persistedRef so the loaded rows are
+  // not re-POSTed to /api/conversations/[id]/messages as if they were
+  // new turns. Ownership is already enforced server-side; this hydration
+  // is pure UX, not an authz boundary.
+  useEffect(() => {
+    if (!initialConversation || initialConversation.messages.length === 0) {
+      return;
+    }
+    const restored = initialConversation.messages.map((m) => ({
+      id: m.id,
+      role: m.role,
+      parts: [{ type: 'text' as const, text: m.content }],
+    }));
+    persistedRef.current = new Set(restored.map((m) => m.id));
+    setMessages(restored);
+    // Mount-only — the server provides a fresh page (and thus fresh
+    // PredictShell) per [conversationId], so the prop is stable for
+    // this component's lifetime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -417,6 +453,15 @@ function PredictShellInner() {
     setDrawerOpen(false);
   }, [router]);
 
+  const onOpenAlerts = useCallback(() => {
+    // Open the in-shell modal instead of navigating away. The modal
+    // mounts the same AlertsList component as /app/alerts so the
+    // armed/triggered/resolved UI is identical — just framed by a
+    // sheet so users stay in the chat surface.
+    setAlertsOpen(true);
+    setDrawerOpen(false);
+  }, []);
+
   const onOpenSettings = useCallback(() => {
     setSettingsOpen(true);
     setDrawerOpen(false);
@@ -487,6 +532,70 @@ function PredictShellInner() {
   );
 
   /**
+   * Quote a message — prepend `> {text}\n\n` to the composer + focus.
+   * Each line of the quoted text is prefixed individually so multi-
+   * line quotes still read as a block-quote in the composer. Works
+   * for both user and assistant bubbles.
+   */
+  const onQuoteMessage = useCallback(
+    (text: string): void => {
+      if (!text) return;
+      const quoted = text
+        .split('\n')
+        .map((line) => `> ${line}`)
+        .join('\n');
+      setInput((prev) => {
+        // If there's existing composer content, leave a blank line
+        // between the quote and the user's draft.
+        const separator = prev.trim().length > 0 ? '\n\n' : '\n\n';
+        return `${quoted}${separator}${prev}`;
+      });
+      setTimeout(() => {
+        const el = inputRef.current;
+        if (!el) return;
+        el.focus();
+        // Cursor lands AT the end so the user types their follow-up
+        // immediately after the quote without arrow-key gymnastics.
+        const len = el.value.length;
+        el.setSelectionRange(len, len);
+      }, 0);
+    },
+    [],
+  );
+
+  /**
+   * Share a message — copy a deep-link URL to the clipboard that
+   * resolves to the conversation + message anchor. The conversation
+   * route is SIWS-gated and ownership-checked server-side, so a
+   * leaked URL still 404s for non-owners. Visible feedback via sonner
+   * toast; the chat-bubble action button also flashes on resolution.
+   */
+  const onShareMessage = useCallback(
+    async (messageId: string): Promise<void> => {
+      if (typeof window === 'undefined') return;
+      if (!activeConversationId) {
+        toast.error(t('share.unsavedTitle'), {
+          description: t('share.unsavedBody'),
+        });
+        throw new Error('no_conversation');
+      }
+      const origin = window.location.origin;
+      const localePrefix = locale === 'en' ? '' : `/${locale}`;
+      const url = `${origin}${localePrefix}/app/predict/${activeConversationId}#m-${messageId}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success(t('share.copied'), { description: url });
+      } catch (e) {
+        toast.error(t('share.copyFailed'), {
+          description: (e as Error).message,
+        });
+        throw e;
+      }
+    },
+    [activeConversationId, locale, t],
+  );
+
+  /**
    * Retry the last failed turn. Trims the errored assistant slot from
    * the thread (if any) and re-fires the latest user prompt. Used by
    * the inline error banner that surfaces engine 5xx responses.
@@ -546,6 +655,7 @@ function PredictShellInner() {
           onPickConversation={(id) => void onPickConversation(id)}
           onDeleteConversation={(id) => void onDeleteConversation(id)}
           onNewChat={onNewChat}
+          onOpenAlerts={onOpenAlerts}
           onOpenReceipts={onOpenReceipts}
           onOpenSettings={onOpenSettings}
           signedIn={signedIn}
@@ -558,9 +668,10 @@ function PredictShellInner() {
 
         {/* ─── Center column ─── */}
         <section className="relative flex flex-col h-full min-h-0 min-w-0 overflow-hidden border-l border-[var(--border)]">
-          {/* Mobile-only top bar — drawer trigger only. The brand
-              lives inside the drawer itself (per Pass 25 spec), so
-              this row stays minimal on the main chat view. */}
+          {/* Mobile-only top bar — drawer trigger. The brand lives
+              inside the drawer itself (per Pass 25 spec); per-bubble
+              compact toggles replaced the previous global density
+              control. */}
           <div
             className={cn(
               'lg:hidden flex items-center shrink-0',
@@ -605,10 +716,18 @@ function PredictShellInner() {
                         ? onEditUserMessage
                         : undefined
                     }
+                    onQuote={onQuoteMessage}
+                    onShare={onShareMessage}
                     editLabel={t('shell.composer.edit')}
                     sourcesLabel={t('shell.composer.sources')}
                     copyLabel={t('shell.composer.copy')}
                     copiedLabel={t('shell.composer.copied')}
+                    quoteLabel={t('shell.composer.quote')}
+                    quotedLabel={t('shell.composer.quoted')}
+                    shareLabel={t('shell.composer.share')}
+                    sharedLabel={t('shell.composer.shared')}
+                    compactLabel={t('shell.composer.compact')}
+                    compactedLabel={t('shell.composer.compacted')}
                     tickerByCoin={tickerByCoin}
                     priceCheck={{
                       label: t('shell.composer.priceCheckLabel'),
@@ -658,19 +777,6 @@ function PredictShellInner() {
               </div>
             )}
           </div>
-
-          {/* Quota line — sits above the chip strip so the user always
-              knows where they stand. Reads from the same `/api/quota`
-              SWR cache the rest of the shell uses, so this is the
-              authoritative truth (no second fetch). Hidden while
-              streaming so the foot of the page stays calm during work,
-              and skipped entirely for Elite — paying users with
-              unlimited runs don't need a counter cluttering the
-              surface, and an "Elite · unlimited" chip just reads as
-              chrome. */}
-          {signedIn && !composerLocked && !isStreaming && quota && quota.tier !== 'elite' && (
-            <QuotaLine quota={quota} />
-          )}
 
           {/* Suggestions strip — Vizzor-native quick-pick chips placed
               ABOVE the composer. Reads as "things you can ask right
@@ -749,6 +855,7 @@ function PredictShellInner() {
           onPickConversation={(id) => void onPickConversation(id)}
           onDeleteConversation={(id) => void onDeleteConversation(id)}
           onNewChat={onNewChat}
+          onOpenAlerts={onOpenAlerts}
           onOpenReceipts={onOpenReceipts}
           onOpenSettings={onOpenSettings}
           signedIn={signedIn}
@@ -764,6 +871,9 @@ function PredictShellInner() {
           onClose={() => setSettingsOpen(false)}
         />
       )}
+
+      <AlertsModal open={alertsOpen} onClose={() => setAlertsOpen(false)} />
+      <AlertsWatcher enabled={signedIn} />
     </div>
   );
 }
@@ -773,9 +883,17 @@ function PredictShellInner() {
 
 function WalletGate() {
   const t = useTranslations('predict.gate');
-  const tShell = useTranslations('predict.shell');
   return (
-    <div className="mx-auto max-w-[640px] w-full px-4 sm:px-6 py-8 sm:py-16 lg:py-24 flex flex-col items-center gap-6 sm:gap-8 text-center">
+    // `min-h-full` makes the gate stretch to fill the thread container's
+    // viewport — without it the wrapper collapses to its content height
+    // and `justify-center` has nothing to center against, so the block
+    // anchors to the top. Padding goes to `py-10` symmetrically so the
+    // hero icon + perks land in the optical middle on tall viewports
+    // and don't crowd the composer footer on short ones.
+    <div className="mx-auto max-w-[640px] w-full min-h-full px-4 sm:px-6 py-10 flex flex-col items-center justify-center gap-6 sm:gap-8 text-center">
+      {/* Icon tile — matches the rounded-2xl bordered tiles used by
+          how-it-works cards. Wallet glyph (lucide) is semantically
+          aligned with the action being requested. */}
       <span
         aria-hidden
         className={cn(
@@ -785,28 +903,24 @@ function WalletGate() {
           'vz-rise',
         )}
       >
-        <IconLock size={20} />
+        <Wallet size={22} strokeWidth={1.5} aria-hidden />
       </span>
 
-      <div className="flex flex-col gap-3">
-        <h2 className="text-[28px] sm:text-[36px] font-semibold tracking-tight leading-[1.05] text-[var(--fg)] text-balance">
+      <div className="flex flex-col gap-3 items-center">
+        <h2 className="text-[28px] sm:text-[36px] font-semibold tracking-[-0.022em] leading-[1.05] text-[var(--fg)] text-balance">
           {t('title')}
         </h2>
-        <p className="text-[14px] leading-relaxed text-[var(--fg-2)] max-w-[48ch] mx-auto">
+        <p className="text-[13.5px] leading-relaxed text-[var(--fg-2)] max-w-[48ch] mx-auto text-balance">
           {t('body')}
         </p>
       </div>
 
-      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 w-full max-w-[420px] text-left vz-rise" style={{ animationDelay: '120ms' }}>
+      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 w-full max-w-[420px] mx-auto justify-items-start vz-rise" style={{ animationDelay: '120ms' }}>
         <GatePerk label={t('perk1')} />
         <GatePerk label={t('perk2')} />
         <GatePerk label={t('perk3')} />
         <GatePerk label={t('perk4')} />
       </ul>
-
-      <p className="mono tabular text-[10.5px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
-        {tShell('composer.footer')}
-      </p>
     </div>
   );
 }
@@ -820,8 +934,8 @@ function WalletGateMini({ onSignedIn }: { onSignedIn: () => void }) {
 
   return (
     <div className="flex items-center gap-3 vz-rise">
-      <IconLock size={14} className="text-[var(--fg-3)] shrink-0" />
-      <p className="flex-1 text-[13px] text-[var(--fg-2)] min-w-0">
+      <Wallet size={14} strokeWidth={1.5} className="text-[var(--fg-3)] shrink-0" aria-hidden />
+      <p className="flex-1 text-[13px] font-medium tracking-tight text-[var(--fg-2)] min-w-0">
         {t('composerHint')}
       </p>
       <div className="shrink-0">
@@ -840,25 +954,17 @@ function WalletGateMini({ onSignedIn }: { onSignedIn: () => void }) {
 
 function GatePerk({ label }: { label: string }) {
   return (
-    <li className="flex items-start gap-2">
+    <li className="flex items-start gap-2.5">
       <span
         aria-hidden
         className={cn(
-          'mt-0.5 inline-flex h-4 w-4 items-center justify-center shrink-0',
+          'mt-[2px] inline-flex h-4 w-4 items-center justify-center shrink-0',
           'rounded-full border border-[var(--border-hi)] bg-[var(--surface-2)] text-[var(--fg)]',
         )}
       >
-        <svg width="9" height="9" viewBox="0 0 9 9" fill="none" aria-hidden>
-          <path
-            d="M1.5 4.5L3.5 6.5L7.5 2.5"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <Check size={9} strokeWidth={2.4} aria-hidden />
       </span>
-      <span className="text-[12.5px] text-[var(--fg-2)] leading-snug">
+      <span className="text-[13px] font-medium tracking-tight text-[var(--fg-2)] leading-snug">
         {label}
       </span>
     </li>
@@ -875,6 +981,7 @@ interface LeftRailProps {
   onPickConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
   onNewChat: () => void;
+  onOpenAlerts: () => void;
   onOpenReceipts: () => void;
   onOpenSettings: () => void;
   signedIn: boolean;
@@ -897,6 +1004,7 @@ function LeftRail({
   onPickConversation,
   onDeleteConversation,
   onNewChat,
+  onOpenAlerts,
   onOpenReceipts,
   onOpenSettings,
   signedIn,
@@ -1016,6 +1124,17 @@ function LeftRail({
             icon={<IconChat size={collapsed ? 20 : 17} />}
             label={t('shell.nav.chat')}
             active
+            collapsed={collapsed}
+          />
+          {/* Alerts entry — routes to /app/alerts. The app-sidebar's
+              footer also carries this, but the app-sidebar is
+              suppressed on /app/predict (3-column shell). Mounting
+              the entry here keeps alerts discoverable from inside
+              chat without re-introducing the umbrella sidebar. */}
+          <NavButton
+            icon={<IconBell size={collapsed ? 20 : 17} />}
+            label={t('shell.nav.alerts')}
+            onClick={onOpenAlerts}
             collapsed={collapsed}
           />
           <NavButton
@@ -1518,6 +1637,7 @@ function MobileDrawer({
   onPickConversation,
   onDeleteConversation,
   onNewChat,
+  onOpenAlerts,
   onOpenReceipts,
   onOpenSettings,
   signedIn,
@@ -1532,6 +1652,7 @@ function MobileDrawer({
   onPickConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
   onNewChat: () => void;
+  onOpenAlerts: () => void;
   onOpenReceipts: () => void;
   onOpenSettings: () => void;
   signedIn: boolean;
@@ -1616,6 +1737,7 @@ function MobileDrawer({
             onPickConversation={onPickConversation}
             onDeleteConversation={onDeleteConversation}
             onNewChat={onNewChat}
+            onOpenAlerts={onOpenAlerts}
             onOpenReceipts={onOpenReceipts}
             onOpenSettings={onOpenSettings}
             signedIn={signedIn}
@@ -2253,7 +2375,10 @@ function SortableTopicChip({
         className={cn(
           'inline-flex items-center gap-1.5',
           'h-7 px-2.5 rounded-full',
-          'text-[12.5px] font-medium leading-none whitespace-nowrap',
+          // Home-page CTA vocabulary: semibold + tight tracking. Reads
+          // as a pill button (same scale as the hero "Open app" CTA),
+          // not a generic chip.
+          'text-[12.5px] font-semibold tracking-tight leading-none whitespace-nowrap',
           'transition-[background-color,color,border-color,box-shadow,transform] duration-200 ease-out',
           'motion-safe:will-change-transform',
           'hover:scale-[1.03] active:scale-95',
@@ -2409,13 +2534,14 @@ function TopicAddPanel({
         'overflow-hidden pb-1',
       )}
     >
-      {/* Section stamp — same scale + tracking as the slash palette so
-          both popovers feel like siblings. */}
-      <p className="px-3 pt-3 pb-1.5 text-[10px] uppercase tracking-[0.2em] font-semibold text-[var(--fg-3)]">
+      {/* Section stamp — mono eyebrow vocabulary matches the home-page
+          cards (how-it-works, hero stat tiles) so the popover reads as
+          part of the same design system, not a separate dropdown chrome. */}
+      <p className="px-3 pt-3 pb-1.5 mono tabular text-[10px] uppercase tracking-[0.2em] font-semibold text-[var(--fg-3)]">
         Add topic
       </p>
       {available.length === 0 ? (
-        <p className="px-3 py-2 text-[12.5px] text-[var(--fg-3)]">
+        <p className="px-3 py-2 text-[12.5px] leading-snug text-[var(--fg-3)]">
           Every topic is already in the bar.
         </p>
       ) : (
@@ -2430,8 +2556,11 @@ function TopicAddPanel({
                   onMouseEnter={() => setActiveIdx(idx)}
                   onClick={() => onAdd(t.id)}
                   className={cn(
-                    'relative w-full flex items-center gap-2.5 px-3 py-1.5 text-left',
-                    'text-[12.5px] transition-colors',
+                    'relative w-full flex items-center gap-2.5 px-3 py-2 text-left',
+                    // Home-page list-item vocabulary: sans, slightly
+                    // larger, medium weight, tight tracking. Matches the
+                    // CTA chip rhythm in `how-it-works.client.tsx`.
+                    'text-[13px] font-medium tracking-tight leading-snug transition-colors',
                     // Left-edge accent — same focus-cue pattern as the
                     // slash palette. No heavy background flood.
                     'before:absolute before:left-0 before:top-1.5 before:bottom-1.5',
@@ -2645,60 +2774,6 @@ function TopicIcon({ kind, size = 12 }: { kind: TopicIconKind; size?: number }) 
     default:
       return null;
   }
-}
-
-/* ─────────────────────────── Quota line ─────────────────────────── */
-
-/**
- * Single-line tier + cap badge that sits above the topic chip bar so
- * the user always knows where they stand. Reads from the cached
- * `/api/quota` payload — the same SWR slot the rest of the shell uses
- * — so no second fetch. Four branches matching the discriminated
- * QuotaState tier:
- *   - trial  → "Prueba · {days}d · {used}/{cap} hoy"
- *   - pro    → "Pro · {used}/{cap} hoy"
- *   - elite  → "Elite · ilimitado"
- *   - free   → "Prueba terminada · /pricing"
- */
-function QuotaLine({ quota }: { quota: QuotaState }) {
-  const t = useTranslations('predict.shell');
-  let body: ReactNode = null;
-  if (quota.tier === 'trial' && quota.trial) {
-    body = t('trialLine', {
-      days: quota.trial.daysRemaining,
-      used: quota.trial.dailyUsed,
-      cap: quota.trial.dailyCap,
-    });
-  } else if (quota.tier === 'pro') {
-    body = t('proLine', { used: quota.used, cap: quota.limit });
-  } else if (quota.tier === 'elite') {
-    body = t('eliteLine');
-  } else {
-    body = t('freeLine');
-  }
-  return (
-    <div className="shrink-0 mx-auto max-w-[860px] w-full px-3 sm:px-6 pt-2">
-      <span
-        className={cn(
-          'inline-flex items-center gap-1.5',
-          'mono tabular text-[10px] uppercase tracking-[0.16em]',
-          'text-[var(--fg-3)]',
-        )}
-      >
-        <span
-          aria-hidden
-          className={cn(
-            'inline-block h-1.5 w-1.5 rounded-full',
-            quota.tier === 'elite' && 'bg-[var(--accent)]',
-            quota.tier === 'pro' && 'bg-[var(--accent)]',
-            quota.tier === 'trial' && 'bg-[var(--fg-2)]',
-            quota.tier === 'free' && 'bg-[var(--danger)]',
-          )}
-        />
-        {body}
-      </span>
-    </div>
-  );
 }
 
 /* ────────────────────────── Example roll ────────────────────────── */
