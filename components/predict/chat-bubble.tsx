@@ -26,9 +26,9 @@
  * parts, same join semantics.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import type { useChat } from '@ai-sdk/react';
-import { Check, Copy, Pencil } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Copy, Pencil, Quote, Share2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useReducedMotionSafe } from '@/lib/motion';
 
@@ -74,7 +74,7 @@ export interface ChatBubbleProps {
     body: string;
   };
   /**
-   * Localized label for the assistant-bubble Copy affordance.
+   * Localized label for the Copy affordance (both roles).
    * Defaults to "Copy". Hidden until hover/focus.
    */
   copyLabel?: string;
@@ -83,6 +83,34 @@ export interface ChatBubbleProps {
    * after a successful copy. Defaults to "Copied".
    */
   copiedLabel?: string;
+  /**
+   * Quote action — when fired, the parent prepends `> {text}\n\n` to
+   * the composer and focuses it. Receives the bubble's plain-text
+   * body. Available on both user and assistant bubbles.
+   */
+  onQuote?: (text: string) => void;
+  /** Localized label for the Quote affordance. Defaults to "Quote". */
+  quoteLabel?: string;
+  /** Localized confirmation flashed after a successful quote action. */
+  quotedLabel?: string;
+  /**
+   * Share action — receives the message id. Parent composes the
+   * conversation-anchored deep link and copies it to the clipboard.
+   * Available on both user and assistant bubbles. Returns optional
+   * promise so the button can wait for confirmation before flashing.
+   */
+  onShare?: (messageId: string) => void | Promise<void>;
+  /** Localized label for the Share affordance. */
+  shareLabel?: string;
+  /** Localized confirmation flashed after a successful share action. */
+  sharedLabel?: string;
+  /** Localized label for the per-bubble compact toggle (assistant
+   *  bubbles only). When clicked, the assistant bubble collapses to
+   *  a tighter density — text size + padding shrink. State is LOCAL
+   *  per bubble so users can compact long answers individually. */
+  compactLabel?: string;
+  /** Localized label flashed when the bubble is in the compact state. */
+  compactedLabel?: string;
 }
 
 /**
@@ -135,6 +163,14 @@ export function ChatBubble({
   priceCheck,
   copyLabel = 'Copy',
   copiedLabel = 'Copied',
+  onQuote,
+  quoteLabel = 'Quote',
+  quotedLabel = 'Quoted',
+  onShare,
+  shareLabel = 'Share',
+  sharedLabel = 'Shared',
+  compactLabel = 'Compact',
+  compactedLabel = 'Compacted',
 }: ChatBubbleProps) {
   const isUser = message.role === 'user';
   const text = message.parts
@@ -144,6 +180,17 @@ export function ChatBubble({
 
   const timestamp = formatTimestamp(undefined);
   const roleLabel = isUser ? 'you' : 'vizzor';
+
+  const actionLabels = {
+    copyLabel,
+    copiedLabel,
+    quoteLabel,
+    quotedLabel,
+    shareLabel,
+    sharedLabel,
+    compactLabel,
+    compactedLabel,
+  };
 
   return (
     <div
@@ -166,35 +213,67 @@ export function ChatBubble({
       {isUser ? (
         <UserBubble
           text={text}
+          messageId={message.id}
           onEdit={onEdit ? () => onEdit(message.id, text) : undefined}
           editLabel={editLabel}
+          onQuote={onQuote}
+          onShare={onShare}
+          actionLabels={actionLabels}
         />
       ) : (
         <AssistantBubble
           text={text}
+          messageId={message.id}
           streaming={streaming}
           sourcesLabel={sourcesLabel}
           tickerByCoin={tickerByCoin}
           priceCheck={priceCheck}
-          copyLabel={copyLabel}
-          copiedLabel={copiedLabel}
+          onQuote={onQuote}
+          onShare={onShare}
+          actionLabels={actionLabels}
         />
       )}
     </div>
   );
 }
 
+/* ────────────── shared action types ────────────── */
+
+interface ActionLabels {
+  copyLabel: string;
+  copiedLabel: string;
+  quoteLabel: string;
+  quotedLabel: string;
+  shareLabel: string;
+  sharedLabel: string;
+  compactLabel: string;
+  compactedLabel: string;
+}
+
 /* ────────────── user bubble ────────────── */
 
 function UserBubble({
   text,
+  messageId,
   onEdit,
   editLabel,
+  onQuote,
+  onShare,
+  actionLabels,
 }: {
   text: string;
+  messageId: string;
   onEdit?: () => void;
   editLabel: string;
+  onQuote?: (text: string) => void;
+  onShare?: (messageId: string) => void | Promise<void>;
+  actionLabels: ActionLabels;
 }) {
+  // The row is rendered whenever ANY action is wired — Edit can be
+  // gated to the latest editable turn (parent decides) while Copy /
+  // Quote / Share are universal once their callbacks are bound.
+  const hasActions = Boolean(onEdit || onQuote || onShare) || text.length > 0;
+
   return (
     // Named group covers BOTH the bubble and the action row underneath.
     // items-end keeps everything right-aligned with the bubble column.
@@ -210,55 +289,37 @@ function UserBubble({
           'transition-colors duration-150',
         )}
       >
-        <p className="text-[13.5px] leading-relaxed whitespace-pre-wrap break-words">
+        <p className="text-[14px] leading-relaxed whitespace-pre-wrap break-words">
           {text}
         </p>
       </div>
-      {onEdit && (
-        // Action row under the bubble — mirrors the assistant side's
-        // Copy row but right-aligned. Single icon for now; the flex
-        // container is the natural mount point for future user-side
-        // affordances (resend, branch).
-        <div className="flex items-center gap-1 -mt-0.5 pr-1">
-          <EditButton onEdit={onEdit} editLabel={editLabel} />
+      {hasActions && (
+        // Action row — Edit (when wired), Copy, Quote, Share. Hover-
+        // revealed via the named `group/user` on the outer column.
+        <div className="flex items-center gap-0.5 -mt-0.5 pr-1">
+          {onEdit && (
+            <BubbleActionButton
+              groupName="user"
+              icon={Pencil}
+              label={editLabel}
+              onActivate={onEdit}
+            />
+          )}
+          <CopyAction text={text} groupName="user" labels={actionLabels} />
+          {onQuote && (
+            <QuoteAction text={text} onQuote={onQuote} groupName="user" labels={actionLabels} />
+          )}
+          {onShare && (
+            <ShareAction
+              messageId={messageId}
+              onShare={onShare}
+              groupName="user"
+              labels={actionLabels}
+            />
+          )}
         </div>
       )}
     </div>
-  );
-}
-
-/**
- * Hover/focus-revealed Edit affordance under user bubbles. Symmetric with
- * the assistant-side CopyButton — same icon-square footprint, same hover
- * background, same `sr-only` accessible label. Activated only on the
- * latest editable user turn (the parent gates which message receives
- * `onEdit`).
- */
-function EditButton({
-  onEdit,
-  editLabel,
-}: {
-  onEdit: () => void;
-  editLabel: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onEdit}
-      aria-label={editLabel}
-      title={editLabel}
-      className={cn(
-        'opacity-0 group-hover/user:opacity-100 focus-visible:opacity-100',
-        'transition-opacity duration-150',
-        'inline-flex items-center justify-center',
-        'h-7 w-7 rounded-md',
-        'text-[var(--fg-3)] hover:text-[var(--fg)]',
-        'hover:bg-[color-mix(in_oklab,var(--surface)_80%,transparent)]',
-      )}
-    >
-      <span className="sr-only">{editLabel}</span>
-      <Pencil className="h-3.5 w-3.5" aria-hidden />
-    </button>
   );
 }
 
@@ -266,21 +327,30 @@ function EditButton({
 
 function AssistantBubble({
   text,
+  messageId,
   streaming,
   sourcesLabel,
   tickerByCoin,
   priceCheck,
-  copyLabel,
-  copiedLabel,
+  onQuote,
+  onShare,
+  actionLabels,
 }: {
   text: string;
+  messageId: string;
   streaming: boolean;
   sourcesLabel: string;
   tickerByCoin?: ReadonlyMap<string, number>;
   priceCheck?: { label: string; body: string };
-  copyLabel: string;
-  copiedLabel: string;
+  onQuote?: (text: string) => void;
+  onShare?: (messageId: string) => void | Promise<void>;
+  actionLabels: ActionLabels;
 }) {
+  // Per-bubble compact toggle — each assistant answer can collapse to
+  // tighter density independently. Local state (no parent prop, no
+  // localStorage) so the compaction is scoped to the message being
+  // read. Default is expanded; user opts in per bubble.
+  const [compact, setCompact] = useState(false);
   const lines = formatLines(text);
   const hasContent = lines.length > 0;
   // Gather unique tool names from inline `[tool:…]` / `[run:…]` markers
@@ -318,11 +388,31 @@ function AssistantBubble({
         'rounded-2xl rounded-tl-md',
         'bg-[color-mix(in_oklab,var(--surface)_55%,transparent)]',
         'hover:bg-[color-mix(in_oklab,var(--surface)_80%,transparent)]',
-        'transition-colors duration-200',
-        'px-4 py-3',
+        'transition-[background-color,padding] duration-200',
+        // Compact halves the vertical padding and tightens the
+        // horizontal pad. The big win is the max-height + internal
+        // scroll on the body container below, which lets a 2000-word
+        // answer fit in ~220px so the user doesn't have to scroll
+        // the page to reach the next bubble.
+        compact ? 'px-3 py-1.5' : 'px-4 py-3',
       )}
     >
-      <div className="mono tabular text-[12.5px] leading-relaxed text-[var(--fg)] whitespace-pre-wrap break-words">
+      <div
+        className={cn(
+          // Body container — sans by default (matches home-page card
+          // descriptions). Individual lines that match the tool-
+          // annotation regex switch to mono via ToolLine. Mono lives
+          // ONLY on instrument readouts; prose reads as prose. Text
+          // size + leading stay CONSTANT in both modes — compact
+          // shrinks the bubble's CHROME, never the reading
+          // vocabulary. Long answers in compact mode become scrollable
+          // INSIDE the bubble (max-h + overflow-y) so the page itself
+          // stops growing.
+          'text-[13.5px] leading-relaxed',
+          'text-[var(--fg)] whitespace-pre-wrap break-words',
+          compact && 'max-h-[200px] overflow-y-auto pr-1 vz-compact-scroll',
+        )}
+      >
         {hasContent ? (
           lines.map((line, idx) => {
             const isLast = idx === lines.length - 1;
@@ -344,11 +434,12 @@ function AssistantBubble({
         )}
       </div>
 
-      {sources.length > 0 && !streaming && (
+      {sources.length > 0 && !streaming && !compact && (
         // Sources panel — sits at the foot of the assistant bubble
         // listing every tool the engine actually invoked for this
         // turn. Transparent so users who don't care can ignore it;
         // the mono chips line up under the prose for a clean fold.
+        // Hidden when compact to maximize bubble shrinkage.
         <div className="mt-3 pt-2.5 border-t border-[var(--border)]/60">
           <p className="mono tabular text-[9.5px] uppercase tracking-[0.2em] font-semibold text-[var(--fg-3)] mb-1.5">
             {sourcesLabel}
@@ -370,18 +461,57 @@ function AssistantBubble({
           </ul>
         </div>
       )}
+
+      {/* Compact toggle — a tiny arrow-only icon button at the lower
+          edge of the bubble. No text, no chip chrome: just a chevron
+          pointing UP when expanded (click to collapse) and DOWN when
+          compact (click to expand). Always visible so the collapse
+          affordance is discoverable at a glance. */}
+      {!streaming && hasContent && (
+        <div
+          className={cn(
+            'flex items-center justify-center',
+            compact ? 'mt-1' : 'mt-2',
+          )}
+        >
+          <BubbleCompactTag
+            compact={compact}
+            onToggle={() => setCompact((v) => !v)}
+            label={compact ? actionLabels.compactedLabel : actionLabels.compactLabel}
+          />
+        </div>
+      )}
+      {/* Streaming-continues indicator — a downward chevron that bounces
+          gently at the foot of the bubble while the SSE is in flight.
+          Reads as "the response continues below" so the user knows more
+          text is on its way and the bubble height will keep growing. */}
+      {streaming && hasContent && (
+        <div className="mt-2 flex items-center justify-center" aria-hidden>
+          <StreamingContinuesArrow />
+        </div>
+      )}
     </div>
       {!streaming && hasContent && (
-        // Action row sits BELOW the bubble — currently a single Copy icon
-        // but the row is the natural mount point for future affordances
-        // (regenerate, share, save) so it's already a flex container.
+        // Action row sits BELOW the bubble — Copy, Quote, Share.
         // Hover-revealed via the named `group/asst` on the outer column.
-        <div className="flex items-center gap-1 -mt-0.5 pl-1">
-          <CopyButton
-            text={text}
-            copyLabel={copyLabel}
-            copiedLabel={copiedLabel}
-          />
+        <div className="flex items-center gap-0.5 -mt-0.5 pl-1">
+          <CopyAction text={text} groupName="asst" labels={actionLabels} />
+          {onQuote && (
+            <QuoteAction
+              text={text}
+              onQuote={onQuote}
+              groupName="asst"
+              labels={actionLabels}
+            />
+          )}
+          {onShare && (
+            <ShareAction
+              messageId={messageId}
+              onShare={onShare}
+              groupName="asst"
+              labels={actionLabels}
+            />
+          )}
         </div>
       )}
     </div>
@@ -526,32 +656,157 @@ function collectSources(lines: readonly FormattedLine[]): readonly string[] {
   return out;
 }
 
-/* ────────────── copy button ────────────── */
+/* ────────────── per-bubble compact tag ────────────── */
 
 /**
- * Hover/focus-revealed Copy affordance on assistant bubbles. Stays mounted
- * but invisible so it can take keyboard focus via Tab without a layout
- * shift; opacity flips on `group-hover` or focus-visible. After a
- * successful copy, the label briefly swaps to the localized "Copied"
- * confirmation, then restores — the timeout is cleared on unmount so
- * navigating away mid-flash doesn't try to setState on a dead node.
+ * BubbleCompactTag — an arrow-only icon button at the lower edge of
+ * the assistant bubble. No text, no chip chrome. The chevron flips
+ * direction to encode state:
  *
- * Falls back to a document.execCommand path when the secure-context
- * Clipboard API is unavailable (e.g. http://localhost in some browsers
- * without explicit allowlist). On total failure we surface nothing
- * loud — the button just doesn't flash "Copied", which is the right
- * read for a low-stakes interaction.
+ *   - Expanded (compact=false) → ChevronUp. Click pulls the bubble
+ *     UPWARD into compact form.
+ *   - Compact (compact=true)  → ChevronDown. Click drops the bubble
+ *     back DOWN into the full expanded form.
+ *
+ * Label is still wired into aria-label + title so screen readers and
+ * tooltips retain the semantic ("Compact" / "Compacted").
  */
-function CopyButton({
-  text,
-  copyLabel,
-  copiedLabel,
+function BubbleCompactTag({
+  compact,
+  onToggle,
+  label,
 }: {
-  text: string;
-  copyLabel: string;
-  copiedLabel: string;
+  compact: boolean;
+  onToggle: () => void;
+  label: string;
 }) {
-  const [copied, setCopied] = useState(false);
+  const Icon = compact ? ChevronDown : ChevronUp;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={compact}
+      aria-label={label}
+      title={label}
+      className={cn(
+        'inline-flex items-center justify-center',
+        'h-6 w-6 rounded-full',
+        'text-[var(--fg-3)] hover:text-[var(--fg)]',
+        'hover:bg-[var(--surface-2)]',
+        'transition-colors',
+      )}
+    >
+      <Icon className="h-3.5 w-3.5" aria-hidden />
+    </button>
+  );
+}
+
+/**
+ * StreamingContinuesArrow — a downward chevron rendered at the foot
+ * of the assistant bubble while a response is still streaming in. The
+ * arrow drifts gently down-and-back-up to telegraph "the response
+ * continues below". Under reduced-motion it stays static (the icon
+ * alone still carries the meaning).
+ */
+function StreamingContinuesArrow() {
+  const reduced = useReducedMotionSafe();
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center justify-center',
+        'h-6 w-6 rounded-full text-[var(--fg-3)]',
+        !reduced && 'motion-safe:animate-bounce',
+      )}
+    >
+      <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+    </span>
+  );
+}
+
+/* ────────────── action toolbar ────────────── */
+
+type LucideIcon = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
+
+interface BubbleActionButtonProps {
+  /** `user` or `asst` — drives which named group governs hover reveal. */
+  groupName: 'user' | 'asst';
+  icon: LucideIcon;
+  label: string;
+  onActivate: () => void;
+  /** When set, the icon swaps to the Check glyph for `flashMs` ms and
+   *  the aria-label swaps to `flashLabel`. */
+  flashLabel?: string;
+  flashed?: boolean;
+}
+
+/**
+ * Shared visual+behavior shell for every bubble action button.
+ *
+ * Hover-reveal is parameterized by `groupName` so the same component
+ * can mount under the `group/user` (right-aligned, items-end) and
+ * `group/asst` (left-aligned, items-start) action rows. Without the
+ * parameter we'd need per-role copies or a runtime branch that
+ * Tailwind can't statically extract — so we accept two literal class
+ * strings and pick at compile time.
+ *
+ * Focus behaviour: the button stays mounted but invisible (opacity 0).
+ * On focus-visible the opacity flips to 1 so keyboard users can tab
+ * through without losing the affordance. Same applies on group hover.
+ */
+function BubbleActionButton({
+  groupName,
+  icon: Icon,
+  label,
+  onActivate,
+  flashLabel,
+  flashed = false,
+}: BubbleActionButtonProps) {
+  const displayLabel = flashed && flashLabel ? flashLabel : label;
+  // Pre-baked hover-reveal classes for each named group. Tailwind needs
+  // these as literals so JIT can pick them up.
+  const hoverClass =
+    groupName === 'user'
+      ? 'opacity-0 group-hover/user:opacity-100 focus-visible:opacity-100'
+      : 'opacity-0 group-hover/asst:opacity-100 focus-visible:opacity-100';
+
+  return (
+    <button
+      type="button"
+      onClick={onActivate}
+      aria-label={displayLabel}
+      title={displayLabel}
+      className={cn(
+        hoverClass,
+        'transition-opacity duration-150',
+        'inline-flex items-center justify-center',
+        'h-7 w-7 rounded-md',
+        'text-[var(--fg-3)] hover:text-[var(--fg)]',
+        'hover:bg-[color-mix(in_oklab,var(--surface)_80%,transparent)]',
+        flashed && 'text-[var(--fg)] opacity-100',
+      )}
+    >
+      <span className="sr-only" aria-live="polite">
+        {displayLabel}
+      </span>
+      {flashed ? (
+        <Check className="h-3.5 w-3.5" aria-hidden />
+      ) : (
+        <Icon className="h-3.5 w-3.5" aria-hidden />
+      )}
+    </button>
+  );
+}
+
+/**
+ * useFlash — generic 1.5s flash-on-success state for action buttons.
+ * Cancels the timeout on unmount so navigating away mid-flash never
+ * setStates on a dead component.
+ */
+function useFlash(): {
+  flashed: boolean;
+  flash: () => void;
+} {
+  const [flashed, setFlashed] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -563,7 +818,34 @@ function CopyButton({
     };
   }, []);
 
-  const handleCopy = useCallback(async () => {
+  const flash = useCallback(() => {
+    setFlashed(true);
+    if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      setFlashed(false);
+      timeoutRef.current = null;
+    }, 1500);
+  }, []);
+
+  return { flashed, flash };
+}
+
+/**
+ * Copy the bubble's plain text. Same dual-path as the prior CopyButton:
+ * native Clipboard API first, document.execCommand fallback for
+ * insecure-context dev. On any success, flash "Copied" for 1.5 s.
+ */
+function CopyAction({
+  text,
+  groupName,
+  labels,
+}: {
+  text: string;
+  groupName: 'user' | 'asst';
+  labels: ActionLabels;
+}) {
+  const { flashed, flash } = useFlash();
+  const handle = useCallback(async () => {
     if (!text) return;
     let ok = false;
     try {
@@ -571,8 +853,6 @@ function CopyButton({
         await navigator.clipboard.writeText(text);
         ok = true;
       } else if (typeof document !== 'undefined') {
-        // Legacy fallback for non-secure contexts. Mount an offscreen
-        // textarea, select, execCommand, tear down. Best-effort.
         const ta = document.createElement('textarea');
         ta.value = text;
         ta.setAttribute('readonly', '');
@@ -587,43 +867,94 @@ function CopyButton({
       ok = false;
     }
     if (!ok) return;
-    setCopied(true);
-    if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      setCopied(false);
-      timeoutRef.current = null;
-    }, 1500);
-  }, [text]);
+    flash();
+  }, [text, flash]);
 
   return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      aria-label={copied ? copiedLabel : copyLabel}
-      title={copied ? copiedLabel : copyLabel}
-      className={cn(
-        // Icon-only square — same hover-reveal behaviour but anchored to
-        // the named `group/asst` on the surrounding column instead of
-        // the bubble itself (since this row now lives outside it).
-        'opacity-0 group-hover/asst:opacity-100 focus-visible:opacity-100',
-        'transition-opacity duration-150',
-        'inline-flex items-center justify-center',
-        'h-7 w-7 rounded-md',
-        'text-[var(--fg-3)] hover:text-[var(--fg)]',
-        'hover:bg-[color-mix(in_oklab,var(--surface)_80%,transparent)]',
-        copied && 'text-[var(--fg)] opacity-100',
-      )}
-    >
-      {/* Live-region announces the change for assistive tech. */}
-      <span className="sr-only" aria-live="polite">
-        {copied ? copiedLabel : copyLabel}
-      </span>
-      {copied ? (
-        <Check className="h-3.5 w-3.5" aria-hidden />
-      ) : (
-        <Copy className="h-3.5 w-3.5" aria-hidden />
-      )}
-    </button>
+    <BubbleActionButton
+      groupName={groupName}
+      icon={Copy}
+      label={labels.copyLabel}
+      onActivate={() => void handle()}
+      flashLabel={labels.copiedLabel}
+      flashed={flashed}
+    />
+  );
+}
+
+/**
+ * Fire the `onQuote` callback with the bubble's text. The parent
+ * (predict-shell) prepends `> {text}\n\n` to the composer and focuses
+ * the textarea — that focus shift IS the primary feedback, the flash
+ * is just a confirmation that the click was registered.
+ */
+function QuoteAction({
+  text,
+  onQuote,
+  groupName,
+  labels,
+}: {
+  text: string;
+  onQuote: (text: string) => void;
+  groupName: 'user' | 'asst';
+  labels: ActionLabels;
+}) {
+  const { flashed, flash } = useFlash();
+  const handle = useCallback(() => {
+    if (!text) return;
+    onQuote(text);
+    flash();
+  }, [text, onQuote, flash]);
+
+  return (
+    <BubbleActionButton
+      groupName={groupName}
+      icon={Quote}
+      label={labels.quoteLabel}
+      onActivate={handle}
+      flashLabel={labels.quotedLabel}
+      flashed={flashed}
+    />
+  );
+}
+
+/**
+ * Fire the `onShare` callback with the message id. The parent composes
+ * the conversation-anchored deep link, copies it to the clipboard, and
+ * shows a sonner toast for the visible feedback. The local flash just
+ * confirms the click landed.
+ */
+function ShareAction({
+  messageId,
+  onShare,
+  groupName,
+  labels,
+}: {
+  messageId: string;
+  onShare: (messageId: string) => void | Promise<void>;
+  groupName: 'user' | 'asst';
+  labels: ActionLabels;
+}) {
+  const { flashed, flash } = useFlash();
+  const handle = useCallback(async () => {
+    try {
+      await onShare(messageId);
+      flash();
+    } catch {
+      // Parent toast carries the error message; the button just doesn't
+      // flash, which reads correctly as "didn't work, try again".
+    }
+  }, [messageId, onShare, flash]);
+
+  return (
+    <BubbleActionButton
+      groupName={groupName}
+      icon={Share2}
+      label={labels.shareLabel}
+      onActivate={() => void handle()}
+      flashLabel={labels.sharedLabel}
+      flashed={flashed}
+    />
   );
 }
 
