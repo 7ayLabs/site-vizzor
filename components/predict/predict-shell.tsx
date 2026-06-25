@@ -57,7 +57,9 @@ import {
   useConversations,
   type ConversationSummary,
 } from './use-conversations';
-import { Check, Wallet } from 'lucide-react';
+import { Check, Wallet, ArrowUpRight } from 'lucide-react';
+import { paymentNetwork } from '@/lib/payment/network';
+import { buildSolscanAccountUrl } from '@/lib/explorer/solana';
 import {
   IconBell,
   IconChat,
@@ -1446,6 +1448,26 @@ function NavButton({
 
 type DropdownPhase = 'closed' | 'enter' | 'open' | 'exit';
 
+interface SessionWithSub {
+  ok?: boolean;
+  signedIn?: boolean;
+  wallet?: string;
+  subscription?: {
+    tier: string;
+    cadence: string;
+    expiresAt: number | null;
+    isLifetime: boolean;
+  } | null;
+}
+
+function tierBadgeFor(sub: SessionWithSub['subscription'] | undefined): string | null {
+  if (!sub) return null;
+  const cadenceLabel = sub.isLifetime
+    ? 'Lifetime'
+    : sub.cadence.charAt(0).toUpperCase() + sub.cadence.slice(1);
+  return `${sub.tier.toUpperCase()} · ${cadenceLabel}`;
+}
+
 function Identity({
   signedIn,
   wallet,
@@ -1463,6 +1485,21 @@ function Identity({
   const [phase, setPhase] = useState<DropdownPhase>('closed');
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  // Pull the same session SWR the app-sidebar wallet pill uses so the
+  // dropdown can surface subscription tier + expiry without a second
+  // round-trip. SWR's cache dedup means this is free when the
+  // app-shell provider already has the key warm; otherwise it's a
+  // single /api/auth/session call shared across the surface.
+  const { data: sessionData } = useSWR<SessionWithSub>(
+    '/api/auth/session',
+    (url: string) =>
+      fetch(url, { credentials: 'same-origin' }).then((r) => r.json()),
+    { revalidateOnFocus: false, keepPreviousData: true },
+  );
+  const subscription = sessionData?.subscription ?? null;
+  const tierBadge = tierBadgeFor(subscription);
+  const network = paymentNetwork();
 
   // Two-phase animation: a frame after mount we flip from `enter`
   // (initial collapsed state) to `open` (visible state) so the CSS
@@ -1570,50 +1607,127 @@ function Identity({
         <div
           role="menu"
           className={cn(
-            'absolute z-50 min-w-[180px]',
+            // Width up to 280px so the full wallet address + tier badge
+            // fit on one line without breaking the dropdown chrome.
+            'absolute z-50 w-[min(280px,calc(100vw-24px))]',
             collapsed
               ? 'left-full ml-2 bottom-0 origin-bottom-left'
-              : 'left-0 right-0 bottom-full mb-1 origin-bottom',
-            'rounded-lg border border-[var(--border)] bg-[var(--surface)]',
-            'p-1',
-            // Tween — opacity + a small lift toward the trigger. No
-            // shadow, no glow; the border + surface contrast carry
-            // the depth.
+              : 'left-0 bottom-full mb-2 origin-bottom-left',
+            'rounded-2xl border border-[var(--border)] bg-[var(--surface)]',
+            'shadow-[0_24px_60px_-12px_rgba(0,0,0,0.45)]',
+            'overflow-hidden',
             'transition-[opacity,transform] duration-150 ease-out',
             isVisible
               ? 'opacity-100 translate-y-0'
               : 'opacity-0 translate-y-1 pointer-events-none',
           )}
         >
-          <DropdownItem
-            icon={<IconSettings size={15} />}
-            label={t('settings')}
-            onClick={() => {
-              setOpen(false);
-              onOpenSettings?.();
-            }}
-          />
-          <DropdownLink
-            href="/docs"
-            icon={<IconHelp size={15} />}
-            label={t('help')}
-            onClick={() => setOpen(false)}
-          />
-          {signedIn && (
+          {/* ── Identity header ─────────────────────────────────────
+              Eyebrow + full wallet address. Matches the navbar pill's
+              dropdown so the predict surface and the marketing-host
+              wallet pill share the same vocabulary for "signed in as
+              this wallet." */}
+          {signedIn && wallet && (
+            <div className="px-4 py-3 border-b border-[var(--border)]">
+              <p className="mono tabular text-[10px] uppercase tracking-[0.18em] font-semibold text-[var(--fg-3)]">
+                {tAuth('signedInAs')}
+              </p>
+              <p className="mono tabular text-[11.5px] text-[var(--fg)] break-all mt-1.5">
+                {wallet}
+              </p>
+            </div>
+          )}
+
+          {/* ── Subscription ────────────────────────────────────────
+              Tier + cadence pill + expiry date when the wallet has an
+              active subscription. Reads from the shared
+              /api/auth/session SWR so it stays in sync with the
+              navbar pill. */}
+          {signedIn && subscription && tierBadge && (
+            <div className="px-4 py-3 border-b border-[var(--border)]">
+              <p className="mono tabular text-[10px] uppercase tracking-[0.18em] font-semibold text-[var(--fg-3)]">
+                {tAuth('subscription')}
+              </p>
+              <p className="text-[13px] font-medium tracking-tight text-[var(--fg)] mt-1.5">
+                {tierBadge}
+              </p>
+              {subscription.expiresAt && !subscription.isLifetime && (
+                <p className="mono tabular text-[10px] text-[var(--fg-3)] mt-0.5">
+                  {tAuth('expiresOn', {
+                    date: new Date(subscription.expiresAt).toLocaleDateString(),
+                  })}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ── Network + Explorer ──────────────────────────────────
+              Read-only display of the active chain plus a deep-link to
+              Solscan for the connected wallet. */}
+          {signedIn && wallet && (
+            <div className="px-4 py-3 border-b border-[var(--border)] flex flex-col gap-2">
+              <p className="mono tabular text-[10px] uppercase tracking-[0.18em] font-semibold text-[var(--fg-3)]">
+                {tAuth('network')}
+              </p>
+              <div className="flex items-center justify-between gap-2">
+                <span className="mono tabular text-[10.5px] uppercase tracking-[0.16em] px-2 py-0.5 rounded-md bg-[var(--fg)] text-[var(--bg)]">
+                  Solana {network}
+                </span>
+                <a
+                  href={buildSolscanAccountUrl(wallet, network)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setOpen(false)}
+                  className="
+                    inline-flex items-center gap-1 text-[11.5px] font-medium tracking-tight
+                    text-[var(--fg-2)] hover:text-[var(--fg)]
+                    transition-colors
+                  "
+                >
+                  <span>{tAuth('viewOnExplorer')}</span>
+                  <ArrowUpRight size={11} strokeWidth={2} />
+                </a>
+              </div>
+            </div>
+          )}
+
+          {/* ── Actions ─────────────────────────────────────────────
+              Settings + Profile + Help routed actions, plus Sign out
+              as a destructive terminal. Each row is a real menu item
+              with the inset-icon vocabulary the chat-bubble dropdowns
+              use elsewhere on the surface. */}
+          <div className="p-1">
+            <DropdownItem
+              icon={<IconSettings size={15} />}
+              label={t('settings')}
+              onClick={() => {
+                setOpen(false);
+                onOpenSettings?.();
+              }}
+            />
+            {signedIn && (
+              <DropdownLink
+                href="/account"
+                icon={<IconUser size={15} />}
+                label={tAuth('viewProfile')}
+                onClick={() => setOpen(false)}
+              />
+            )}
             <DropdownLink
-              href="/account"
-              icon={<IconUser size={15} />}
-              label={tAuth('viewProfile')}
+              href="/docs"
+              icon={<IconHelp size={15} />}
+              label={t('help')}
               onClick={() => setOpen(false)}
             />
-          )}
-          {signedIn && (
-            <DropdownItem
-              icon={<IconSignOut size={15} />}
-              label={tAuth('signOut')}
-              onClick={() => void onSignOut()}
-            />
-          )}
+            {signedIn && (
+              <DropdownItem
+                icon={<IconSignOut size={15} />}
+                label={tAuth('signOut')}
+                onClick={() => void onSignOut()}
+                tone="danger"
+              />
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -1632,19 +1746,44 @@ function DropdownItem({
   icon,
   label,
   onClick,
+  tone = 'default',
 }: {
   icon: ReactNode;
   label: string;
   onClick: () => void;
+  /** `danger` shifts the row to the destructive token set on hover so
+   *  sign-out reads as a terminal action without crying for attention
+   *  in the idle state. */
+  tone?: 'default' | 'danger';
 }) {
+  const toneClass =
+    tone === 'danger'
+      ? cn(
+          'text-[var(--fg-2)] hover:text-[var(--danger)]',
+          'hover:bg-[color-mix(in_oklab,var(--danger)_10%,transparent)]',
+        )
+      : 'text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]';
   return (
     <button
       type="button"
       role="menuitem"
       onClick={onClick}
-      className={dropdownItemClass}
+      className={cn(
+        'group w-full flex items-center gap-2.5 text-left',
+        'h-8 px-2.5 rounded-md text-[13px]',
+        'transition-colors',
+        toneClass,
+      )}
     >
-      <span aria-hidden className="text-[var(--fg-3)] group-hover:text-[var(--fg)] transition-colors">
+      <span
+        aria-hidden
+        className={cn(
+          'transition-colors',
+          tone === 'danger'
+            ? 'text-[var(--fg-3)] group-hover:text-[var(--danger)]'
+            : 'text-[var(--fg-3)] group-hover:text-[var(--fg)]',
+        )}
+      >
         {icon}
       </span>
       <span className="flex-1 truncate">{label}</span>
