@@ -115,7 +115,7 @@ export function ensureSeeded(): void {
     refreshKicked = true;
     void (async () => {
       try {
-        const mod = await import('../../scripts/refresh-ofac');
+        const mod = await import('./ofac-feed');
         const r = await mod.refreshOfacFeedIfStale();
         if (r.ran && r.summary) {
           // eslint-disable-next-line no-console

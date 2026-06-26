@@ -35,7 +35,7 @@
 
 import { promises as fs } from 'node:fs';
 import { dirname } from 'node:path';
-import { insertSanctionedAddress, countSanctionedAddresses } from '../lib/payment/db';
+import { insertSanctionedAddress, countSanctionedAddresses } from './db';
 
 const MIRROR_BASE =
   'https://raw.githubusercontent.com/0xB10C/ofac-sanctioned-digital-currency-addresses/lists/';
