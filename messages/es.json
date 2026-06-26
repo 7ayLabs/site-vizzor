@@ -1155,7 +1155,8 @@
         "rpcUnavailable": "El RPC de Solana está rate-limited ahora mismo. Reintenta en un momento, o cambia a TON.",
         "walletNotConnected": "Conecta una wallet para continuar.",
         "insufficientBalance": "Tu wallet no tiene suficiente SOL para cubrir este pago y la comisión de red. En devnet puedes pedir un airdrop de 1 SOL desde el panel de arriba, o cargar saldo en faucet.solana.com.",
-        "invalidDestination": "La dirección del tesoro de destino está mal configurada para esta red. Revisa VIZZOR_SOLANA_TREASURY para el cluster activo."
+        "invalidDestination": "La dirección del tesoro de destino está mal configurada para esta red. Revisa VIZZOR_SOLANA_TREASURY para el cluster activo.",
+        "wrongNetwork": "Tu wallet está en la red equivocada. Cambia a Solana mainnet en la extensión de tu wallet y vuelve a intentarlo."
       }
     },
     "cta": {

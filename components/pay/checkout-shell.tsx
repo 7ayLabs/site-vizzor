@@ -357,7 +357,7 @@ export function CheckoutShell({ tier, cadence, priceUsd }: CheckoutShellProps) {
   })();
 
   const inner = (
-    <div className="mx-auto w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8 pt-6 sm:pt-10">
+    <div className="mx-auto w-full max-w-[1100px] grid grid-cols-1 md:grid-cols-[1fr_320px] lg:grid-cols-[1fr_380px] gap-8 pt-6 sm:pt-10">
       <div className="flex flex-col gap-6">
         <header ref={headerRef} className="flex flex-col gap-3">
           <p className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--fg-3)]">

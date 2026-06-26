@@ -17,8 +17,8 @@
  * from typography weight + `bg-[var(--fg)] text-[var(--bg)]` inversion.
  */
 
-import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useMemo, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useRouter, Link } from '@/i18n/navigation';
 import {
   ArrowUpRight,
@@ -135,10 +135,23 @@ export function AccountProfile({
   recentSessions,
 }: AccountProfileProps) {
   const t = useTranslations('account');
+  const locale = useLocale();
   const router = useRouter();
   const [signOutBusy, setSignOutBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const now = Date.now();
+
+  // Locale-aware USD formatter. Memoized because `Intl.NumberFormat`
+  // construction shows up in profiling hot paths when used inside a
+  // map — once per locale change is enough.
+  const usdFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency: 'USD',
+      }),
+    [locale],
+  );
 
   const onCopyWallet = async () => {
     try {
@@ -269,7 +282,7 @@ export function AccountProfile({
         </header>
 
         {/* ─── Stats row ─── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-px rounded-2xl border border-[var(--border)] bg-[var(--border)] overflow-hidden">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-px rounded-2xl border border-[var(--border)] bg-[var(--border)] overflow-hidden">
           <StatTile
             label={t('stats.plan')}
             value={planLabel}
@@ -392,7 +405,7 @@ export function AccountProfile({
                     </span>
                     <span className="ml-auto flex items-center gap-3">
                       <span className="mono tabular text-[14px] text-[var(--fg)]">
-                        ${(s.amountUsdCents / 100).toFixed(2)}
+                        {usdFormatter.format(s.amountUsdCents / 100)}
                       </span>
                       <StatusPill status={s.status} />
                       {explorerHref && (

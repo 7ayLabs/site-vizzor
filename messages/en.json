@@ -1173,6 +1173,7 @@
       "insufficientBalance": "Your wallet doesn't have enough SOL to cover this payment plus the network fee. On devnet you can airdrop 1 SOL from the panel above, or top up at faucet.solana.com.",
       "invalidDestination": "The destination treasury address is misconfigured for this network. Check VIZZOR_SOLANA_TREASURY for the active cluster.",
       "walletRejected": "You rejected the transaction in your wallet. Click Pay again when you're ready.",
+      "wrongNetwork": "Your wallet is on the wrong network. Switch to Solana mainnet in your wallet extension and try again.",
       "unknown": "Something went wrong. Retry, or use the Telegram bot if the problem persists."
     },
     "cta": {

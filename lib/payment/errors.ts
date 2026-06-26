@@ -60,6 +60,7 @@ export type PaymentReason =
   // Wallet-side reasons (client surface).
   | 'wallet_not_connected'
   | 'wallet_rejected'
+  | 'wrong_network'
   | 'mint_not_configured'
   | 'rpc_unavailable'
   | 'insufficient_balance'
@@ -121,6 +122,7 @@ const REASON_TABLE: Readonly<Record<PaymentReason, ReasonDescriptor>> = {
     klass: 'user-action',
   },
   wallet_rejected: { copyKey: 'walletRejected', klass: 'user-action' },
+  wrong_network: { copyKey: 'wrongNetwork', klass: 'user-action' },
   insufficient_balance: {
     copyKey: 'insufficientBalance',
     klass: 'user-action',

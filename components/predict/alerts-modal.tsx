@@ -31,6 +31,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { AlertsList } from '@/components/app/alerts-list';
+import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { cn } from '@/lib/utils';
 import { IconClose } from './predict-icons';
 
@@ -53,6 +54,11 @@ export function AlertsModal({ open, onClose }: AlertsModalProps) {
   const [mounted, setMounted] = useState(open);
   const [closing, setClosing] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Panel ref — trapped while the modal is open AND not in its exit
+  // animation, so focus restoration runs while the trigger is still in
+  // the document.
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(panelRef, open && mounted && !closing);
 
   useEffect(() => {
     if (open) {
@@ -134,6 +140,7 @@ export function AlertsModal({ open, onClose }: AlertsModalProps) {
         )}
       />
       <div
+        ref={panelRef}
         onClick={stop}
         className={cn(
           'relative z-10 w-full sm:max-w-[640px]',

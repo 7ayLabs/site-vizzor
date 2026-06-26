@@ -11,8 +11,8 @@
 
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import { gsap } from 'gsap';
 import type {
   PaymentCadence,
@@ -75,9 +75,24 @@ function quoteSymbol(chain: PaymentChain, _token: PaymentToken): string {
 
 export function OrderSummary({ tier, cadence, chain, token }: OrderSummaryProps) {
   const t = useTranslations('pay.summary');
+  const locale = useLocale();
   const [rate, setRate] = useState<number | null>(null);
   const [rateLoading, setRateLoading] = useState(true);
   const cardRef = useRef<HTMLDivElement | null>(null);
+
+  // Intl-driven USD formatter for the "you save" line. Other USD
+  // surfaces in this card (base price, effective price) come from the
+  // pricing-table helpers, which still hard-code the `$` prefix; once
+  // those helpers move off hand-formatted strings we'll route them
+  // through this formatter too.
+  const usdFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency: 'USD',
+      }),
+    [locale],
+  );
 
   const ptoken = priceToken(chain, token);
 
@@ -128,7 +143,7 @@ export function OrderSummary({ tier, cadence, chain, token }: OrderSummaryProps)
     discountBps(tier, cadence, chain, token) / 100,
   );
   const savedCents = Math.round(basePriceCents - effectivePriceUsdNumber * 100);
-  const savedLabel = `$${(savedCents / 100).toFixed(2)}`;
+  const savedLabel = usdFormatter.format(savedCents / 100);
 
   const tokenAmount =
     rate !== null

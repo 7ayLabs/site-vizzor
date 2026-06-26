@@ -17,11 +17,12 @@
  * to true at the parent.
  */
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, useRouter } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { useTheme } from '@/components/layout/theme-provider';
+import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { cn } from '@/lib/utils';
 import { IconClose } from './predict-icons';
 
@@ -42,6 +43,10 @@ export function SettingsSheet({ locale, signedIn, onClose }: SettingsSheetProps)
   const router = useRouter();
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
+  // SettingsSheet is rendered conditionally by its parent (mounted ===
+  // open), so the trap is always armed while this component lives.
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(panelRef, true);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -103,6 +108,7 @@ export function SettingsSheet({ locale, signedIn, onClose }: SettingsSheetProps)
         className="absolute inset-0 bg-black/55 backdrop-blur-sm"
       />
       <div
+        ref={panelRef}
         className={cn(
           'relative z-10 w-full sm:max-w-[380px]',
           'rounded-t-2xl sm:rounded-2xl border border-[var(--border)] bg-[var(--surface)]',

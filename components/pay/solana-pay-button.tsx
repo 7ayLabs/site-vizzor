@@ -98,6 +98,15 @@ function classifyWalletError(msg: string): string {
   if (/reject|denied|user rejected|cancel/i.test(msg)) {
     return 'wallet_rejected';
   }
+  // Wallet is on the wrong cluster (Phantom emits "wrong network",
+  // Solflare "cluster mismatch", Backpack "network mismatch"). We
+  // catch the union so the banner can prompt a switch rather than
+  // surfacing a generic error. Order matters: keep this above the
+  // RPC-unavailable / insufficient-balance branches because cluster
+  // mismatches sometimes co-emit "invalid blockhash" downstream.
+  if (/wrong\s*network|network\s*mismatch|cluster\s*mismatch|wrong\s*cluster/i.test(msg)) {
+    return 'wrong_network';
+  }
   // Wallet/RPC pre-flight told us the payer has no devnet SOL. The
   // Solana RPC verbatim returns "Attempt to debit an account but found
   // no record of a prior credit" when balance is below the fee.
