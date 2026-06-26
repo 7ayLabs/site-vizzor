@@ -41,6 +41,10 @@ import { getDb } from './db';
 import { shortenAddress } from './log-redact';
 
 const POLL_INTERVAL_MS = 6_000;
+/** Cap exponential backoff at 60s — matches SOL watcher. Beyond that
+ *  we'd miss the 5-min rate-lock window for in-flight sessions even on
+ *  a single tick. */
+const MAX_BACKOFF_MS = 60_000;
 /** Same slippage band the Solana watcher uses. The locked rate has a
  *  5-min validity window; within that window a ±0.5% wallet-side
  *  rounding error shouldn't reject the payment. */
@@ -54,6 +58,10 @@ const TX_LIMIT_PER_ADDRESS = 20;
 interface TonWatcherState {
   started: boolean;
   lastTickAt: number | null;
+  /** Adaptive backoff state — counts consecutive tick failures. The
+   *  next poll waits `min(MAX_BACKOFF_MS, POLL_INTERVAL_MS * 2^errors)`.
+   *  Resets to 0 on the next successful tick. */
+  consecutiveErrors: number;
 }
 
 const KEY = Symbol.for('vizzor.payment.watcher.ton');
@@ -66,25 +74,44 @@ export function isTonWatcherStarted(): boolean {
   return g[KEY]?.started ?? false;
 }
 
+/**
+ * Last successful TON poll-tick timestamp (epoch ms). Mirrors
+ * `getWatcherLastTickAt()` from the SOL watcher so `/api/health` can
+ * report a stuck TON watcher the same way it reports a stuck SOL one.
+ * `null` if the watcher has never ticked successfully.
+ */
+export function getTonWatcherLastTickAt(): number | null {
+  return g[KEY]?.lastTickAt ?? null;
+}
+
 export function ensureTonWatcherStarted(): void {
   if (!acceptTonPayments()) return;
   const state = (g[KEY] =
-    g[KEY] ?? { started: false, lastTickAt: null });
+    g[KEY] ?? { started: false, lastTickAt: null, consecutiveErrors: 0 });
   if (state.started) return;
   state.started = true;
   void tick(state);
 }
 
 async function tick(state: TonWatcherState): Promise<void> {
+  let delay = POLL_INTERVAL_MS;
   try {
     await pollOnce();
     state.lastTickAt = Date.now();
+    state.consecutiveErrors = 0;
   } catch (e) {
-    // Swallow — watcher must keep running. Log to stderr for ops.
+    state.consecutiveErrors = Math.min(state.consecutiveErrors + 1, 10);
+    delay = Math.min(
+      MAX_BACKOFF_MS,
+      POLL_INTERVAL_MS * 2 ** Math.min(state.consecutiveErrors - 1, 6),
+    );
     // eslint-disable-next-line no-console
-    console.error('[vizzor-watcher-ton] tick failed:', e);
+    console.error(
+      `[vizzor-watcher-ton] tick failed (consec=${state.consecutiveErrors}, next in ${delay}ms):`,
+      (e as Error)?.message ?? e,
+    );
   } finally {
-    setTimeout(() => tick(state), POLL_INTERVAL_MS);
+    setTimeout(() => tick(state), delay);
   }
 }
 

@@ -32,7 +32,10 @@ import {
   getWatcherLastTickAt,
   isWatcherStarted,
 } from '@/lib/payment/watcher';
-import { isTonWatcherStarted } from '@/lib/payment/watcher-ton';
+import {
+  getTonWatcherLastTickAt,
+  isTonWatcherStarted,
+} from '@/lib/payment/watcher-ton';
 import {
   acceptSolanaPayments,
   acceptTonPayments,
@@ -100,20 +103,25 @@ function probeWatcher(): SubsystemStatus {
 }
 
 /**
- * Same shape as `probeWatcher` but for the TON daemon. The TON
- * watcher exposes `isTonWatcherStarted()` only — there's no
- * lastTickAt accessor yet, so we report `ok` purely on the started
- * flag. Add a tickAt accessor in a follow-up commit if TON RPC
- * outages bite us in prod.
+ * Same shape as `probeWatcher` but for the TON daemon. v0.4.0 added
+ * `getTonWatcherLastTickAt()` so a stuck TON watcher is now surfaced
+ * the same way SOL is — `ok: false, stale: true` when no tick in the
+ * last `WATCHER_STALE_THRESHOLD_MS`.
  */
 function probeTonWatcher(): SubsystemStatus {
   if (!acceptTonPayments()) {
     return { ok: true, detail: 'disabled' };
   }
   const started = isTonWatcherStarted();
-  return started
-    ? { ok: true }
-    : { ok: true, detail: 'not_started', lastTickAt: null };
+  const lastTickAt = getTonWatcherLastTickAt();
+  if (!started) {
+    return { ok: true, detail: 'not_started', lastTickAt: null };
+  }
+  if (lastTickAt === null) {
+    return { ok: false, detail: 'no_ticks_yet', lastTickAt: null, stale: true };
+  }
+  const stale = Date.now() - lastTickAt > WATCHER_STALE_THRESHOLD_MS;
+  return { ok: !stale, lastTickAt, stale };
 }
 
 /**
