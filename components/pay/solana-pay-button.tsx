@@ -209,9 +209,19 @@ export function SolanaPayButton({
       // link in testnet) instead of leaving the user staring at a
       // generic wallet error. A 5_000-lamport buffer covers the
       // network fee + memo program rent.
+      //
+      // The `balance > 0` guard sidesteps a wrong-network false
+      // positive: if our connection is on devnet but the wallet
+      // extension is on mainnet (or vice versa), `getBalance` for the
+      // signer's pubkey returns exactly 0 from the network where the
+      // user never funded that key. Showing "insufficient_balance"
+      // there is wrong — the user IS funded, just on the other
+      // cluster. Falling through lets the wallet's signing popup
+      // surface the real condition (most wallets refuse to sign for a
+      // mismatched cluster with their own clearer message).
       try {
         const balance = await connection.getBalance(publicKey);
-        if (balance < lamports + 5_000) {
+        if (balance > 0 && balance < lamports + 5_000) {
           onError('insufficient_balance');
           return;
         }
