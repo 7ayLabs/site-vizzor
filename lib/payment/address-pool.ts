@@ -58,6 +58,33 @@ const POOL_PATH_ENV: Record<PoolChain, string> = {
   solana: 'VIZZOR_SOLANA_ADDRESS_POOL_PATH',
   ton: 'VIZZOR_TON_ADDRESS_POOL_PATH',
 };
+/**
+ * Operator records the sha256 of the pool file out-of-band (in a
+ * password manager, NOT in git) and configures these env vars. Boot
+ * refuses to start if the on-disk sha256 doesn't match — a VPS-shell
+ * attacker who swaps the file to attacker-controlled addresses would
+ * change the digest, so this gate makes the swap fail loudly instead
+ * of silently redirecting the next 256 customer payments. The gate is
+ * opt-in (empty env → no check) so the dev / CI flow that uses an
+ * inline test pool isn't blocked; production MUST set it.
+ */
+const POOL_SHA256_ENV: Record<PoolChain, string> = {
+  solana: 'VIZZOR_SOLANA_POOL_SHA256',
+  ton: 'VIZZOR_TON_POOL_SHA256',
+};
+/** When MODE_GATE=true, the pool file must have no group/world bits
+ *  (mode 0400 / 0600 / etc.). A pool file with 0644 perms means any
+ *  process on the host can read it — the addresses are public so this
+ *  is mild, but it signals an opsec drift the operator should fix.
+ *  Refusing to start surfaces it immediately. Defaults ON in
+ *  production, OFF elsewhere so dev / CI fixtures with default umask
+ *  permissions don't break. Force via `VIZZOR_POOL_MODE_GATE=true|false`. */
+function poolModeGateEnabled(): boolean {
+  const override = process.env.VIZZOR_POOL_MODE_GATE;
+  if (override === 'true') return true;
+  if (override === 'false') return false;
+  return process.env.NODE_ENV === 'production';
+}
 
 const cache = new Map<PoolChain, PoolCache>();
 
@@ -106,11 +133,30 @@ export function loadPool(chain: PoolChain): PoolCache {
       `[address-pool] cannot read ${envName}=${path}: ${(e as Error).message}`,
     );
   }
+  // Mode gate — refuse to load a pool file with permissive bits set.
+  // The Unix `mode & 0o077` mask covers group + other read/write/exec.
+  // Default-on in production; toggle via VIZZOR_POOL_MODE_GATE=false
+  // for local dev with a checked-in fixture.
+  if (poolModeGateEnabled() && (stat.mode & 0o077) !== 0) {
+    throw new Error(
+      `[address-pool] ${path} has permissive permissions (mode ${(stat.mode & 0o7777).toString(8)}) — must be 0400 or 0600 (no group/world bits). Run: sudo chmod 0400 ${path}`,
+    );
+  }
   const hit = cache.get(chain);
   if (hit && hit.mtimeMs === stat.mtimeMs) return hit;
 
   const raw = readFileSync(path, 'utf8');
   const sha256 = createHash('sha256').update(raw).digest('hex');
+
+  // Expected-digest gate — operator records the sha256 of the canonical
+  // pool out-of-band. Boot refuses to start on a mismatch. Empty env =
+  // no check (dev / CI). Production prod env file MUST set this.
+  const expected = process.env[POOL_SHA256_ENV[chain]];
+  if (expected && expected.trim() !== sha256) {
+    throw new Error(
+      `[address-pool] ${path} sha256 mismatch — expected ${POOL_SHA256_ENV[chain]}=${expected.trim().slice(0, 16)}…, on-disk ${sha256.slice(0, 16)}…. POSSIBLE TAMPER — refusing to load. Verify the operator-recorded digest before restarting.`,
+    );
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
