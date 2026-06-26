@@ -30,6 +30,8 @@ import {
 } from 'lucide-react';
 import { WalletIdenticon } from './wallet-identicon';
 import { SubscriptionManagementCard } from './subscription-management';
+import { buildSolscanTxUrl } from '@/lib/explorer/solana';
+import { buildTonviewerTxUrl } from '@/lib/explorer/ton';
 
 type Cluster = 'mainnet' | 'testnet' | 'devnet';
 
@@ -112,10 +114,21 @@ function formatRelative(ts: number, now: number): string {
   return diff > 0 ? `in ${minutes}m` : `${minutes}m ago`;
 }
 
+function explorerUrlFor(
+  chain: string,
+  txSig: string | null,
+  network: Cluster,
+): string | null {
+  if (!txSig) return null;
+  if (chain === 'solana') return buildSolscanTxUrl(txSig, network);
+  if (chain === 'ton') return buildTonviewerTxUrl(txSig, network);
+  return null;
+}
+
 export function AccountProfile({
   wallet,
   authExpiresAt: _authExpiresAt,
-  network: _network,
+  network,
   networkBadge,
   subscription,
   walletLink,
@@ -358,31 +371,51 @@ export function AccountProfile({
             </div>
           ) : (
             <ul className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
-              {recentSessions.map((s) => (
-                <li
-                  key={s.sessionId}
-                  className="px-4 sm:px-5 py-3.5 flex flex-wrap items-center gap-x-4 gap-y-1"
-                >
-                  <span className="mono tabular text-[10.5px] uppercase tracking-[0.16em] text-[var(--fg-3)] min-w-[80px]">
-                    {formatRelative(s.createdAt, now)}
-                  </span>
-                  <span className="text-[13.5px] font-medium text-[var(--fg)]">
-                    {t(`tier.${s.tier}`)} ·{' '}
-                    <span className="text-[var(--fg-2)] font-normal">
-                      {t(`cadence.${s.cadence}`)}
+              {recentSessions.map((s) => {
+                const explorerHref = explorerUrlFor(s.chain, s.txSig, network);
+                return (
+                  <li
+                    key={s.sessionId}
+                    className="px-4 sm:px-5 py-3.5 flex flex-wrap items-center gap-x-4 gap-y-1"
+                  >
+                    <span className="mono tabular text-[10.5px] uppercase tracking-[0.16em] text-[var(--fg-3)] min-w-[80px]">
+                      {formatRelative(s.createdAt, now)}
                     </span>
-                  </span>
-                  <span className="mono tabular text-[11px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
-                    {s.chain} · {s.token}
-                  </span>
-                  <span className="ml-auto flex items-center gap-3">
-                    <span className="mono tabular text-[14px] text-[var(--fg)]">
-                      ${(s.amountUsdCents / 100).toFixed(2)}
+                    <span className="text-[13.5px] font-medium text-[var(--fg)]">
+                      {t(`tier.${s.tier}`)} ·{' '}
+                      <span className="text-[var(--fg-2)] font-normal">
+                        {t(`cadence.${s.cadence}`)}
+                      </span>
                     </span>
-                    <StatusPill status={s.status} />
-                  </span>
-                </li>
-              ))}
+                    <span className="mono tabular text-[11px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+                      {s.chain} · {s.token}
+                    </span>
+                    <span className="ml-auto flex items-center gap-3">
+                      <span className="mono tabular text-[14px] text-[var(--fg)]">
+                        ${(s.amountUsdCents / 100).toFixed(2)}
+                      </span>
+                      <StatusPill status={s.status} />
+                      {explorerHref && (
+                        <a
+                          href={explorerHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="
+                            inline-flex items-center gap-1 mono tabular
+                            text-[10.5px] uppercase tracking-[0.16em] font-medium
+                            text-[var(--fg-2)] hover:text-[var(--fg)]
+                            transition-colors
+                          "
+                          title={t('activity.row.viewOnChainTitle')}
+                        >
+                          <span>{t('activity.row.viewOnChain')}</span>
+                          <ArrowUpRight size={11} strokeWidth={2.2} />
+                        </a>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>

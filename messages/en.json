@@ -391,6 +391,10 @@
       "title": "Recent payments",
       "linkedTo": "Telegram #{id}",
       "empty": "No payment sessions yet for this wallet. When you complete a checkout on /pay, it shows up here as a receipt.",
+      "row": {
+        "viewOnChain": "On chain",
+        "viewOnChainTitle": "View transaction on the chain explorer"
+      },
       "status": {
         "pending": "Pending",
         "confirmed": "Confirmed",

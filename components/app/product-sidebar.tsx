@@ -84,7 +84,12 @@ export function ProductSidebar() {
   const recent = useMemo(() => conversations.slice(0, 12), [conversations]);
 
   const onPredict = /^\/app\/predict(\/|$)/.test(pathname);
-  const onAccount = /^\/account(\/|$)/.test(pathname);
+  // `Receipts` opens /account#payments but is NOT a Receipts surface —
+  // it's a profile + activity dashboard. Highlighting `Receipts` while
+  // the user is on /account misreads as "you're on the Receipts page",
+  // so we don't flip the active state for that route. The viewProfile
+  // menu item inside the Identity dropdown is the canonical entrypoint
+  // for /account.
 
   // Mirror predict-shell action contract: Alerts opens an in-place
   // modal (same AlertsList the /app/alerts page uses), Settings
@@ -226,7 +231,6 @@ export function ProductSidebar() {
           icon={<IconReceipts size={collapsed ? 20 : 17} />}
           label={t('shell.nav.receipts')}
           onClick={onOpenReceipts}
-          active={onAccount}
           collapsed={collapsed}
         />
       </nav>

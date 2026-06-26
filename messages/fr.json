@@ -381,6 +381,10 @@
       "title": "Paiements récents",
       "linkedTo": "Telegram #{id}",
       "empty": "Aucune session de paiement encore pour ce portefeuille. Quand vous complétez un checkout sur /pay, ça apparaît ici comme un reçu.",
+      "row": {
+        "viewOnChain": "On chain",
+        "viewOnChainTitle": "Voir la transaction sur l'explorateur de la chaîne"
+      },
       "status": {
         "pending": "En attente",
         "confirmed": "Confirmé",
