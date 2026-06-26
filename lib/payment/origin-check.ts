@@ -16,7 +16,8 @@
  *   - Present and doesn't match → reject with 403.
  *
  * Allowed origins:
- *   - `https://vizzor.ai` and `https://www.vizzor.ai` in production.
+ *   - `https://vizzor.ai`, `https://www.vizzor.ai`, and the product
+ *     shell host `https://app.vizzor.ai` in production.
  *   - Any localhost / 127.0.0.1 on non-production for the dev loop.
  *   - `VIZZOR_EXTRA_ORIGINS` env (comma-separated) for staging URLs.
  */
@@ -24,6 +25,7 @@
 const PROD_ORIGINS = new Set<string>([
   'https://vizzor.ai',
   'https://www.vizzor.ai',
+  'https://app.vizzor.ai',
 ]);
 
 function isLocalDevOrigin(origin: string): boolean {

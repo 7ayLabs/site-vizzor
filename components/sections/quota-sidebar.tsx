@@ -52,7 +52,11 @@ export interface QuotaSidebarProps {
 export function QuotaSidebar({ refreshKey = 0 }: QuotaSidebarProps) {
   const t = useTranslations('predict');
   const { data, mutate } = useSWR<QuotaState>('/api/quota', fetcher, {
-    revalidateOnFocus: false,
+    // See predict-shell.tsx — mobile-tab backgrounding starves the
+    // counter of updates without a poll + visibility-driven refetch.
+    refreshInterval: 15_000,
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
     keepPreviousData: true,
   });
 

@@ -30,7 +30,7 @@
  */
 
 import { useTranslations } from 'next-intl';
-import { useState, type CSSProperties } from 'react';
+import { useState } from 'react';
 import { CoinIcon } from '@/components/ui/coin-icon';
 import { AnimatedNumber } from '@/components/ui/animated-number';
 import { useTicker } from '@/lib/api';
@@ -41,12 +41,11 @@ interface TickerCarouselProps {
   entries?: TickerEntry[];
 }
 
-const DIVIDER_STYLE: CSSProperties = { height: '14px' };
-
 function TickerPill({ entry }: { entry: TickerEntry }) {
   const t = useTranslations('ticker');
   const [open, setOpen] = useState(false);
   const positive = entry.changePct >= 0;
+  const directionColor = positive ? 'var(--up)' : 'var(--down)';
 
   const predictHref = `https://t.me/vizzorai_bot?start=predict_${entry.symbol}`;
 
@@ -56,17 +55,41 @@ function TickerPill({ entry }: { entry: TickerEntry }) {
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
     >
-      <span className="flex items-center gap-2 px-4 whitespace-nowrap cursor-default">
+      {/* Each entry is a refined chip: hover lifts a subtle pill
+          backdrop without disrupting the marquee flow. Wider gap
+          between chips (mx-1) replaces the prior vertical divider. */}
+      <span
+        className="
+          flex items-center gap-2.5
+          h-7 px-3 mx-1
+          rounded-full
+          whitespace-nowrap cursor-default
+          transition-colors duration-150 ease-out
+          hover:bg-[color-mix(in_oklab,var(--fg)_5%,transparent)]
+        "
+      >
         <CoinIcon symbol={entry.symbol} size={16} />
-        <span className="mono tabular text-[11px] text-[var(--fg-3)]">
+        <span className="mono tabular text-[11px] font-semibold tracking-[0.04em] text-[var(--fg-2)] uppercase">
           {entry.symbol}
         </span>
-        <span className="mono tabular text-[12px] text-[var(--fg)]">
+        <span className="mono tabular text-[12px] text-[var(--fg)] tracking-tight">
           <AnimatedNumber value={entry.price} format="usd" duration={500} />
         </span>
+        {/* Delta chip — small rounded pill with a very subtle direction
+            tint so the up/down state reads at a glance without the
+            entire ticker turning red on a bad day. */}
         <span
-          className="mono tabular text-[11px] inline-flex items-center gap-1"
-          style={{ color: positive ? 'var(--up)' : 'var(--down)' }}
+          className="
+            mono tabular text-[10px] font-semibold
+            inline-flex items-center gap-0.5
+            h-[18px] px-1.5
+            rounded-full
+            tracking-tight
+          "
+          style={{
+            color: directionColor,
+            backgroundColor: `color-mix(in oklab, ${directionColor} 12%, transparent)`,
+          }}
         >
           {/* ▲ / ▼ glyph — direction redundancy for colorblind users
               and high-contrast modes where the up/down tint flattens. */}
@@ -81,11 +104,6 @@ function TickerPill({ entry }: { entry: TickerEntry }) {
             prefix={positive ? '+' : ''}
           />
         </span>
-        <span
-          aria-hidden
-          className="ml-2 inline-block w-px bg-[var(--border)] align-middle"
-          style={DIVIDER_STYLE}
-        />
       </span>
 
       {open && (
@@ -98,7 +116,11 @@ function TickerPill({ entry }: { entry: TickerEntry }) {
           <div
             role="menu"
             aria-label={`${entry.symbol} actions`}
-            className="border border-[var(--border)] bg-[var(--surface)] whitespace-nowrap"
+            className="
+              rounded-xl border border-[var(--border)] bg-[var(--surface)]
+              shadow-[0_8px_24px_-12px_color-mix(in_oklab,var(--fg)_30%,transparent)]
+              whitespace-nowrap overflow-hidden
+            "
           >
             <a
               role="menuitem"
@@ -106,9 +128,10 @@ function TickerPill({ entry }: { entry: TickerEntry }) {
               target="_blank"
               rel="noopener"
               className="
-                block px-3 py-1.5 mono tabular text-[10.5px]
+                block px-3.5 py-2 mono tabular text-[10.5px]
                 uppercase tracking-[0.14em] text-[var(--fg)]
                 hover:bg-[var(--surface-2)]
+                transition-colors
               "
             >
               {t('predict', { symbol: entry.symbol })}
@@ -118,7 +141,7 @@ function TickerPill({ entry }: { entry: TickerEntry }) {
               aria-disabled="true"
               className="
                 flex items-center gap-2 border-t border-[var(--border)]
-                px-3 py-1.5 mono tabular text-[10.5px]
+                px-3.5 py-2 mono tabular text-[10.5px]
                 uppercase tracking-[0.14em] text-[var(--fg-3)]
                 cursor-not-allowed select-none
               "
@@ -159,7 +182,7 @@ export function TickerCarousel({ entries }: TickerCarouselProps) {
         relative z-50 w-full
         border-b border-[var(--border)]
         bg-[var(--surface)]
-        h-8 sm:h-9
+        h-10 sm:h-11
         overflow-x-clip overflow-y-visible
       "
     >

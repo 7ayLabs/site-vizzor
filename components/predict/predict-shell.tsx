@@ -29,7 +29,6 @@
  * Predict surface.
  */
 
-import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
@@ -44,8 +43,10 @@ import {
   type ReactNode,
 } from 'react';
 import useSWR from 'swr';
+import { toast } from 'sonner';
 import { useTicker } from '@/lib/api';
 import { ChatBubble } from '@/components/predict/chat-bubble';
+import { TickerStack } from '@/components/predict/ticker-banner';
 import { CoinIcon } from '@/components/ui/coin-icon';
 import { Link } from '@/i18n/navigation';
 import { WalletAuthButton } from '@/components/auth/wallet-auth-button';
@@ -56,11 +57,14 @@ import {
   useConversations,
   type ConversationSummary,
 } from './use-conversations';
+import { Check, Wallet, ArrowUpRight } from 'lucide-react';
+import { paymentNetwork } from '@/lib/payment/network';
+import { buildSolscanAccountUrl } from '@/lib/explorer/solana';
 import {
+  IconBell,
   IconChat,
   IconClose,
   IconHelp,
-  IconLock,
   IconMenu,
   IconPaperclip,
   IconPlus,
@@ -70,6 +74,8 @@ import {
 } from './predict-icons';
 import { SlashPalette } from './slash-palette';
 import { SettingsSheet } from './settings-sheet';
+import { AlertsModal } from './alerts-modal';
+import { AlertsWatcher } from './alerts-watcher';
 import {
   DndContext,
   PointerSensor,
@@ -87,11 +93,6 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-
-const SolanaWalletAdapter = dynamic(
-  () => import('@/components/wallet/wallet-provider'),
-  { ssr: false, loading: () => null },
-);
 
 interface QuotaState {
   connected: boolean;
@@ -126,28 +127,30 @@ const MAX_CHARS = 3000;
 
 /* ─────────────────────────── Shell ─────────────────────────── */
 
-export function PredictShell() {
-  // autoConnect intentionally OFF.
-  //
-  // The wallet-adapter library's autoConnect=true issues a silent
-  // `connect({ silent: true })` on mount. That silent call leaves the
-  // Phantom adapter in an intermediate state that swallows the next
-  // explicit `connect()` from the selector modal — the extension popup
-  // never appears (manifesting as "Open Phantom to approve" stuck
-  // forever, both on Chrome and Brave).
-  //
-  // The connect flow inside `wallet-connect-flow.tsx` is built around
-  // `autoConnect=false` (its comment in Step 1 explicitly notes this).
-  // Sharing one provider context across the shell + the modal requires
-  // honouring that contract, so autoConnect stays off here.
-  return (
-    <SolanaWalletAdapter autoConnect={false}>
-      <PredictShellInner />
-    </SolanaWalletAdapter>
-  );
+/**
+ * PredictShell — wallet adapter is owned by the parent `/app/*` layout
+ * (`AppShellProvider`), so this component just consumes `useWallet()`
+ * via the surrounding provider context. Mounting here would create a
+ * nested provider tree and break SIWS continuity across surface
+ * switches; see `components/app/app-shell-provider.tsx` for the
+ * canonical mount point + the `autoConnect={false}` rationale (Phantom
+ * silent-connect bug).
+ *
+ * `initialConversation` opt-in hydrates the shell with a pre-loaded
+ * thread (deep-link path `/app/predict/[conversationId]`). When absent
+ * the shell behaves as the canonical /app/predict landing.
+ */
+export interface InitialConversation {
+  id: string;
+  title: string;
+  messages: Array<{ id: string; role: 'user' | 'assistant'; content: string }>;
 }
 
-function PredictShellInner() {
+export interface PredictShellProps {
+  initialConversation?: InitialConversation;
+}
+
+export function PredictShell({ initialConversation }: PredictShellProps = {}) {
   const t = useTranslations('predict');
   const router = useRouter();
   const locale = useLocale();
@@ -157,9 +160,10 @@ function PredictShellInner() {
   const [search, setSearch] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(
-    null,
+    initialConversation?.id ?? null,
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [alertsOpen, setAlertsOpen] = useState(false);
   // Tracks which message ids we've already POSTed to
   // /api/conversations/[id]/messages so a re-render of useChat state
   // doesn't double-persist. Pre-populated when loading a past chat so
@@ -192,7 +196,19 @@ function PredictShellInner() {
   const { data: quota, mutate: mutateQuota } = useSWR<QuotaState>(
     '/api/quota',
     jsonFetcher,
-    { revalidateOnFocus: false, keepPreviousData: true },
+    {
+      // Mobile users returning to a backgrounded /predict tab were
+      // seeing a stale counter until they reloaded. SWR's defaults
+      // assume an active desktop focus event will trigger revalidation;
+      // mobile browsers don't fire that reliably. Belt-and-braces:
+      // poll every 15s, plus refetch on tab-foreground and network
+      // reconnect. /api/quota is unrate-limited and reads SQLite —
+      // cheap enough to poll without churn.
+      refreshInterval: 15_000,
+      revalidateOnFocus: true,
+      revalidateOnReconnect: true,
+      keepPreviousData: true,
+    },
   );
 
   // Live ticker — the same SWR hook that backs the global ticker bar.
@@ -201,7 +217,7 @@ function PredictShellInner() {
   // against the live reference. Defends against engine-side LLM
   // hallucinations (a known incident: BTC quoted at $105k while the
   // resolver was reading $63k) without claiming to fix the root cause.
-  const ticker = useTicker(30_000);
+  const ticker = useTicker(15_000);
   const tickerByCoin = useMemo<ReadonlyMap<string, number>>(() => {
     const m = new Map<string, number>();
     for (const e of ticker.data) {
@@ -209,6 +225,60 @@ function PredictShellInner() {
       m.set(e.symbol.toUpperCase(), e.price);
     }
     return m;
+  }, [ticker.data]);
+
+  // Full ticker entry map — used by TickerBanner to render name +
+  // price + 24h delta in a single lookup.
+  const tickerEntryBySymbol = useMemo(() => {
+    const m = new Map<string, { price: number; changePct: number }>();
+    for (const e of ticker.data) {
+      if (!e.symbol || !Number.isFinite(e.price)) continue;
+      m.set(e.symbol.toUpperCase(), { price: e.price, changePct: e.changePct });
+    }
+    return m;
+  }, [ticker.data]);
+
+  // In-session price history per symbol. We append one sample on
+  // every ticker poll (≈30s) and keep the last 30 — enough for a
+  // smooth ~15min sparkline without ballooning memory. Stored in a
+  // ref-backed state so React re-renders banners as samples accrue,
+  // but the writes are O(1) and don't churn anything else.
+  const [priceHistory, setPriceHistory] = useState<ReadonlyMap<string, readonly number[]>>(
+    () => new Map(),
+  );
+  useEffect(() => {
+    if (!ticker.data || ticker.data.length === 0) return;
+    setPriceHistory((prev) => {
+      const next = new Map(prev);
+      for (const e of ticker.data) {
+        if (!e.symbol || !Number.isFinite(e.price) || e.price <= 0) continue;
+        const sym = e.symbol.toUpperCase();
+        const tail = next.get(sym) ?? [];
+        // First sample for this symbol: seed the history with the
+        // derived 24h-open price + current price so the banner can
+        // render a meaningful 2-point curve immediately instead of
+        // waiting 30s for the second poll. The open is engine-
+        // authoritative (price / (1 + changePct)) so the seed
+        // doesn't lie about the trajectory.
+        if (tail.length === 0) {
+          const denom = 1 + (e.changePct ?? 0);
+          const open = denom > 0 ? e.price / denom : null;
+          const seeded =
+            open && Number.isFinite(open) && open > 0 && open !== e.price
+              ? [open, e.price]
+              : [e.price];
+          next.set(sym, seeded);
+          continue;
+        }
+        // Skip dedup-equal back-to-back samples on subsequent polls
+        // to keep the line honest when the ticker returns the same
+        // price twice.
+        if (tail[tail.length - 1] === e.price) continue;
+        const updated = [...tail, e.price].slice(-30);
+        next.set(sym, updated);
+      }
+      return next;
+    });
   }, [ticker.data]);
 
   const signedIn = auth?.signedIn === true;
@@ -256,6 +326,29 @@ function PredictShellInner() {
       void mutateQuota();
     },
   });
+
+  // Deep-link hydration — when the page is /app/predict/[conversationId]
+  // the server pre-loads the thread and passes it down. We seed useChat
+  // exactly once on mount and prime persistedRef so the loaded rows are
+  // not re-POSTed to /api/conversations/[id]/messages as if they were
+  // new turns. Ownership is already enforced server-side; this hydration
+  // is pure UX, not an authz boundary.
+  useEffect(() => {
+    if (!initialConversation || initialConversation.messages.length === 0) {
+      return;
+    }
+    const restored = initialConversation.messages.map((m) => ({
+      id: m.id,
+      role: m.role,
+      parts: [{ type: 'text' as const, text: m.content }],
+    }));
+    persistedRef.current = new Set(restored.map((m) => m.id));
+    setMessages(restored);
+    // Mount-only — the server provides a fresh page (and thus fresh
+    // PredictShell) per [conversationId], so the prop is stable for
+    // this component's lifetime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -417,6 +510,15 @@ function PredictShellInner() {
     setDrawerOpen(false);
   }, [router]);
 
+  const onOpenAlerts = useCallback(() => {
+    // Open the in-shell modal instead of navigating away. The modal
+    // mounts the same AlertsList component as /app/alerts so the
+    // armed/triggered/resolved UI is identical — just framed by a
+    // sheet so users stay in the chat surface.
+    setAlertsOpen(true);
+    setDrawerOpen(false);
+  }, []);
+
   const onOpenSettings = useCallback(() => {
     setSettingsOpen(true);
     setDrawerOpen(false);
@@ -487,6 +589,70 @@ function PredictShellInner() {
   );
 
   /**
+   * Quote a message — prepend `> {text}\n\n` to the composer + focus.
+   * Each line of the quoted text is prefixed individually so multi-
+   * line quotes still read as a block-quote in the composer. Works
+   * for both user and assistant bubbles.
+   */
+  const onQuoteMessage = useCallback(
+    (text: string): void => {
+      if (!text) return;
+      const quoted = text
+        .split('\n')
+        .map((line) => `> ${line}`)
+        .join('\n');
+      setInput((prev) => {
+        // If there's existing composer content, leave a blank line
+        // between the quote and the user's draft.
+        const separator = prev.trim().length > 0 ? '\n\n' : '\n\n';
+        return `${quoted}${separator}${prev}`;
+      });
+      setTimeout(() => {
+        const el = inputRef.current;
+        if (!el) return;
+        el.focus();
+        // Cursor lands AT the end so the user types their follow-up
+        // immediately after the quote without arrow-key gymnastics.
+        const len = el.value.length;
+        el.setSelectionRange(len, len);
+      }, 0);
+    },
+    [],
+  );
+
+  /**
+   * Share a message — copy a deep-link URL to the clipboard that
+   * resolves to the conversation + message anchor. The conversation
+   * route is SIWS-gated and ownership-checked server-side, so a
+   * leaked URL still 404s for non-owners. Visible feedback via sonner
+   * toast; the chat-bubble action button also flashes on resolution.
+   */
+  const onShareMessage = useCallback(
+    async (messageId: string): Promise<void> => {
+      if (typeof window === 'undefined') return;
+      if (!activeConversationId) {
+        toast.error(t('share.unsavedTitle'), {
+          description: t('share.unsavedBody'),
+        });
+        throw new Error('no_conversation');
+      }
+      const origin = window.location.origin;
+      const localePrefix = locale === 'en' ? '' : `/${locale}`;
+      const url = `${origin}${localePrefix}/app/predict/${activeConversationId}#m-${messageId}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success(t('share.copied'), { description: url });
+      } catch (e) {
+        toast.error(t('share.copyFailed'), {
+          description: (e as Error).message,
+        });
+        throw e;
+      }
+    },
+    [activeConversationId, locale, t],
+  );
+
+  /**
    * Retry the last failed turn. Trims the errored assistant slot from
    * the thread (if any) and re-fires the latest user prompt. Used by
    * the inline error banner that surfaces engine 5xx responses.
@@ -546,6 +712,7 @@ function PredictShellInner() {
           onPickConversation={(id) => void onPickConversation(id)}
           onDeleteConversation={(id) => void onDeleteConversation(id)}
           onNewChat={onNewChat}
+          onOpenAlerts={onOpenAlerts}
           onOpenReceipts={onOpenReceipts}
           onOpenSettings={onOpenSettings}
           signedIn={signedIn}
@@ -558,9 +725,10 @@ function PredictShellInner() {
 
         {/* ─── Center column ─── */}
         <section className="relative flex flex-col h-full min-h-0 min-w-0 overflow-hidden border-l border-[var(--border)]">
-          {/* Mobile-only top bar — drawer trigger only. The brand
-              lives inside the drawer itself (per Pass 25 spec), so
-              this row stays minimal on the main chat view. */}
+          {/* Mobile-only top bar — drawer trigger. The brand lives
+              inside the drawer itself (per Pass 25 spec); per-bubble
+              compact toggles replaced the previous global density
+              control. */}
           <div
             className={cn(
               'lg:hidden flex items-center shrink-0',
@@ -592,30 +760,74 @@ function PredictShellInner() {
               <Welcome onPick={submitPrompt} />
             ) : (
               <div className="mx-auto max-w-[860px] w-full px-4 sm:px-6 py-6 flex flex-col gap-6">
-                {messages.map((m) => (
-                  <ChatBubble
-                    key={m.id}
-                    message={m}
-                    streaming={isStreaming && m.id === lastAssistantId}
-                    // Only the LAST user message gets the edit
-                    // affordance — editing earlier turns would
-                    // require a branching model we don't have.
-                    onEdit={
-                      !isStreaming && m.id === lastEditableUserId
-                        ? onEditUserMessage
-                        : undefined
-                    }
-                    editLabel={t('shell.composer.edit')}
-                    sourcesLabel={t('shell.composer.sources')}
-                    copyLabel={t('shell.composer.copy')}
-                    copiedLabel={t('shell.composer.copied')}
-                    tickerByCoin={tickerByCoin}
-                    priceCheck={{
-                      label: t('shell.composer.priceCheckLabel'),
-                      body: t('shell.composer.priceCheckBody'),
-                    }}
-                  />
-                ))}
+                {messages.map((m) => {
+                  // For user turns, surface a TickerBanner per ticker
+                  // mentioned in the prompt. The banner sits BETWEEN
+                  // the user bubble and the assistant bubble (= "ground
+                  // truth before the model adds its analysis"). Web3
+                  // UX precedent: DexScreener / Phantom / Etherscan
+                  // pin live market context to the top of any ticker
+                  // query. Banners only render for symbols the live
+                  // ticker recognizes (avoids false positives like
+                  // "TO" or "AND" matching the bare-ticker regex).
+                  const isUserTurn = m.role === 'user';
+                  const userText = isUserTurn
+                    ? m.parts
+                        .filter((p) => p.type === 'text')
+                        .map((p) => ('text' in p ? p.text : ''))
+                        .join(' ')
+                    : '';
+                  const detectedSymbols = isUserTurn
+                    ? extractTickersFromText(
+                        userText,
+                        new Set(tickerEntryBySymbol.keys()),
+                      )
+                    : [];
+                  return (
+                    <div key={m.id} className="flex flex-col gap-3">
+                      <ChatBubble
+                        message={m}
+                        streaming={isStreaming && m.id === lastAssistantId}
+                        onEdit={
+                          !isStreaming && m.id === lastEditableUserId
+                            ? onEditUserMessage
+                            : undefined
+                        }
+                        onQuote={onQuoteMessage}
+                        onShare={onShareMessage}
+                        editLabel={t('shell.composer.edit')}
+                        sourcesLabel={t('shell.composer.sources')}
+                        copyLabel={t('shell.composer.copy')}
+                        copiedLabel={t('shell.composer.copied')}
+                        quoteLabel={t('shell.composer.quote')}
+                        quotedLabel={t('shell.composer.quoted')}
+                        shareLabel={t('shell.composer.share')}
+                        sharedLabel={t('shell.composer.shared')}
+                        compactLabel={t('shell.composer.compact')}
+                        compactedLabel={t('shell.composer.compacted')}
+                        tickerByCoin={tickerByCoin}
+                        priceCheck={{
+                          label: t('shell.composer.priceCheckLabel'),
+                          body: t('shell.composer.priceCheckBody'),
+                        }}
+                      />
+                      {detectedSymbols.length > 0 && (
+                        <TickerStack
+                          entries={detectedSymbols.map((sym) => {
+                            const entry = tickerEntryBySymbol.get(sym);
+                            return {
+                              symbol: sym,
+                              name: tickerDisplayName(sym),
+                              price: entry?.price,
+                              changePct: entry?.changePct,
+                              history: priceHistory.get(sym),
+                            };
+                          })}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
                 {isErrored && error && (
                   // Degraded banner — the engine returned an error
                   // mid-turn. Surfaces the parsed message and a retry
@@ -658,19 +870,6 @@ function PredictShellInner() {
               </div>
             )}
           </div>
-
-          {/* Quota line — sits above the chip strip so the user always
-              knows where they stand. Reads from the same `/api/quota`
-              SWR cache the rest of the shell uses, so this is the
-              authoritative truth (no second fetch). Hidden while
-              streaming so the foot of the page stays calm during work,
-              and skipped entirely for Elite — paying users with
-              unlimited runs don't need a counter cluttering the
-              surface, and an "Elite · unlimited" chip just reads as
-              chrome. */}
-          {signedIn && !composerLocked && !isStreaming && quota && quota.tier !== 'elite' && (
-            <QuotaLine quota={quota} />
-          )}
 
           {/* Suggestions strip — Vizzor-native quick-pick chips placed
               ABOVE the composer. Reads as "things you can ask right
@@ -749,6 +948,7 @@ function PredictShellInner() {
           onPickConversation={(id) => void onPickConversation(id)}
           onDeleteConversation={(id) => void onDeleteConversation(id)}
           onNewChat={onNewChat}
+          onOpenAlerts={onOpenAlerts}
           onOpenReceipts={onOpenReceipts}
           onOpenSettings={onOpenSettings}
           signedIn={signedIn}
@@ -764,6 +964,9 @@ function PredictShellInner() {
           onClose={() => setSettingsOpen(false)}
         />
       )}
+
+      <AlertsModal open={alertsOpen} onClose={() => setAlertsOpen(false)} />
+      <AlertsWatcher enabled={signedIn} />
     </div>
   );
 }
@@ -773,9 +976,17 @@ function PredictShellInner() {
 
 function WalletGate() {
   const t = useTranslations('predict.gate');
-  const tShell = useTranslations('predict.shell');
   return (
-    <div className="mx-auto max-w-[640px] w-full px-4 sm:px-6 py-8 sm:py-16 lg:py-24 flex flex-col items-center gap-6 sm:gap-8 text-center">
+    // `min-h-full` makes the gate stretch to fill the thread container's
+    // viewport — without it the wrapper collapses to its content height
+    // and `justify-center` has nothing to center against, so the block
+    // anchors to the top. Padding goes to `py-10` symmetrically so the
+    // hero icon + perks land in the optical middle on tall viewports
+    // and don't crowd the composer footer on short ones.
+    <div className="mx-auto max-w-[640px] w-full min-h-full px-4 sm:px-6 py-10 flex flex-col items-center justify-center gap-6 sm:gap-8 text-center">
+      {/* Icon tile — matches the rounded-2xl bordered tiles used by
+          how-it-works cards. Wallet glyph (lucide) is semantically
+          aligned with the action being requested. */}
       <span
         aria-hidden
         className={cn(
@@ -785,28 +996,24 @@ function WalletGate() {
           'vz-rise',
         )}
       >
-        <IconLock size={20} />
+        <Wallet size={22} strokeWidth={1.5} aria-hidden />
       </span>
 
-      <div className="flex flex-col gap-3">
-        <h2 className="text-[28px] sm:text-[36px] font-semibold tracking-tight leading-[1.05] text-[var(--fg)] text-balance">
+      <div className="flex flex-col gap-3 items-center">
+        <h2 className="text-[28px] sm:text-[36px] font-semibold tracking-[-0.022em] leading-[1.05] text-[var(--fg)] text-balance">
           {t('title')}
         </h2>
-        <p className="text-[14px] leading-relaxed text-[var(--fg-2)] max-w-[48ch] mx-auto">
+        <p className="text-[13.5px] leading-relaxed text-[var(--fg-2)] max-w-[48ch] mx-auto text-balance">
           {t('body')}
         </p>
       </div>
 
-      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 w-full max-w-[420px] text-left vz-rise" style={{ animationDelay: '120ms' }}>
+      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 w-full max-w-[420px] mx-auto justify-items-start vz-rise" style={{ animationDelay: '120ms' }}>
         <GatePerk label={t('perk1')} />
         <GatePerk label={t('perk2')} />
         <GatePerk label={t('perk3')} />
         <GatePerk label={t('perk4')} />
       </ul>
-
-      <p className="mono tabular text-[10.5px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
-        {tShell('composer.footer')}
-      </p>
     </div>
   );
 }
@@ -820,8 +1027,8 @@ function WalletGateMini({ onSignedIn }: { onSignedIn: () => void }) {
 
   return (
     <div className="flex items-center gap-3 vz-rise">
-      <IconLock size={14} className="text-[var(--fg-3)] shrink-0" />
-      <p className="flex-1 text-[13px] text-[var(--fg-2)] min-w-0">
+      <Wallet size={14} strokeWidth={1.5} className="text-[var(--fg-3)] shrink-0" aria-hidden />
+      <p className="flex-1 text-[13px] font-medium tracking-tight text-[var(--fg-2)] min-w-0">
         {t('composerHint')}
       </p>
       <div className="shrink-0">
@@ -840,25 +1047,17 @@ function WalletGateMini({ onSignedIn }: { onSignedIn: () => void }) {
 
 function GatePerk({ label }: { label: string }) {
   return (
-    <li className="flex items-start gap-2">
+    <li className="flex items-start gap-2.5">
       <span
         aria-hidden
         className={cn(
-          'mt-0.5 inline-flex h-4 w-4 items-center justify-center shrink-0',
+          'mt-[2px] inline-flex h-4 w-4 items-center justify-center shrink-0',
           'rounded-full border border-[var(--border-hi)] bg-[var(--surface-2)] text-[var(--fg)]',
         )}
       >
-        <svg width="9" height="9" viewBox="0 0 9 9" fill="none" aria-hidden>
-          <path
-            d="M1.5 4.5L3.5 6.5L7.5 2.5"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <Check size={9} strokeWidth={2.4} aria-hidden />
       </span>
-      <span className="text-[12.5px] text-[var(--fg-2)] leading-snug">
+      <span className="text-[13px] font-medium tracking-tight text-[var(--fg-2)] leading-snug">
         {label}
       </span>
     </li>
@@ -875,6 +1074,7 @@ interface LeftRailProps {
   onPickConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
   onNewChat: () => void;
+  onOpenAlerts: () => void;
   onOpenReceipts: () => void;
   onOpenSettings: () => void;
   signedIn: boolean;
@@ -897,6 +1097,7 @@ function LeftRail({
   onPickConversation,
   onDeleteConversation,
   onNewChat,
+  onOpenAlerts,
   onOpenReceipts,
   onOpenSettings,
   signedIn,
@@ -1016,6 +1217,17 @@ function LeftRail({
             icon={<IconChat size={collapsed ? 20 : 17} />}
             label={t('shell.nav.chat')}
             active
+            collapsed={collapsed}
+          />
+          {/* Alerts entry — routes to /app/alerts. The app-sidebar's
+              footer also carries this, but the app-sidebar is
+              suppressed on /app/predict (3-column shell). Mounting
+              the entry here keeps alerts discoverable from inside
+              chat without re-introducing the umbrella sidebar. */}
+          <NavButton
+            icon={<IconBell size={collapsed ? 20 : 17} />}
+            label={t('shell.nav.alerts')}
+            onClick={onOpenAlerts}
             collapsed={collapsed}
           />
           <NavButton
@@ -1236,6 +1448,26 @@ function NavButton({
 
 type DropdownPhase = 'closed' | 'enter' | 'open' | 'exit';
 
+interface SessionWithSub {
+  ok?: boolean;
+  signedIn?: boolean;
+  wallet?: string;
+  subscription?: {
+    tier: string;
+    cadence: string;
+    expiresAt: number | null;
+    isLifetime: boolean;
+  } | null;
+}
+
+function tierBadgeFor(sub: SessionWithSub['subscription'] | undefined): string | null {
+  if (!sub) return null;
+  const cadenceLabel = sub.isLifetime
+    ? 'Lifetime'
+    : sub.cadence.charAt(0).toUpperCase() + sub.cadence.slice(1);
+  return `${sub.tier.toUpperCase()} · ${cadenceLabel}`;
+}
+
 function Identity({
   signedIn,
   wallet,
@@ -1253,6 +1485,21 @@ function Identity({
   const [phase, setPhase] = useState<DropdownPhase>('closed');
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  // Pull the same session SWR the app-sidebar wallet pill uses so the
+  // dropdown can surface subscription tier + expiry without a second
+  // round-trip. SWR's cache dedup means this is free when the
+  // app-shell provider already has the key warm; otherwise it's a
+  // single /api/auth/session call shared across the surface.
+  const { data: sessionData } = useSWR<SessionWithSub>(
+    '/api/auth/session',
+    (url: string) =>
+      fetch(url, { credentials: 'same-origin' }).then((r) => r.json()),
+    { revalidateOnFocus: false, keepPreviousData: true },
+  );
+  const subscription = sessionData?.subscription ?? null;
+  const tierBadge = tierBadgeFor(subscription);
+  const network = paymentNetwork();
 
   // Two-phase animation: a frame after mount we flip from `enter`
   // (initial collapsed state) to `open` (visible state) so the CSS
@@ -1360,50 +1607,127 @@ function Identity({
         <div
           role="menu"
           className={cn(
-            'absolute z-50 min-w-[180px]',
+            // Width up to 280px so the full wallet address + tier badge
+            // fit on one line without breaking the dropdown chrome.
+            'absolute z-50 w-[min(280px,calc(100vw-24px))]',
             collapsed
               ? 'left-full ml-2 bottom-0 origin-bottom-left'
-              : 'left-0 right-0 bottom-full mb-1 origin-bottom',
-            'rounded-lg border border-[var(--border)] bg-[var(--surface)]',
-            'p-1',
-            // Tween — opacity + a small lift toward the trigger. No
-            // shadow, no glow; the border + surface contrast carry
-            // the depth.
+              : 'left-0 bottom-full mb-2 origin-bottom-left',
+            'rounded-2xl border border-[var(--border)] bg-[var(--surface)]',
+            'shadow-[0_24px_60px_-12px_rgba(0,0,0,0.45)]',
+            'overflow-hidden',
             'transition-[opacity,transform] duration-150 ease-out',
             isVisible
               ? 'opacity-100 translate-y-0'
               : 'opacity-0 translate-y-1 pointer-events-none',
           )}
         >
-          <DropdownItem
-            icon={<IconSettings size={15} />}
-            label={t('settings')}
-            onClick={() => {
-              setOpen(false);
-              onOpenSettings?.();
-            }}
-          />
-          <DropdownLink
-            href="/docs"
-            icon={<IconHelp size={15} />}
-            label={t('help')}
-            onClick={() => setOpen(false)}
-          />
-          {signedIn && (
+          {/* ── Identity header ─────────────────────────────────────
+              Eyebrow + full wallet address. Matches the navbar pill's
+              dropdown so the predict surface and the marketing-host
+              wallet pill share the same vocabulary for "signed in as
+              this wallet." */}
+          {signedIn && wallet && (
+            <div className="px-4 py-3 border-b border-[var(--border)]">
+              <p className="mono tabular text-[10px] uppercase tracking-[0.18em] font-semibold text-[var(--fg-3)]">
+                {tAuth('signedInAs')}
+              </p>
+              <p className="mono tabular text-[11.5px] text-[var(--fg)] break-all mt-1.5">
+                {wallet}
+              </p>
+            </div>
+          )}
+
+          {/* ── Subscription ────────────────────────────────────────
+              Tier + cadence pill + expiry date when the wallet has an
+              active subscription. Reads from the shared
+              /api/auth/session SWR so it stays in sync with the
+              navbar pill. */}
+          {signedIn && subscription && tierBadge && (
+            <div className="px-4 py-3 border-b border-[var(--border)]">
+              <p className="mono tabular text-[10px] uppercase tracking-[0.18em] font-semibold text-[var(--fg-3)]">
+                {tAuth('subscription')}
+              </p>
+              <p className="text-[13px] font-medium tracking-tight text-[var(--fg)] mt-1.5">
+                {tierBadge}
+              </p>
+              {subscription.expiresAt && !subscription.isLifetime && (
+                <p className="mono tabular text-[10px] text-[var(--fg-3)] mt-0.5">
+                  {tAuth('expiresOn', {
+                    date: new Date(subscription.expiresAt).toLocaleDateString(),
+                  })}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ── Network + Explorer ──────────────────────────────────
+              Read-only display of the active chain plus a deep-link to
+              Solscan for the connected wallet. */}
+          {signedIn && wallet && (
+            <div className="px-4 py-3 border-b border-[var(--border)] flex flex-col gap-2">
+              <p className="mono tabular text-[10px] uppercase tracking-[0.18em] font-semibold text-[var(--fg-3)]">
+                {tAuth('network')}
+              </p>
+              <div className="flex items-center justify-between gap-2">
+                <span className="mono tabular text-[10.5px] uppercase tracking-[0.16em] px-2 py-0.5 rounded-md bg-[var(--fg)] text-[var(--bg)]">
+                  Solana {network}
+                </span>
+                <a
+                  href={buildSolscanAccountUrl(wallet, network)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setOpen(false)}
+                  className="
+                    inline-flex items-center gap-1 text-[11.5px] font-medium tracking-tight
+                    text-[var(--fg-2)] hover:text-[var(--fg)]
+                    transition-colors
+                  "
+                >
+                  <span>{tAuth('viewOnExplorer')}</span>
+                  <ArrowUpRight size={11} strokeWidth={2} />
+                </a>
+              </div>
+            </div>
+          )}
+
+          {/* ── Actions ─────────────────────────────────────────────
+              Settings + Profile + Help routed actions, plus Sign out
+              as a destructive terminal. Each row is a real menu item
+              with the inset-icon vocabulary the chat-bubble dropdowns
+              use elsewhere on the surface. */}
+          <div className="p-1">
+            <DropdownItem
+              icon={<IconSettings size={15} />}
+              label={t('settings')}
+              onClick={() => {
+                setOpen(false);
+                onOpenSettings?.();
+              }}
+            />
+            {signedIn && (
+              <DropdownLink
+                href="/account"
+                icon={<IconUser size={15} />}
+                label={tAuth('viewProfile')}
+                onClick={() => setOpen(false)}
+              />
+            )}
             <DropdownLink
-              href="/account"
-              icon={<IconUser size={15} />}
-              label={tAuth('viewProfile')}
+              href="/docs"
+              icon={<IconHelp size={15} />}
+              label={t('help')}
               onClick={() => setOpen(false)}
             />
-          )}
-          {signedIn && (
-            <DropdownItem
-              icon={<IconSignOut size={15} />}
-              label={tAuth('signOut')}
-              onClick={() => void onSignOut()}
-            />
-          )}
+            {signedIn && (
+              <DropdownItem
+                icon={<IconSignOut size={15} />}
+                label={tAuth('signOut')}
+                onClick={() => void onSignOut()}
+                tone="danger"
+              />
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -1422,19 +1746,44 @@ function DropdownItem({
   icon,
   label,
   onClick,
+  tone = 'default',
 }: {
   icon: ReactNode;
   label: string;
   onClick: () => void;
+  /** `danger` shifts the row to the destructive token set on hover so
+   *  sign-out reads as a terminal action without crying for attention
+   *  in the idle state. */
+  tone?: 'default' | 'danger';
 }) {
+  const toneClass =
+    tone === 'danger'
+      ? cn(
+          'text-[var(--fg-2)] hover:text-[var(--danger)]',
+          'hover:bg-[color-mix(in_oklab,var(--danger)_10%,transparent)]',
+        )
+      : 'text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]';
   return (
     <button
       type="button"
       role="menuitem"
       onClick={onClick}
-      className={dropdownItemClass}
+      className={cn(
+        'group w-full flex items-center gap-2.5 text-left',
+        'h-8 px-2.5 rounded-md text-[13px]',
+        'transition-colors',
+        toneClass,
+      )}
     >
-      <span aria-hidden className="text-[var(--fg-3)] group-hover:text-[var(--fg)] transition-colors">
+      <span
+        aria-hidden
+        className={cn(
+          'transition-colors',
+          tone === 'danger'
+            ? 'text-[var(--fg-3)] group-hover:text-[var(--danger)]'
+            : 'text-[var(--fg-3)] group-hover:text-[var(--fg)]',
+        )}
+      >
         {icon}
       </span>
       <span className="flex-1 truncate">{label}</span>
@@ -1518,6 +1867,7 @@ function MobileDrawer({
   onPickConversation,
   onDeleteConversation,
   onNewChat,
+  onOpenAlerts,
   onOpenReceipts,
   onOpenSettings,
   signedIn,
@@ -1532,6 +1882,7 @@ function MobileDrawer({
   onPickConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
   onNewChat: () => void;
+  onOpenAlerts: () => void;
   onOpenReceipts: () => void;
   onOpenSettings: () => void;
   signedIn: boolean;
@@ -1607,7 +1958,12 @@ function MobileDrawer({
             <IconClose size={18} />
           </button>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto p-2">
+        {/* The drawer wrapper itself stays paddingless so LeftRail can
+            own the horizontal rhythm. Letting LeftRail keep its default
+            `p-4` gives nav items breathing room from the drawer edge
+            (16px) instead of jamming them against it (the alignment
+            issue flagged on mobile). */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <LeftRail
             search={search}
             onSearch={onSearch}
@@ -1616,13 +1972,14 @@ function MobileDrawer({
             onPickConversation={onPickConversation}
             onDeleteConversation={onDeleteConversation}
             onNewChat={onNewChat}
+            onOpenAlerts={onOpenAlerts}
             onOpenReceipts={onOpenReceipts}
             onOpenSettings={onOpenSettings}
             signedIn={signedIn}
             wallet={wallet}
             quota={quota}
             embedded
-            className="flex h-full border-0 p-0 bg-transparent shadow-none backdrop-blur-none"
+            className="flex h-full border-0 bg-transparent shadow-none backdrop-blur-none"
           />
         </div>
       </div>
@@ -2001,6 +2358,159 @@ function saveBarIds(ids: ReadonlyArray<string>): void {
   }
 }
 
+/* ─────────────────────── custom tokens ─────────────────────── */
+
+/**
+ * User-defined tokens. Stored separately from the catalog so the
+ * built-in topic list can evolve between releases without colliding
+ * with whatever ticker the user typed in. Persisted under a versioned
+ * key for the same forward-compat reason as the bar order.
+ *
+ * The id namespace is `custom-<SYMBOL>` so it never overlaps with the
+ * built-in ids; the merge helper below dedupes by id when surfacing
+ * them in the catalog.
+ */
+const CUSTOM_TOKENS_KEY = 'vizzor.predict.custom-tokens.v1';
+const CUSTOM_TOKEN_SYMBOL_RE = /^[A-Z0-9]{2,10}$/;
+
+interface StoredCustomTokens {
+  v: 1;
+  symbols: ReadonlyArray<string>;
+}
+
+function loadCustomTokens(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_TOKENS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as StoredCustomTokens | null;
+    if (!parsed || parsed.v !== 1 || !Array.isArray(parsed.symbols)) return [];
+    const valid: string[] = [];
+    const seen = new Set<string>();
+    for (const s of parsed.symbols) {
+      if (typeof s !== 'string') continue;
+      const up = s.toUpperCase();
+      if (!CUSTOM_TOKEN_SYMBOL_RE.test(up)) continue;
+      if (seen.has(up)) continue;
+      seen.add(up);
+      valid.push(up);
+    }
+    return valid;
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomTokens(symbols: ReadonlyArray<string>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      CUSTOM_TOKENS_KEY,
+      JSON.stringify({ v: 1, symbols } satisfies StoredCustomTokens),
+    );
+  } catch {
+    // Best-effort.
+  }
+}
+
+/* ─────────────────────── ticker extraction ─────────────────────── */
+
+/**
+ * Friendly name → uppercase symbol. Used by `extractTickersFromText`
+ * so a prompt like "What about Bitcoin today?" still surfaces the BTC
+ * banner. Symbols not in this map only match via the `$BTC` or bare
+ * uppercase pattern.
+ */
+const TICKER_NAME_MAP: Record<string, string> = {
+  bitcoin: 'BTC',
+  btc: 'BTC',
+  ethereum: 'ETH',
+  eth: 'ETH',
+  solana: 'SOL',
+  sol: 'SOL',
+  toncoin: 'TON',
+  ton: 'TON',
+  hyperliquid: 'HYPE',
+  hype: 'HYPE',
+  pyth: 'PYTH',
+  jup: 'JUP',
+  jupiter: 'JUP',
+};
+
+const DOLLAR_TICKER_RE = /\$([A-Z0-9]{2,10})\b/gi;
+const BARE_TICKER_RE = /\b([A-Z]{2,10})\b/g;
+
+/**
+ * Pull a deduped list of ticker symbols out of a user message.
+ *
+ *   1. `$BTC` / `$eth` — explicit ticker mentions (case-insensitive
+ *      thanks to the `i` flag on DOLLAR_TICKER_RE).
+ *   2. Bare uppercase `BTC` — only when the symbol is in
+ *      `knownSymbols` so "TO" or "AND" don't trigger banners.
+ *   3. Friendly names (`bitcoin`, `Solana`) → mapped via
+ *      TICKER_NAME_MAP.
+ *
+ * Order preserved (first mention wins) so banners stack in the order
+ * the user thought about them.
+ */
+function extractTickersFromText(
+  text: string,
+  knownSymbols: ReadonlySet<string>,
+): string[] {
+  if (!text) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (sym: string): void => {
+    const up = sym.toUpperCase();
+    if (seen.has(up)) return;
+    if (!knownSymbols.has(up)) return;
+    seen.add(up);
+    out.push(up);
+  };
+  // $TICKER pattern — case-insensitive.
+  for (const m of text.matchAll(DOLLAR_TICKER_RE)) {
+    if (m[1]) push(m[1]);
+  }
+  // Bare uppercase ticker — exact case to avoid false positives.
+  for (const m of text.matchAll(BARE_TICKER_RE)) {
+    if (m[1]) push(m[1]);
+  }
+  // Friendly names — case-insensitive whole-word scan.
+  const lower = text.toLowerCase();
+  for (const [name, sym] of Object.entries(TICKER_NAME_MAP)) {
+    const re = new RegExp(`\\b${name}\\b`, 'i');
+    if (re.test(lower)) push(sym);
+  }
+  return out;
+}
+
+/** Friendly display name for a banner — falls back to the symbol. */
+function tickerDisplayName(symbol: string): string {
+  const up = symbol.toUpperCase();
+  const inverted: Record<string, string> = {
+    BTC: 'Bitcoin',
+    ETH: 'Ethereum',
+    SOL: 'Solana',
+    TON: 'Toncoin',
+    HYPE: 'Hyperliquid',
+    PYTH: 'Pyth Network',
+    JUP: 'Jupiter',
+  };
+  return inverted[up] ?? up;
+}
+
+/** Produce a TopicSpec for a user-defined token symbol. */
+function customTokenToSpec(symbol: string): TopicSpec {
+  const up = symbol.toUpperCase();
+  return {
+    id: `custom-${up}`,
+    label: up,
+    ticker: up,
+    prompt: `${up} `,
+    behavior: 'insert',
+  };
+}
+
 function ChatTopics({
   onSubmit,
   onInsert,
@@ -2017,14 +2527,47 @@ function ChatTopics({
   // first paint matches the default layout. The reorder/add/remove
   // handlers then mutate this state and persist on every change.
   const [barIds, setBarIds] = useState<string[]>(() => [...DEFAULT_BAR_IDS]);
+  const [customTokens, setCustomTokens] = useState<string[]>(() => []);
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
     setBarIds(loadBarIds());
+    setCustomTokens(loadCustomTokens());
     setHydrated(true);
   }, []);
   useEffect(() => {
     if (hydrated) saveBarIds(barIds);
   }, [barIds, hydrated]);
+  useEffect(() => {
+    if (hydrated) saveCustomTokens(customTokens);
+  }, [customTokens, hydrated]);
+
+  // Live ticker — used to render price + delta on ticker chips. One
+  // subscription at this scope is cheaper than per-chip useSWR; the
+  // map below makes lookups O(1) in the render path.
+  const { data: tickerData } = useTicker();
+  const priceBySymbol = useMemo(() => {
+    const map = new Map<string, { price: number; changePct: number }>();
+    (tickerData ?? []).forEach((t) => {
+      map.set(t.symbol.toUpperCase(), {
+        price: t.price,
+        changePct: t.changePct,
+      });
+    });
+    return map;
+  }, [tickerData]);
+
+  // Merge built-in catalog with user-defined tokens. Custom tokens
+  // get appended (catalog-first ordering) so the built-in head stays
+  // recognizable; the panel renders them in their own section.
+  const customSpecs = useMemo(
+    () => customTokens.map(customTokenToSpec),
+    [customTokens],
+  );
+  const allTopicsById = useMemo(() => {
+    const merged: Record<string, TopicSpec> = { ...TOPICS_BY_ID };
+    for (const spec of customSpecs) merged[spec.id] = spec;
+    return merged;
+  }, [customSpecs]);
 
   const [addOpen, setAddOpen] = useState(false);
   // Closing-phase flag for the (+) add panel — keeps the panel mounted
@@ -2076,10 +2619,35 @@ function ChatTopics({
     setAddOpen(false);
   }, []);
 
-  const available = useMemo(
-    () => TOPICS_CATALOG.filter((t) => !barIds.includes(t.id)),
-    [barIds],
+  /** Add a user-defined token by symbol. The symbol is upper-cased
+   *  and validated (2-10 alphanumeric chars) before being persisted.
+   *  Returns the spec id when successful so the caller can also drop
+   *  the new chip directly into the bar. */
+  const addCustomToken = useCallback(
+    (rawSymbol: string): string | null => {
+      const up = rawSymbol.trim().toUpperCase().replace(/^\$/, '');
+      if (!CUSTOM_TOKEN_SYMBOL_RE.test(up)) return null;
+      const spec = customTokenToSpec(up);
+      // If a built-in already exists for this symbol, just add it to
+      // the bar (don't duplicate as a custom).
+      const builtin = TOPICS_CATALOG.find(
+        (t) => t.ticker?.toUpperCase() === up,
+      );
+      if (builtin) {
+        setBarIds((ids) => (ids.includes(builtin.id) ? ids : [...ids, builtin.id]));
+        return builtin.id;
+      }
+      setCustomTokens((list) => (list.includes(up) ? list : [...list, up]));
+      setBarIds((ids) => (ids.includes(spec.id) ? ids : [...ids, spec.id]));
+      return spec.id;
+    },
+    [],
   );
+
+  const available = useMemo(() => {
+    const merged = [...TOPICS_CATALOG, ...customSpecs];
+    return merged.filter((t) => !barIds.includes(t.id));
+  }, [barIds, customSpecs]);
 
   const onChipPick = useCallback(
     (topic: TopicSpec) => {
@@ -2118,8 +2686,10 @@ function ChatTopics({
                 )}
               >
                 {barIds.map((id, idx) => {
-                  const topic = TOPICS_BY_ID[id];
+                  const topic = allTopicsById[id];
                   if (!topic) return null;
+                  const ticker = topic.ticker?.toUpperCase();
+                  const live = ticker ? priceBySymbol.get(ticker) : undefined;
                   return (
                     <SortableTopicChip
                       key={id}
@@ -2127,6 +2697,8 @@ function ChatTopics({
                       onPick={onChipPick}
                       onRemove={removeChip}
                       highlighted={idx === 0}
+                      livePrice={live?.price}
+                      liveChangePct={live?.changePct}
                     />
                   );
                 })}
@@ -2201,6 +2773,7 @@ function ChatTopics({
             <TopicAddPanel
               available={available}
               onAdd={addChip}
+              onAddCustom={addCustomToken}
               onClose={dismissAdd}
               closing={addClosing}
             />
@@ -2223,11 +2796,18 @@ function SortableTopicChip({
   onPick,
   onRemove,
   highlighted = false,
+  livePrice,
+  liveChangePct,
 }: {
   topic: TopicSpec;
   onPick: (topic: TopicSpec) => void;
   onRemove: (id: string) => void;
   highlighted?: boolean;
+  /** Live spot price for the chip's ticker, when available. Ignored
+   *  for non-ticker chips. */
+  livePrice?: number;
+  /** Fractional 24h change (e.g. -0.021 = -2.1%). */
+  liveChangePct?: number;
 }) {
   const {
     attributes,
@@ -2243,6 +2823,15 @@ function SortableTopicChip({
     transition,
   };
 
+  // Ticker chips with a live price render in a "compact instrument"
+  // layout — icon + symbol + price + signed delta — instead of the
+  // long label. Minimalist, single-line, no busy chart. Falls back to
+  // the label layout when no price is wired yet (initial load).
+  const showLivePrice =
+    Boolean(topic.ticker) && typeof livePrice === 'number' && livePrice > 0;
+  const deltaPct = typeof liveChangePct === 'number' ? liveChangePct * 100 : null;
+  const isUp = (deltaPct ?? 0) >= 0;
+
   return (
     <li ref={setNodeRef} style={style} className={cn('shrink-0 relative group/chip', isDragging && 'z-10')}>
       <button
@@ -2253,7 +2842,7 @@ function SortableTopicChip({
         className={cn(
           'inline-flex items-center gap-1.5',
           'h-7 px-2.5 rounded-full',
-          'text-[12.5px] font-medium leading-none whitespace-nowrap',
+          'text-[12.5px] font-semibold tracking-tight leading-none whitespace-nowrap',
           'transition-[background-color,color,border-color,box-shadow,transform] duration-200 ease-out',
           'motion-safe:will-change-transform',
           'hover:scale-[1.03] active:scale-95',
@@ -2278,7 +2867,37 @@ function SortableTopicChip({
             <TopicIcon kind="spark" size={12} />
           )}
         </span>
-        <span>{topic.label}</span>
+        {showLivePrice && typeof livePrice === 'number' ? (
+          <>
+            <span className="mono tabular">{topic.ticker}</span>
+            <span
+              className={cn(
+                'mono tabular font-medium',
+                highlighted ? 'text-[var(--bg)]/85' : 'text-[var(--fg-3)]',
+              )}
+            >
+              {formatChipPrice(livePrice)}
+            </span>
+            {deltaPct !== null && Number.isFinite(deltaPct) && (
+              <span
+                className={cn(
+                  'mono tabular text-[10.5px] font-semibold',
+                  highlighted
+                    ? 'text-[var(--bg)]/85'
+                    : isUp
+                      ? 'text-[var(--up)]'
+                      : 'text-[var(--down)]',
+                )}
+                aria-label={`24h change ${deltaPct.toFixed(2)} percent`}
+              >
+                <span aria-hidden>{isUp ? '▲' : '▼'}</span>
+                {Math.abs(deltaPct).toFixed(1)}%
+              </span>
+            )}
+          </>
+        ) : (
+          <span>{topic.label}</span>
+        )}
       </button>
       <button
         type="button"
@@ -2305,6 +2924,17 @@ function SortableTopicChip({
   );
 }
 
+/** Compact price formatter for the chip strip — keeps the chip narrow
+ *  so the carousel fits more entries without horizontal scrolling. */
+function formatChipPrice(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return '—';
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 10_000) return `$${(n / 1000).toFixed(1)}k`;
+  if (n >= 1) return `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+  if (n >= 0.01) return `$${n.toFixed(3)}`;
+  return `$${n.toFixed(6)}`;
+}
+
 /**
  * Tiny dropdown panel anchored to the (+) button. Lists every chip in
  * the catalog that the user hasn't added yet. Click to add. ESC + click
@@ -2314,11 +2944,15 @@ function SortableTopicChip({
 function TopicAddPanel({
   available,
   onAdd,
+  onAddCustom,
   onClose,
   closing = false,
 }: {
   available: ReadonlyArray<TopicSpec>;
   onAdd: (id: string) => void;
+  /** Add a user-defined token by symbol. Returns the spec id on
+   *  success, null when the symbol failed validation. */
+  onAddCustom: (rawSymbol: string) => string | null;
   onClose: () => void;
   /** When true, render the slide-out keyframe instead of slide-in. The
    *  parent keeps the panel mounted for ~160ms so the exit animation
@@ -2327,6 +2961,21 @@ function TopicAddPanel({
 }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const listRef = useRef<HTMLUListElement | null>(null);
+  const [customInput, setCustomInput] = useState('');
+  const [customError, setCustomError] = useState(false);
+
+  const submitCustom = useCallback(() => {
+    const trimmed = customInput.trim();
+    if (!trimmed) return;
+    const id = onAddCustom(trimmed);
+    if (id) {
+      setCustomInput('');
+      setCustomError(false);
+      onClose();
+    } else {
+      setCustomError(true);
+    }
+  }, [customInput, onAddCustom, onClose]);
 
   // Re-clamp the active index if `available` shrinks (the user added a
   // topic and the panel re-rendered with one fewer row).
@@ -2341,6 +2990,12 @@ function TopicAddPanel({
       if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
+        return;
+      }
+      // Don't hijack keystrokes when the user is typing in the custom
+      // token input — Enter there submits the input, not a menu pick.
+      const target = e.target as HTMLElement | null;
+      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') {
         return;
       }
       if (available.length === 0) return;
@@ -2409,13 +3064,70 @@ function TopicAddPanel({
         'overflow-hidden pb-1',
       )}
     >
-      {/* Section stamp — same scale + tracking as the slash palette so
-          both popovers feel like siblings. */}
-      <p className="px-3 pt-3 pb-1.5 text-[10px] uppercase tracking-[0.2em] font-semibold text-[var(--fg-3)]">
+      {/* Section stamp — mono eyebrow vocabulary matches the home-page
+          cards (how-it-works, hero stat tiles) so the popover reads as
+          part of the same design system, not a separate dropdown chrome. */}
+      <p className="px-3 pt-3 pb-1.5 mono tabular text-[10px] uppercase tracking-[0.2em] font-semibold text-[var(--fg-3)]">
         Add topic
       </p>
+      {/* Custom token entry — type any symbol the engine knows (BTC,
+          HYPE, etc.). The chip is added immediately and persists in
+          localStorage so the user's bar feels theirs. Validation
+          lives in the parent (CUSTOM_TOKEN_SYMBOL_RE); we only flash
+          a hairline error when the parent rejects. */}
+      <div className="px-2 pb-2 border-b border-[var(--border)]/60">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitCustom();
+          }}
+          className={cn(
+            'flex items-center gap-1.5 h-8 px-2 rounded-md border',
+            'bg-[var(--surface-2)] transition-colors',
+            customError
+              ? 'border-[var(--danger)]'
+              : 'border-[var(--border)] focus-within:border-[var(--border-hi)]',
+          )}
+        >
+          <span aria-hidden className="mono tabular text-[11px] text-[var(--fg-3)] shrink-0">$</span>
+          <input
+            type="text"
+            value={customInput}
+            onChange={(e) => {
+              setCustomInput(e.target.value);
+              if (customError) setCustomError(false);
+            }}
+            placeholder="Add token — e.g. HYPE"
+            aria-label="Add custom token"
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="characters"
+            className={cn(
+              'flex-1 min-w-0 bg-transparent outline-none',
+              'mono tabular text-[12px] uppercase tracking-tight text-[var(--fg)]',
+              'placeholder:text-[var(--fg-3)] placeholder:normal-case placeholder:tracking-normal placeholder:font-normal',
+            )}
+            maxLength={11}
+          />
+          <button
+            type="submit"
+            disabled={!customInput.trim()}
+            aria-label="Add token"
+            className={cn(
+              'shrink-0 inline-flex items-center justify-center h-6 w-6 rounded-full',
+              'text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface)]',
+              'transition-colors',
+              'disabled:opacity-40 disabled:pointer-events-none',
+            )}
+          >
+            <svg width={10} height={10} viewBox="0 0 16 16" fill="none" aria-hidden>
+              <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" />
+            </svg>
+          </button>
+        </form>
+      </div>
       {available.length === 0 ? (
-        <p className="px-3 py-2 text-[12.5px] text-[var(--fg-3)]">
+        <p className="px-3 py-2 text-[12.5px] leading-snug text-[var(--fg-3)]">
           Every topic is already in the bar.
         </p>
       ) : (
@@ -2430,8 +3142,11 @@ function TopicAddPanel({
                   onMouseEnter={() => setActiveIdx(idx)}
                   onClick={() => onAdd(t.id)}
                   className={cn(
-                    'relative w-full flex items-center gap-2.5 px-3 py-1.5 text-left',
-                    'text-[12.5px] transition-colors',
+                    'relative w-full flex items-center gap-2.5 px-3 py-2 text-left',
+                    // Home-page list-item vocabulary: sans, slightly
+                    // larger, medium weight, tight tracking. Matches the
+                    // CTA chip rhythm in `how-it-works.client.tsx`.
+                    'text-[13px] font-medium tracking-tight leading-snug transition-colors',
                     // Left-edge accent — same focus-cue pattern as the
                     // slash palette. No heavy background flood.
                     'before:absolute before:left-0 before:top-1.5 before:bottom-1.5',
@@ -2647,60 +3362,6 @@ function TopicIcon({ kind, size = 12 }: { kind: TopicIconKind; size?: number }) 
   }
 }
 
-/* ─────────────────────────── Quota line ─────────────────────────── */
-
-/**
- * Single-line tier + cap badge that sits above the topic chip bar so
- * the user always knows where they stand. Reads from the cached
- * `/api/quota` payload — the same SWR slot the rest of the shell uses
- * — so no second fetch. Four branches matching the discriminated
- * QuotaState tier:
- *   - trial  → "Prueba · {days}d · {used}/{cap} hoy"
- *   - pro    → "Pro · {used}/{cap} hoy"
- *   - elite  → "Elite · ilimitado"
- *   - free   → "Prueba terminada · /pricing"
- */
-function QuotaLine({ quota }: { quota: QuotaState }) {
-  const t = useTranslations('predict.shell');
-  let body: ReactNode = null;
-  if (quota.tier === 'trial' && quota.trial) {
-    body = t('trialLine', {
-      days: quota.trial.daysRemaining,
-      used: quota.trial.dailyUsed,
-      cap: quota.trial.dailyCap,
-    });
-  } else if (quota.tier === 'pro') {
-    body = t('proLine', { used: quota.used, cap: quota.limit });
-  } else if (quota.tier === 'elite') {
-    body = t('eliteLine');
-  } else {
-    body = t('freeLine');
-  }
-  return (
-    <div className="shrink-0 mx-auto max-w-[860px] w-full px-3 sm:px-6 pt-2">
-      <span
-        className={cn(
-          'inline-flex items-center gap-1.5',
-          'mono tabular text-[10px] uppercase tracking-[0.16em]',
-          'text-[var(--fg-3)]',
-        )}
-      >
-        <span
-          aria-hidden
-          className={cn(
-            'inline-block h-1.5 w-1.5 rounded-full',
-            quota.tier === 'elite' && 'bg-[var(--accent)]',
-            quota.tier === 'pro' && 'bg-[var(--accent)]',
-            quota.tier === 'trial' && 'bg-[var(--fg-2)]',
-            quota.tier === 'free' && 'bg-[var(--danger)]',
-          )}
-        />
-        {body}
-      </span>
-    </div>
-  );
-}
-
 /* ────────────────────────── Example roll ────────────────────────── */
 
 /**
@@ -2911,6 +3572,11 @@ function ExhaustedBanner({
         {t(bodyKey as 'exhaustedBanner.body')}
       </p>
       <div className="mt-1 flex flex-wrap items-center gap-3">
+        {/* Upgrade CTA — `/pricing` is a marketing route that the
+            middleware bypasses on the product host, so this link stays
+            on `app.vizzor.ai/pricing` (no marketing-site bounce) and
+            falls through to the regular checkout shell at /pay/[tier]/
+            [cadence]. */}
         <Link
           href="/pricing"
           className={cn(
@@ -2920,21 +3586,8 @@ function ExhaustedBanner({
             'hover:opacity-90 transition-opacity',
           )}
         >
-          {t('subscribe.cta')}
+          {t('exhaustedBanner.upgradeCta')}
         </Link>
-        <a
-          href="https://t.me/vizzorai_bot"
-          target="_blank"
-          rel="noopener"
-          className={cn(
-            'inline-flex items-center gap-1.5 h-9 px-4 rounded-full',
-            'border border-[var(--border-hi)] text-[var(--fg)]',
-            'text-[12.5px] font-semibold tracking-tight',
-            'hover:bg-[var(--surface-2)] transition-colors',
-          )}
-        >
-          {t('exhaustedBanner.telegramCta')}
-        </a>
         {IS_DEV && (
           <button
             type="button"

@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { LanguageSwitch } from './language-switch';
+import { ThemeToggle } from './theme-toggle';
 
 type LinkHref = ComponentProps<typeof Link>['href'];
 
@@ -211,9 +212,16 @@ export async function Footer() {
               </a>
             </span>
           </div>
-          {/* Language picker — Stripe / Cloudflare pattern. `placement=up`
-              flips the dropdown so it doesn't drop off the page bottom. */}
-          <LanguageSwitch placement="up" />
+          {/* Set-once preference cluster — language + theme. Both
+              follow the Stripe / Cloudflare pattern of living at the
+              page foot rather than the navbar. `placement=up` flips
+              the language dropdown so it doesn't drop off the page
+              bottom. ThemeToggle stays inline (it owns its own popover
+              positioning when needed). */}
+          <div className="flex items-center gap-3">
+            <LanguageSwitch placement="up" />
+            <ThemeToggle />
+          </div>
         </div>
       </div>
     </footer>

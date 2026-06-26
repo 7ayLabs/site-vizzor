@@ -3,45 +3,50 @@
 /**
  * MobileMenu — hamburger-triggered side drawer for screens below `md`.
  *
- * Visual contract:
- *   - Right-anchored panel, `min(360px, 88vw)` wide.
- *   - Docs-sidebar typography vocabulary: mono uppercase section eyebrows,
- *     13.5px row text, 8px row radius, left-edge 2px bar on active rows.
- *   - Sections (in order): Navigate, Account, Preferences. Each section
- *     gets its own dedicated eyebrow so the drawer reads like an atlas
- *     instead of a flat link dump.
- *   - Smooth right-edge slide via `mobile-drawer-slide-in/out` (defined
- *     in app/globals.css), staggered row reveal on first paint.
- *   - Backdrop click + Escape dismiss, focus returns to the hamburger,
- *     body scroll locked while open, reduced-motion respected.
+ * Visual contract: matches the navbar pill aesthetic. The panel
+ * MATCHES the page mode — light surface in light mode, dark surface
+ * in dark mode — so it reads as an elevated card from the page
+ * surface rather than an inverted brand artifact. Primary CTAs
+ * (Open App, Telegram) provide the contrast inside.
  *
- * The wallet entry lives inside the Account section. It reuses the
- * existing `WalletAuthButton hasProvider={false}` so the connect /
- * sign-in / signed-in states stay in lock-step with the navbar.
+ * Structure (top → bottom):
+ *   1. Header strip: logo badge (small white circle) + close button
+ *   2. Primary CTA pill: [Open App ↗] — paper-white solid, matching
+ *      the desktop navbar's primary CTA
+ *   3. Marketing nav rows: rounded-2xl pill rows for Manifesto,
+ *      Pricing, Changelog, Docs
+ *   4. Footer:
+ *      - Telegram outline pill (secondary CTA — Telegram is the #2
+ *        product, kept reachable from mobile since the navbar pill
+ *        only carries one primary action)
+ *      - Preferences row (Language + Theme)
+ *
+ * Animations preserved: right-edge slide-in, backdrop fade,
+ * row-stagger reveal, ESC dismiss, body scroll lock,
+ * reduced-motion safe.
  */
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
-import { Menu, X, ArrowUpRight } from 'lucide-react';
+import Image from 'next/image';
+import { ArrowUpRight, Menu, X } from 'lucide-react';
+import { TelegramIcon } from '@/components/icons/telegram-icon';
 import { Link, usePathname } from '@/i18n/navigation';
 import type { ComponentProps } from 'react';
-import type { Route } from 'next';
 import { LanguageSwitch } from './language-switch';
 import { ThemeToggle } from './theme-toggle';
-import { WalletAuthButton } from '@/components/auth/wallet-auth-button';
+import { getAppLinkTarget } from '@/lib/app-url';
 
 type LinkHref = ComponentProps<typeof Link>['href'];
-type NavKey = 'predict' | 'surfaces' | 'pricing' | 'docs';
+type NavKey = 'manifesto' | 'pricing' | 'changelog' | 'docs';
 
+// Marketing nav for the drawer. Open App is promoted to its own
+// primary pill above this list, so it's no longer in the loop here.
 const NAV: readonly { href: LinkHref; key: NavKey; match: RegExp }[] = [
-  { href: '/predict', key: 'predict', match: /^\/predict(\/|$)/ },
-  {
-    href: '/docs#surfaces' as Route,
-    key: 'surfaces',
-    match: /^\/docs#surfaces/,
-  },
+  { href: '/manifesto', key: 'manifesto', match: /^\/manifesto(\/|$)/ },
   { href: '/pricing', key: 'pricing', match: /^\/pricing(\/|$)/ },
+  { href: '/changelog', key: 'changelog', match: /^\/changelog(\/|$)/ },
   { href: '/docs', key: 'docs', match: /^\/docs($|\/)/ },
 ];
 
@@ -98,13 +103,15 @@ export function MobileMenu() {
         aria-expanded={phase === 'open' || phase === 'opening'}
         aria-label={t('mobileMenu.openAria')}
         className="
-          md:hidden inline-flex h-8 w-8 items-center justify-center
+          md:hidden inline-flex h-9 w-9 items-center justify-center
+          rounded-full
           text-[var(--fg-3)]
-          transition-[color,transform] duration-200 ease-out
-          hover:text-[var(--fg)] hover:scale-[1.06]
+          transition-[color,background-color,transform] duration-200 ease-out
+          hover:text-[var(--fg)] hover:bg-[var(--surface-2)]
           active:scale-[0.94]
           focus-visible:outline-none focus-visible:ring-2
-          focus-visible:ring-[var(--accent)] focus-visible:rounded-md
+          focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2
+          focus-visible:ring-offset-[var(--surface)]
         "
       >
         <Menu size={18} strokeWidth={1.75} />
@@ -119,7 +126,8 @@ export function MobileMenu() {
             label: tNav(item.key),
             active: item.match.test(pathname),
           }))}
-          cta={t('cta')}
+          openAppLabel={t('openApp')}
+          telegramLabel={t('cta')}
         />
       )}
     </>
@@ -137,10 +145,17 @@ interface PanelProps {
     label: string;
     active: boolean;
   }>;
-  cta: string;
+  openAppLabel: string;
+  telegramLabel: string;
 }
 
-function MobilePanel({ phase, onClose, nav, cta }: PanelProps) {
+function MobilePanel({
+  phase,
+  onClose,
+  nav,
+  openAppLabel,
+  telegramLabel,
+}: PanelProps) {
   const t = useTranslations('header');
   const exiting = phase === 'closing';
   const backdropAnim = exiting
@@ -157,35 +172,68 @@ function MobilePanel({ phase, onClose, nav, cta }: PanelProps) {
       aria-label={t('mobileMenu.label')}
       className={`fixed inset-0 z-[70] md:hidden ${backdropAnim}`}
     >
+      {/* Backdrop — deeper blur + opacity since the panel is dark; a
+          lighter backdrop would let the page bleed through and break
+          the brand-artifact feel. */}
       <button
         type="button"
         aria-label={t('mobileMenu.closeAria')}
         onClick={onClose}
-        className="absolute inset-0 bg-[color:color-mix(in_oklab,var(--bg)_70%,black_20%)]/85 backdrop-blur-[6px]"
+        className="absolute inset-0 bg-black/55 backdrop-blur-[8px]"
       />
 
       <div
         className={`
           absolute right-0 top-0 z-10 h-full w-[min(360px,88vw)]
-          border-l border-[var(--border)] bg-[var(--surface)]
-          flex flex-col ${panelAnim}
+          rounded-l-3xl
+          bg-[var(--surface)] text-[var(--fg)]
+          border-l border-y border-[var(--border)]
+          shadow-[-12px_0_48px_-16px_rgba(0,0,0,0.25)]
+          dark:shadow-[-12px_0_48px_-10px_rgba(0,0,0,0.6)]
+          flex flex-col overflow-hidden
+          ${panelAnim}
         `}
       >
         {/* ── Header ─────────────────────────────────────────── */}
-        <header className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
-          <span className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--fg-3)]">
-            {t('mobileMenu.eyebrow')}
+        <header className="flex items-center justify-between px-4 py-3.5 border-b border-[var(--border)]">
+          {/* Logo badge — one shade off the panel (--bg) so it reads
+              as a small inset within the surface. Brand mark inside
+              uses the dual-image theme swap. */}
+          <span
+            className="
+              inline-flex items-center justify-center h-9 w-9
+              rounded-full bg-[var(--bg)] border border-[var(--border)]
+            "
+          >
+            <Image
+              src="/brand/vizzor_darkicon.png"
+              alt=""
+              width={364}
+              height={535}
+              priority
+              className="block dark:hidden h-5 w-auto"
+            />
+            <Image
+              src="/brand/vizzor_icon.png"
+              alt=""
+              width={364}
+              height={535}
+              priority
+              className="hidden dark:block h-5 w-auto"
+            />
           </span>
           <button
             type="button"
             onClick={onClose}
             aria-label={t('mobileMenu.closeAria')}
             className="
-              inline-flex h-8 w-8 items-center justify-center rounded-md
+              inline-flex h-9 w-9 items-center justify-center
+              rounded-full
               text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)]
               transition-colors
               focus-visible:outline-none focus-visible:ring-2
-              focus-visible:ring-[var(--accent)]
+              focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2
+              focus-visible:ring-offset-[var(--surface)]
             "
           >
             <X size={16} strokeWidth={2} />
@@ -193,10 +241,14 @@ function MobilePanel({ phase, onClose, nav, cta }: PanelProps) {
         </header>
 
         {/* ── Scrollable body ────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto px-3 py-4 flex flex-col gap-5">
-          {/* Navigate section */}
-          <SectionEyebrow label={t('mobileMenu.sections.navigate')} />
-          <nav className="flex flex-col gap-0.5">
+        <div className="flex-1 overflow-y-auto px-4 py-5 flex flex-col gap-4">
+          {/* Primary CTA pill — paper-white solid, matches the desktop
+              navbar's Open-App pill. Sits above the nav rows so it
+              earns the primary visual weight inside the drawer. */}
+          <OpenAppPrimary onClose={onClose} label={openAppLabel} />
+
+          {/* Nav rows — rounded-2xl pills with subtle hover/active fill. */}
+          <nav className="flex flex-col gap-1">
             {nav.map((item, i) => (
               <DrawerRow
                 key={item.key}
@@ -204,23 +256,16 @@ function MobilePanel({ phase, onClose, nav, cta }: PanelProps) {
                 label={item.label}
                 active={item.active}
                 onClick={onClose}
-                delayMs={40 + i * 25}
+                delayMs={90 + i * 30}
               />
             ))}
           </nav>
-
-          {/* Account section */}
-          <SectionEyebrow label={t('mobileMenu.sections.account')} />
-          <div
-            className="mobile-drawer-row-in px-1"
-            style={{ ['--row-delay' as string]: `${40 + nav.length * 25 + 30}ms` }}
-          >
-            <WalletAuthButton hasProvider={false} />
-          </div>
         </div>
 
-        {/* ── Footer: CTA + preferences ──────────────────────── */}
-        <div className="border-t border-[var(--border)] px-5 py-4 flex flex-col gap-3">
+        {/* ── Footer: secondary CTA + preferences ──────────── */}
+        <div className="border-t border-[var(--border)] px-4 py-4 flex flex-col gap-4">
+          {/* Telegram brand-blue pill — fixed brand color, doesn't
+              flip with theme. */}
           <a
             href="https://t.me/vizzorai_bot"
             target="_blank"
@@ -228,19 +273,28 @@ function MobilePanel({ phase, onClose, nav, cta }: PanelProps) {
             onClick={onClose}
             className="
               inline-flex h-11 items-center justify-center gap-2 px-4
-              rounded-full bg-[var(--fg)] text-[var(--bg)]
+              rounded-full
+              bg-[#229ED9] hover:bg-[#1B8FC4]
+              text-white
               text-[13px] font-semibold tracking-tight
-              hover:opacity-90 transition-opacity
+              transition-[background-color,transform] duration-200 ease-out
+              active:scale-[0.98]
+              focus-visible:outline-none focus-visible:ring-2
+              focus-visible:ring-[#229ED9] focus-visible:ring-offset-2
+              focus-visible:ring-offset-[var(--surface)]
             "
           >
-            <span>{cta}</span>
-            <ArrowUpRight size={14} strokeWidth={2.2} />
+            <TelegramIcon size={14} />
+            <span>{telegramLabel}</span>
           </a>
 
-          <div className="flex items-center justify-between gap-3 pt-1">
-            <span className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--fg-3)]">
+          <div className="flex items-center justify-between gap-3">
+            <span className="mono tabular text-[10px] uppercase tracking-[0.18em] text-[var(--fg-3)]">
               {t('mobileMenu.sections.preferences')}
             </span>
+            {/* Pref triggers — drawer is now --surface, so the natural
+                --fg-3 default of LanguageSwitch + ThemeToggle reads
+                correctly without per-context overrides. */}
             <div className="flex items-center gap-2">
               {/* placement='up' so the locale menu opens above the
                   switch instead of dropping off the drawer footer. */}
@@ -257,11 +311,63 @@ function MobilePanel({ phase, onClose, nav, cta }: PanelProps) {
 
 /* ─────────────── pieces ─────────────── */
 
-function SectionEyebrow({ label }: { label: string }) {
+/**
+ * Primary "Open App" pill at the top of the drawer body. Resolves the
+ * URL + target via `getAppLinkTarget()` — external in prod (new tab),
+ * internal locale-aware Link in dev.
+ */
+function OpenAppPrimary({
+  onClose,
+  label,
+}: {
+  onClose: () => void;
+  label: string;
+}) {
+  const appLink = getAppLinkTarget();
+  const classes = `
+    mobile-drawer-row-in
+    group inline-flex h-12 items-center justify-between
+    rounded-full px-5
+    bg-[var(--fg)] text-[var(--bg)]
+    text-[14px] font-semibold tracking-tight
+    transition-transform duration-200 ease-out
+    active:scale-[0.98]
+    focus-visible:outline-none focus-visible:ring-2
+    focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2
+    focus-visible:ring-offset-[var(--surface)]
+  `;
+  const content = (
+    <>
+      <span>{label}</span>
+      <ArrowUpRight size={14} strokeWidth={2.25} />
+    </>
+  );
+  const style = { ['--row-delay' as string]: '40ms' } as React.CSSProperties;
+
+  if (appLink.external) {
+    return (
+      <a
+        href={appLink.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`${label} (opens in a new tab)`}
+        onClick={onClose}
+        style={style}
+        className={classes}
+      >
+        {content}
+      </a>
+    );
+  }
   return (
-    <p className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--fg-3)] px-2.5 -mb-1">
-      {label}
-    </p>
+    <Link
+      href={appLink.href as '/app/predict'}
+      onClick={onClose}
+      style={style}
+      className={classes}
+    >
+      {content}
+    </Link>
   );
 }
 
@@ -278,6 +384,8 @@ function DrawerRow({
   onClick: () => void;
   delayMs: number;
 }) {
+  // Use paper-white tones; active state is a subtle paper-fill so
+  // active rows read without departing from the dark-pill palette.
   return (
     <Link
       href={href}
@@ -286,9 +394,9 @@ function DrawerRow({
       style={{ ['--row-delay' as string]: `${delayMs}ms` }}
       className={`
         mobile-drawer-row-in
-        relative flex items-center justify-between
-        rounded-lg px-2.5 py-2
-        text-[13.5px] transition-colors
+        group relative flex items-center justify-between
+        rounded-2xl px-4 py-3
+        text-[14px] transition-colors
         ${
           active
             ? 'bg-[var(--surface-2)] text-[var(--fg)] font-semibold'
@@ -296,17 +404,14 @@ function DrawerRow({
         }
       `}
     >
-      {/* Left-edge active bar — mirrors the docs sidebar treatment. */}
-      {active && (
-        <span
-          aria-hidden
-          className="absolute left-[-2px] top-[30%] bottom-[30%] w-[2px] rounded-sm bg-[var(--fg)]"
-        />
-      )}
       <span>{label}</span>
       <span
         aria-hidden
-        className="mono tabular text-[10.5px] text-[var(--fg-3)]"
+        className="
+          mono tabular text-[11px] text-[var(--fg-3)]
+          transition-transform duration-200 ease-out
+          group-hover:translate-x-0.5
+        "
       >
         →
       </span>

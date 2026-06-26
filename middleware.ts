@@ -81,6 +81,83 @@ function geoRedirect(req: NextRequest): NextResponse | null {
 const PROD = process.env.NODE_ENV === 'production';
 
 /**
+ * Hostnames that route the visitor directly into the product shell
+ * (`/app/*`) instead of the marketing surface. The single Next.js
+ * process serves both — this middleware just rewrites the requested
+ * path into the `/app/*` segment for these hosts.
+ *
+ * Configurable via `APP_HOSTS` env (comma-separated) so staging can
+ * use a different subdomain (e.g. `app.staging.vizzor.ai`) without
+ * a code change.
+ */
+const DEFAULT_APP_HOSTS = ['app.vizzor.ai'];
+const APP_HOSTS = new Set(
+  (process.env.APP_HOSTS ?? DEFAULT_APP_HOSTS.join(','))
+    .split(',')
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean),
+);
+
+/** Path prefixes the host-rewrite must NOT touch — even on app.*
+ *  these should pass through unchanged. The marketing-route bypasses
+ *  (account, pricing, pay, wallet, cli-pair, telegram-pair, legal,
+ *  changelog) belong to the marketing route group but are reachable
+ *  from inside the product (profile dropdown, exhausted-banner
+ *  upgrade CTA, wallet redirect target, pairing flows, legal/privacy
+ *  links, changelog island) — the visitor stays on `app.vizzor.ai`
+ *  end-to-end instead of bouncing to vizzor.ai. The marketing layout
+ *  detects the app host and strips its chrome so these pages render
+ *  in app-style on the product subdomain. */
+const HOST_REWRITE_BYPASS_RE =
+  /^\/(?:api|_next|_vercel|docs|favicon\.ico|sitemap\.xml|robots\.txt|manifest\.webmanifest|account|pricing|pay|wallet|cli-pair|telegram-pair|legal|changelog)(?:\/|$)/;
+
+/**
+ * On `app.vizzor.ai`, mutate the URL pathname in place so the rest
+ * of the middleware pipeline (geo → next-intl locale negotiation →
+ * security headers) sees the `/app/*` path and routes it through the
+ * `[locale]/app/...` segment correctly. The function returns true if
+ * a rewrite was applied; callers don't need the return value but it's
+ * useful for tests.
+ *
+ *   app.vizzor.ai/                  → (mutated to) /app/predict
+ *   app.vizzor.ai/predict           → /app/predict
+ *   app.vizzor.ai/predict/abc       → /app/predict/abc
+ *   app.vizzor.ai/billing           → /app/billing
+ *   app.vizzor.ai/es/predict        → /es/app/predict (locale preserved)
+ *
+ * MUST mutate in place rather than return a terminal NextResponse:
+ * next-intl's localeMiddleware downstream reads req.nextUrl.pathname
+ * to decide whether to inject the default locale prefix. Returning
+ * early with `NextResponse.rewrite(/app/predict)` bypasses next-intl,
+ * leaving the URL without a `[locale]` segment — which 404s because
+ * every route file lives under `app/[locale]/...`.
+ */
+function applyAppHostRewriteInPlace(req: NextRequest): boolean {
+  const hostHeader = (req.headers.get('host') ?? '').toLowerCase();
+  const host = hostHeader.split(':')[0] ?? '';
+  if (!APP_HOSTS.has(host)) return false;
+
+  const { pathname } = req.nextUrl;
+  if (HOST_REWRITE_BYPASS_RE.test(pathname)) return false;
+
+  const localeMatch = pathname.match(
+    new RegExp(`^/(${routing.locales.filter((l) => l !== routing.defaultLocale).join('|')})(?=/|$)`),
+  );
+  const localePrefix = localeMatch ? localeMatch[0] : '';
+  const rest = pathname.slice(localePrefix.length);
+  if (rest.startsWith('/app')) return false;
+
+  const nextRest = rest === '' || rest === '/'
+    ? '/app/predict'
+    : `/app${rest}`;
+
+  const newPathname = `${localePrefix}${nextRest}`;
+  if (newPathname === pathname) return false;
+  req.nextUrl.pathname = newPathname;
+  return true;
+}
+
+/**
  * Build the CSP directive string. Keeps the allowlist in one place so
  * Phase 2 (promotion to enforcing) is a one-line flip.
  *
@@ -172,14 +249,30 @@ function applySecurityHeaders(res: NextResponse): NextResponse {
   res.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
   res.headers.set('Cross-Origin-Resource-Policy', 'same-site');
 
-  // CSP — Report-Only for Phase 1. Switch to `Content-Security-Policy`
-  // for enforcing in Phase 2.
-  res.headers.set('Content-Security-Policy-Report-Only', buildCsp());
+  // CSP — Report-Only for staging / devnet; enforcing for production
+  // mainnet. The Report-Only header still ships in prod alongside the
+  // enforcing one so the report endpoint keeps catching the long tail.
+  const csp = buildCsp();
+  const isMainnetProd =
+    PROD &&
+    (process.env.NEXT_PUBLIC_PAYMENT_NETWORK === 'mainnet' ||
+      process.env.CSP_ENFORCE === 'true');
+  if (isMainnetProd) {
+    res.headers.set('Content-Security-Policy', csp);
+  } else {
+    res.headers.set('Content-Security-Policy-Report-Only', csp);
+  }
 
   return res;
 }
 
 export default function middleware(req: NextRequest): NextResponse {
+  // 0. App-host rewrite — mutates req.nextUrl.pathname in place when
+  //    the visitor is on `app.vizzor.ai`. The rest of the pipeline
+  //    (geo → locale → security headers) then processes the rewritten
+  //    path and next-intl injects the correct `[locale]` segment.
+  applyAppHostRewriteInPlace(req);
+
   // Only run the next-intl locale handler against paths it owns.
   // Everything else flows through unchanged and just collects the
   // security headers on its way out.

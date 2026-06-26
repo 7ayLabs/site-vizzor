@@ -9,6 +9,14 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: 'standalone',
   typedRoutes: true,
+  // Native Node modules used by the payment subsystem. Without this,
+  // `instrumentation.ts` (which dynamic-imports lib/payment/* on the
+  // Node runtime) fails the edge-runtime build with "Module not found:
+  // Can't resolve 'fs'/'path'" because webpack walks the full import
+  // graph regardless of runtime guards. Marking better-sqlite3 as
+  // external tells Next.js to `require()` it at runtime instead of
+  // bundling — the standalone output still ships it via node_modules.
+  serverExternalPackages: ['better-sqlite3', 'bindings'],
   // Hide the small floating `N` chip Next.js renders in the corner
   // while running `next dev`. It overlapped the marketing layout's
   // own bottom-left affordances and read as a stray brand mark to
@@ -19,6 +27,27 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'cdn.jsdelivr.net', pathname: '/gh/atomiclabs/cryptocurrency-icons/**' },
       { protocol: 'https', hostname: 'icons.llamao.fi', pathname: '/icons/**' },
     ],
+  },
+  // Legacy app-surface URLs → new /app/* umbrella. 308 (permanent)
+  // preserves SEO + browser history; handled at the edge before any
+  // route resolution. Per-locale variants explicit because next-intl's
+  // `as-needed` localePrefix puts `en` at the root.
+  async redirects() {
+    return [
+      // English (root) — preserves the canonical /predict, /dashboard/*
+      // URLs that have been live since v0.1.0.
+      { source: '/predict', destination: '/app/predict', permanent: true },
+      { source: '/dashboard', destination: '/app', permanent: true },
+      { source: '/dashboard/flow', destination: '/app/flow', permanent: true },
+      { source: '/dashboard/whales', destination: '/app/whales', permanent: true },
+      // Localized variants (es, fr) — must enumerate per next-intl
+      // `as-needed` strategy; we don't redirect for unknown locales so
+      // a typo doesn't 308 into a 404 trap.
+      { source: '/:locale(es|fr)/predict', destination: '/:locale/app/predict', permanent: true },
+      { source: '/:locale(es|fr)/dashboard', destination: '/:locale/app', permanent: true },
+      { source: '/:locale(es|fr)/dashboard/flow', destination: '/:locale/app/flow', permanent: true },
+      { source: '/:locale(es|fr)/dashboard/whales', destination: '/:locale/app/whales', permanent: true },
+    ];
   },
 };
 

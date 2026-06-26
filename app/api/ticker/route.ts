@@ -1,24 +1,21 @@
 /**
- * GET /api/ticker — live ticker prices for the homepage carousel.
+ * GET /api/ticker — live ticker prices.
  *
- * Server-side proxy to CoinGecko's free `simple/price` endpoint. Returns
- * the same `TickerEntry[]` shape the SWR client hook expects, so the
- * upstream change is invisible to the consumer.
+ * Source priority (highest authority first):
+ *   1. Vizzor engine `${VIZZOR_API_URL}/v1/market/prices?symbols=…`
+ *      — Binance + CoinGecko aggregated upstream, same prices the AI
+ *      sees when it composes trade plans. **This is the only path
+ *      that prevents AI/UI price divergence.** If we serve a stale
+ *      CoinGecko price here while the chat assistant uses Binance,
+ *      users see "BTC at $63k" in the banner and "BTC at $61k" in the
+ *      reply — the exact hallucination class we want to kill.
+ *   2. CoinGecko direct — only used when the engine is unreachable
+ *      AND the snapshot is too old. Best-effort polish, not a
+ *      replacement for engine-authoritative pricing.
+ *   3. Committed `data/snapshot.json` — never go blank.
  *
- * Why proxy instead of letting the client call CoinGecko directly:
- *  - CoinGecko free tier has a per-IP rate limit (~30 req/min). One
- *    server-side cache window covers every visitor on this VPS.
- *  - The CoinGecko response is keyed by gecko ID — we own the symbol→id
- *    mapping in `lib/coin-meta.ts` and translate it here so the client
- *    never needs to know about gecko IDs.
- *  - Avoids exposing third-party endpoints in the browser network panel.
- *
- * On any upstream error or timeout we fall back to the committed
- * `data/snapshot.json` ticker so the carousel never goes blank.
- *
- * Cached for 30 seconds via `next.revalidate`, which is the same cadence
- * the client SWR hook polls at. So we hit CoinGecko at most twice per
- * minute regardless of traffic.
+ * Cache: 30s (matches the SWR client poll cadence). One upstream hit
+ * per minute per node regardless of visitor traffic.
  */
 
 import { NextResponse } from 'next/server';
@@ -29,30 +26,90 @@ import type { TickerEntry } from '@/lib/types';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+const VIZZOR_API_BASE =
+  process.env.VIZZOR_API_URL ??
+  process.env.NEXT_PUBLIC_VIZZOR_API_URL ??
+  'https://api.vizzor.ai';
 const COINGECKO_BASE = 'https://api.coingecko.com/api/v3/simple/price';
-const FETCH_TIMEOUT_MS = 6_000;
+// Tight timeout on the engine fetch — if the engine doesn't have the
+// market route deployed yet OR is offline, we want to fall through
+// to CoinGecko fast rather than make the browser wait. 3s is the
+// p99 of healthy engine responses in our staging logs.
+const VIZZOR_TIMEOUT_MS = 3_000;
+const COINGECKO_TIMEOUT_MS = 6_000;
+
+interface VizzorPriceRow {
+  price?: unknown;
+  priceChange24h?: unknown;
+  name?: unknown;
+  volume24h?: unknown;
+  marketCap?: unknown;
+}
+interface VizzorPricesResponse {
+  prices?: Record<string, VizzorPriceRow>;
+}
+
+async function fetchFromVizzor(): Promise<TickerEntry[] | null> {
+  const symbols = TOP_20.map((c) => c.symbol).join(',');
+  const url = `${VIZZOR_API_BASE}/v1/market/prices?symbols=${encodeURIComponent(symbols)}`;
+  const apiKey = process.env.VIZZOR_API_KEY;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), VIZZOR_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      cache: 'no-store',
+      headers: {
+        accept: 'application/json',
+        ...(apiKey ? { 'x-api-key': apiKey } : {}),
+      },
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as VizzorPricesResponse;
+    if (!json.prices || typeof json.prices !== 'object') return null;
+
+    const entries: TickerEntry[] = [];
+    for (const coin of TOP_20) {
+      const row = json.prices[coin.symbol];
+      if (!row) continue;
+      const price = typeof row.price === 'number' ? row.price : null;
+      if (price === null || !Number.isFinite(price) || price <= 0) continue;
+      const change24h =
+        typeof row.priceChange24h === 'number' ? row.priceChange24h : 0;
+      entries.push({
+        symbol: coin.symbol,
+        price,
+        // Engine returns percent (e.g. -1.96), site stores fractional.
+        changePct: change24h / 100,
+        source: 'vizzor',
+      });
+    }
+    return entries.length > 0 ? entries : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 type CoinGeckoResponse = Record<
   string,
   { usd: number; usd_24h_change?: number }
 >;
 
-async function fetchLive(): Promise<TickerEntry[] | null> {
+async function fetchFromCoinGecko(): Promise<TickerEntry[] | null> {
   const ids = TOP_20.map((c) => c.geckoId).join(',');
   const url = `${COINGECKO_BASE}?ids=${ids}&vs_currencies=usd&include_24hr_change=true`;
-
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
+  const timeout = setTimeout(() => controller.abort(), COINGECKO_TIMEOUT_MS);
   try {
     const res = await fetch(url, {
       signal: controller.signal,
+      cache: 'no-store',
       headers: { accept: 'application/json' },
-      next: { revalidate: 30 },
     });
     if (!res.ok) return null;
     const data = (await res.json()) as CoinGeckoResponse;
-
     const entries: TickerEntry[] = TOP_20
       .map((coin): TickerEntry | null => {
         const row = data[coin.geckoId];
@@ -68,7 +125,6 @@ async function fetchLive(): Promise<TickerEntry[] | null> {
         };
       })
       .filter((e): e is TickerEntry => e !== null);
-
     return entries.length > 0 ? entries : null;
   } catch {
     return null;
@@ -78,14 +134,49 @@ async function fetchLive(): Promise<TickerEntry[] | null> {
 }
 
 export async function GET() {
-  const live = await fetchLive();
-  if (live) {
-    return NextResponse.json(live, {
-      headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' },
+  // Defensive: every fetcher already swallows its own errors and
+  // returns null, but a throw in the snapshot getter or JSON path
+  // would still 500 the route. Outer try/catch guarantees the
+  // ticker endpoint NEVER returns a non-2xx — the UI relies on
+  // `useTicker()` always resolving to a usable array.
+  try {
+    // 1. Vizzor engine — authoritative, matches what the AI sees.
+    // No CDN caching: the engine already caches Binance for 15s, so
+    // adding another 30s layer here drifts the widget away from what
+    // the AI quotes in the same conversation. `no-store` means every
+    // SWR poll hits the engine, the engine's own cache absorbs the
+    // load against Binance.
+    const fromVizzor = await fetchFromVizzor();
+    if (fromVizzor) {
+      return NextResponse.json(fromVizzor, {
+        headers: {
+          'Cache-Control': 'no-store',
+          'x-vizzor-source': 'engine',
+        },
+      });
+    }
+    // 2. CoinGecko direct — best-effort when engine is down.
+    const fromGecko = await fetchFromCoinGecko();
+    if (fromGecko) {
+      return NextResponse.json(fromGecko, {
+        headers: {
+          'Cache-Control': 'no-store',
+          'x-vizzor-source': 'coingecko',
+        },
+      });
+    }
+    // 3. Committed snapshot — never go blank.
+    return NextResponse.json(snapshotTicker(), {
+      headers: { 'Cache-Control': 'no-store', 'x-vizzor-source': 'snapshot' },
+    });
+  } catch {
+    // Final guard: if even the snapshot getter throws (e.g. corrupt
+    // bundled JSON), return an empty list with a 200 so the client
+    // SWR resolves and the UI degrades to "no ticker" instead of
+    // throwing a useSWR error.
+    return NextResponse.json([], {
+      status: 200,
+      headers: { 'Cache-Control': 'no-store', 'x-vizzor-source': 'empty' },
     });
   }
-  // Fall back to the committed snapshot so the ticker never goes blank.
-  return NextResponse.json(snapshotTicker(), {
-    headers: { 'Cache-Control': 'no-store', 'x-vizzor-fallback': 'snapshot' },
-  });
 }

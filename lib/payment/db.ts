@@ -121,6 +121,7 @@ function init(): DB {
     );
   `);
   runV020Migrations(db);
+  runV04TreasuryMigrations(db);
   return db;
 }
 
@@ -178,6 +179,13 @@ function runV020Migrations(db: DB): void {
   db.exec(
     `CREATE INDEX IF NOT EXISTS idx_subs_telegram ON subscriptions(telegram_user_id)`,
   );
+  // v0.4 — scheduled plan transition. Null = no schedule; the row
+  // naturally lapses to free at expires_at. 'cancel' = let the period
+  // run out then drop to free (no renewal nudge). 'downgrade_to_pro'
+  // = same lifecycle, but the next paid plan we surface is Pro
+  // rather than the current Elite. Read-only by the tier resolver
+  // (purely a UX surface); written by the cancel + downgrade routes.
+  addColumnIfMissing(db, 'subscriptions', 'scheduled_action', 'TEXT');
   addColumnIfMissing(db, 'auth_sessions', 'telegram_user_id', 'INTEGER');
 
   // Persistent burn-signature replay cache. Replaces the in-memory
@@ -391,6 +399,43 @@ function runV020Migrations(db: DB): void {
   `);
 }
 
+/* ------------------------------------------------------------------ *\
+ * v0.4 treasury migrations — watch-only HD model. Additive only.
+ *
+ * Adds per-session derived-address bookkeeping so two distinct sessions
+ * never share a receive address (privacy + replay safety). The site
+ * stops paying every customer's payment into a single static treasury;
+ * each session is allocated a unique address from either the TON xpub
+ * (via `derivation_index` → `lib/payment/hd-ton.ts`) or the Solana
+ * pre-derived pool (via `pool_index` → `lib/payment/sol-pool.ts`).
+ *
+ * `sol_pool_state` holds a single-row counter for the next-unclaimed
+ * Solana pool index. The atomic UPDATE-then-INSERT inside one
+ * SQLite transaction in `claimNextAddress` is what guarantees
+ * two concurrent session-creates never grab the same address.
+\* ------------------------------------------------------------------ */
+function runV04TreasuryMigrations(db: DB): void {
+  // Per-session derived-address index. Same column name across chains
+  // since the underlying model is identical (operator-pre-derived
+  // pool consumed atomically). Null on legacy pre-v0.4 rows that
+  // settled against the static treasury.
+  addColumnIfMissing(db, 'payment_sessions', 'pool_index', 'INTEGER');
+  // One state row per chain. The `chain` PK makes the
+  // increment-and-claim a single atomic UPDATE...RETURNING per chain,
+  // so concurrent claims on Solana don't block TON claims and vice
+  // versa. `next_index` is the next-unclaimed pool entry; bump it
+  // after every successful allocation.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pool_state (
+      chain           TEXT PRIMARY KEY,
+      next_index      INTEGER NOT NULL DEFAULT 0,
+      updated_at      INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000)
+    );
+    INSERT OR IGNORE INTO pool_state (chain, next_index) VALUES ('solana', 0);
+    INSERT OR IGNORE INTO pool_state (chain, next_index) VALUES ('ton', 0);
+  `);
+}
+
 export function getDb(): DB {
   if (!g[KEY]) g[KEY] = init();
   return g[KEY];
@@ -420,7 +465,14 @@ export interface SessionRow {
   grant_code: string | null;
   memo: string | null;
   created_at: number;
+  /** v0.4 — operator-pre-derived address-pool index for the
+   *  per-session receive address. Same column for both SOL and TON;
+   *  the chain disambiguates which pool to look up against. Null on
+   *  pre-v0.4 legacy rows that settled against the static treasury. */
+  pool_index: number | null;
 }
+
+export type ScheduledSubscriptionAction = 'cancel' | 'downgrade_to_pro';
 
 export interface SubscriptionRow {
   id: number;
@@ -436,6 +488,14 @@ export interface SubscriptionRow {
    * payment. v0.2.0+ column; null on legacy rows.
    */
   telegram_user_id: number | null;
+  /**
+   * v0.4 — pre-scheduled plan transition. The tier resolver does NOT
+   * consult this; it's purely a UX surface so /account can show
+   * "plan continues until {date}, then drops to {target}". The
+   * underlying lifecycle is unchanged — the subscription lapses to
+   * free at `expires_at` regardless. Null on legacy rows.
+   */
+  scheduled_action: ScheduledSubscriptionAction | null;
 }
 
 export interface GrantRow {
@@ -602,18 +662,72 @@ export interface RateCacheRow {
  * Repository helpers — keep raw SQL behind named functions for callers.
 \* ------------------------------------------------------------------ */
 
-export function insertSession(row: Omit<SessionRow, 'created_at' | 'tx_sig' | 'confirmed_at' | 'payer_address' | 'grant_code' | 'memo'> & { memo?: string }): void {
+export function insertSession(
+  row: Omit<
+    SessionRow,
+    | 'created_at'
+    | 'tx_sig'
+    | 'confirmed_at'
+    | 'payer_address'
+    | 'grant_code'
+    | 'memo'
+    | 'pool_index'
+  > & {
+    memo?: string;
+    pool_index?: number | null;
+  },
+): void {
   getDb()
     .prepare(
       `INSERT INTO payment_sessions
        (session_id, tier, cadence, chain, token, dest_address,
         amount, decimals, amount_usd_cents, discount_bps,
-        rate_locked, expires_at, status, memo)
+        rate_locked, expires_at, status, memo,
+        pool_index)
        VALUES (@session_id, @tier, @cadence, @chain, @token, @dest_address,
         @amount, @decimals, @amount_usd_cents, @discount_bps,
-        @rate_locked, @expires_at, @status, @memo)`,
+        @rate_locked, @expires_at, @status, @memo,
+        @pool_index)`,
     )
-    .run({ ...row, memo: row.memo ?? null });
+    .run({
+      ...row,
+      memo: row.memo ?? null,
+      pool_index: row.pool_index ?? null,
+    });
+}
+
+export type PoolChain = 'solana' | 'ton';
+
+/**
+ * Atomically claim the next pool index for the given chain. Uses
+ * UPDATE...RETURNING so the read + write are one SQL statement —
+ * concurrent claims serialize through SQLite's write lock and never
+ * observe the same index twice. Per-chain rows mean a SOL claim
+ * never blocks a TON claim (or vice versa).
+ */
+export function claimNextPoolIndex(chain: PoolChain): number {
+  const row = getDb()
+    .prepare(
+      `UPDATE pool_state
+       SET next_index = next_index + 1,
+           updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000
+       WHERE chain = ?
+       RETURNING next_index - 1 AS claimed`,
+    )
+    .get(chain) as { claimed: number } | undefined;
+  if (!row) {
+    throw new Error(
+      `pool_state row missing for chain=${chain} — migration did not run`,
+    );
+  }
+  return row.claimed;
+}
+
+export function getPoolNextIndex(chain: PoolChain): number {
+  const row = getDb()
+    .prepare(`SELECT next_index FROM pool_state WHERE chain = ?`)
+    .get(chain) as { next_index: number } | undefined;
+  return row?.next_index ?? 0;
 }
 
 export function getSessionRow(sessionId: string): SessionRow | null {
@@ -700,7 +814,13 @@ export function redeemGrant(code: string, telegramUserId: number): void {
  * already exists at payment time (the C1 watcher seam).
  */
 export function insertSubscription(
-  row: Omit<SubscriptionRow, 'id' | 'created_at' | 'telegram_user_id'> & {
+  // New subscriptions are always inserted with a clear ledger —
+  // `scheduled_action` only gets set later via the cancel/downgrade
+  // routes, so the caller doesn't need to thread null through.
+  row: Omit<
+    SubscriptionRow,
+    'id' | 'created_at' | 'telegram_user_id' | 'scheduled_action'
+  > & {
     telegram_user_id?: number | null;
   },
 ): number {
@@ -735,6 +855,33 @@ export function findActiveSubscriptionByWallet(
     )
     .get(wallet, now) as SubscriptionRow | undefined;
   return row ?? null;
+}
+
+/**
+ * Stamp a scheduled plan transition on the wallet's currently-active
+ * subscription. The tier resolver doesn't consult this field; it's a
+ * UX-only marker so /account can show "plan continues until {date},
+ * then drops to {target}" and the subscribe CTA on /pricing can hint
+ * at the upcoming change.
+ *
+ * Returns the updated row, or `null` if the wallet has no active
+ * subscription (in which case there's nothing to schedule).
+ *
+ * Idempotent: passing the same `action` twice is a no-op DB-write
+ * but still returns the row. Passing `null` clears any prior
+ * schedule so the user can change their mind.
+ */
+export function setScheduledActionForActiveSubscription(
+  wallet: string,
+  action: ScheduledSubscriptionAction | null,
+  now: number,
+): SubscriptionRow | null {
+  const row = findActiveSubscriptionByWallet(wallet, now);
+  if (!row) return null;
+  getDb()
+    .prepare(`UPDATE subscriptions SET scheduled_action = ? WHERE id = ?`)
+    .run(action, row.id);
+  return { ...row, scheduled_action: action };
 }
 
 /**

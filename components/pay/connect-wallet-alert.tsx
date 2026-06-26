@@ -17,11 +17,12 @@
  * wrappers stay consistent across the app.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { AlertCircle, Wallet2, X } from 'lucide-react';
+import { useFocusTrap } from '@/hooks/use-focus-trap';
 
 type Phase = 'closed' | 'opening' | 'open' | 'closing';
 const EXIT_MS = 180;
@@ -42,6 +43,11 @@ export function ConnectWalletAlert({
   const { setVisible } = useWalletModal();
   const [phase, setPhase] = useState<Phase>('closed');
   const [mounted, setMounted] = useState(false);
+  // Trap is armed while the alert is in its visible phases; on
+  // 'closing' the trap releases focus so the restore lands while the
+  // trigger is still in the DOM.
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(panelRef, phase === 'open' || phase === 'opening');
 
   useEffect(() => {
     setMounted(true);
@@ -125,6 +131,7 @@ export function ConnectWalletAlert({
       />
 
       <div
+        ref={panelRef}
         className={`relative z-10 w-[calc(100%-1.5rem)] sm:max-w-[400px] border border-[var(--border)] bg-[var(--surface)] rounded-2xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.5)] flex flex-col ${cardAnim}`}
       >
         <div className="flex items-start gap-3 px-5 pt-5 pb-3">

@@ -96,26 +96,33 @@ export function LifetimePromoModal({ open, onDismiss }: LifetimePromoModalProps)
       aria-labelledby="promo-lifetime-title"
       className={`fixed inset-0 z-[60] flex items-end sm:items-center justify-center ${backdropAnim}`}
     >
+      {/* Backdrop — flat tint, no backdrop-blur. The native iOS /
+          macOS Safari blur on the surface beneath fights any
+          backdrop-blur applied here and reads as "vibecoded"
+          chrome. A solid dim is calmer and on-system. */}
       <button
         type="button"
         aria-label={t('dismiss')}
         onClick={onDismiss}
-        className="absolute inset-0 bg-[color:color-mix(in_oklab,var(--bg)_70%,black_20%)]/85 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/55"
       />
 
       <div
-        className={`relative z-10 w-[calc(100%-1.5rem)] sm:max-w-[440px] border border-[var(--border)] bg-[var(--surface)] rounded-2xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.45)] flex flex-col ${cardAnim}`}
+        className={`relative z-10 w-[calc(100%-1.5rem)] sm:max-w-[420px] border border-[var(--border)] bg-[var(--surface)] rounded-2xl shadow-[0_12px_36px_-18px_color-mix(in_oklab,#000_85%,transparent)] flex flex-col ${cardAnim}`}
       >
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3 px-7 pt-6 pb-3">
-          <div className="flex flex-col gap-2 min-w-0">
-            <p className="mono tabular text-[10px] uppercase tracking-[0.18em] text-[var(--accent)] inline-flex items-center gap-1.5">
-              <Sparkles size={11} strokeWidth={2.4} />
+        {/* Header — single tight row: eyebrow + title on the left,
+            close on the right. Subtitle moves up as a one-liner so the
+            card scans top-to-bottom without the previous 3-line
+            header + separate subtitle block. */}
+        <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-1">
+          <div className="flex flex-col gap-1.5 min-w-0">
+            <p className="mono tabular text-[9.5px] uppercase tracking-[0.2em] font-semibold text-[var(--accent)] inline-flex items-center gap-1.5">
+              <Sparkles size={10} strokeWidth={2.4} />
               <span>{t('eyebrow')}</span>
             </p>
             <h2
               id="promo-lifetime-title"
-              className="text-[19px] sm:text-[21px] font-semibold tracking-tight text-[var(--fg)] leading-[1.25]"
+              className="text-[18px] sm:text-[19px] font-semibold tracking-tight text-[var(--fg)] leading-[1.25]"
             >
               {t('title')}
             </h2>
@@ -124,73 +131,80 @@ export function LifetimePromoModal({ open, onDismiss }: LifetimePromoModalProps)
             type="button"
             onClick={onDismiss}
             aria-label={t('dismiss')}
-            className="shrink-0 -mr-1.5 -mt-1.5 inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)] transition-colors"
+            className="shrink-0 -mr-1 -mt-1 inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)] transition-colors"
           >
-            <X size={16} strokeWidth={2} />
+            <X size={14} strokeWidth={2} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="px-7 pb-5 flex flex-col gap-4">
-          <p className="text-[13px] leading-[1.55] text-[var(--fg-2)]">
+        <div className="px-6 pb-4 flex flex-col gap-3.5">
+          <p className="text-[12.5px] leading-[1.55] text-[var(--fg-2)]">
             {t('subtitle')}
           </p>
 
-          {/* Savings panel — vertical stack so the prices breathe */}
-          <div className="border border-[var(--border)] bg-[var(--bg)]/40 px-4 py-4 flex flex-col gap-3 rounded-xl">
+          {/* Savings panel — flatter card, no inner bg tint. Two
+              prices stacked with a hairline divider; the strikethrough
+              row carries the comparison visually without needing a
+              gradient or accent fill. */}
+          <div className="border border-[var(--border)] px-4 py-3.5 flex flex-col gap-3 rounded-xl">
             <div className="flex items-baseline justify-between gap-3">
-              <p className="mono tabular text-[9.5px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
+              <span className="mono tabular text-[9px] uppercase tracking-[0.18em] text-[var(--fg-3)]">
                 {t('lifetimePriceLabel')}
-              </p>
-              <p className="mono tabular text-[10px] text-[var(--fg-3)]">
+              </span>
+              <span className="mono tabular text-[9px] text-[var(--fg-3)]">
                 {t('lifetimePriceCaption')}
-              </p>
+              </span>
             </div>
-            <p className="text-[28px] font-semibold tracking-tight text-[var(--fg)] leading-none">
+            <p className="text-[26px] font-semibold tracking-tight text-[var(--fg)] leading-none">
               $1,499
             </p>
             <div className="h-px bg-[var(--border)]" />
             <div className="flex items-baseline justify-between gap-3">
-              <p className="mono tabular text-[9.5px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
+              <span className="mono tabular text-[9px] uppercase tracking-[0.18em] text-[var(--fg-3)]">
                 {t('comparisonLabel')}
-              </p>
-              <p className="mono tabular text-[10px] text-[var(--fg-3)]">
+              </span>
+              <span className="mono tabular text-[9px] text-[var(--fg-3)]">
                 {t('comparisonCaption')}
-              </p>
+              </span>
             </div>
-            <p className="text-[22px] font-medium tracking-tight text-[var(--fg-3)] leading-none line-through">
+            <p className="text-[18px] font-medium tracking-tight text-[var(--fg-3)] leading-none line-through">
               $11,880
             </p>
           </div>
 
-          {/* SOL discount footnote */}
-          <p className="mono tabular text-[10.5px] uppercase tracking-[0.14em] text-[var(--accent)]">
+          {/* SOL discount footnote — single line */}
+          <p className="mono tabular text-[10px] uppercase tracking-[0.14em] text-[var(--accent)]">
             {t('solFootnote')}
           </p>
         </div>
 
-        {/* CTAs */}
-        <div className="flex flex-col gap-1.5 px-7 pb-6">
+        {/* CTAs — primary solid fill in var(--fg) matching the topic
+            bar + composer language; secondary becomes a hairline-
+            bordered ghost so it reads as "dismiss" not "secondary
+            action". */}
+        <div className="flex flex-col gap-1.5 px-6 pb-5">
           <Link
             href="/pay/elite/lifetime"
             onClick={onDismiss}
             className="
-              inline-flex h-11 items-center justify-center gap-1.5
-              rounded-full bg-[var(--accent)] px-5
-              text-[12.5px] font-semibold tracking-tight text-[var(--accent-fg)]
-              hover:opacity-90 transition-opacity
+              inline-flex h-11 items-center justify-center
+              rounded-full bg-[var(--fg)] px-5
+              text-[12.5px] font-semibold tracking-tight text-[var(--bg)]
+              transition-[transform,opacity] duration-150
+              hover:opacity-90 motion-safe:hover:scale-[1.01]
             "
           >
-            <span>{t('cta')}</span>
-            <span aria-hidden>→</span>
+            {t('cta')}
           </Link>
           <button
             type="button"
             onClick={onDismiss}
             className="
-              inline-flex h-9 items-center justify-center
+              inline-flex h-9 items-center justify-center rounded-full
+              border border-[var(--border)] bg-transparent
               text-[11.5px] text-[var(--fg-3)] hover:text-[var(--fg)]
-              transition-colors
+              hover:border-[var(--border-hi)] transition-colors
             "
           >
             {t('dismiss')}
@@ -206,9 +220,16 @@ export function LifetimePromoModal({ open, onDismiss }: LifetimePromoModalProps)
 
 /**
  * LifetimeRetriggerPill — small fixed-position button at the bottom
- * of /pricing that re-opens the modal after the user dismissed it.
- * Renders only when the modal is closed AND the controlled state
- * permits manual re-open.
+ * of /pricing that opens (or re-opens) the lifetime promo modal.
+ *
+ * v0.4 change: rendered persistently while the user is on /pricing,
+ * not only as a post-dismissal consolation. z-index dropped to 30
+ * (was 40) so the modal at z-60 still overlays cleanly when both are
+ * open; the lifetime-promo-island still passes `visible={false}` for
+ * users who already hold the lifetime tier.
+ *
+ * Shadow softened to match the on-system language used by the new
+ * popovers on /predict (slash-palette + topic-add-panel).
  */
 export function LifetimeRetriggerPill({
   visible,
@@ -224,11 +245,11 @@ export function LifetimeRetriggerPill({
       type="button"
       onClick={onOpen}
       className="
-        fixed bottom-5 right-5 z-40
+        fixed bottom-5 right-5 z-30
         inline-flex h-10 items-center gap-1.5 rounded-full
         border border-[var(--border)] bg-[var(--surface)] px-3.5
         text-[12px] font-semibold tracking-tight text-[var(--fg)]
-        shadow-[0_8px_24px_-6px_rgba(0,0,0,0.35)]
+        shadow-[0_12px_36px_-18px_color-mix(in_oklab,#000_85%,transparent)]
         hover:bg-[var(--surface-2)]
         transition-colors
       "

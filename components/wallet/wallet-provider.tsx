@@ -45,7 +45,13 @@ import {
   WalletProvider,
 } from '@solana/wallet-adapter-react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
+// `@solana/wallet-adapter-wallets` is the umbrella package we depend on;
+// it re-exports the individual adapters. Importing through it avoids
+// adding a direct dependency on `@solana/wallet-adapter-solflare`.
+import { SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
+import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import { solanaRpcUrl } from '@/lib/solana';
+import { paymentNetwork } from '@/lib/payment/network';
 
 import '@solana/wallet-adapter-react-ui/styles.css';
 
@@ -92,30 +98,52 @@ export default function WalletAdapter({
   //     gives us synchronous detection on mount. Wallet Standard
   //     coverage is also there in parallel as a backup.
   //
-  // Discovery race: `WalletProvider` keeps `wallets` reactive — it
-  // emits updates whenever a Wallet Standard registration arrives.
-  // `WalletConnectFlow` re-evaluates each entry's `readyState` until
-  // either the requested wallet appears or a 1.5s timeout fires, so
-  // a late-registering Phantom still resolves cleanly.
-  // Pure Wallet Standard discovery. Modern Phantom, Solflare, Backpack,
-  // Glow, and Brave Wallet all register themselves via
-  // `window.navigator.wallets` and `WalletProvider` keeps the discovered
-  // list reactive — emitting updates whenever a registration arrives.
-  // We pass an empty `wallets` array so:
+  // Wallet registration policy:
   //
-  //   * The picker reflects EXACTLY what's installed in the browser.
-  //     No phantom (pun intended) entries for extensions the user
-  //     doesn't have.
-  //   * Brave's `window.solana` spoof of `isPhantom: true` is bypassed —
-  //     the legacy injection path is disabled entirely; only
-  //     Wallet-Standard-registered wallets appear, and Brave registers
-  //     as its own canonical name "Brave Wallet" alongside (not as)
-  //     Phantom.
+  //   * **Phantom — Wallet Standard only.** Not pre-registered (see the
+  //     Brave/`isPhantom` spoof rationale above). Modern Phantom
+  //     auto-injects via `window.navigator.wallets`; `WalletProvider`
+  //     surfaces it reactively the moment the registration event fires.
+  //   * **Solflare — legacy adapter pre-registered.** Brave does NOT
+  //     impersonate Solflare's `isSolflare` flag, so the legacy
+  //     direct-injection path is safe. Pre-registering buys us two
+  //     things that pure Wallet Standard discovery doesn't deliver
+  //     reliably:
+  //       1. **Synchronous availability on mount.** Wallet Standard
+  //          registration for Solflare lands later than Phantom on
+  //          some Chromium builds (Brave especially), and the
+  //          discovery race let the `READY_TIMEOUT_MS` fire before
+  //          Solflare surfaced — the modal flipped straight to
+  //          `wallet_not_installed` and the user saw "Solflare didn't
+  //          open."
+  //       2. **Built-in web-wallet fallback.** The
+  //          `SolflareWalletAdapter.connect()` flow opens
+  //          `https://solflare.com/access-wallet` when no extension is
+  //          detected, so visitors without the browser extension can
+  //          still sign in via the Solflare web wallet. Pure
+  //          Wallet-Standard discovery sees nothing in that case and
+  //          the adapter never enters its fallback branch.
+  //     The legacy entry passes the active `network` so the adapter
+  //     can route to the right Solflare cluster URL (mainnet /
+  //     testnet / devnet) when the web-wallet fallback fires.
   //
-  // The picker UI handles the case where no wallets are registered yet
-  // by polling the reactive list — entries appear within a tick of
-  // Phantom's late registration without us pre-registering anything.
-  const wallets = useMemo(() => [], []);
+  // `WalletProvider` deduplicates: if Solflare also registers via
+  // Wallet Standard, it appears once — the canonical Wallet Standard
+  // entry wins, and our legacy pre-registration is only the safety
+  // net for the discovery-race case.
+  const wallets = useMemo(
+    () => [
+      new SolflareWalletAdapter({
+        network:
+          paymentNetwork() === 'mainnet'
+            ? WalletAdapterNetwork.Mainnet
+            : paymentNetwork() === 'testnet'
+              ? WalletAdapterNetwork.Testnet
+              : WalletAdapterNetwork.Devnet,
+      }),
+    ],
+    [],
+  );
 
   return (
     <ConnectionProvider endpoint={endpoint}>

@@ -96,3 +96,55 @@ export interface TrackerWR {
   byTier: Record<Tier, { wr: number; samples: number }>;
   byHorizon: Record<string, { wr: number; samples: number }>;
 }
+
+/**
+ * Alert lifecycle status. Mirrors the engine's bot-side semantics:
+ *
+ *   armed       — waiting for the trigger condition (price hit, etc.).
+ *   triggered   — fired, notification sent, outcome not yet resolved.
+ *   resolved    — fully closed (with hit/miss outcome on the parent
+ *                 prediction or a manual user resolution).
+ *   cancelled   — armed alert disarmed by the user before firing.
+ */
+export type AlertStatus = 'armed' | 'triggered' | 'resolved' | 'cancelled';
+
+/**
+ * Type of trigger threshold the engine armed for the user. Currently
+ * the engine auto-arms one row per `entry`, `tp1`, `tp2`, `sl` whenever
+ * the predictor emits a trade plan; `custom` is the slot for manually
+ * armed alerts via the Telegram bot's `/alert SYMBOL PRICE` command.
+ */
+export type AlertKind = 'entry' | 'tp1' | 'tp2' | 'sl' | 'custom';
+
+export interface AlertRow {
+  id: string;
+  symbol: string;
+  chain?: Chain;
+  /** Direction the trigger fires on — `up` = price crosses above,
+   *  `down` = price crosses below. */
+  direction: Direction;
+  /** Trigger price in USD. */
+  price: number;
+  kind: AlertKind;
+  status: AlertStatus;
+  armedAt: string; // ISO 8601
+  triggeredAt?: string;
+  /** Spot price at the moment the rule fired. Used by the web surface
+   *  to render an authoritative "fired @ $X" stamp without re-querying
+   *  the ticker. */
+  triggeredPrice?: number;
+  resolvedAt?: string;
+  /** When the alert was auto-armed from a prediction's trade plan,
+   *  this links back to the parent prediction so the UI can show the
+   *  full context (confidence, signal breakdown). */
+  predictionId?: string;
+  /** Trade-plan context (populated for rows armed by the engine's
+   *  `set_trade_plan_alerts` tool). Lets the UI render leverage +
+   *  P/L% per row against the parent entry. */
+  entryPrice?: number;
+  leverage?: number;
+  planId?: string;
+  /** Direction of the parent trade plan — 'long' bets price up, 'short'
+   *  bets price down. Used by the P/L% computation in the UI. */
+  tradeDirection?: 'long' | 'short';
+}

@@ -96,9 +96,13 @@ export function ChatPanel({
     },
   });
 
-  // Live quota — shared with <QuotaSidebar> via SWR key dedup.
+  // Live quota — shared with <QuotaSidebar> via SWR key dedup. The
+  // mobile-refresh options mirror quota-sidebar.tsx so a backgrounded
+  // tab returns with the correct counter on foreground.
   const { data: quota } = useSWR<QuotaState>('/api/quota', quotaFetcher, {
-    revalidateOnFocus: false,
+    refreshInterval: 15_000,
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
     keepPreviousData: true,
   });
   const exhausted = !!quota?.exhausted;

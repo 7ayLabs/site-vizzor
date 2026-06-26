@@ -1,14 +1,20 @@
 /**
- * HowItWorks — Bloomberg-meets-Solana three-card terminal grid.
+ * HowItWorks — three feature-mock cards in a 3-column grid.
  *
- * Each card is a vt-bracket terminal panel with: a mono `01 / 02 / 03`
- * step number in gold, a `<LiveBadge>`, a `<GlitchHeading>` title, a
- * short description, and a live mini-visual (streaming sparklines /
- * 6-into-1 vote graph / animated A+ stamp with conviction count-up).
+ * Composition follows the reference dashboard "How it works" pattern:
+ * each card has a step number, a bold title, a short descriptive
+ * paragraph, and a substantial product-mockup visual that takes the
+ * bottom half of the card. The visual carries the explanation — the
+ * text just frames it.
  *
- * Reveal + visuals live in `HowItWorksClient`; this shell stays a server
- * component and only forwards translated copy. Horizontal arrows between
- * cards stack to vertical on mobile (collapsed by the grid).
+ * Style vocabulary matches the hero data cards (corner brackets,
+ * scanline overlay, hairline borders, mono typography). No chromatic
+ * accents — strict monochrome with the scoped --up/--down direction
+ * tokens used only on actual hit/miss glyphs.
+ *
+ * Drops the prior arrow-separator layout (felt like a flowchart
+ * diagram, not feature cards) and the per-card LiveBadge + glitch
+ * heading noise (the live state lives on the hero, not here).
  */
 import { getTranslations } from 'next-intl/server';
 import { SectionEyebrow } from '@/components/ui/section-eyebrow';
@@ -47,22 +53,21 @@ export async function HowItWorks() {
   return (
     <section
       aria-labelledby="how-it-works-title"
-      className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 py-32 lg:py-40"
+      className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8 py-24 lg:py-32"
     >
       <GsapHeadline
-        glitch
         className="flex flex-col items-center gap-4 max-w-[60ch] mx-auto text-center"
         eyebrow={<SectionEyebrow align="center">{t('eyebrow')}</SectionEyebrow>}
         title={t('title')}
         sub={t('lede')}
         titleId="how-it-works-title"
-        titleClassName="text-3xl lg:text-5xl font-bold tracking-tight text-[var(--fg)]"
-        subClassName="text-[var(--fg-2)] max-w-[58ch] mx-auto leading-relaxed"
+        titleClassName="display text-[var(--fg)] text-balance text-[32px] sm:text-[44px] lg:text-[56px] leading-[1.02] tracking-[-0.025em] font-semibold"
+        subClassName="text-[var(--fg-2)] max-w-[58ch] mx-auto leading-relaxed text-[15px] sm:text-[16px]"
       />
 
-      <HowItWorksClient steps={steps} arrow="→" />
+      <HowItWorksClient steps={steps} />
 
-      <p className="mt-16 text-[12px] mono text-[var(--fg-3)] text-center">
+      <p className="mt-14 text-[12px] mono text-[var(--fg-3)] text-center">
         <Link
           href="/docs/chronovisor"
           className="underline-offset-4 hover:text-[var(--fg)] hover:underline transition-colors"

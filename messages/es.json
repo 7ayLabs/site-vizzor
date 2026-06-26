@@ -1,11 +1,13 @@
 {
   "header": {
     "nav": {
-      "predict": "Predecir",
-      "surfaces": "Superficies",
+      "openApp": "Abrir app",
+      "manifesto": "Manifiesto",
       "pricing": "Precios",
+      "changelog": "Novedades",
       "docs": "Documentación"
     },
+    "openApp": "Abrir app",
     "cta": "Abrir en Telegram",
     "mobileMenu": {
       "label": "Navegación del sitio",
@@ -20,12 +22,215 @@
       }
     }
   },
+  "app": {
+    "hostTopbar": {
+      "home": "Inicio de Vizzor",
+      "backToPredict": "Volver a Predict"
+    },
+    "sidebar": {
+      "section": {
+        "surfaces": "Superficies",
+        "alsoOn": "También en"
+      },
+      "surface": {
+        "predict": "Chat",
+        "whales": "Ballenas",
+        "flow": "Flujo"
+      },
+      "tier": { "elite": "ELITE" },
+      "telegram": {
+        "label": "Abrir en Telegram"
+      },
+      "footer": {
+        "alerts": "Alertas",
+        "settings": "Ajustes",
+        "billing": "Facturación",
+        "pricing": "Precios",
+        "docs": "Docs"
+      }
+    },
+    "statusPill": {
+      "healthy": "Sistemas operativos",
+      "degraded": "Degradado — ver detalles",
+      "loading": "Verificando…",
+      "down": "Sonda de salud caída",
+      "subsystem": { "engine": "Motor", "rpc": "RPC de Solana", "sqlite": "Base de datos" },
+      "build": "Build"
+    },
+    "walletMenu": {
+      "chainPill": "Solana {network}",
+      "viewOnExplorer": "Ver en el explorador",
+      "switchWallet": "Cambiar wallet",
+      "disconnect": "Desconectar",
+      "toast": {
+        "switching": "Cambiando de wallet…",
+        "disconnected": "Wallet desconectada",
+        "disconnectFailed": "Error al desconectar"
+      }
+    },
+    "commandPalette": {
+      "label": "Paleta de comandos",
+      "dismiss": "Cerrar paleta",
+      "placeholder": "Busca comandos, superficies, ajustes…",
+      "empty": "Ningún comando coincide.",
+      "confirmHint": "Pulsa Enter de nuevo para confirmar.",
+      "footer": {
+        "navigate": "↑↓ navegar · ↵ seleccionar",
+        "dismiss": "esc cerrar · ⌘K alternar"
+      }
+    },
+    "onboarding": {
+      "aria": {
+        "dialog": "Te damos la bienvenida a Vizzor",
+        "dismiss": "Cerrar bienvenida"
+      },
+      "connect": {
+        "eyebrow": "Paso 1 de 3",
+        "title": "Conecta tu wallet",
+        "body": "Vizzor vincula tu prueba a tu wallet — sin email, sin contraseña. Funciona con Phantom, Solflare y cualquier wallet compatible con el Solana Wallet Standard.",
+        "skip": "Omitir por ahora"
+      },
+      "siws": {
+        "eyebrow": "Paso 2 de 3",
+        "title": "Firma el mensaje de bienvenida",
+        "body": "Usamos Sign-In With Solana (SIWS) para verificar que eres tú. La firma se queda en tu dispositivo — no se mueven fondos ni se envía ninguna transacción.",
+        "waiting": "Esperando la firma…",
+        "skip": "Omitir por ahora"
+      },
+      "trialIntro": {
+        "eyebrow": "Paso 3 de 3",
+        "title": "Tu prueba Pro de {days} días está activa",
+        "body": "Hasta {dailyCap} predicciones al día durante los próximos 7 días — cada familia de señales, cada horizonte. Sin tarjeta. Cancela simplemente no suscribiéndote.",
+        "cta": "Empezar a predecir"
+      }
+    },
+    "billing": {
+      "meta": {
+        "title": "Facturación",
+        "description": "Pagos on-chain confirmados de tu suscripción a Vizzor."
+      },
+      "eyebrow": "Facturación · Cuenta",
+      "title": "Historial de pagos",
+      "body": "Cada pago on-chain confirmado desde tu wallet activa, del más reciente al más antiguo. Haz clic en el enlace del explorador para la vista canónica de la transacción en Solscan o Tonviewer.",
+      "history": {
+        "title": "Pagos recientes",
+        "loading": "Cargando historial de pagos…",
+        "error": "No se pudo cargar el historial.",
+        "empty": "Aún no hay pagos confirmados — cuando una suscripción se liquide on-chain aparecerá aquí.",
+        "row": {
+          "title": "{tier} · {cadence}",
+          "explorer": "Ver en el explorador"
+        }
+      }
+    },
+    "alerts": {
+      "meta": {
+        "title": "Alertas",
+        "description": "Disparadores de precio armados y notificaciones lanzadas para tu wallet."
+      },
+      "eyebrow": "Alertas · En vivo",
+      "title": "Alertas",
+      "body": "Cada plan que emite el predictor arma automáticamente alertas de entry, TP y SL. Gestiónalas aquí; el bot de Telegram lanza la notificación cuando se toca cada nivel.",
+      "loading": "Cargando alertas…",
+      "sections": {
+        "armed": {
+          "eyebrow": "Activas",
+          "title": "Armadas",
+          "empty": "Ahora mismo no hay disparadores armados."
+        },
+        "triggered": {
+          "eyebrow": "Últimas 24h",
+          "title": "Disparadas",
+          "empty": "Nada se disparó en las últimas 24 horas."
+        },
+        "resolved": {
+          "eyebrow": "Últimos 7d",
+          "title": "Resueltas",
+          "empty": "No hay alertas cerradas en los últimos 7 días."
+        }
+      },
+      "empty": {
+        "signedOut": {
+          "title": "Inicia sesión para ver tus alertas",
+          "body": "Las alertas están vinculadas a tu wallet. Abre el chat y completa el flujo de inicio de sesión para cargarlas aquí."
+        },
+        "tier": {
+          "title": "Las alertas son parte de Pro",
+          "body": "Alertas armadas ilimitadas vienen con el tier Pro. Suscríbete una vez y cada plan arma entry, TP y SL automáticamente."
+        },
+        "none": {
+          "title": "Aún no hay alertas armadas",
+          "body": "Cuando el predictor emite un plan, arma automáticamente entry, TP1, TP2 y SL. También puedes armar una alerta manual desde el bot de Telegram.",
+          "cta": "Armar una alerta en Telegram"
+        },
+        "error": {
+          "title": "No se pudieron cargar las alertas",
+          "body": "El motor no responde ahora mismo. La página reintentará cada 30 segundos."
+        },
+        "staleHint": "Mostrando datos en caché"
+      },
+      "modal": {
+        "close": "Cerrar alertas"
+      },
+      "row": {
+        "live": "En vivo",
+        "entry": "Entrada",
+        "leverage": "{x}x",
+        "firedAt": "Disparada @ ${price}"
+      },
+      "banner": {
+        "title": "Alerta {kind} de {symbol} activada",
+        "body": "Precio {direction} ${price}"
+      },
+      "arm": {
+        "eyebrow": "Armar nueva alerta",
+        "title": "Configura un disparador de precio",
+        "symbol": "Símbolo",
+        "kind": "Tipo",
+        "direction": "Dirección",
+        "up": "Cruza por encima",
+        "down": "Cruza por debajo",
+        "price": "Precio disparador",
+        "arm": "Armar",
+        "arming": "Armando…",
+        "success": "Alerta armada",
+        "errors": {
+          "price": "Introduce un precio válido",
+          "invalid": "Datos de alerta inválidos",
+          "unauthenticated": "Inicia sesión para armar alertas",
+          "engineUnavailable": "Motor no disponible, reintenta",
+          "generic": "No se pudo armar la alerta"
+        }
+      },
+      "cancel": {
+        "label": "Cancelar alerta",
+        "success": "Alerta cancelada",
+        "notFound": "La alerta ya no existe",
+        "engineUnavailable": "Motor no disponible, reintenta",
+        "error": "No se pudo cancelar la alerta"
+      }
+    },
+    "settings": {
+      "meta": {
+        "title": "Ajustes",
+        "description": "Gestiona tu cuenta de Vizzor, tu wallet y tus preferencias."
+      },
+      "title": "Ajustes",
+      "body": "Controles de cuenta para tu sesión de Vizzor. La gestión de wallet vive en la parte superior de la barra lateral; la facturación y el historial de pagos viven en Facturación.",
+      "accountLink": {
+        "label": "Perfil de cuenta",
+        "cta": "Abrir perfil de cuenta →"
+      }
+    }
+  },
   "auth": {
     "connect": "Conectar wallet",
     "connecting": "Conectando…",
     "sign": "Iniciar sesión",
     "signing": "Firmando…",
     "signedInAs": "Sesión iniciada como",
+    "network": "Red",
+    "viewOnExplorer": "Ver en el explorador",
     "subscription": "Suscripción",
     "lifetime": "Vitalicio",
     "expiresOn": "Expira el {date}",
@@ -146,7 +351,20 @@
       "manage": "Gestionar plan",
       "openBot": "Abrir en Telegram",
       "emptyBody": "Aún no tienes una suscripción activa. Elige un tier en /pricing — pagar en SOL en Solana ahorra 15% al instante.",
-      "emptyCta": "Ver precios"
+      "emptyCta": "Ver precios",
+      "manageTitle": "Gestionar suscripción",
+      "manageBody": "No hay renovación automática — cada período se paga por adelantado. Cancela cuando quieras para detener el aviso de renovación; tu acceso continúa hasta el final del período que ya pagaste.",
+      "cancel": "Cancelar suscripción",
+      "downgrade": "Bajar a Pro",
+      "confirmAgain": "Click de nuevo para confirmar",
+      "cancelling": "Cancelando…",
+      "downgrading": "Bajando…",
+      "lifetimeCannotChange": "Los planes de por vida no son reembolsables y no expiran — no hay nada que cancelar o degradar.",
+      "scheduledNotice": {
+        "cancel": "Cancelación programada — tu plan continúa hasta el %date%, luego baja a Free.",
+        "downgrade": "Bajada programada — Elite continúa hasta el %date%, luego pasa a Pro en tu próximo pago."
+      },
+      "error": "No se pudo actualizar — {reason}. Reintenta en un momento."
     },
     "telegram": {
       "eyebrow": "vínculo con telegram",
@@ -163,6 +381,10 @@
       "title": "Pagos recientes",
       "linkedTo": "Telegram #{id}",
       "empty": "Aún no hay sesiones de pago para esta wallet. Cuando completes un checkout en /pay aparecerá aquí como un recibo.",
+      "row": {
+        "viewOnChain": "On chain",
+        "viewOnChainTitle": "Ver la transacción en el explorador de la cadena"
+      },
       "status": {
         "pending": "Pendiente",
         "confirmed": "Confirmado",
@@ -225,6 +447,14 @@
       "title": "Predecir — Vizzor",
       "description": "Conecta tu wallet para correr una llamada cripto calibrada contra el mismo motor que usa el bot de Telegram. Prueba Pro de 7 días, 5 predicciones/día. Tracked-live, recibos públicos."
     },
+    "share": {
+      "label": "Compartir",
+      "aria": "Copiar enlace compartible a esta conversación",
+      "copied": "Enlace copiado",
+      "copyFailed": "No se pudo copiar el enlace",
+      "unsavedTitle": "Guarda el chat primero",
+      "unsavedBody": "Envía un mensaje para abrir la conversación y luego podrás compartirla."
+    },
     "gate": {
       "title": "Conecta tu wallet para predecir.",
       "body": "Vizzor ata la prueba a tu wallet, así el contador sobrevive aunque borres cookies. Firma una vez con SIWS — sin email, sin contraseña.",
@@ -255,8 +485,8 @@
     },
     "exhaustedBanner": {
       "label": "Tier gratis agotado",
-      "body": "Prueba gratis agotada. Suscríbete para seguir — o pásate a Telegram.",
-      "telegramCta": "Abrir en Telegram",
+      "body": "Se agotaron tus predicciones gratis. Actualiza para seguir on-chain en SOL — mismo motor, topes más altos, sin tarjeta.",
+      "upgradeCta": "Mejorar plan",
       "resetDev": "reiniciar · solo dev",
       "dailyCap": {
         "label": "Tope diario alcanzado",
@@ -289,6 +519,7 @@
       "freeLine": "Prueba terminada · /pricing",
       "nav": {
         "chat": "Correr",
+        "alerts": "Alertas",
         "library": "Recibos",
         "libraryHint": "/precisions",
         "receipts": "Recibos",
@@ -322,6 +553,12 @@
         "sources": "Fuentes",
         "copy": "Copiar",
         "copied": "Copiado",
+        "quote": "Citar",
+        "quoted": "Citado",
+        "share": "Compartir",
+        "shared": "Compartido",
+        "compact": "Compactar",
+        "compacted": "Expandir",
         "retry": "Reintentar",
         "priceCheckLabel": "Precio dudoso — verifica el ticker",
         "priceCheckBody": "%symbol%: el modelo dice %quoted%, ticker en vivo %live% (%delta%).",
@@ -369,10 +606,18 @@
   },
   "hero": {
     "ribbon": "{version} · subiendo hacia {target}% sobre el registro",
+    "eyebrow": "EN VIVO · TRACKED · PÚBLICO",
     "headline": "Predice. Resuelve. Anota.",
     "sub": "Vizzor llama el movimiento, te enseña el smart money detrás y registra cada win rate en público. Recibos que puedes auditar — no vibes.",
+    "primaryCta": "Empezar a predecir",
+    "secondaryCta": "Leer el manifiesto",
     "tryCta": "Prueba Vizzor",
     "orLabel": "o córrelo en local",
+    "stats": {
+      "chains": { "label": "Cadenas en vivo", "value": "11" },
+      "signals": { "label": "Familias de señales", "value": "6" },
+      "license": { "label": "Licencia", "value": "BUSL · autoaloja" }
+    },
     "badges": {
       "chains": "11 cadenas en vivo",
       "signals": "6 familias de señales",
@@ -397,17 +642,17 @@
     "footer": "Ver qué corre por debajo",
     "steps": {
       "fetch": {
-        "title": "01. Pregunta",
+        "title": "Pregunta",
         "description": "Escribe una moneda. Elige un horizonte. Ya está.",
         "ariaLabel": "Paso uno: escribe un símbolo y un horizonte para pedirle una llamada a Vizzor"
       },
       "fuse": {
-        "title": "02. Recibe la llamada",
+        "title": "Recibe la llamada",
         "description": "Una dirección clara, un número de confianza y las razones detrás. En segundos.",
         "ariaLabel": "Paso dos: recibe una llamada direccional con confianza calibrada"
       },
       "emit": {
-        "title": "03. Sigue el resultado",
+        "title": "Sigue el resultado",
         "description": "Cada llamada queda en el marcador público. Ves los aciertos. Ves los fallos. Sin ediciones.",
         "ariaLabel": "Paso tres: cada llamada aterriza en un marcador público, aciertos y fallos a la vez"
       }
@@ -519,7 +764,7 @@
       },
       "billing": {
         "title": "Facturación on-chain",
-        "description": "Paga en SOL, TON o USDC. Sin tarjeta. Sin KYC. Cada rail trae su descuento — SOL 15%, TON 10%, USDC 5%.",
+        "description": "Paga en SOL o TON. Sin tarjeta. Sin KYC. Cada rail trae su descuento — SOL 15%, TON 10%.",
         "reveal": "Cada pago verificado on-chain — sin Stripe en medio."
       },
       "surfaces": {
@@ -589,7 +834,7 @@
   "pricing": {
     "eyebrow": "tiers · facturación honesta",
     "title": "Precios",
-    "sub": "Cuatro tiers, facturación on-chain en SOL, TON y USDC. Cada rail trae su descuento. Sin tarjetas. Cancela cuando quieras.",
+    "sub": "Tres tiers, facturación on-chain en SOL o TON. Cada rail trae su descuento. Sin tarjetas. Cancela cuando quieras.",
     "mostPopular": "Más popular",
     "orPrefix": "o",
     "promo": {
@@ -728,9 +973,15 @@
       "title": "Cada usuario nuevo recibe Pro durante 7 días",
       "body": "En tu primer /start, el acceso Pro completo se activa automáticamente. Tras 7 días el bot baja a Free — sin tarjeta guardada, sin sorpresas, sin cargo."
     },
+    "cta": {
+      "currentPlan": "Plan actual",
+      "includedInHigher": "Incluido en Elite",
+      "manage": "Gestionar plan",
+      "trialBadge": "Prueba · %days%d"
+    },
     "chains": {
       "eyebrow": "paga con cripto",
-      "title": "Cuatro formas de pagar. Una suscripción.",
+      "title": "Dos rails nativos. Una suscripción.",
       "sub": "Elige el rail que encaje con tu wallet. Cada uno trae su propio descuento incorporado. Sin Stripe, sin datos de tarjeta, sin intermediarios.",
       "items": {
         "solana": {
@@ -744,18 +995,6 @@
           "token": "TON nativo",
           "discount": "ahorra 10%",
           "strategy": "Paga desde tu wallet dentro de Telegram. Confirmación instantánea."
-        },
-        "base": {
-          "name": "Base",
-          "token": "USDC en Base",
-          "discount": "ahorra 5%",
-          "strategy": "USDC de Circle en la L2 de Coinbase. ~$0.01 de gas."
-        },
-        "arbitrum": {
-          "name": "Arbitrum",
-          "token": "USDC en Arbitrum",
-          "discount": "ahorra 5%",
-          "strategy": "USDC de Circle en Arbitrum One. ~$0.01 de gas."
         }
       }
     },
@@ -773,7 +1012,7 @@
         },
         "chains": {
           "q": "¿Desde qué cadenas puedo pagar?",
-          "a": "Cuatro rails están en vivo: SOL en Solana (ahorra 15%), TON (ahorra 10%), USDC en Base (ahorra 5%), USDC en Arbitrum (ahorra 5%). SOL se firma en el sitio; los otros tres pasan al bot de Telegram para firmar. Cada pago se verifica on-chain — sin Stripe, sin Plaid, sin datos de tarjeta, sin intermediarios."
+          "a": "Dos rails nativos están en vivo en la web: SOL en Solana (ahorra 15%) y TON (ahorra 10%). SOL se firma en el sitio; TON pasa al bot de Telegram para firmar. Cada pago se verifica on-chain — sin Stripe, sin Plaid, sin datos de tarjeta, sin intermediarios."
         },
         "difference": {
           "q": "¿Cuál es la diferencia práctica entre Free, Pro y Elite?",
@@ -794,7 +1033,7 @@
     },
     "eyebrow": "checkout · elige tu rail",
     "title": "Activar {tier}",
-    "sub": "Paga on-chain con SOL, TON o USDC — cada rail tiene su propio descuento integrado. Nunca pedimos tarjeta. Cuando se confirme, tu código de acceso se canjea en el bot de Telegram.",
+    "sub": "Paga on-chain con SOL o TON — cada rail tiene su propio descuento integrado. Nunca pedimos tarjeta. Cuando se confirme, tu código de acceso se canjea en el bot de Telegram.",
     "legalFootnote": "Pago on-chain · cotización fija 5 min · cancela cuando quieras",
     "summary": {
       "label": "Resumen de la orden",
@@ -853,7 +1092,7 @@
       "use": "Usar",
       "connect": "Conectar",
       "install": "Instalar",
-      "footer": "MetaMask no es una wallet de Solana — úsala para los rails USDC vía el handoff a Telegram.",
+      "footer": "MetaMask no es una wallet de Solana — el checkout web de Vizzor solo soporta SOL en Solana y TON por ahora.",
       "emptyTitle": "No se detectaron wallets Solana.",
       "emptyHint": "Instala Phantom o Solflare y refresca.",
       "devnet": {
@@ -911,10 +1150,13 @@
         "unsupportedChain": "Solo Solana está soportada en este release. Cambia a SOL en Solana.",
         "priceLookup": "No pudimos buscar el precio del tier en el servidor. Refresca la página.",
         "sessionFailed": "Falló la creación de sesión. Reintenta, o abre el bot de Telegram si persiste.",
-        "rpcUnavailable": "El RPC de Solana está rate-limited ahora mismo. Reintenta en un momento, o cambia a TON / USDC.",
+        "paymentMisconfigured": "El servicio de pagos se está configurando. Reintenta en un momento, o usa el bot de Telegram mientras tanto.",
+        "internalError": "El servicio de pagos tuvo un error inesperado. Reintenta, o usa el bot de Telegram si el problema persiste.",
+        "rpcUnavailable": "El RPC de Solana está rate-limited ahora mismo. Reintenta en un momento, o cambia a TON.",
         "walletNotConnected": "Conecta una wallet para continuar.",
         "insufficientBalance": "Tu wallet no tiene suficiente SOL para cubrir este pago y la comisión de red. En devnet puedes pedir un airdrop de 1 SOL desde el panel de arriba, o cargar saldo en faucet.solana.com.",
-        "invalidDestination": "La dirección del tesoro de destino está mal configurada para esta red. Revisa VIZZOR_SOLANA_TREASURY para el cluster activo."
+        "invalidDestination": "La dirección del tesoro de destino está mal configurada para esta red. Revisa VIZZOR_SOLANA_TREASURY para el cluster activo.",
+        "wrongNetwork": "Tu wallet está en la red equivocada. Cambia a Solana mainnet en la extensión de tu wallet y vuelve a intentarlo."
       }
     },
     "cta": {

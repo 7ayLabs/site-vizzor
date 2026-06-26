@@ -35,19 +35,23 @@ import {
   type SessionRow,
 } from './db';
 import { getRate } from './rates';
-import { evmTreasury, solanaTreasury, tonTreasury } from './treasury';
+import { solanaTreasury, tonTreasury } from './treasury';
+import { claimNext, type ClaimedAddress } from './address-pool';
+import { acceptTonPayments } from '@/lib/feature-flags';
 
 export type PaymentTier = 'pro' | 'elite';
 export type PaymentCadence = 'monthly' | 'annual' | 'lifetime';
-export type PaymentChain = 'solana' | 'ton' | 'base' | 'arbitrum';
-export type PaymentToken = 'native' | 'usdc';
+// USDC on Base / Arbitrum dropped in v0.4 — neither chain had a settled
+// watcher. The union stays parameterised so re-introducing a chain
+// later is a one-line edit; the `payment_sessions` schema keeps
+// `chain`/`token` as flexible strings so no migration is needed.
+export type PaymentChain = 'solana' | 'ton';
+export type PaymentToken = 'native';
 
 /** Combinations the checkout shell offers and the engine knows how to settle. */
 export const SUPPORTED_PAIRS = [
   { chain: 'solana', token: 'native' },
   { chain: 'ton', token: 'native' },
-  { chain: 'base', token: 'usdc' },
-  { chain: 'arbitrum', token: 'usdc' },
 ] as const;
 
 export function isSupportedPair(chain: string, token: string): boolean {
@@ -97,27 +101,74 @@ export type SessionFailure =
 
 const SOL_DECIMALS = 9;
 const TON_DECIMALS = 9;
-const USDC_DECIMALS = 6;
 
-function decimalsFor(chain: PaymentChain, token: PaymentToken): number {
-  if (token === 'usdc') return USDC_DECIMALS;
+function decimalsFor(chain: PaymentChain, _token: PaymentToken): number {
   if (chain === 'ton') return TON_DECIMALS;
   return SOL_DECIMALS;
 }
 
 function priceTokenFor(
   chain: PaymentChain,
-  token: PaymentToken,
-): 'sol' | 'ton' | 'usdc' {
-  if (token === 'usdc') return 'usdc';
+  _token: PaymentToken,
+): 'sol' | 'ton' {
   if (chain === 'ton') return 'ton';
   return 'sol';
 }
 
-function destinationFor(chain: PaymentChain): string {
-  if (chain === 'ton') return tonTreasury();
-  if (chain === 'base' || chain === 'arbitrum') return evmTreasury(chain);
-  return solanaTreasury();
+/**
+ * Resolve the destination address for a new session.
+ *
+ * Watch-only HD model (v0.4+): every session gets a unique
+ * pre-derived address from the operator-uploaded pool, so two
+ * customers never pay into the same address (privacy + replay
+ * safety). Pool is consumed atomically via `claimNext`.
+ *
+ * Backwards-compat fallback: if the pool env var is unset (or the
+ * pool file is missing), fall back to the legacy static-treasury env
+ * var so an operator who hasn't migrated yet keeps accepting payments
+ * — at the cost of address reuse. Log a deprecation warning so the
+ * runbook gap is visible. Once the operator provisions a pool, the
+ * primary path takes over with zero code change.
+ */
+function destinationFor(
+  chain: PaymentChain,
+): { dest: string; poolIndex: number | null } {
+  if (chain === 'ton') {
+    return tryClaimFromPool('ton') ?? legacyStatic('ton', tonTreasury);
+  }
+  return tryClaimFromPool('solana') ?? legacyStatic('solana', solanaTreasury);
+}
+
+function tryClaimFromPool(
+  chain: 'solana' | 'ton',
+): { dest: string; poolIndex: number } | null {
+  const envName =
+    chain === 'solana'
+      ? 'VIZZOR_SOLANA_ADDRESS_POOL_PATH'
+      : 'VIZZOR_TON_ADDRESS_POOL_PATH';
+  if (!process.env[envName]) return null;
+  let claimed: ClaimedAddress;
+  try {
+    claimed = claimNext(chain);
+  } catch (e) {
+    // Pool exhausted or unreadable — surface upstream via the same
+    // session_failed reason. Caller logs the actual cause.
+    throw new Error(
+      `pool_unavailable_${chain}: ${(e as Error).message}`,
+    );
+  }
+  return { dest: claimed.address, poolIndex: claimed.index };
+}
+
+function legacyStatic(
+  chain: 'solana' | 'ton',
+  resolver: () => string,
+): { dest: string; poolIndex: null } {
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[vizzor-payment] using legacy static treasury for ${chain} — set ${chain === 'solana' ? 'VIZZOR_SOLANA_ADDRESS_POOL_PATH' : 'VIZZOR_TON_ADDRESS_POOL_PATH'} to enable the watch-only HD pool (privacy + per-session address freshness). See docs/ops/treasury-setup.md.`,
+  );
+  return { dest: resolver(), poolIndex: null };
 }
 
 function newSessionId(): string {
@@ -154,7 +205,14 @@ export async function createSession(
   ) {
     return { ok: false, reason: 'invalid_input' };
   }
-  if (!acceptSolanaPayments()) {
+  // Per-chain feature gate. Each chain has its own flag so the
+  // operator can roll out SOL or TON independently. A request for a
+  // disabled chain returns the same `feature_disabled` reason the
+  // UI knows how to render.
+  if (input.chain === 'solana' && !acceptSolanaPayments()) {
+    return { ok: false, reason: 'feature_disabled' };
+  }
+  if (input.chain === 'ton' && !acceptTonPayments()) {
     return { ok: false, reason: 'feature_disabled' };
   }
 
@@ -169,7 +227,10 @@ export async function createSession(
   const amount = Math.round((usd / rate.usdPer) * 10000) / 10000;
   const decimals = decimalsFor(input.chain, input.token);
 
-  const destAddress = destinationFor(input.chain);
+  // Resolve the per-session destination. Throws when the pool is
+  // exhausted; the caller (POST /api/payment/session) catches and
+  // surfaces it as `internal_error` with the underlying message.
+  const { dest: destAddress, poolIndex } = destinationFor(input.chain);
   const expiresAt = Date.now() + paymentRateLockSeconds() * 1000;
 
   insertSession({
@@ -187,6 +248,7 @@ export async function createSession(
     expires_at: expiresAt,
     status: 'pending',
     memo: sessionId,
+    pool_index: poolIndex,
   });
 
   return {
@@ -360,5 +422,165 @@ export function finalizeSession(
 
     return { confirmed: true, subscriptionId, grantCode: code };
   });
-  return run();
+  const result = run();
+
+  // Outbound webhook to the engine — fired AFTER the transaction
+  // commits so the engine never sees a tier update for a row that
+  // failed to insert. Best-effort: a failed webhook just means the
+  // engine's 60-second cache picks up the change on the next chat
+  // command via its periodic lookup against /api/subscriptions/lookup.
+  // The site is the source of truth; this is purely a UX optimization
+  // to flip the bot's tier badge instantly after the web checkout.
+  if (result.confirmed && payer) {
+    void notifyEngineSubscriptionUpdated({
+      wallet: payer,
+      telegramUserId: result.walletLinkedTo ?? null,
+      tier: session.tier,
+      idempotencyKey: session.session_id,
+    });
+  }
+
+  return result;
+}
+
+interface EngineWebhookPayload {
+  wallet: string;
+  telegramUserId: number | null;
+  tier: string;
+  /**
+   * Stable per-session key the engine reads as `Idempotency-Key` to
+   * dedupe duplicate webhook deliveries (which can happen if a watcher
+   * crashes and restarts mid-finalize, or if our retry loop succeeds
+   * after the engine has already processed the first attempt).
+   */
+  idempotencyKey: string;
+}
+
+/** Retry schedule in milliseconds. Three attempts, exp-ish backoff,
+ *  total worst-case wall time ~13s before we give up. The engine's own
+ *  60s subscription-sync cache TTL is the floor — we should be done
+ *  retrying long before the cache would have refreshed on its own. */
+const WEBHOOK_RETRY_DELAYS_MS: ReadonlyArray<number> = [1_000, 3_000, 9_000];
+const WEBHOOK_FETCH_TIMEOUT_MS = 5_000;
+
+/**
+ * Fire-and-forget POST to the engine's subscription-cache invalidator.
+ * The engine module that handles this (`src/api/routes/internal/
+ * subscription-updated.ts`) expects the `X-Vizzor-Bot-Token` shared
+ * secret and (post-v0.4.0) an `Idempotency-Key` header that the engine
+ * uses to short-circuit duplicate deliveries.
+ *
+ * Retry semantics:
+ *   - 2xx → success, return.
+ *   - 4xx (other than 408 / 429) → permanent failure, no retry.
+ *     The shape of our payload is fixed; a 4xx means auth or schema
+ *     drift — retrying won't help and we'd just hammer the engine.
+ *   - 5xx / 408 / 429 / network error → backoff and retry up to N times.
+ *   - `Retry-After` header (seconds) on 429 / 5xx overrides the backoff.
+ *
+ * When `VIZZOR_API_URL` or `VIZZOR_BOT_TOKEN` is unset, we log + skip
+ * loudly. v0.4.0 adds `VIZZOR_BOT_TOKEN` to the required env list so
+ * this branch should only ever fire in dev / CI.
+ */
+async function notifyEngineSubscriptionUpdated(
+  payload: EngineWebhookPayload,
+): Promise<void> {
+  const base =
+    process.env.VIZZOR_API_URL ??
+    process.env.NEXT_PUBLIC_VIZZOR_API_URL ??
+    '';
+  const token = process.env.VIZZOR_BOT_TOKEN ?? '';
+  if (!base || !token) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[vizzor-payment] skipping engine webhook (VIZZOR_API_URL or VIZZOR_BOT_TOKEN missing) — engine cache will refresh on next lookup',
+    );
+    return;
+  }
+  const url = `${base.replace(/\/+$/, '')}/v1/internal/subscription-updated`;
+  const body = JSON.stringify({
+    wallet: payload.wallet,
+    telegramUserId: payload.telegramUserId,
+    tier: payload.tier,
+  });
+  const shortWallet = `${payload.wallet.slice(0, 4)}…${payload.wallet.slice(-4)}`;
+
+  for (let attempt = 0; attempt <= WEBHOOK_RETRY_DELAYS_MS.length; attempt++) {
+    const result = await attemptWebhook(url, token, payload.idempotencyKey, body);
+    if (result.kind === 'ok') {
+      if (attempt > 0) {
+        // eslint-disable-next-line no-console
+        console.info(
+          `[vizzor-payment] engine webhook recovered after ${attempt} retries for wallet=${shortWallet}`,
+        );
+      }
+      return;
+    }
+    if (result.kind === 'permanent') {
+      // eslint-disable-next-line no-console
+      console.error(
+        `[vizzor-payment] engine webhook permanent failure ${result.status} for wallet=${shortWallet} — giving up`,
+      );
+      return;
+    }
+    // Transient — backoff if we have any attempts left.
+    if (attempt >= WEBHOOK_RETRY_DELAYS_MS.length) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[vizzor-payment] engine webhook exhausted retries for wallet=${shortWallet}; engine cache will catch up via /api/subscriptions/lookup within ~60s`,
+      );
+      return;
+    }
+    const baseDelay = WEBHOOK_RETRY_DELAYS_MS[attempt] ?? 9_000;
+    const delay = Math.max(baseDelay, result.retryAfterMs ?? 0);
+    await new Promise<void>((resolve) => setTimeout(resolve, delay));
+  }
+}
+
+type WebhookAttempt =
+  | { kind: 'ok' }
+  | { kind: 'permanent'; status: number }
+  | { kind: 'transient'; status?: number; retryAfterMs?: number; reason?: string };
+
+async function attemptWebhook(
+  url: string,
+  token: string,
+  idempotencyKey: string,
+  body: string,
+): Promise<WebhookAttempt> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), WEBHOOK_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'content-type': 'application/json',
+        'X-Vizzor-Bot-Token': token,
+        'Idempotency-Key': idempotencyKey,
+      },
+      body,
+    });
+    if (res.ok) return { kind: 'ok' };
+    if (res.status === 408 || res.status === 429 || res.status >= 500) {
+      const ra = res.headers.get('Retry-After');
+      const retryAfterMs = ra ? parseRetryAfterMs(ra) : undefined;
+      return { kind: 'transient', status: res.status, retryAfterMs };
+    }
+    return { kind: 'permanent', status: res.status };
+  } catch (e) {
+    const err = e as Error;
+    return {
+      kind: 'transient',
+      reason: err.name === 'AbortError' ? 'timeout' : err.message?.slice(0, 80),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function parseRetryAfterMs(value: string): number | undefined {
+  const secs = Number.parseInt(value, 10);
+  if (!Number.isFinite(secs) || secs < 0) return undefined;
+  return Math.min(secs, 30) * 1000;
 }

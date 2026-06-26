@@ -145,9 +145,9 @@ export function LanguageSwitch({
         aria-label={t('label')}
         className={cn(
           'group inline-flex h-8 items-center gap-1.5',
-          'text-[var(--fg-3)]',
+          'text-[var(--pref-trigger,var(--fg-3))]',
           'transition-[color,transform] duration-200 ease-out',
-          'hover:text-[var(--fg)] hover:scale-[1.04]',
+          'hover:text-[var(--pref-trigger-hover,var(--fg))] hover:scale-[1.04]',
           'active:scale-[0.96]',
           'focus-visible:outline-none focus-visible:ring-2',
           'focus-visible:ring-[var(--accent)] focus-visible:rounded-md',
