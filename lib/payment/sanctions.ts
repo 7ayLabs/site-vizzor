@@ -84,8 +84,15 @@ const SEED_SANCTIONS: ReadonlyArray<{
  * Idempotent seeding. Runs on the watcher's first tick (and any other
  * boot path that calls `screenPayer`). If the table already has rows
  * we leave it alone — the operator may have curated it manually.
+ *
+ * Also triggers a lazy OFAC SDN refresh from the community mirror —
+ * gated to 24h via sentinel file, fire-and-forget so a slow mirror
+ * doesn't block the first payment. The refresh module is only imported
+ * here (a Node-only code path that touches SQLite) so the edge-runtime
+ * bundle never sees it.
  */
 let seeded = false;
+let refreshKicked = false;
 export function ensureSeeded(): void {
   if (seeded) return;
   try {
@@ -99,6 +106,32 @@ export function ensureSeeded(): void {
     // Fail-open on seed errors — see header doc.
   }
   seeded = true;
+
+  // Kick off a lazy OFAC refresh exactly once per process. Wrapped in
+  // a try so a missing scripts/refresh-ofac module never blocks the
+  // sanctions screen. Fire-and-forget — the table already has the
+  // seed list as a floor while the refresh is in flight.
+  if (!refreshKicked) {
+    refreshKicked = true;
+    void (async () => {
+      try {
+        const mod = await import('../../scripts/refresh-ofac');
+        const r = await mod.refreshOfacFeedIfStale();
+        if (r.ran && r.summary) {
+          // eslint-disable-next-line no-console
+          console.info(
+            `[ofac] refresh ok — inserted ${r.summary.inserted} addresses (errors: ${r.summary.errors.length})`,
+          );
+        } else if (r.reason) {
+          // eslint-disable-next-line no-console
+          console.info(`[ofac] refresh skipped — ${r.reason}`);
+        }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('[ofac] refresh failed:', (e as Error)?.message ?? e);
+      }
+    })();
+  }
 }
 
 export type ScreenOutcome =

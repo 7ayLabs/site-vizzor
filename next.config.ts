@@ -9,6 +9,14 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: 'standalone',
   typedRoutes: true,
+  // Native Node modules used by the payment subsystem. Without this,
+  // `instrumentation.ts` (which dynamic-imports lib/payment/* on the
+  // Node runtime) fails the edge-runtime build with "Module not found:
+  // Can't resolve 'fs'/'path'" because webpack walks the full import
+  // graph regardless of runtime guards. Marking better-sqlite3 as
+  // external tells Next.js to `require()` it at runtime instead of
+  // bundling — the standalone output still ships it via node_modules.
+  serverExternalPackages: ['better-sqlite3', 'bindings'],
   // Hide the small floating `N` chip Next.js renders in the corner
   // while running `next dev`. It overlapped the marketing layout's
   // own bottom-left affordances and read as a stray brand mark to
