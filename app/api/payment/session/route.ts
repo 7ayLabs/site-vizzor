@@ -42,10 +42,12 @@ import {
   recordIdempotencyKey,
 } from '@/lib/payment/idempotency';
 import { ensureWatcherStarted } from '@/lib/payment/watcher';
+import { ensureTonWatcherStarted } from '@/lib/payment/watcher-ton';
 import { enforceRateLimit } from '@/lib/payment/rate-limit';
 import { checkOrigin } from '@/lib/payment/origin-check';
 import {
   PAYMENT_SESSION_ROUTE_REQUIREMENTS,
+  PAYMENT_TON_ROUTE_REQUIREMENTS,
   missingRequiredEnv,
 } from '@/lib/env';
 
@@ -115,18 +117,24 @@ export async function POST(req: Request) {
     const limited = enforceRateLimit(req, 'payment.session');
     if (limited) return limited;
 
-    // Lazy boot of the Solana watcher daemon on the first session
-    // create. Idempotent — only starts once per Node process. Wrapped
-    // in its own try/catch so a watcher boot failure (missing RPC,
-    // bad treasury format) doesn't block sessions on the chain the
-    // user isn't even paying with. We log + continue: the watcher
-    // will retry on the next session create, and TON sessions don't
-    // need the Solana watcher at all.
+    // Lazy boot of both chain watchers on first session create.
+    // Idempotent — each starts at most once per Node process. Each
+    // wrapped in its own try/catch so a boot failure on one chain
+    // never blocks sessions on the other. We log + continue; both
+    // watchers retry on the next session create.
     try {
       ensureWatcherStarted();
     } catch (watcherErr) {
       console.error(
-        '[vizzor-payment] watcher boot failed (continuing):',
+        '[vizzor-payment] solana watcher boot failed (continuing):',
+        (watcherErr as Error)?.message ?? watcherErr,
+      );
+    }
+    try {
+      ensureTonWatcherStarted();
+    } catch (watcherErr) {
+      console.error(
+        '[vizzor-payment] ton watcher boot failed (continuing):',
         (watcherErr as Error)?.message ?? watcherErr,
       );
     }
@@ -157,6 +165,30 @@ export async function POST(req: Request) {
         { ok: false, reason: 'unsupported_chain' },
         { status: 400 },
       );
+    }
+
+    // Chain-aware env check — TON sessions need their own env set
+    // (TON RPC + TON address pool) above and beyond the Solana-only
+    // PAYMENT_SESSION_ROUTE_REQUIREMENTS. Same `payment_misconfigured`
+    // shape so the UI renders the same Telegram-fallback chip.
+    if (chain === 'ton' && process.env.NODE_ENV === 'production') {
+      const missingTon = missingRequiredEnv(PAYMENT_TON_ROUTE_REQUIREMENTS);
+      if (missingTon.length > 0) {
+        const names = missingTon.map((m) => m.name);
+        console.error(
+          '[vizzor-payment] TON route misconfigured — missing env:',
+          names.join(', '),
+        );
+        return NextResponse.json(
+          {
+            ok: false,
+            reason: 'payment_misconfigured',
+            message: `TON payments are being configured. Missing: ${names.join(', ')}. Use Solana or Telegram in the meantime.`,
+            missing: names,
+          },
+          { status: 503 },
+        );
+      }
     }
 
     const amountUsdCents = effectivePriceCents(

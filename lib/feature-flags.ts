@@ -101,6 +101,17 @@ export function acceptSolanaPayments(): boolean {
 }
 
 /**
+ * Gates the /pay/* TON checkout shell and the TON watcher daemon.
+ * When false (default), the TON tile renders as "coming soon" and
+ * the watcher refuses to boot. Flip to true once the TON address
+ * pool (`VIZZOR_TON_ADDRESS_POOL_PATH`) is provisioned and the
+ * watcher has been verified against testnet.
+ */
+export function acceptTonPayments(): boolean {
+  return process.env.NEXT_PUBLIC_ACCEPT_TON_PAYMENTS === 'true';
+}
+
+/**
  * Lifetime of a payment session before the locked USD-to-SOL rate
  * expires. Defaults to 5 minutes.
  */

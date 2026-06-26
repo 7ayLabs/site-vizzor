@@ -103,13 +103,31 @@ export const PAYMENT_SESSION_ROUTE_REQUIREMENTS: readonly EnvRequirement[] = [
       'SQLite path for payment_sessions/subscriptions; must point inside the persistent volume',
   },
   {
-    name: 'VIZZOR_SOLANA_TREASURY',
+    name: 'VIZZOR_SOLANA_ADDRESS_POOL_PATH',
     rationale:
-      'Solana treasury wallet address; the watcher disambiguates payments by memo at this address',
+      'Path to the operator-uploaded pre-derived Solana address pool (JSON). Watch-only HD model — see docs/ops/treasury-setup.md.',
   },
   {
     name: 'SOLANA_RPC_URL',
     rationale:
       'dedicated Solana RPC; public mainnet-beta is rate-limited and unsafe for the 5s-poll watcher',
+  },
+];
+
+/**
+ * Per-chain requirement bundle for TON. Checked at REQUEST time
+ * (only when chain === 'ton') so a Solana-only operator doesn't have
+ * to provision TON env to keep accepting SOL.
+ */
+export const PAYMENT_TON_ROUTE_REQUIREMENTS: readonly EnvRequirement[] = [
+  {
+    name: 'VIZZOR_TON_ADDRESS_POOL_PATH',
+    rationale:
+      'Path to the operator-uploaded pre-derived TON address pool (JSON). Same watch-only HD model as Solana.',
+  },
+  {
+    name: 'VIZZOR_TON_RPC_URL',
+    rationale:
+      'TON HTTP RPC endpoint (toncenter or self-hosted). Free tier is rate-limited; production should use a paid key.',
   },
 ];

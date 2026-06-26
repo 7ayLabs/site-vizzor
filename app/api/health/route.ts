@@ -32,7 +32,12 @@ import {
   getWatcherLastTickAt,
   isWatcherStarted,
 } from '@/lib/payment/watcher';
-import { acceptSolanaPayments } from '@/lib/feature-flags';
+import { isTonWatcherStarted } from '@/lib/payment/watcher-ton';
+import {
+  acceptSolanaPayments,
+  acceptTonPayments,
+} from '@/lib/feature-flags';
+import { poolHealth, type PoolHealth } from '@/lib/payment/address-pool';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -95,6 +100,36 @@ function probeWatcher(): SubsystemStatus {
 }
 
 /**
+ * Same shape as `probeWatcher` but for the TON daemon. The TON
+ * watcher exposes `isTonWatcherStarted()` only — there's no
+ * lastTickAt accessor yet, so we report `ok` purely on the started
+ * flag. Add a tickAt accessor in a follow-up commit if TON RPC
+ * outages bite us in prod.
+ */
+function probeTonWatcher(): SubsystemStatus {
+  if (!acceptTonPayments()) {
+    return { ok: true, detail: 'disabled' };
+  }
+  const started = isTonWatcherStarted();
+  return started
+    ? { ok: true }
+    : { ok: true, detail: 'not_started', lastTickAt: null };
+}
+
+/**
+ * Per-chain address-pool health. Surfaces the operator-visible
+ * lowWatermark flag so a refill alert can be wired to the JSON
+ * directly (no Telegram-bot intermediary needed).
+ */
+function probePool(chain: 'solana' | 'ton'): PoolHealth & { ok: boolean } {
+  const health = poolHealth(chain);
+  // `ok` reads as "not exhausted" — `lowWatermark` is a softer
+  // forewarning, not a fault. Both surface in JSON so the operator
+  // can wire either as the alert threshold.
+  return { ...health, ok: health.remaining > 0 };
+}
+
+/**
  * Engine liveness — HEAD the upstream Vizzor API. Result cached for
  * `ENGINE_PROBE_CACHE_MS` so health checks don't fan out into a real
  * upstream RTT on every poll. Any 2xx/3xx/4xx counts as "reachable"
@@ -151,13 +186,20 @@ async function probeEngine(): Promise<SubsystemStatus> {
 export async function GET() {
   const sqlite = probeSqlite();
   const watcher = probeWatcher();
+  const tonWatcher = probeTonWatcher();
   const engine = await probeEngine();
+  // Address-pool health probes don't gate `status` — a low watermark
+  // is an operator-actionable softer alert, not a deploy blocker.
+  // Pools surface as their own subsystem keys so an external monitor
+  // can wire an alert on `subsystems.solanaPool.lowWatermark`.
+  const solanaPool = probePool('solana');
+  const tonPool = probePool('ton');
   // Overall `status` reflects "this container can serve traffic" — the
   // deploy smoke-test gates on it (see `.github/workflows/deploy.yml`).
-  // Engine reachability is reported but NOT folded in: an upstream
-  // outage is a user-facing degradation surfaced by the status pill,
-  // but it shouldn't fail a site-vizzor deploy or trip uptime alerts.
-  const allOk = sqlite.ok && watcher.ok;
+  // Engine reachability and pool low-watermark are reported but NOT
+  // folded in: upstream / operator-supply degradations surface to the
+  // status pill and the runbook, but shouldn't fail a deploy.
+  const allOk = sqlite.ok && watcher.ok && tonWatcher.ok;
   const status: 'healthy' | 'degraded' = allOk ? 'healthy' : 'degraded';
 
   return NextResponse.json(
@@ -172,7 +214,10 @@ export async function GET() {
       subsystems: {
         sqlite,
         watcher,
+        tonWatcher,
         engine,
+        solanaPool,
+        tonPool,
       },
     },
     {

@@ -121,6 +121,7 @@ function init(): DB {
     );
   `);
   runV020Migrations(db);
+  runV04TreasuryMigrations(db);
   return db;
 }
 
@@ -398,6 +399,43 @@ function runV020Migrations(db: DB): void {
   `);
 }
 
+/* ------------------------------------------------------------------ *\
+ * v0.4 treasury migrations — watch-only HD model. Additive only.
+ *
+ * Adds per-session derived-address bookkeeping so two distinct sessions
+ * never share a receive address (privacy + replay safety). The site
+ * stops paying every customer's payment into a single static treasury;
+ * each session is allocated a unique address from either the TON xpub
+ * (via `derivation_index` → `lib/payment/hd-ton.ts`) or the Solana
+ * pre-derived pool (via `pool_index` → `lib/payment/sol-pool.ts`).
+ *
+ * `sol_pool_state` holds a single-row counter for the next-unclaimed
+ * Solana pool index. The atomic UPDATE-then-INSERT inside one
+ * SQLite transaction in `claimNextAddress` is what guarantees
+ * two concurrent session-creates never grab the same address.
+\* ------------------------------------------------------------------ */
+function runV04TreasuryMigrations(db: DB): void {
+  // Per-session derived-address index. Same column name across chains
+  // since the underlying model is identical (operator-pre-derived
+  // pool consumed atomically). Null on legacy pre-v0.4 rows that
+  // settled against the static treasury.
+  addColumnIfMissing(db, 'payment_sessions', 'pool_index', 'INTEGER');
+  // One state row per chain. The `chain` PK makes the
+  // increment-and-claim a single atomic UPDATE...RETURNING per chain,
+  // so concurrent claims on Solana don't block TON claims and vice
+  // versa. `next_index` is the next-unclaimed pool entry; bump it
+  // after every successful allocation.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pool_state (
+      chain           TEXT PRIMARY KEY,
+      next_index      INTEGER NOT NULL DEFAULT 0,
+      updated_at      INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000)
+    );
+    INSERT OR IGNORE INTO pool_state (chain, next_index) VALUES ('solana', 0);
+    INSERT OR IGNORE INTO pool_state (chain, next_index) VALUES ('ton', 0);
+  `);
+}
+
 export function getDb(): DB {
   if (!g[KEY]) g[KEY] = init();
   return g[KEY];
@@ -427,6 +465,11 @@ export interface SessionRow {
   grant_code: string | null;
   memo: string | null;
   created_at: number;
+  /** v0.4 — operator-pre-derived address-pool index for the
+   *  per-session receive address. Same column for both SOL and TON;
+   *  the chain disambiguates which pool to look up against. Null on
+   *  pre-v0.4 legacy rows that settled against the static treasury. */
+  pool_index: number | null;
 }
 
 export type ScheduledSubscriptionAction = 'cancel' | 'downgrade_to_pro';
@@ -619,18 +662,72 @@ export interface RateCacheRow {
  * Repository helpers — keep raw SQL behind named functions for callers.
 \* ------------------------------------------------------------------ */
 
-export function insertSession(row: Omit<SessionRow, 'created_at' | 'tx_sig' | 'confirmed_at' | 'payer_address' | 'grant_code' | 'memo'> & { memo?: string }): void {
+export function insertSession(
+  row: Omit<
+    SessionRow,
+    | 'created_at'
+    | 'tx_sig'
+    | 'confirmed_at'
+    | 'payer_address'
+    | 'grant_code'
+    | 'memo'
+    | 'pool_index'
+  > & {
+    memo?: string;
+    pool_index?: number | null;
+  },
+): void {
   getDb()
     .prepare(
       `INSERT INTO payment_sessions
        (session_id, tier, cadence, chain, token, dest_address,
         amount, decimals, amount_usd_cents, discount_bps,
-        rate_locked, expires_at, status, memo)
+        rate_locked, expires_at, status, memo,
+        pool_index)
        VALUES (@session_id, @tier, @cadence, @chain, @token, @dest_address,
         @amount, @decimals, @amount_usd_cents, @discount_bps,
-        @rate_locked, @expires_at, @status, @memo)`,
+        @rate_locked, @expires_at, @status, @memo,
+        @pool_index)`,
     )
-    .run({ ...row, memo: row.memo ?? null });
+    .run({
+      ...row,
+      memo: row.memo ?? null,
+      pool_index: row.pool_index ?? null,
+    });
+}
+
+export type PoolChain = 'solana' | 'ton';
+
+/**
+ * Atomically claim the next pool index for the given chain. Uses
+ * UPDATE...RETURNING so the read + write are one SQL statement —
+ * concurrent claims serialize through SQLite's write lock and never
+ * observe the same index twice. Per-chain rows mean a SOL claim
+ * never blocks a TON claim (or vice versa).
+ */
+export function claimNextPoolIndex(chain: PoolChain): number {
+  const row = getDb()
+    .prepare(
+      `UPDATE pool_state
+       SET next_index = next_index + 1,
+           updated_at = CAST(strftime('%s','now') AS INTEGER) * 1000
+       WHERE chain = ?
+       RETURNING next_index - 1 AS claimed`,
+    )
+    .get(chain) as { claimed: number } | undefined;
+  if (!row) {
+    throw new Error(
+      `pool_state row missing for chain=${chain} — migration did not run`,
+    );
+  }
+  return row.claimed;
+}
+
+export function getPoolNextIndex(chain: PoolChain): number {
+  const row = getDb()
+    .prepare(`SELECT next_index FROM pool_state WHERE chain = ?`)
+    .get(chain) as { next_index: number } | undefined;
+  return row?.next_index ?? 0;
 }
 
 export function getSessionRow(sessionId: string): SessionRow | null {

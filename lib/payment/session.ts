@@ -36,6 +36,8 @@ import {
 } from './db';
 import { getRate } from './rates';
 import { solanaTreasury, tonTreasury } from './treasury';
+import { claimNext, type ClaimedAddress } from './address-pool';
+import { acceptTonPayments } from '@/lib/feature-flags';
 
 export type PaymentTier = 'pro' | 'elite';
 export type PaymentCadence = 'monthly' | 'annual' | 'lifetime';
@@ -113,9 +115,60 @@ function priceTokenFor(
   return 'sol';
 }
 
-function destinationFor(chain: PaymentChain): string {
-  if (chain === 'ton') return tonTreasury();
-  return solanaTreasury();
+/**
+ * Resolve the destination address for a new session.
+ *
+ * Watch-only HD model (v0.4+): every session gets a unique
+ * pre-derived address from the operator-uploaded pool, so two
+ * customers never pay into the same address (privacy + replay
+ * safety). Pool is consumed atomically via `claimNext`.
+ *
+ * Backwards-compat fallback: if the pool env var is unset (or the
+ * pool file is missing), fall back to the legacy static-treasury env
+ * var so an operator who hasn't migrated yet keeps accepting payments
+ * — at the cost of address reuse. Log a deprecation warning so the
+ * runbook gap is visible. Once the operator provisions a pool, the
+ * primary path takes over with zero code change.
+ */
+function destinationFor(
+  chain: PaymentChain,
+): { dest: string; poolIndex: number | null } {
+  if (chain === 'ton') {
+    return tryClaimFromPool('ton') ?? legacyStatic('ton', tonTreasury);
+  }
+  return tryClaimFromPool('solana') ?? legacyStatic('solana', solanaTreasury);
+}
+
+function tryClaimFromPool(
+  chain: 'solana' | 'ton',
+): { dest: string; poolIndex: number } | null {
+  const envName =
+    chain === 'solana'
+      ? 'VIZZOR_SOLANA_ADDRESS_POOL_PATH'
+      : 'VIZZOR_TON_ADDRESS_POOL_PATH';
+  if (!process.env[envName]) return null;
+  let claimed: ClaimedAddress;
+  try {
+    claimed = claimNext(chain);
+  } catch (e) {
+    // Pool exhausted or unreadable — surface upstream via the same
+    // session_failed reason. Caller logs the actual cause.
+    throw new Error(
+      `pool_unavailable_${chain}: ${(e as Error).message}`,
+    );
+  }
+  return { dest: claimed.address, poolIndex: claimed.index };
+}
+
+function legacyStatic(
+  chain: 'solana' | 'ton',
+  resolver: () => string,
+): { dest: string; poolIndex: null } {
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[vizzor-payment] using legacy static treasury for ${chain} — set ${chain === 'solana' ? 'VIZZOR_SOLANA_ADDRESS_POOL_PATH' : 'VIZZOR_TON_ADDRESS_POOL_PATH'} to enable the watch-only HD pool (privacy + per-session address freshness). See docs/ops/treasury-setup.md.`,
+  );
+  return { dest: resolver(), poolIndex: null };
 }
 
 function newSessionId(): string {
@@ -152,7 +205,14 @@ export async function createSession(
   ) {
     return { ok: false, reason: 'invalid_input' };
   }
-  if (!acceptSolanaPayments()) {
+  // Per-chain feature gate. Each chain has its own flag so the
+  // operator can roll out SOL or TON independently. A request for a
+  // disabled chain returns the same `feature_disabled` reason the
+  // UI knows how to render.
+  if (input.chain === 'solana' && !acceptSolanaPayments()) {
+    return { ok: false, reason: 'feature_disabled' };
+  }
+  if (input.chain === 'ton' && !acceptTonPayments()) {
     return { ok: false, reason: 'feature_disabled' };
   }
 
@@ -167,7 +227,10 @@ export async function createSession(
   const amount = Math.round((usd / rate.usdPer) * 10000) / 10000;
   const decimals = decimalsFor(input.chain, input.token);
 
-  const destAddress = destinationFor(input.chain);
+  // Resolve the per-session destination. Throws when the pool is
+  // exhausted; the caller (POST /api/payment/session) catches and
+  // surfaces it as `internal_error` with the underlying message.
+  const { dest: destAddress, poolIndex } = destinationFor(input.chain);
   const expiresAt = Date.now() + paymentRateLockSeconds() * 1000;
 
   insertSession({
@@ -185,6 +248,7 @@ export async function createSession(
     expires_at: expiresAt,
     status: 'pending',
     memo: sessionId,
+    pool_index: poolIndex,
   });
 
   return {
@@ -358,5 +422,82 @@ export function finalizeSession(
 
     return { confirmed: true, subscriptionId, grantCode: code };
   });
-  return run();
+  const result = run();
+
+  // Outbound webhook to the engine — fired AFTER the transaction
+  // commits so the engine never sees a tier update for a row that
+  // failed to insert. Best-effort: a failed webhook just means the
+  // engine's 60-second cache picks up the change on the next chat
+  // command via its periodic lookup against /api/subscriptions/lookup.
+  // The site is the source of truth; this is purely a UX optimization
+  // to flip the bot's tier badge instantly after the web checkout.
+  if (result.confirmed && payer) {
+    void notifyEngineSubscriptionUpdated({
+      wallet: payer,
+      telegramUserId: result.walletLinkedTo ?? null,
+      tier: session.tier,
+    });
+  }
+
+  return result;
+}
+
+interface EngineWebhookPayload {
+  wallet: string;
+  telegramUserId: number | null;
+  tier: string;
+}
+
+/**
+ * Fire-and-forget POST to the engine's subscription-cache invalidator.
+ * The engine module that handles this (`src/api/routes/internal/
+ * subscription-updated.ts`) expects the `X-Vizzor-Bot-Token` shared
+ * secret. When `VIZZOR_API_URL` or `VIZZOR_BOT_TOKEN` is unset (dev /
+ * CI), we log + skip. When the engine is unreachable, we log + swallow
+ * — the engine's own 60-second cache window guarantees eventual
+ * consistency without this hook.
+ */
+async function notifyEngineSubscriptionUpdated(
+  payload: EngineWebhookPayload,
+): Promise<void> {
+  const base =
+    process.env.VIZZOR_API_URL ??
+    process.env.NEXT_PUBLIC_VIZZOR_API_URL ??
+    '';
+  const token = process.env.VIZZOR_BOT_TOKEN ?? '';
+  if (!base || !token) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[vizzor-payment] skipping engine webhook (VIZZOR_API_URL or VIZZOR_BOT_TOKEN missing) — engine cache will refresh on next lookup',
+    );
+    return;
+  }
+  const url = `${base.replace(/\/+$/, '')}/v1/internal/subscription-updated`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5_000);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'content-type': 'application/json',
+        'X-Vizzor-Bot-Token': token,
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[vizzor-payment] engine webhook returned ${res.status} for wallet=${payload.wallet.slice(0, 6)}…`,
+      );
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[vizzor-payment] engine webhook failed for wallet=${payload.wallet.slice(0, 6)}…:`,
+      (e as Error)?.message ?? e,
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
 }
