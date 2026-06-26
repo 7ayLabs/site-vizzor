@@ -3,7 +3,7 @@
 # ──────────────────────────────────────────────────────────────────────
 # Base — pnpm + node 20
 # ──────────────────────────────────────────────────────────────────────
-FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS base
+FROM node:26-alpine@sha256:725aeba2364a9b16beae49e180d83bd597dbd0b15c47f1f28875c290bfd255b9 AS base
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 WORKDIR /app
 
@@ -84,7 +84,7 @@ RUN pnpm build
 # ──────────────────────────────────────────────────────────────────────
 # Runner — minimal runtime image with the standalone bundle
 # ──────────────────────────────────────────────────────────────────────
-FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS runner
+FROM node:26-alpine@sha256:725aeba2364a9b16beae49e180d83bd597dbd0b15c47f1f28875c290bfd255b9 AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
