@@ -1,26 +1,29 @@
-/**
- * HowItWorksClient — three plain-language explanation cards.
- *
- * Pass 2 reframes the section away from engine diagnostics. Each card is now
- * a friendly explanation, not an instrument. The three mini-visuals match
- * the three steps a Web3-native trader takes:
- *
- *   1. Ask           : a chat-style prompt bubble
- *   2. Get a call    : a directional call-out card (arrow + confidence)
- *   3. Track the     : a tiny public-scoreboard tally (wins/misses/neutral)
- *      result
- *
- * Animation behaviour is unchanged — staggered GSAP reveal of the three
- * cards, all gated by `useReducedMotionSafe`. The mini-visuals each
- * render a static frame under reduced-motion.
- */
 'use client';
+
+/**
+ * HowItWorksClient — three product-mockup cards in a uniform 3-column
+ * grid. Reads as feature cards, not engine diagnostics.
+ *
+ * Each card has:
+ *   - Mono step number (top-left) + a TRACKED tag (top-right)
+ *   - Bold display title
+ *   - Short descriptive paragraph
+ *   - Substantial product-mockup visual on the bottom half
+ *
+ * Visuals match the hero data cards' vocabulary: corner brackets
+ * (vt-bracket), scanline overlay (vt-scanlines), hairline borders,
+ * mono typography. Strict monochrome — the only color exception is
+ * the scoped `--up` / `--down` direction tokens used on explicit
+ * hit/miss glyphs (a11y carry-through for colorblind users).
+ *
+ * Reveal: GSAP stagger via runGsapReveal (same primitive used across
+ * the marketing page). Reduced motion snaps each card to its final
+ * state instantly.
+ */
 
 import { useEffect, useRef } from 'react';
 import { runGsapReveal, useReducedMotionSafe } from '@/lib/motion';
-import { GlitchHeading } from '@/components/ui/glitch-heading';
-import { LiveBadge } from '@/components/ui/live-badge';
-import { AnimatedNumber } from '@/components/ui/animated-number';
+import { CoinIcon } from '@/components/ui/coin-icon';
 import { cn } from '@/lib/utils';
 
 interface StepCopy {
@@ -31,10 +34,9 @@ interface StepCopy {
 
 export interface HowItWorksClientProps {
   steps: readonly [StepCopy, StepCopy, StepCopy];
-  arrow: string;
 }
 
-export function HowItWorksClient({ steps, arrow }: HowItWorksClientProps) {
+export function HowItWorksClient({ steps }: HowItWorksClientProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef<HTMLDivElement[]>([]);
   const reduced = useReducedMotionSafe();
@@ -50,8 +52,8 @@ export function HowItWorksClient({ steps, arrow }: HowItWorksClientProps) {
       root,
       targets,
       reduced,
-      stagger: 0.12,
-      duration: 0.55,
+      stagger: 0.14,
+      duration: 0.6,
     });
   }, [reduced]);
 
@@ -60,218 +62,340 @@ export function HowItWorksClient({ steps, arrow }: HowItWorksClientProps) {
   };
 
   const visuals: readonly [React.ReactNode, React.ReactNode, React.ReactNode] = [
-    <AskVisual key="v1" reduced={reduced} />,
-    <CallVisual key="v2" reduced={reduced} />,
-    <ScoreboardVisual key="v3" reduced={reduced} />,
+    <AskVisual key="v1" />,
+    <CallVisual key="v2" />,
+    <ScoreboardVisual key="v3" />,
   ];
 
   return (
     <div
       ref={rootRef}
-      className="mt-20 grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr] gap-8 md:gap-4 items-stretch"
+      className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-6 items-stretch"
     >
-      {steps.map((step, idx) => {
-        const isLast = idx === steps.length - 1;
-        return (
-          <div key={step.number} className="contents">
-            <div
-              ref={setCardRef(idx)}
-              className={cn(
-                'relative flex flex-col gap-5 p-6',
-                'rounded-lg bg-[var(--surface)] border border-[var(--border-hi)]',
-                'vt-bracket',
-              )}
-            >
-              <div className="flex items-center justify-between">
-                <span className="mono tabular text-[12px] font-semibold uppercase tracking-[0.18em] text-[var(--gold)] leading-none">
-                  {step.number}
-                </span>
-                <LiveBadge tone={idx === 2 ? 'gold' : 'mint'} />
-              </div>
-
-              <GlitchHeading
-                as="h3"
-                className="text-[22px] sm:text-[26px] font-bold tracking-tight text-[var(--fg)] leading-[1.15]"
-              >
-                {step.title}
-              </GlitchHeading>
-
-              <p className="text-[15px] leading-relaxed text-[var(--fg-2)]">
-                {step.description}
-              </p>
-
-              <div className="mt-auto pt-2">{visuals[idx]}</div>
-            </div>
-
-            {!isLast && (
-              <div
-                aria-hidden
-                className="hidden md:flex items-center justify-center mono tabular text-[20px] text-[var(--fg-3)] select-none"
-              >
-                {arrow}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ---------------------------------------------------------------- *
- * Mini-visuals — friendly, marketing-friendly. Not engine diagnostics.
- * ---------------------------------------------------------------- */
-
-interface VisualProps {
-  reduced: boolean;
-}
-
-/** Step 01 — a chat-style prompt bubble. */
-function AskVisual({ reduced }: VisualProps) {
-  return (
-    <div
-      className="relative h-[72px] rounded-md border border-[var(--border)] bg-[var(--surface-2)] overflow-hidden px-3 py-2"
-      aria-hidden
-    >
-      <div className="flex items-center gap-2 mono tabular text-[11px]">
-        <span
-          className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent)]/15 text-[var(--accent)] text-[10px] leading-none"
-          style={
-            reduced
-              ? undefined
-              : {
-                  animation:
-                    'how-it-works-prompt-blink 2.6s ease-in-out infinite',
-                }
-          }
+      {steps.map((step, idx) => (
+        <article
+          key={step.number}
+          ref={setCardRef(idx)}
+          className={cn(
+            'group relative flex flex-col',
+            'rounded-2xl bg-[var(--surface)] border border-[var(--border)]',
+            'shadow-[0_8px_32px_-16px_rgba(0,0,0,0.18)]',
+            'dark:shadow-[0_8px_32px_-10px_rgba(0,0,0,0.55)]',
+            'transition-[transform,box-shadow,border-color] duration-300 ease-out',
+            'hover:border-[var(--border-hi)]',
+            'hover:shadow-[0_16px_40px_-16px_rgba(0,0,0,0.25)]',
+            'motion-safe:hover:[transform:translateY(-2px)]',
+            'overflow-hidden',
+          )}
         >
-          ›
-        </span>
-        <span className="text-[var(--fg-2)]">you</span>
-        <span className="text-[var(--fg-3)]">·</span>
-        <span className="text-[var(--fg)]">BTC 4h</span>
-      </div>
-      <div className="mt-2 flex items-center gap-2 mono tabular text-[10px] text-[var(--fg-3)]">
-        <span className="inline-block h-1 w-1 rounded-full bg-[var(--accent)]" />
-        <span>SOL 1d</span>
-        <span>·</span>
-        <span>ETH 15m</span>
-        <span>·</span>
-        <span>HYPE 1h</span>
-      </div>
-      <style>{`
-        @keyframes how-it-works-prompt-blink {
-          0%, 100% { opacity: 0.55; }
-          50% { opacity: 1; }
-        }
-      `}</style>
+          {/* ── Top: step number only ──────────────────────────────── */}
+          <header className="px-7 pt-7">
+            <span className="mono tabular text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--fg-3)]">
+              {step.number}
+            </span>
+          </header>
+
+          {/* ── Title + description ────────────────────────────────── */}
+          <div className="px-7 pt-3 flex flex-col gap-2.5">
+            <h3 className="display text-[20px] sm:text-[22px] leading-[1.1] tracking-[-0.02em] font-semibold text-[var(--fg)]">
+              {step.title}
+            </h3>
+            <p className="text-[13.5px] leading-relaxed text-[var(--fg-2)] max-w-[42ch]">
+              {step.description}
+            </p>
+          </div>
+
+          {/* ── Visual ─────────────────────────────────────────────── */}
+          <div className="px-5 pb-5 pt-5 mt-auto">{visuals[idx]}</div>
+        </article>
+      ))}
     </div>
   );
 }
 
-/** Step 02 — a directional call-out card. */
-function CallVisual({ reduced }: VisualProps) {
+/* ─────────────────── shared visual chrome ─────────────────── */
+
+function VisualFrame({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
     <div
-      className="relative h-[72px] rounded-md border border-[var(--border)] bg-[var(--surface-2)] overflow-hidden flex items-center justify-between px-4"
       aria-hidden
+      className={cn(
+        'vt-bracket relative',
+        'rounded-lg border border-[var(--border)]',
+        'bg-[var(--bg)]',
+        'overflow-hidden',
+        className,
+      )}
     >
-      <div className="flex items-center gap-2">
+      <span aria-hidden className="vt-scanlines absolute inset-0 rounded-lg" />
+      <div className="relative p-4">{children}</div>
+    </div>
+  );
+}
+
+/* ─────────────────── 01 · ASK — chat composer mock ─────────────────── */
+
+function AskVisual() {
+  return (
+    <VisualFrame className="min-h-[180px]">
+      {/* Prompt bubble — user's incoming question */}
+      <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 flex items-start gap-2">
+        <span className="mono tabular text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)] shrink-0 pt-0.5">
+          you
+        </span>
+        <span className="text-[12.5px] text-[var(--fg)] leading-snug">
+          What is BTC doing this week?
+        </span>
+      </div>
+
+      {/* Recent symbol chips — quick re-runs */}
+      <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+        <span className="mono tabular text-[9px] uppercase tracking-[0.16em] text-[var(--fg-3)] mr-1">
+          recent
+        </span>
+        {(['BTC', 'ETH', 'SOL', 'HYPE'] as const).map((sym) => (
+          <span
+            key={sym}
+            className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-2 py-0.5 mono tabular text-[10px] text-[var(--fg-2)]"
+          >
+            <CoinIcon symbol={sym} size={11} />
+            {sym}
+          </span>
+        ))}
+      </div>
+
+      {/* Composer input line + submit cue */}
+      <div className="mt-4 flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] pl-3 pr-1 py-1">
         <span
-          className="display font-bold text-[28px] leading-none text-[var(--accent)] tracking-tight"
-          style={
-            reduced
-              ? undefined
-              : {
-                  animation: 'how-it-works-arrow 2.4s ease-in-out infinite',
-                  transformOrigin: 'center',
-                }
-          }
+          className="inline-flex h-1.5 w-1.5 rounded-full bg-[var(--fg)] motion-safe:animate-pulse shrink-0"
+          aria-hidden
+        />
+        <span className="mono tabular text-[11px] text-[var(--fg-3)] flex-1 truncate">
+          /predict SOL 1d
+        </span>
+        <span className="inline-flex items-center justify-center h-6 px-2.5 rounded-full bg-[var(--fg)] text-[var(--bg)] text-[10px] font-semibold tracking-tight">
+          PREDICT →
+        </span>
+      </div>
+    </VisualFrame>
+  );
+}
+
+/* ─────────────────── 02 · GET A CALL — prediction receipt mock ─────────────── */
+
+function CallVisual() {
+  return (
+    <VisualFrame className="min-h-[180px]">
+      {/* Direction headline + confidence number */}
+      <div className="flex items-center gap-4">
+        <span
+          className="display font-bold text-[42px] leading-none tracking-tight"
+          style={{ color: 'var(--up)' }}
+          aria-hidden
         >
           ↑
         </span>
         <div className="flex flex-col">
-          <span className="mono tabular text-[10px] uppercase tracking-[0.18em] text-[var(--fg-3)] leading-none">
+          <span className="mono tabular text-[10px] uppercase tracking-[0.16em] text-[var(--fg-3)] leading-none">
             call
           </span>
-          <span className="mono tabular text-[13px] font-semibold text-[var(--fg)] leading-tight">
-            UP
+          <span className="mono tabular text-[18px] font-bold text-[var(--fg)] leading-tight">
+            LONG
+          </span>
+        </div>
+        <div className="flex flex-col ml-auto items-end">
+          <span className="mono tabular text-[10px] uppercase tracking-[0.16em] text-[var(--fg-3)] leading-none">
+            target
+          </span>
+          <span className="mono tabular text-[14px] font-semibold text-[var(--fg)] leading-tight">
+            $69,420
           </span>
         </div>
       </div>
-      <div className="flex flex-col items-end gap-1">
-        <span className="mono tabular text-[9px] uppercase tracking-[0.16em] text-[var(--fg-3)] leading-none">
-          confidence
-        </span>
-        <AnimatedNumber
-          value={78}
-          format="pct"
-          decimals={0}
-          className="mono tabular text-[18px] font-bold text-[var(--fg)] leading-none"
-        />
-      </div>
-      <style>{`
-        @keyframes how-it-works-arrow {
-          0%, 100% { transform: translateY(0); opacity: 0.9; }
-          50% { transform: translateY(-2px); opacity: 1; }
-        }
-      `}</style>
-    </div>
+
+      {/* Signal-family bullet list — fills 4 of the 6 to suggest "most fired" */}
+      <ul className="mt-4 flex flex-col gap-1.5">
+        {[
+          { name: 'ON-CHAIN', filled: true },
+          { name: 'ML ENSEMBLE', filled: true },
+          { name: 'MARKETS', filled: true },
+          { name: 'PATTERN', filled: false },
+        ].map((sig) => (
+          <li
+            key={sig.name}
+            className="flex items-center gap-2 mono tabular text-[10px] uppercase tracking-[0.14em] text-[var(--fg-2)]"
+          >
+            <span
+              aria-hidden
+              className={cn(
+                'inline-block h-1.5 w-6 rounded-full',
+                sig.filled ? 'bg-[var(--fg)]' : 'bg-[var(--border)]',
+              )}
+            />
+            <span className={sig.filled ? 'text-[var(--fg)]' : 'text-[var(--fg-3)]'}>
+              {sig.name}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </VisualFrame>
   );
 }
 
-/** Step 03 — a tiny public-scoreboard tally. */
-function ScoreboardVisual({ reduced }: VisualProps) {
-  const cells: readonly { label: string; value: string; tone: 'mint' | 'gold' | 'fg-3' }[] = [
-    { label: 'wins', value: '128', tone: 'mint' },
-    { label: 'miss', value: '52', tone: 'gold' },
-    { label: 'neut', value: '14', tone: 'fg-3' },
+/* ─────────────────── 03 · TRACK — scoreboard + receipts mock ─────────── */
+
+function ScoreboardVisual() {
+  // Static mock — the LIVE wr ring on the hero is the dynamic one;
+  // here we just need a believable still frame.
+  const wrPercent = 0.724;
+  const samples = 247;
+  const recent: ReadonlyArray<{
+    sym: string;
+    outcome: 'hit' | 'miss' | 'neu';
+  }> = [
+    { sym: 'BTC', outcome: 'hit' },
+    { sym: 'ETH', outcome: 'hit' },
+    { sym: 'SOL', outcome: 'miss' },
+    { sym: 'XRP', outcome: 'hit' },
+    { sym: 'HYPE', outcome: 'neu' },
   ];
+
+  return (
+    <VisualFrame className="min-h-[180px]">
+      {/* Mini WR ring + samples — static SVG so we don't double-mount
+          the real WRRing primitive (which animates on prop change). */}
+      <div className="flex items-center gap-4">
+        <MiniWrRing percent={wrPercent} size={72} />
+        <div className="flex flex-col">
+          <span className="mono tabular text-[10px] uppercase tracking-[0.16em] text-[var(--fg-3)] leading-none">
+            tracked
+          </span>
+          <span className="mono tabular text-[20px] font-bold text-[var(--fg)] leading-tight">
+            {samples}
+          </span>
+          <span className="mono tabular text-[10px] text-[var(--fg-3)] mt-0.5">
+            calls audited
+          </span>
+        </div>
+        {/* Right column: hit/miss/neu counts */}
+        <div className="ml-auto flex flex-col gap-1 text-right">
+          <CountRow label="HITS" count={128} tone="up" />
+          <CountRow label="MISS" count={52} tone="down" />
+          <CountRow label="NEU" count={14} tone="neutral" />
+        </div>
+      </div>
+
+      {/* Recent receipts strip — last 5 outcomes as glyphs */}
+      <div className="mt-4 flex items-center gap-1.5 flex-wrap">
+        <span className="mono tabular text-[9px] uppercase tracking-[0.16em] text-[var(--fg-3)] mr-1">
+          recent
+        </span>
+        {recent.map((r, i) => (
+          <span
+            key={`${r.sym}-${i}`}
+            className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-1.5 py-0.5 mono tabular text-[9.5px]"
+          >
+            <CoinIcon symbol={r.sym} size={10} />
+            <span className="text-[var(--fg-2)]">{r.sym}</span>
+            <span
+              aria-hidden
+              style={{
+                color:
+                  r.outcome === 'hit'
+                    ? 'var(--up)'
+                    : r.outcome === 'miss'
+                      ? 'var(--down)'
+                      : 'var(--fg-3)',
+              }}
+            >
+              {r.outcome === 'hit' ? '✓' : r.outcome === 'miss' ? '✗' : '◌'}
+            </span>
+          </span>
+        ))}
+      </div>
+    </VisualFrame>
+  );
+}
+
+function CountRow({
+  label,
+  count,
+  tone,
+}: {
+  label: string;
+  count: number;
+  tone: 'up' | 'down' | 'neutral';
+}) {
+  const color =
+    tone === 'up'
+      ? 'var(--up)'
+      : tone === 'down'
+        ? 'var(--down)'
+        : 'var(--fg-3)';
+  return (
+    <span className="mono tabular text-[10.5px] inline-flex items-center justify-end gap-1.5">
+      <span className="text-[var(--fg-3)] text-[9px] uppercase tracking-[0.16em]">
+        {label}
+      </span>
+      <span className="font-semibold" style={{ color }}>
+        {count}
+      </span>
+    </span>
+  );
+}
+
+function MiniWrRing({ percent, size }: { percent: number; size: number }) {
+  // Inline SVG so this visual stays self-contained (no separate mount,
+  // no re-animation triggered by HoverIntent). Matches the WRRing
+  // primitive's stroke logic in spirit but without the animation
+  // keyframe — the card body's hover lift carries enough motion.
+  const stroke = size / 12;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - Math.max(0, Math.min(1, percent)));
+  const cx = size / 2;
+  const cy = size / 2;
   return (
     <div
-      className="relative h-[72px] rounded-md border border-[var(--border)] bg-[var(--surface-2)] overflow-hidden grid grid-cols-3"
-      aria-hidden
+      className="relative inline-flex items-center justify-center"
+      style={{ width: size, height: size }}
     >
-      {cells.map((cell, i) => {
-        const color =
-          cell.tone === 'mint'
-            ? 'var(--accent)'
-            : cell.tone === 'gold'
-              ? 'var(--gold)'
-              : 'var(--fg-3)';
-        return (
-          <div
-            key={cell.label}
-            className="flex flex-col items-center justify-center gap-1 border-r border-[var(--border)] last:border-r-0"
-            style={
-              reduced
-                ? undefined
-                : {
-                    animation: `how-it-works-cell 2.6s ease-in-out ${i * 0.2}s infinite alternate`,
-                  }
-            }
-          >
-            <span
-              className="mono tabular text-[9px] uppercase tracking-[0.16em] leading-none"
-              style={{ color: 'var(--fg-3)' }}
-            >
-              {cell.label}
-            </span>
-            <span
-              className="mono tabular text-[16px] font-bold leading-none"
-              style={{ color }}
-            >
-              {cell.value}
-            </span>
-          </div>
-        );
-      })}
-      <style>{`
-        @keyframes how-it-works-cell {
-          from { opacity: 0.85; }
-          to { opacity: 1; }
-        }
-      `}</style>
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="absolute inset-0 -rotate-90"
+        aria-hidden
+      >
+        <circle
+          cx={cx}
+          cy={cy}
+          r={radius}
+          fill="none"
+          stroke="var(--border)"
+          strokeWidth={stroke}
+        />
+        <circle
+          cx={cx}
+          cy={cy}
+          r={radius}
+          fill="none"
+          stroke="var(--fg)"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+        />
+      </svg>
+      <span className="relative mono tabular text-[13px] font-bold text-[var(--fg)] leading-none">
+        {(percent * 100).toFixed(1)}%
+      </span>
     </div>
   );
 }

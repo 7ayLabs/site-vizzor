@@ -60,8 +60,25 @@ export const ROUTE_LIMITS: Readonly<Record<string, RateLimitConfig>> = {
   'grants.redeem': { capacity: 10, refillPerSecond: 5 },
   'subscriptions.lookup': { capacity: 10, refillPerSecond: 5 },
   'wallet-links.write': { capacity: 10, refillPerSecond: 5 },
-  // 60 req/min — CSP reports can burst during a rollout.
-  'security.csp-report': { capacity: 60, refillPerSecond: 1 },
+  // 600 req/min, sustained 10/s — Phase 1 (Report-Only) routinely
+  // bursts beyond 60/min when a single misconfigured directive fires
+  // dozens of reports per page load. The previous 60/min cap silenced
+  // the diagnostic channel after a few page views, which defeats the
+  // purpose of Report-Only. Bound is still well below an actual DoS.
+  'security.csp-report': { capacity: 600, refillPerSecond: 10 },
+  // 30 req/min — payment history is wallet-scoped + SIWS-gated; the
+  // limit is defense-in-depth against enumeration attempts on the
+  // SQLite probe path. /app/billing polls at most every 20s, so 30/min
+  // gives well over 3× headroom for legitimate use.
+  'payment.history': { capacity: 30, refillPerSecond: 30 / 60 },
+  // 60 req/min — alerts list is polled by /app/alerts every 30s
+  // (~2 req/min for a normal user). Cap at 60 gives 30× headroom and
+  // catches scrapers without inconveniencing real users.
+  'alerts.read': { capacity: 60, refillPerSecond: 60 / 60 },
+  // 10 req/min — arm/cancel are user-driven; a Pro user wouldn't
+  // legitimately fire more than a handful in a sitting. Tight cap
+  // also blunts the cost of bot-driven spam against the engine.
+  'alerts.write': { capacity: 10, refillPerSecond: 10 / 60 },
   // 30 req/min — account-delete is rare but should not enumerate.
   'account.delete': { capacity: 30, refillPerSecond: 0.5 },
   // 5 req/min — retention sweep is server-side cron, low frequency.

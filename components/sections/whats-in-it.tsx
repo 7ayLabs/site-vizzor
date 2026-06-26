@@ -25,8 +25,6 @@ import { Check } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { GsapHeadline } from '@/components/ui/gsap-headline';
 import { DataTile } from '@/components/ui/data-tile';
-import { LiveBadge } from '@/components/ui/live-badge';
-import { ScanlineOverlay } from '@/components/ui/scanline-overlay';
 import { cn } from '@/lib/utils';
 
 const CONFIDENCE_PCT = 78; // matches the long-standing copy example
@@ -48,87 +46,78 @@ export async function WhatsInIt() {
   const t = await getTranslations('whatsInIt');
 
   return (
-    <section className="relative isolate">
-      {/* CRT scanline tint — utility self-suppresses under reduced motion. */}
-      <ScanlineOverlay opacity={0.6} />
-
-      <div className="relative z-10 mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 py-32 lg:py-40">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16">
-          {/* Headline + bullets — copy band */}
-          <div className="lg:col-span-7">
-            <GsapHeadline
-              glitch
-              eyebrow={
-                <span className="mono tabular text-[12px] tracking-[0.18em] uppercase text-[var(--fg-3)]">
-                  {t('eyebrow')}
-                </span>
-              }
-              title={t('title')}
-              sub={t('sub')}
-              titleClassName="display text-[var(--fg)] text-balance text-[36px] sm:text-[44px] lg:text-[52px] leading-[1.08] tracking-tight font-semibold mt-4"
-              subClassName="mt-6 text-[17px] leading-relaxed text-[var(--fg-2)] max-w-[52ch]"
-            />
-          </div>
-
-          <ul className="lg:col-span-5 flex flex-col gap-3 self-end mt-2">
-            {(['directional', 'targets', 'snapshot'] as const).map((k) => (
-              <li
-                key={k}
-                className="flex items-start gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] px-4 py-3"
-              >
-                <Check
-                  size={18}
-                  strokeWidth={2}
-                  className="mt-[3px] flex-none text-[var(--accent)]"
-                  aria-hidden
-                />
-                <span className="text-[14px] text-[var(--fg)] leading-relaxed">
-                  {t(`bullets.${k}`)}
-                </span>
-              </li>
-            ))}
-          </ul>
+    <section className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8 py-24 lg:py-32">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12">
+        {/* Headline + bullets — copy band */}
+        <div className="lg:col-span-7">
+          <GsapHeadline
+            eyebrow={
+              <span className="mono tabular text-[11px] tracking-[0.22em] uppercase text-[var(--fg-3)]">
+                {t('eyebrow')}
+              </span>
+            }
+            title={t('title')}
+            sub={t('sub')}
+            titleClassName="display text-[var(--fg)] text-balance text-[28px] sm:text-[36px] lg:text-[44px] leading-[1.05] tracking-[-0.02em] font-semibold mt-4"
+            subClassName="mt-5 text-[15px] sm:text-[16px] leading-relaxed text-[var(--fg-2)] max-w-[52ch]"
+          />
         </div>
 
-        {/* Instrument panels — 12-col grid, stack on mobile */}
-        <div className="mt-16 grid grid-cols-1 md:grid-cols-12 gap-4">
-          {/* Direction */}
-          <div className="md:col-span-4">
-            <DataTile
-              variant="terminal"
-              live
-              size="lg"
-              label="direction"
-              value="↑ UP"
-              hint="entry $2,112.40"
-            />
-          </div>
+        <ul className="lg:col-span-5 flex flex-col gap-2.5 self-end">
+          {(['directional', 'targets', 'snapshot'] as const).map((k) => (
+            <li
+              key={k}
+              className="flex items-start gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3"
+            >
+              <Check
+                size={16}
+                strokeWidth={2}
+                className="mt-[3px] flex-none text-[var(--fg)]"
+                aria-hidden
+              />
+              <span className="text-[13.5px] text-[var(--fg)] leading-relaxed">
+                {t(`bullets.${k}`)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
 
-          {/* Confidence — replace standard DataTile with a custom panel that
-              still uses the same terminal shell (vt-bracket + border-hi) so
-              the visual cluster is consistent. */}
-          <div className="md:col-span-5">
-            <ConfidenceTile
-              percent={CONFIDENCE_PCT}
-              ticks={CONFIDENCE_TICKS}
-            />
-          </div>
-
-          {/* Alerts feed */}
-          <div className="md:col-span-3">
-            <AlertsTile rows={ALERT_ROWS} />
-          </div>
+      {/* Instrument panels — 12-col grid, stack on mobile */}
+      <div className="mt-12 grid grid-cols-1 md:grid-cols-12 gap-4">
+        {/* Direction */}
+        <div className="md:col-span-4">
+          <DataTile
+            variant="terminal"
+            size="lg"
+            label="direction"
+            value="↑ UP"
+            hint="entry $2,112.40"
+          />
         </div>
 
-        <div className="mt-10">
-          <Link
-            href="/docs/chronovisor"
-            className="inline-flex items-center gap-1.5 text-[14px] font-medium text-[var(--fg)] underline-offset-4 hover:underline"
-          >
-            <span>{t('learnMore')}</span>
-            <span aria-hidden>→</span>
-          </Link>
+        {/* Confidence */}
+        <div className="md:col-span-5">
+          <ConfidenceTile
+            percent={CONFIDENCE_PCT}
+            ticks={CONFIDENCE_TICKS}
+          />
         </div>
+
+        {/* Alerts feed */}
+        <div className="md:col-span-3">
+          <AlertsTile rows={ALERT_ROWS} />
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <Link
+          href="/docs/chronovisor"
+          className="inline-flex items-center gap-1.5 text-[13.5px] font-medium text-[var(--fg)] underline-offset-4 hover:underline"
+        >
+          <span>{t('learnMore')}</span>
+          <span aria-hidden>→</span>
+        </Link>
       </div>
     </section>
   );
@@ -149,23 +138,12 @@ function ConfidenceTile({ percent, ticks }: ConfidenceTileProps) {
     <div
       className={cn(
         'relative flex flex-col gap-4 h-full',
-        'rounded-lg bg-[var(--surface)] vt-bracket border border-[var(--border-hi)] p-6',
+        'rounded-lg bg-[var(--surface)] vt-bracket border border-[var(--border)] p-6',
       )}
     >
-      <span
-        aria-hidden
-        className="absolute right-3 top-3 inline-block h-1.5 w-1.5 rounded-full"
-        style={{
-          background: 'var(--accent)',
-          animation: 'pulse-dot 1.6s ease-in-out infinite',
-        }}
-      />
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--fg-3)] leading-none">
           confidence
-        </span>
-        <span className="mono tabular text-[10px] text-[var(--fg-3)] leading-none">
-          tracked live
         </span>
       </div>
 
@@ -213,14 +191,13 @@ function AlertsTile({ rows }: AlertsTileProps) {
     <div
       className={cn(
         'relative flex flex-col gap-3 h-full',
-        'rounded-lg bg-[var(--surface)] vt-bracket border border-[var(--border-hi)] p-6',
+        'rounded-lg bg-[var(--surface)] vt-bracket border border-[var(--border)] p-6',
       )}
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--fg-3)] leading-none">
           alerts
         </span>
-        <LiveBadge tone="mint" />
       </div>
 
       <ul className="flex flex-col gap-2">

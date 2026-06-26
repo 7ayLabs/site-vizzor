@@ -44,15 +44,16 @@ jobs:
   resolve:
     runs-on: ubuntu-latest
     outputs:
-      target:          ${{ steps.r.outputs.target }}
-      image_tag:       ${{ steps.r.outputs.image_tag }}
-      host_url:        ${{ steps.r.outputs.host_url }}
-      service_name:    ${{ steps.r.outputs.service_name }}
-      compose_overlay: ${{ steps.r.outputs.compose_overlay }}
-      build_api_url:   ${{ steps.r.outputs.build_api_url }}
-      payment_network: ${{ steps.r.outputs.payment_network }}
-      allow_dev_auth:  ${{ steps.r.outputs.allow_dev_auth }}
-      checkout_ref:    ${{ steps.r.outputs.checkout_ref }}
+      target:                 ${{ steps.r.outputs.target }}
+      image_tag:              ${{ steps.r.outputs.image_tag }}
+      host_url:               ${{ steps.r.outputs.host_url }}
+      service_name:           ${{ steps.r.outputs.service_name }}
+      compose_overlay:        ${{ steps.r.outputs.compose_overlay }}
+      build_api_url:          ${{ steps.r.outputs.build_api_url }}
+      payment_network:        ${{ steps.r.outputs.payment_network }}
+      allow_dev_auth:         ${{ steps.r.outputs.allow_dev_auth }}
+      accept_solana_payments: ${{ steps.r.outputs.accept_solana_payments }}
+      checkout_ref:           ${{ steps.r.outputs.checkout_ref }}
     steps:
       - id: r
         run: |
@@ -73,6 +74,16 @@ jobs:
               # downstream client-side cascade dead-codes against this
               # being unset; the server-side route hard-404s.
               echo "allow_dev_auth="                                    >> "$GITHUB_OUTPUT"
+              # Production keeps the on-chain checkout gate CLOSED
+              # until the mainnet treasury + Solana watcher have been
+              # validated end-to-end (see lib/payment/watcher.ts and
+              # the runbook in docs/ops). The empty value bakes a
+              # falsey check into the bundle so /pay renders the
+              # "infrastructure pending" panel rather than minting a
+              # real on-chain session against an unverified treasury.
+              # Flip to `true` here once the mainnet wiring is signed
+              # off.
+              echo "accept_solana_payments="                            >> "$GITHUB_OUTPUT"
               echo "checkout_ref=main"                                  >> "$GITHUB_OUTPUT"
               ;;
             testing|refs/heads/testing)
@@ -98,6 +109,15 @@ jobs:
               # server-side route additionally recognises test.vizzor.ai
               # as a built-in staging origin — no VPS env edit needed.
               echo "allow_dev_auth=true"                                >> "$GITHUB_OUTPUT"
+              # Open the on-chain checkout gate on staging so the
+              # devnet treasury can actually receive a test payment
+              # end-to-end. Without this bake, the client bundle
+              # short-circuits into the "infrastructure pending"
+              # panel and the watcher never sees a real session
+              # being created. Devnet only — prod stays closed
+              # (see the `main` branch above) until mainnet wiring
+              # is signed off.
+              echo "accept_solana_payments=true"                        >> "$GITHUB_OUTPUT"
               echo "checkout_ref=testing"                               >> "$GITHUB_OUTPUT"
               ;;
             *)
@@ -166,6 +186,7 @@ jobs:
             NEXT_PUBLIC_VIZZOR_API_URL=${{ needs.resolve.outputs.build_api_url }}
             NEXT_PUBLIC_PAYMENT_NETWORK=${{ needs.resolve.outputs.payment_network }}
             NEXT_PUBLIC_ALLOW_DEV_AUTH=${{ needs.resolve.outputs.allow_dev_auth }}
+            NEXT_PUBLIC_ACCEPT_SOLANA_PAYMENTS=${{ needs.resolve.outputs.accept_solana_payments }}
 
   # ────────────────────────────────────────────────────────────────────
   # deploy-vps — SSH into the (single) VPS, pull the just-pushed image

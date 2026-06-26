@@ -49,13 +49,7 @@ export function assertRequiredEnv(
   // present. The same module loaded at request time WILL see the
   // injected env and assert correctly.
   if (process.env.NEXT_PHASE === 'phase-production-build') return;
-  const missing: EnvRequirement[] = [];
-  for (const req of required) {
-    const val = process.env[req.name];
-    if (val === undefined || val === null || val === '') {
-      missing.push(req);
-    }
-  }
+  const missing = missingRequiredEnv(required);
   if (missing.length === 0) return;
   const lines = missing.map((m) => `  - ${m.name}: ${m.rationale}`);
   throw new Error(
@@ -63,6 +57,29 @@ export function assertRequiredEnv(
       lines.join('\n') +
       '\nSee docs/ops/secrets.md for provisioning instructions.',
   );
+}
+
+/**
+ * Non-throwing variant — returns the list of missing requirements
+ * instead of throwing. Route handlers use this at request time so a
+ * misconfigured prod returns a structured JSON error (with a clear
+ * `payment_misconfigured` reason and the missing var names) rather
+ * than crashing module load and serving a raw "Internal Server
+ * Error" with no JSON body. The asserting variant stays as the
+ * defense-in-depth signal for deploys that wire the route module in
+ * at boot — when missing-env conditions are surfaced loudly to ops.
+ */
+export function missingRequiredEnv(
+  required: readonly EnvRequirement[],
+): EnvRequirement[] {
+  const missing: EnvRequirement[] = [];
+  for (const req of required) {
+    const val = process.env[req.name];
+    if (val === undefined || val === null || val === '') {
+      missing.push(req);
+    }
+  }
+  return missing;
 }
 
 /* ------------------------------------------------------------------ *\
@@ -79,6 +96,26 @@ export const PREDICT_ROUTE_REQUIREMENTS: readonly EnvRequirement[] = [
   },
 ];
 
+/**
+ * Hard requirements for the payment-session route — env vars without
+ * a runtime fallback in `lib/payment/treasury.ts` or `lib/solana.ts`.
+ *
+ * The SOL treasury + RPC are intentionally NOT in this list: the
+ * runtime resolvers fall back through a chain of env-var names
+ * (cluster-specific → generic → safe defaults / pre-derived pool →
+ * legacy static treasury). A missing literal `VIZZOR_SOLANA_TREASURY`
+ * is fine as long as one of `VIZZOR_SOLANA_TREASURY_MAINNET` /
+ * `_DEVNET` / `_TESTNET` is set, or the address-pool env is set
+ * instead. Listing the literal here would falsely block sessions
+ * whose downstream resolver would have succeeded.
+ *
+ * Same reasoning for `SOLANA_RPC_URL` — staging uses the
+ * cluster-specific `SOLANA_RPC_URL_DEVNET` variant.
+ *
+ * What stays here: `VIZZOR_SITE_DB`, which has no fallback. Without
+ * it the SQLite writer would silently write to the container's
+ * ephemeral CWD and lose every payment on container recreate.
+ */
 export const PAYMENT_SESSION_ROUTE_REQUIREMENTS: readonly EnvRequirement[] = [
   {
     name: 'VIZZOR_SITE_DB',
@@ -86,13 +123,20 @@ export const PAYMENT_SESSION_ROUTE_REQUIREMENTS: readonly EnvRequirement[] = [
       'SQLite path for payment_sessions/subscriptions; must point inside the persistent volume',
   },
   {
-    name: 'VIZZOR_SOLANA_TREASURY',
+    name: 'VIZZOR_BOT_TOKEN',
     rationale:
-      'Solana treasury wallet address; the watcher disambiguates payments by memo at this address',
-  },
-  {
-    name: 'SOLANA_RPC_URL',
-    rationale:
-      'dedicated Solana RPC; public mainnet-beta is rate-limited and unsafe for the 5s-poll watcher',
+      'Shared secret used to authenticate the outbound webhook to the engine on subscription mint — silent skip would leave the bot tier-flip on a 60s cache lag instead of instant',
   },
 ];
+
+/**
+ * Per-chain requirement bundle for TON. Checked at REQUEST time
+ * (only when chain === 'ton'). Same fallback-aware reasoning as the
+ * SOL list — none of the TON env vars are absolute requirements at
+ * the env-check layer; the runtime resolver chooses between
+ * `VIZZOR_TON_TREASURY_MAINNET` / `_TESTNET` and the address pool.
+ * The chain-specific RPC URL resolver in `lib/ton.ts` falls back
+ * through cluster-specific → generic → public toncenter so a
+ * configured `VIZZOR_TON_RPC_URL_TESTNET` is enough on staging.
+ */
+export const PAYMENT_TON_ROUTE_REQUIREMENTS: readonly EnvRequirement[] = [];

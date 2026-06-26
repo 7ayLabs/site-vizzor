@@ -21,7 +21,10 @@
  * New callers should read `tier` and `trial` directly.
  */
 
-import { resolveTier, type EffectiveTier } from './payment/tier-resolver';
+import {
+  resolveTierWithTrialStart,
+  type EffectiveTier,
+} from './payment/tier-resolver';
 
 export interface QuotaState {
   /** Discriminated tier: `elite | pro | trial | free`. */
@@ -49,9 +52,26 @@ const ELITE_DISPLAY_LIMIT = 999_999;
  * Returns the current state for a wallet. Callers that haven't
  * authenticated should NOT call this — use the route-level 401 path
  * instead.
+ *
+ * **Side effect: auto-seeds the 7-day Pro trial on first call.**
+ * `startTrialIfNew()` runs an `INSERT OR IGNORE` so the second-and-
+ * onwards calls are no-ops at the DB layer — safe to invoke on every
+ * /api/quota request without performance worry.
+ *
+ * Why seed here instead of at the SIWS verify boundary: the trial
+ * state IS the entitlement state, and /api/quota is the canonical
+ * read for "what tier is this wallet". Without the auto-seed, a
+ * freshly-signed-in wallet sat at `tier='free', freeReason='never_started'`
+ * — exhausted=true — until they made their FIRST /predict call, which
+ * the composer-lock prevented because the same quota read said the
+ * composer should be locked. Chicken-and-egg: the trial start was
+ * gated on a path the user couldn't reach because the trial hadn't
+ * started. Auto-seeding on first quota check resolves it cleanly
+ * without coupling the SIWS verify route to the tier-resolver
+ * lifecycle.
  */
 export function readWalletQuota(wallet: string): QuotaState {
-  return projectFromEffective(resolveTier(wallet));
+  return projectFromEffective(resolveTierWithTrialStart(wallet));
 }
 
 function projectFromEffective(effective: EffectiveTier): QuotaState {

@@ -17,8 +17,8 @@
  * from typography weight + `bg-[var(--fg)] text-[var(--bg)]` inversion.
  */
 
-import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useMemo, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useRouter, Link } from '@/i18n/navigation';
 import {
   ArrowUpRight,
@@ -29,6 +29,9 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { WalletIdenticon } from './wallet-identicon';
+import { SubscriptionManagementCard } from './subscription-management';
+import { buildSolscanTxUrl } from '@/lib/explorer/solana';
+import { buildTonviewerTxUrl } from '@/lib/explorer/ton';
 
 type Cluster = 'mainnet' | 'testnet' | 'devnet';
 
@@ -38,6 +41,10 @@ interface SubscriptionDetail {
   expiresAt: number | null;
   isLifetime: boolean;
   telegramUserId: number | null;
+  /** v0.4 — a scheduled lifecycle transition that takes effect when
+   *  the current period elapses. `null` means the subscription will
+   *  simply lapse to free (default behaviour). */
+  scheduledAction: 'cancel' | 'downgrade_to_pro' | null;
 }
 
 interface WalletLinkDetail {
@@ -107,20 +114,44 @@ function formatRelative(ts: number, now: number): string {
   return diff > 0 ? `in ${minutes}m` : `${minutes}m ago`;
 }
 
+function explorerUrlFor(
+  chain: string,
+  txSig: string | null,
+  network: Cluster,
+): string | null {
+  if (!txSig) return null;
+  if (chain === 'solana') return buildSolscanTxUrl(txSig, network);
+  if (chain === 'ton') return buildTonviewerTxUrl(txSig, network);
+  return null;
+}
+
 export function AccountProfile({
   wallet,
   authExpiresAt: _authExpiresAt,
-  network: _network,
+  network,
   networkBadge,
   subscription,
   walletLink,
   recentSessions,
 }: AccountProfileProps) {
   const t = useTranslations('account');
+  const locale = useLocale();
   const router = useRouter();
   const [signOutBusy, setSignOutBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const now = Date.now();
+
+  // Locale-aware USD formatter. Memoized because `Intl.NumberFormat`
+  // construction shows up in profiling hot paths when used inside a
+  // map — once per locale change is enough.
+  const usdFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency: 'USD',
+      }),
+    [locale],
+  );
 
   const onCopyWallet = async () => {
     try {
@@ -251,7 +282,7 @@ export function AccountProfile({
         </header>
 
         {/* ─── Stats row ─── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-px rounded-2xl border border-[var(--border)] bg-[var(--border)] overflow-hidden">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-px rounded-2xl border border-[var(--border)] bg-[var(--border)] overflow-hidden">
           <StatTile
             label={t('stats.plan')}
             value={planLabel}
@@ -278,6 +309,17 @@ export function AccountProfile({
             }
           />
         </div>
+
+        {/* ─── Subscription management (only if there's a sub) ─── */}
+        {subscription && (
+          <SubscriptionManagementCard
+            tier={subscription.tier}
+            cadence={subscription.cadence}
+            expiresAt={subscription.expiresAt}
+            isLifetime={subscription.isLifetime}
+            scheduledAction={subscription.scheduledAction}
+          />
+        )}
 
         {/* ─── Telegram link callout (only if unlinked) ─── */}
         {!walletLink && (
@@ -342,31 +384,51 @@ export function AccountProfile({
             </div>
           ) : (
             <ul className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
-              {recentSessions.map((s) => (
-                <li
-                  key={s.sessionId}
-                  className="px-4 sm:px-5 py-3.5 flex flex-wrap items-center gap-x-4 gap-y-1"
-                >
-                  <span className="mono tabular text-[10.5px] uppercase tracking-[0.16em] text-[var(--fg-3)] min-w-[80px]">
-                    {formatRelative(s.createdAt, now)}
-                  </span>
-                  <span className="text-[13.5px] font-medium text-[var(--fg)]">
-                    {t(`tier.${s.tier}`)} ·{' '}
-                    <span className="text-[var(--fg-2)] font-normal">
-                      {t(`cadence.${s.cadence}`)}
+              {recentSessions.map((s) => {
+                const explorerHref = explorerUrlFor(s.chain, s.txSig, network);
+                return (
+                  <li
+                    key={s.sessionId}
+                    className="px-4 sm:px-5 py-3.5 flex flex-wrap items-center gap-x-4 gap-y-1"
+                  >
+                    <span className="mono tabular text-[10.5px] uppercase tracking-[0.16em] text-[var(--fg-3)] min-w-[80px]">
+                      {formatRelative(s.createdAt, now)}
                     </span>
-                  </span>
-                  <span className="mono tabular text-[11px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
-                    {s.chain} · {s.token}
-                  </span>
-                  <span className="ml-auto flex items-center gap-3">
-                    <span className="mono tabular text-[14px] text-[var(--fg)]">
-                      ${(s.amountUsdCents / 100).toFixed(2)}
+                    <span className="text-[13.5px] font-medium text-[var(--fg)]">
+                      {t(`tier.${s.tier}`)} ·{' '}
+                      <span className="text-[var(--fg-2)] font-normal">
+                        {t(`cadence.${s.cadence}`)}
+                      </span>
                     </span>
-                    <StatusPill status={s.status} />
-                  </span>
-                </li>
-              ))}
+                    <span className="mono tabular text-[11px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
+                      {s.chain} · {s.token}
+                    </span>
+                    <span className="ml-auto flex items-center gap-3">
+                      <span className="mono tabular text-[14px] text-[var(--fg)]">
+                        {usdFormatter.format(s.amountUsdCents / 100)}
+                      </span>
+                      <StatusPill status={s.status} />
+                      {explorerHref && (
+                        <a
+                          href={explorerHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="
+                            inline-flex items-center gap-1 mono tabular
+                            text-[10.5px] uppercase tracking-[0.16em] font-medium
+                            text-[var(--fg-2)] hover:text-[var(--fg)]
+                            transition-colors
+                          "
+                          title={t('activity.row.viewOnChainTitle')}
+                        >
+                          <span>{t('activity.row.viewOnChain')}</span>
+                          <ArrowUpRight size={11} strokeWidth={2.2} />
+                        </a>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>

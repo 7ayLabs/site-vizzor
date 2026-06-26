@@ -61,6 +61,12 @@ export async function GET() {
             tier: sub.tier,
             cadence: sub.cadence,
             expiresAt: sub.expires_at,
+            // v0.4 — pre-scheduled plan transition (cancel /
+            // downgrade-to-pro) the user requested from /account.
+            // Null when no schedule is set. Consumers use this to
+            // surface "plan continues until {date}, then drops to
+            // {target}" without changing the underlying lifecycle.
+            scheduledAction: sub.scheduled_action ?? null,
           }
         : null,
       // legacy mirror — drop in v0.3.3

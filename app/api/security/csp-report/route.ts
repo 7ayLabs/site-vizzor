@@ -42,12 +42,27 @@ interface ReportingApiEntry {
   };
 }
 
+// Browsers report a sentinel token (not a URL) when the violation is
+// an inline script, an eval call, a WebAssembly compile, or a data:
+// URI. Preserve those verbatim so the log line is actionable; otherwise
+// reduce a real URL to its host to avoid leaking query strings.
+const BLOCKED_URI_SENTINELS = new Set([
+  'inline',
+  'eval',
+  'wasm-eval',
+  'data',
+  'blob',
+  'filesystem',
+  'self',
+]);
+
 function safeHost(url: string | undefined): string {
   if (!url) return '';
+  if (BLOCKED_URI_SENTINELS.has(url)) return url;
   try {
     return new URL(url).host;
   } catch {
-    return 'invalid';
+    return url.slice(0, 64);
   }
 }
 
@@ -56,7 +71,7 @@ function safePath(url: string | undefined): string {
   try {
     return new URL(url).pathname;
   } catch {
-    return 'invalid';
+    return url.slice(0, 64);
   }
 }
 

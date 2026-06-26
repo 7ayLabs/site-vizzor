@@ -25,11 +25,21 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import useSWR from 'swr';
-import { Wallet, LogOut, Check, UserCircle2 } from 'lucide-react';
+import {
+  Wallet,
+  LogOut,
+  Check,
+  UserCircle2,
+  ArrowUpRight,
+  Repeat2,
+} from 'lucide-react';
+import { toast } from 'sonner';
 import { Link } from '@/i18n/navigation';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { WalletSelectorModal } from './wallet-selector-modal';
+import { paymentNetwork } from '@/lib/payment/network';
+import { buildSolscanAccountUrl } from '@/lib/explorer/solana';
 
 interface AuthState {
   ok: boolean;
@@ -65,7 +75,13 @@ export function WalletAuthButton({
 }: WalletAuthButtonProps) {
   const t = useTranslations('auth');
   const { data, mutate } = useSWR<AuthState>('/api/auth/session', fetcher, {
-    revalidateOnFocus: false,
+    // Without these the navbar tier badge stayed stale after a
+    // successful subscription — the user had to hard-reload to see
+    // their new plan. Same pattern as the quota SWR: poll + foreground
+    // refetch handles mobile tab-switch returns.
+    refreshInterval: 20_000,
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
   });
 
   const [busy, setBusy] = useState(false);
@@ -74,10 +90,16 @@ export function WalletAuthButton({
   const signedIn = data?.signedIn === true;
 
   if (signedIn && data) {
-    return <SignedInBadge state={data} onSignOut={async () => {
-      await fetch('/api/auth/session', { method: 'DELETE' });
-      void mutate();
-    }} />;
+    return (
+      <SignedInBadge
+        state={data}
+        hasProvider={hasProvider}
+        onSignOut={async () => {
+          await fetch('/api/auth/session', { method: 'DELETE' });
+          void mutate();
+        }}
+      />
+    );
   }
 
   if (!hasProvider || useModal) {
@@ -110,9 +132,15 @@ export function WalletAuthButton({
 
 function SignedInBadge({
   state,
+  hasProvider,
   onSignOut,
 }: {
   state: AuthState;
+  /** True when mounted inside a Solana wallet adapter tree (app shell,
+   *  /predict, /pay). Unlocks the chain pill + Switch Wallet +
+   *  Disconnect menu items that need `useWallet()`. False on marketing
+   *  pages — badge falls back to server-only Sign Out. */
+  hasProvider: boolean;
   onSignOut: () => void | Promise<void>;
 }) {
   const t = useTranslations('auth');
@@ -167,7 +195,7 @@ function SignedInBadge({
         className="
           inline-flex h-8 items-center gap-1.5 rounded-full
           border border-[var(--border)] bg-[var(--surface-2)] px-3
-          text-[11.5px] font-medium text-[var(--fg)]
+          text-[12px] font-semibold tracking-tight text-[var(--fg)]
           hover:bg-[var(--surface)]
           transition-colors
         "
@@ -188,22 +216,27 @@ function SignedInBadge({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full mt-1 z-50 min-w-[220px] border border-[var(--border)] bg-[var(--surface)] shadow-lg"
+          className="
+            absolute right-0 top-full mt-2 z-50 min-w-[240px]
+            rounded-2xl border border-[var(--border)] bg-[var(--surface)]
+            shadow-[0_24px_60px_-12px_rgba(0,0,0,0.45)]
+            overflow-hidden
+          "
         >
           <div className="px-4 py-3 border-b border-[var(--border)]">
-            <p className="mono tabular text-[9.5px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
+            <p className="mono tabular text-[10px] uppercase tracking-[0.18em] font-semibold text-[var(--fg-3)]">
               {t('signedInAs')}
             </p>
-            <p className="mono tabular text-[11.5px] text-[var(--fg)] break-all mt-1">
+            <p className="mono tabular text-[11.5px] text-[var(--fg)] break-all mt-1.5">
               {state.wallet}
             </p>
           </div>
           {sub && (
             <div className="px-4 py-3 border-b border-[var(--border)]">
-              <p className="mono tabular text-[9.5px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
+              <p className="mono tabular text-[10px] uppercase tracking-[0.18em] font-semibold text-[var(--fg-3)]">
                 {t('subscription')}
               </p>
-              <p className="text-[12.5px] text-[var(--fg)] mt-1">
+              <p className="text-[13px] font-medium tracking-tight text-[var(--fg)] mt-1.5">
                 {tierBadge}
               </p>
               {sub.expiresAt && (
@@ -215,38 +248,158 @@ function SignedInBadge({
               )}
             </div>
           )}
+          {/* Chain pill + explorer link — surfaced inside the menu
+              rather than on the trigger so the navbar pill stays
+              compact. Read-only display of the active network. */}
+          <div className="px-4 py-3 border-b border-[var(--border)] flex flex-col gap-2">
+            <p className="mono tabular text-[10px] uppercase tracking-[0.18em] font-semibold text-[var(--fg-3)]">
+              {t('network')}
+            </p>
+            <div className="flex items-center justify-between gap-2">
+              <span className="mono tabular text-[10.5px] uppercase tracking-[0.16em] px-2 py-0.5 rounded-md bg-[var(--fg)] text-[var(--bg)]">
+                Solana {paymentNetwork()}
+              </span>
+              <a
+                href={buildSolscanAccountUrl(state.wallet, paymentNetwork())}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setOpen(false)}
+                className="
+                  inline-flex items-center gap-1 text-[11.5px] font-medium tracking-tight
+                  text-[var(--fg-2)] hover:text-[var(--fg)]
+                  transition-colors
+                "
+              >
+                <span>{t('viewOnExplorer')}</span>
+                <ArrowUpRight size={11} strokeWidth={2} />
+              </a>
+            </div>
+          </div>
           <Link
             href="/account"
             role="menuitem"
             onClick={() => setOpen(false)}
             className="
               w-full flex items-center gap-2 px-4 py-2.5
-              text-[12px] text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]
+              text-[12.5px] font-medium tracking-tight
+              text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]
               transition-colors border-b border-[var(--border)]
             "
           >
             <UserCircle2 size={13} strokeWidth={2} />
             <span>{t('viewProfile')}</span>
           </Link>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              void onSignOut();
-            }}
-            className="
-              w-full flex items-center gap-2 px-4 py-2.5
-              text-[12px] text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]
-              transition-colors
-            "
-          >
-            <LogOut size={13} strokeWidth={2} />
-            <span>{t('signOut')}</span>
-          </button>
+          {hasProvider && (
+            <WalletAdapterActions
+              onAfterAction={() => setOpen(false)}
+              onSignOut={onSignOut}
+            />
+          )}
+          {!hasProvider && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                void onSignOut();
+              }}
+              className="
+                w-full flex items-center gap-2 px-4 py-2.5
+                text-[12.5px] font-medium tracking-tight
+                text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]
+                transition-colors
+              "
+            >
+              <LogOut size={13} strokeWidth={2} />
+              <span>{t('signOut')}</span>
+            </button>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Wallet-adapter-dependent menu items. Only rendered when the host
+ * page sits inside a WalletProvider tree — otherwise `useWallet()`
+ * throws. Owns the dual action contract: Switch Wallet AND Disconnect
+ * both clear the server SIWS session before touching the adapter, so
+ * the cookie can never out-live the wallet connection.
+ */
+function WalletAdapterActions({
+  onAfterAction,
+  onSignOut,
+}: {
+  onAfterAction: () => void;
+  onSignOut: () => void | Promise<void>;
+}) {
+  const t = useTranslations('auth');
+  const tMenu = useTranslations('app.walletMenu');
+  const { disconnect } = useWallet();
+  const { setVisible } = useWalletModal();
+
+  const handleSwitch = async () => {
+    onAfterAction();
+    toast.message(tMenu('toast.switching'));
+    // Clear the SIWS session BEFORE disconnecting so the next wallet's
+    // sign-in flow doesn't race against a still-valid auth cookie that
+    // points at the previous wallet. Order matters for security: a
+    // stale cookie + new wallet would briefly let the new wallet act
+    // as the old one on cached requests.
+    try {
+      await onSignOut();
+      await disconnect();
+    } catch {
+      // Disconnect can throw if no wallet was selected; safe to ignore.
+    }
+    setVisible(true);
+  };
+
+  const handleDisconnect = async () => {
+    onAfterAction();
+    try {
+      await onSignOut();
+      await disconnect();
+      toast.success(tMenu('toast.disconnected'));
+    } catch (e) {
+      toast.error(tMenu('toast.disconnectFailed'), {
+        description: (e as Error).message,
+      });
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        role="menuitem"
+        onClick={() => void handleSwitch()}
+        className="
+          w-full flex items-center gap-2 px-4 py-2.5
+          text-[12.5px] font-medium tracking-tight
+          text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]
+          transition-colors border-b border-[var(--border)]
+        "
+      >
+        <Repeat2 size={13} strokeWidth={2} />
+        <span>{tMenu('switchWallet')}</span>
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        onClick={() => void handleDisconnect()}
+        className="
+          w-full flex items-center gap-2 px-4 py-2.5
+          text-[12.5px] font-medium tracking-tight
+          text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]
+          transition-colors
+        "
+      >
+        <LogOut size={13} strokeWidth={2} />
+        <span>{tMenu('disconnect')}</span>
+      </button>
+    </>
   );
 }
 

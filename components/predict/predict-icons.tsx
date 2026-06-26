@@ -235,7 +235,7 @@ export function IconPlus({ size = 16, ...props }: IconProps) {
 export function IconMenu({ size = 16, ...props }: IconProps) {
   return (
     <svg {...base(size, props)}>
-      <path d="M2.5 5h11M2.5 10h11" />
+      <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" />
     </svg>
   );
 }
@@ -283,6 +283,48 @@ export function IconDot({ size = 8, ...props }: IconProps) {
       {...props}
     >
       <circle cx="4" cy="4" r="3" />
+    </svg>
+  );
+}
+
+/**
+ * Density toggle glyphs. `IconDensityComfortable` shows two thicker
+ * rows spaced apart — the current "spacious" view. `IconDensityCompact`
+ * shows three tighter rows packed together — the "more in view" mode.
+ * Pair semantically: the button swaps icons based on the NEXT state
+ * the user is heading toward, matching the ThemeToggle convention.
+ */
+export function IconDensityComfortable({ size = 16, ...props }: IconProps) {
+  return (
+    <svg {...base(size, props)}>
+      <path d="M3 5h10" />
+      <path d="M3 11h10" />
+    </svg>
+  );
+}
+
+export function IconDensityCompact({ size = 16, ...props }: IconProps) {
+  return (
+    <svg {...base(size, props)}>
+      <path d="M3 4h10" />
+      <path d="M3 8h10" />
+      <path d="M3 12h10" />
+    </svg>
+  );
+}
+
+/**
+ * Bell glyph for the alerts entry in the predict-shell left nav.
+ * Matches the geometric line style of the rest of the predict-icons
+ * set so it sits cleanly next to IconChat, IconReceipts, etc.
+ */
+export function IconBell({ size = 16, ...props }: IconProps) {
+  return (
+    <svg {...base(size, props)}>
+      <path d="M8 2.5v1" />
+      <path d="M4 11.5V8a4 4 0 0 1 8 0v3.5" />
+      <path d="M3 11.5h10" />
+      <path d="M6.5 13a1.5 1.5 0 0 0 3 0" />
     </svg>
   );
 }

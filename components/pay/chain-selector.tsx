@@ -76,22 +76,6 @@ const OPTIONS: ReadonlyArray<ChainOption> = [
     primaryIcon: 'ton',
     label: 'TON',
   },
-  {
-    id: 'base:usdc',
-    chain: 'base',
-    token: 'usdc',
-    primaryIcon: 'usdc',
-    networkBadge: 'base',
-    label: 'USDC · Base',
-  },
-  {
-    id: 'arbitrum:usdc',
-    chain: 'arbitrum',
-    token: 'usdc',
-    primaryIcon: 'usdc',
-    networkBadge: 'arbitrum',
-    label: 'USDC · Arbitrum',
-  },
 ];
 
 export function ChainSelector({

@@ -53,26 +53,36 @@ const MEMO_PROGRAM_ID = new PublicKey(
 const LAMPORTS_PER_SOL = 1_000_000_000;
 
 function rpcCandidates(): string[] {
-  const network =
-    process.env.NEXT_PUBLIC_PAYMENT_NETWORK === 'mainnet'
-      ? 'mainnet'
-      : process.env.NEXT_PUBLIC_PAYMENT_NETWORK === 'testnet'
-        ? 'testnet'
-        : process.env.NODE_ENV === 'production'
-          ? 'mainnet'
-          : 'testnet';
+  // Three explicit cluster cases plus a NODE_ENV-driven default. The
+  // earlier two-branch form (mainnet / testnet only) collapsed the
+  // 'devnet' value into the production fallback and shipped a mainnet
+  // RPC to staging — `app.vizzor.ai` is built with
+  // NEXT_PUBLIC_PAYMENT_NETWORK=devnet, so the bundle MUST round-trip
+  // 'devnet' to api.devnet.solana.com, not to mainnet-beta.
+  const raw = process.env.NEXT_PUBLIC_PAYMENT_NETWORK;
+  const network: 'mainnet' | 'testnet' | 'devnet' =
+    raw === 'mainnet' || raw === 'testnet' || raw === 'devnet'
+      ? raw
+      : process.env.NODE_ENV === 'production'
+        ? 'mainnet'
+        : 'devnet';
 
   const configured =
     network === 'mainnet'
       ? (process.env.NEXT_PUBLIC_SOLANA_RPC_URL_MAINNET ??
         process.env.NEXT_PUBLIC_SOLANA_RPC_URL)
-      : (process.env.NEXT_PUBLIC_SOLANA_RPC_URL_DEVNET ??
-        process.env.NEXT_PUBLIC_SOLANA_RPC_URL);
+      : network === 'testnet'
+        ? (process.env.NEXT_PUBLIC_SOLANA_RPC_URL_TESTNET ??
+          process.env.NEXT_PUBLIC_SOLANA_RPC_URL)
+        : (process.env.NEXT_PUBLIC_SOLANA_RPC_URL_DEVNET ??
+          process.env.NEXT_PUBLIC_SOLANA_RPC_URL);
 
   const fallbacks =
     network === 'mainnet'
       ? ['https://solana-rpc.publicnode.com', 'https://rpc.ankr.com/solana']
-      : ['https://api.devnet.solana.com'];
+      : network === 'testnet'
+        ? ['https://api.testnet.solana.com']
+        : ['https://api.devnet.solana.com'];
 
   return configured ? [configured, ...fallbacks] : fallbacks;
 }
@@ -87,6 +97,15 @@ function classifyWalletError(msg: string): string {
   // User dismissed Phantom's approve dialog.
   if (/reject|denied|user rejected|cancel/i.test(msg)) {
     return 'wallet_rejected';
+  }
+  // Wallet is on the wrong cluster (Phantom emits "wrong network",
+  // Solflare "cluster mismatch", Backpack "network mismatch"). We
+  // catch the union so the banner can prompt a switch rather than
+  // surfacing a generic error. Order matters: keep this above the
+  // RPC-unavailable / insufficient-balance branches because cluster
+  // mismatches sometimes co-emit "invalid blockhash" downstream.
+  if (/wrong\s*network|network\s*mismatch|cluster\s*mismatch|wrong\s*cluster/i.test(msg)) {
+    return 'wrong_network';
   }
   // Wallet/RPC pre-flight told us the payer has no devnet SOL. The
   // Solana RPC verbatim returns "Attempt to debit an account but found
@@ -209,9 +228,19 @@ export function SolanaPayButton({
       // link in testnet) instead of leaving the user staring at a
       // generic wallet error. A 5_000-lamport buffer covers the
       // network fee + memo program rent.
+      //
+      // The `balance > 0` guard sidesteps a wrong-network false
+      // positive: if our connection is on devnet but the wallet
+      // extension is on mainnet (or vice versa), `getBalance` for the
+      // signer's pubkey returns exactly 0 from the network where the
+      // user never funded that key. Showing "insufficient_balance"
+      // there is wrong — the user IS funded, just on the other
+      // cluster. Falling through lets the wallet's signing popup
+      // surface the real condition (most wallets refuse to sign for a
+      // mismatched cluster with their own clearer message).
       try {
         const balance = await connection.getBalance(publicKey);
-        if (balance < lamports + 5_000) {
+        if (balance > 0 && balance < lamports + 5_000) {
           onError('insufficient_balance');
           return;
         }

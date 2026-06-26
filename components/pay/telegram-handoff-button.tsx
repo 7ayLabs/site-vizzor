@@ -28,25 +28,37 @@ export function TelegramHandoffButton({
 }: TelegramHandoffButtonProps) {
   const t = useTranslations('pay');
   const href = `https://t.me/${TG_USERNAME}?start=pay_${sessionId}`;
+  const label = t('cta.continueInTelegram', { chain: chainLabel });
+  // Visual styling stays identical for both the disabled (<button>)
+  // and enabled (<a>) branches — only the cursor + opacity shift on
+  // disabled, plus the hover lift is dropped. Splitting on the disabled
+  // state lets us use a real HTML `disabled` attribute (anchors don't
+  // support it) which is what screen readers + form-control semantics
+  // expect, rather than the fragile `aria-disabled` + `preventDefault`
+  // pair this component shipped with originally.
+  const base =
+    'group relative inline-flex items-center justify-center gap-2 h-13 px-5 w-full py-3 rounded-xl text-[14px] font-semibold tracking-tight bg-[var(--fg)] text-[var(--bg)] transition-[transform,opacity] duration-200 ease-out';
+
+  if (disabled) {
+    return (
+      <button
+        type="button"
+        disabled
+        className={`${base} opacity-40 cursor-not-allowed`}
+      >
+        <span>{label}</span>
+        <span aria-hidden>→</span>
+      </button>
+    );
+  }
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      aria-disabled={disabled}
-      onClick={(e) => {
-        if (disabled) e.preventDefault();
-      }}
-      className={`
-        group relative inline-flex items-center justify-center gap-2 h-13 px-5 w-full py-3
-        rounded-xl text-[14px] font-semibold tracking-tight
-        bg-[var(--fg)] text-[var(--bg)]
-        transition-[transform,opacity] duration-200 ease-out
-        motion-safe:hover:-translate-y-[1px]
-        ${disabled ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-90'}
-      `}
+      className={`${base} motion-safe:hover:-translate-y-[1px] hover:opacity-90`}
     >
-      <span>{t('cta.continueInTelegram', { chain: chainLabel })}</span>
+      <span>{label}</span>
       <span
         aria-hidden
         className="transition-transform duration-200 ease-out motion-safe:group-hover:translate-x-0.5"

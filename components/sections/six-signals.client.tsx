@@ -12,7 +12,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { LiveBadge } from '@/components/ui/live-badge';
 import { useReducedMotionSafe } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
@@ -103,15 +102,12 @@ export function SixSignalsClient({ rows }: SixSignalsClientProps) {
               )}
             >
               <div className="flex items-center justify-between gap-3">
-                <span
-                  className={cn(
-                    'text-[15px] font-semibold leading-tight',
-                    active ? 'text-[var(--fg)]' : 'text-[var(--fg)]',
-                  )}
-                >
+                <span className="text-[15px] font-semibold leading-tight text-[var(--fg)]">
                   {row.title}
                 </span>
-                <LiveBadge tone={active ? 'mint' : 'gold'} />
+                <span className="mono tabular text-[9.5px] font-semibold uppercase tracking-[0.18em] text-[var(--fg-3)]">
+                  {String(idx + 1).padStart(2, '0')}
+                </span>
               </div>
               <p className="text-[13px] text-[var(--fg-2)] leading-relaxed">
                 {row.description}
