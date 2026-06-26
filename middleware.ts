@@ -249,9 +249,19 @@ function applySecurityHeaders(res: NextResponse): NextResponse {
   res.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
   res.headers.set('Cross-Origin-Resource-Policy', 'same-site');
 
-  // CSP — Report-Only for Phase 1. Switch to `Content-Security-Policy`
-  // for enforcing in Phase 2.
-  res.headers.set('Content-Security-Policy-Report-Only', buildCsp());
+  // CSP — Report-Only for staging / devnet; enforcing for production
+  // mainnet. The Report-Only header still ships in prod alongside the
+  // enforcing one so the report endpoint keeps catching the long tail.
+  const csp = buildCsp();
+  const isMainnetProd =
+    PROD &&
+    (process.env.NEXT_PUBLIC_PAYMENT_NETWORK === 'mainnet' ||
+      process.env.CSP_ENFORCE === 'true');
+  if (isMainnetProd) {
+    res.headers.set('Content-Security-Policy', csp);
+  } else {
+    res.headers.set('Content-Security-Policy-Report-Only', csp);
+  }
 
   return res;
 }

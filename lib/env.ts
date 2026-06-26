@@ -122,6 +122,11 @@ export const PAYMENT_SESSION_ROUTE_REQUIREMENTS: readonly EnvRequirement[] = [
     rationale:
       'SQLite path for payment_sessions/subscriptions; must point inside the persistent volume',
   },
+  {
+    name: 'VIZZOR_BOT_TOKEN',
+    rationale:
+      'Shared secret used to authenticate the outbound webhook to the engine on subscription mint — silent skip would leave the bot tier-flip on a 60s cache lag instead of instant',
+  },
 ];
 
 /**
