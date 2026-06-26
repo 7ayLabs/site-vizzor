@@ -74,16 +74,17 @@ jobs:
               # downstream client-side cascade dead-codes against this
               # being unset; the server-side route hard-404s.
               echo "allow_dev_auth="                                    >> "$GITHUB_OUTPUT"
-              # Production keeps the on-chain checkout gate CLOSED
-              # until the mainnet treasury + Solana watcher have been
-              # validated end-to-end (see lib/payment/watcher.ts and
-              # the runbook in docs/ops). The empty value bakes a
-              # falsey check into the bundle so /pay renders the
-              # "infrastructure pending" panel rather than minting a
-              # real on-chain session against an unverified treasury.
-              # Flip to `true` here once the mainnet wiring is signed
-              # off.
-              echo "accept_solana_payments="                            >> "$GITHUB_OUTPUT"
+              # v0.4.0 — mainnet flip. Treasury + watcher + OFAC feed +
+              # webhook retry + adaptive backoff + sha256 pool gate are
+              # all signed off (see docs/ops/mainnet-flip-checklist.md).
+              # Real $0.50 test from operator wallet ran on the staging
+              # devnet build with full E2E confirmation; the only delta
+              # to prod is the cluster bind (mainnet RPC + the static
+              # 5Szv47W… treasury address). Flipping the gate bakes the
+              # accept flag true into the production bundle so /pay
+              # renders the live checkout instead of the "infrastructure
+              # pending" panel.
+              echo "accept_solana_payments=true"                        >> "$GITHUB_OUTPUT"
               echo "checkout_ref=main"                                  >> "$GITHUB_OUTPUT"
               ;;
             testing|refs/heads/testing)
