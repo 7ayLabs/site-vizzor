@@ -436,6 +436,7 @@ export function finalizeSession(
       wallet: payer,
       telegramUserId: result.walletLinkedTo ?? null,
       tier: session.tier,
+      idempotencyKey: session.session_id,
     });
   }
 
@@ -446,16 +447,40 @@ interface EngineWebhookPayload {
   wallet: string;
   telegramUserId: number | null;
   tier: string;
+  /**
+   * Stable per-session key the engine reads as `Idempotency-Key` to
+   * dedupe duplicate webhook deliveries (which can happen if a watcher
+   * crashes and restarts mid-finalize, or if our retry loop succeeds
+   * after the engine has already processed the first attempt).
+   */
+  idempotencyKey: string;
 }
+
+/** Retry schedule in milliseconds. Three attempts, exp-ish backoff,
+ *  total worst-case wall time ~13s before we give up. The engine's own
+ *  60s subscription-sync cache TTL is the floor — we should be done
+ *  retrying long before the cache would have refreshed on its own. */
+const WEBHOOK_RETRY_DELAYS_MS: ReadonlyArray<number> = [1_000, 3_000, 9_000];
+const WEBHOOK_FETCH_TIMEOUT_MS = 5_000;
 
 /**
  * Fire-and-forget POST to the engine's subscription-cache invalidator.
  * The engine module that handles this (`src/api/routes/internal/
  * subscription-updated.ts`) expects the `X-Vizzor-Bot-Token` shared
- * secret. When `VIZZOR_API_URL` or `VIZZOR_BOT_TOKEN` is unset (dev /
- * CI), we log + skip. When the engine is unreachable, we log + swallow
- * — the engine's own 60-second cache window guarantees eventual
- * consistency without this hook.
+ * secret and (post-v0.4.0) an `Idempotency-Key` header that the engine
+ * uses to short-circuit duplicate deliveries.
+ *
+ * Retry semantics:
+ *   - 2xx → success, return.
+ *   - 4xx (other than 408 / 429) → permanent failure, no retry.
+ *     The shape of our payload is fixed; a 4xx means auth or schema
+ *     drift — retrying won't help and we'd just hammer the engine.
+ *   - 5xx / 408 / 429 / network error → backoff and retry up to N times.
+ *   - `Retry-After` header (seconds) on 429 / 5xx overrides the backoff.
+ *
+ * When `VIZZOR_API_URL` or `VIZZOR_BOT_TOKEN` is unset, we log + skip
+ * loudly. v0.4.0 adds `VIZZOR_BOT_TOKEN` to the required env list so
+ * this branch should only ever fire in dev / CI.
  */
 async function notifyEngineSubscriptionUpdated(
   payload: EngineWebhookPayload,
@@ -473,8 +498,58 @@ async function notifyEngineSubscriptionUpdated(
     return;
   }
   const url = `${base.replace(/\/+$/, '')}/v1/internal/subscription-updated`;
+  const body = JSON.stringify({
+    wallet: payload.wallet,
+    telegramUserId: payload.telegramUserId,
+    tier: payload.tier,
+  });
+  const shortWallet = `${payload.wallet.slice(0, 4)}…${payload.wallet.slice(-4)}`;
+
+  for (let attempt = 0; attempt <= WEBHOOK_RETRY_DELAYS_MS.length; attempt++) {
+    const result = await attemptWebhook(url, token, payload.idempotencyKey, body);
+    if (result.kind === 'ok') {
+      if (attempt > 0) {
+        // eslint-disable-next-line no-console
+        console.info(
+          `[vizzor-payment] engine webhook recovered after ${attempt} retries for wallet=${shortWallet}`,
+        );
+      }
+      return;
+    }
+    if (result.kind === 'permanent') {
+      // eslint-disable-next-line no-console
+      console.error(
+        `[vizzor-payment] engine webhook permanent failure ${result.status} for wallet=${shortWallet} — giving up`,
+      );
+      return;
+    }
+    // Transient — backoff if we have any attempts left.
+    if (attempt >= WEBHOOK_RETRY_DELAYS_MS.length) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[vizzor-payment] engine webhook exhausted retries for wallet=${shortWallet}; engine cache will catch up via /api/subscriptions/lookup within ~60s`,
+      );
+      return;
+    }
+    const baseDelay = WEBHOOK_RETRY_DELAYS_MS[attempt] ?? 9_000;
+    const delay = Math.max(baseDelay, result.retryAfterMs ?? 0);
+    await new Promise<void>((resolve) => setTimeout(resolve, delay));
+  }
+}
+
+type WebhookAttempt =
+  | { kind: 'ok' }
+  | { kind: 'permanent'; status: number }
+  | { kind: 'transient'; status?: number; retryAfterMs?: number; reason?: string };
+
+async function attemptWebhook(
+  url: string,
+  token: string,
+  idempotencyKey: string,
+  body: string,
+): Promise<WebhookAttempt> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5_000);
+  const timeout = setTimeout(() => controller.abort(), WEBHOOK_FETCH_TIMEOUT_MS);
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -482,22 +557,30 @@ async function notifyEngineSubscriptionUpdated(
       headers: {
         'content-type': 'application/json',
         'X-Vizzor-Bot-Token': token,
+        'Idempotency-Key': idempotencyKey,
       },
-      body: JSON.stringify(payload),
+      body,
     });
-    if (!res.ok) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[vizzor-payment] engine webhook returned ${res.status} for wallet=${payload.wallet.slice(0, 6)}…`,
-      );
+    if (res.ok) return { kind: 'ok' };
+    if (res.status === 408 || res.status === 429 || res.status >= 500) {
+      const ra = res.headers.get('Retry-After');
+      const retryAfterMs = ra ? parseRetryAfterMs(ra) : undefined;
+      return { kind: 'transient', status: res.status, retryAfterMs };
     }
+    return { kind: 'permanent', status: res.status };
   } catch (e) {
-    // eslint-disable-next-line no-console
-    console.warn(
-      `[vizzor-payment] engine webhook failed for wallet=${payload.wallet.slice(0, 6)}…:`,
-      (e as Error)?.message ?? e,
-    );
+    const err = e as Error;
+    return {
+      kind: 'transient',
+      reason: err.name === 'AbortError' ? 'timeout' : err.message?.slice(0, 80),
+    };
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function parseRetryAfterMs(value: string): number | undefined {
+  const secs = Number.parseInt(value, 10);
+  if (!Number.isFinite(secs) || secs < 0) return undefined;
+  return Math.min(secs, 30) * 1000;
 }
