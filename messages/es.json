@@ -1206,7 +1206,7 @@
       "internalError": "El servicio de pagos tuvo un error inesperado. Reintenta, o usa el bot de Telegram si el problema persiste.",
       "rpcUnavailable": "El RPC de Solana está rate-limited ahora mismo. Reintenta en un momento, o cambia a TON.",
       "walletNotConnected": "Conecta una wallet para continuar.",
-      "insufficientBalance": "Tu wallet no tiene suficiente SOL para cubrir este pago y la comisión de red. Compra SOL desde la opción Buy de tu wallet, envía desde un exchange (Coinbase, Binance, Bitso) o — en devnet — pide un airdrop desde el panel de arriba.",
+      "insufficientBalance": "Tu wallet no tiene suficiente SOL para cubrir este pago y la comisión de red. Compra SOL desde la opción Buy de tu wallet, o envía desde un exchange (Coinbase, Binance, Bitso).",
       "invalidDestination": "La dirección del tesoro de destino está mal configurada para esta red. Revisa VIZZOR_SOLANA_TREASURY para el cluster activo.",
       "wrongNetwork": "Tu wallet está en la red equivocada. Cambia a Solana mainnet en la extensión de tu wallet y vuelve a intentarlo.",
       "rateUnavailable": "No pudimos bloquear la cotización del intercambio. Reintenta en un momento.",
