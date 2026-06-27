@@ -62,7 +62,7 @@ Configure the API base via env var: `NEXT_PUBLIC_VIZZOR_API_URL=https://api.vizz
 | `/api/health` | Public health probe — returns sha, build time, uptime. Used by Docker healthcheck and the deploy workflow's smoke test. |
 | `/api/snapshot` | Proxies the live API into the snapshot shape. Called hourly by the snapshot refresh workflow. |
 | `/api/search` | Fumadocs Orama-backed docs search. |
-| `/changelog/feed.xml` | RSS 2.0 feed for the changelog. |
+| `/blog/feed.xml` | RSS 2.0 feed for the blog. |
 | `/predictions/[id]/opengraph-image` | Edge-runtime PNG generator for shareable prediction cards (1200×630). |
 
 ## Deployment (operator runbook)
@@ -147,7 +147,7 @@ Rollback: bump the `image:` tag in `docker-compose.prod.yml` to a previous `ghcr
 Per operator memory rules:
 - `feat/*`, `fix/*`, `hotfix/*` branch from `develop` but **PRs target `main` directly**
 - Release branches follow `develop → testing → main`
-- Conventional commits with site-specific scopes: `home`, `predictions`, `pricing`, `manifesto`, `changelog`, `docs`, `ui`, `i18n`, `api`, `motion`, `theme`, `seo`, `deploy`, `deps`
+- Conventional commits with site-specific scopes: `home`, `predictions`, `pricing`, `manifesto`, `blog`, `changelog`, `docs`, `ui`, `i18n`, `api`, `motion`, `theme`, `seo`, `deploy`, `deps`
 - Subject text after the colon **lowercase** (commitlint)
 - No `Co-Authored-By` trailer
 - No auto-commit, no auto-push without explicit instruction

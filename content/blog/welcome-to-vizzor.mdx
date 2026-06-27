@@ -4,6 +4,10 @@ codename: Launch
 date: 2026-06-26
 title: Welcome to Vizzor
 summary: What it is, how to install on each surface, and how to make your first prediction. Read this once and you're set.
+author: Vizzor team
+tags:
+  - welcome
+  - onboarding
 ---
 
 ## 👋 What is Vizzor?
@@ -24,10 +28,10 @@ The win-rate scoreboard on the homepage is computed from that archive. You can f
 
 ```bash
 npm install -g @vizzor/cli
-vizzor login
+vizzor setup
 ```
 
-The CLI pairs to your wallet via a one-time code printed by `vizzor login` — visit the URL it prints, sign once, and every subsequent command authenticates from the local config.
+The CLI pairs to your wallet via the guided `vizzor setup` wizard — it prints a one-time `vizzor.ai/cli-pair?code=…` URL, you open it, sign once with SIWS, and every subsequent command authenticates from the local config.
 
 ## 🎯 Your first prediction
 
