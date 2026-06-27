@@ -904,12 +904,12 @@
         "name": "Pro",
         "sub": "El banco de trabajo del trader activo",
         "price": "$19",
-        "priceUnit": "/ mes",
+        "priceUnit": "USD / mes",
         "cta": "Obtener Pro",
         "cadences": {
           "annual": {
-            "label": "Pagar anualmente · $190/año (ahorras $38)",
-            "inline": "$190/año facturado anualmente"
+            "label": "Pagar anualmente · US$190/año (ahorras US$38)",
+            "inline": "US$190/año facturado anualmente"
           }
         },
         "everythingIn": "Todo lo de Free, más:",
@@ -944,16 +944,16 @@
         "name": "Elite",
         "sub": "El stack completo de inteligencia",
         "price": "$99",
-        "priceUnit": "/ mes",
+        "priceUnit": "USD / mes",
         "cta": "Obtener Elite",
         "cadences": {
           "annual": {
-            "label": "Pagar anualmente · $990/año (ahorras $198)",
-            "inline": "$990/año facturado anualmente"
+            "label": "Pagar anualmente · US$990/año (ahorras US$198)",
+            "inline": "US$990/año facturado anualmente"
           },
           "lifetime": {
-            "label": "Pago único · $1,499 vitalicio (rentabiliza ~año 1.3)",
-            "inline": "$1,499 una vez · acceso vitalicio"
+            "label": "Pago único · US$1,499 vitalicio (rentabiliza ~año 1.3)",
+            "inline": "US$1,499 una vez · acceso vitalicio"
           }
         },
         "everythingIn": "Todo lo de Pro, más:",

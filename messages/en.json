@@ -914,12 +914,12 @@
         "name": "Pro",
         "sub": "The work bench for the active trader",
         "price": "$19",
-        "priceUnit": "/ mo",
+        "priceUnit": "USD / mo",
         "cta": "Get Pro",
         "cadences": {
           "annual": {
-            "label": "Pay annually · $190/yr (save $38)",
-            "inline": "$190/yr billed annually"
+            "label": "Pay annually · $190 USD/yr (save $38)",
+            "inline": "$190 USD/yr billed annually"
           }
         },
         "everythingIn": "Everything in Free, plus:",
@@ -954,16 +954,16 @@
         "name": "Elite",
         "sub": "The full intelligence stack",
         "price": "$99",
-        "priceUnit": "/ mo",
+        "priceUnit": "USD / mo",
         "cta": "Get Elite",
         "cadences": {
           "annual": {
-            "label": "Pay annually · $990/yr (save $198)",
-            "inline": "$990/yr billed annually"
+            "label": "Pay annually · $990 USD/yr (save $198)",
+            "inline": "$990 USD/yr billed annually"
           },
           "lifetime": {
-            "label": "Pay once · $1,499 lifetime (break-even ~year 1.3)",
-            "inline": "$1,499 paid once · lifetime"
+            "label": "Pay once · $1,499 USD lifetime (break-even ~year 1.3)",
+            "inline": "$1,499 USD paid once · lifetime"
           }
         },
         "everythingIn": "Everything in Pro, plus:",
