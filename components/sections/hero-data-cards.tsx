@@ -32,8 +32,9 @@
  */
 
 import { useEffect, useMemo, useRef } from 'react';
+import gsap from 'gsap';
 import { useTicker, useRecentPredictions } from '@/lib/api';
-import { useReducedMotionSafe, runGsapReveal } from '@/lib/motion';
+import { useReducedMotionSafe } from '@/lib/motion';
 import { CoinIcon } from '@/components/ui/coin-icon';
 import { AnimatedNumber } from '@/components/ui/animated-number';
 import { LastPredictionCard } from './last-prediction-card';
@@ -53,19 +54,40 @@ export function HeroDataCards() {
     [ticker.data],
   );
 
-  // Stagger-reveal the three cards on first paint via the canonical
-  // IntersectionObserver-driven helper.
+  // Stagger-reveal the three cards on first paint. The hero gets a
+  // bespoke timeline (instead of the canonical `runGsapReveal`) so we
+  // can layer overshoot easing + a subtle scale settle that reads as
+  // "cards landing into position" rather than the flat fade-in used by
+  // downstream sections. Reduced-motion users skip the timeline and see
+  // the final state immediately.
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    const cards = Array.from(root.querySelectorAll<HTMLElement>('[data-hero-card]'));
-    return runGsapReveal({
-      root,
-      targets: cards,
-      reduced,
-      stagger: 0.14,
-      duration: 0.8,
+    const cards = Array.from(
+      root.querySelectorAll<HTMLElement>('[data-hero-card]'),
+    );
+    if (cards.length === 0) return;
+
+    if (reduced) {
+      gsap.set(cards, { opacity: 1, y: 0, scale: 1 });
+      return;
+    }
+
+    gsap.set(cards, { opacity: 0, y: 24, scale: 0.96 });
+
+    const tween = gsap.to(cards, {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      duration: 0.9,
+      ease: 'back.out(1.4)',
+      stagger: 0.12,
+      delay: 0.05,
     });
+
+    return () => {
+      tween.kill();
+    };
   }, [reduced]);
 
   return (
@@ -92,26 +114,30 @@ export function HeroDataCards() {
         }}
       />
 
-      {/* Card 1 — LAST PREDICTION. Top-right anchor, slight ccw tilt.
-          Replaces the previous TrackerWR ring slot. */}
+      {/* Card 1 — LAST PREDICTION. Pinned top-right, ccw tilt. The
+          most-recent confirmed call anchors the visual entry point. */}
       <div
         data-hero-card="card-last-prediction"
         className="
           absolute top-0 right-0 w-[300px] sm:w-[330px]
-          lg:[transform:rotate(-1.2deg)]
+          lg:[transform:rotate(-1.8deg)]
           motion-safe:lg:[animation:hero-card-drift-a_6.5s_ease-in-out_infinite]
           will-change-transform
+          z-20
         "
       >
         <LastPredictionCard variant="compact" />
       </div>
 
-      {/* Card 2 — LIVE TICKER. Center-left, foreground stack. */}
+      {/* Card 2 — LIVE TICKER. Pushed further left + slightly higher
+          than 32% so it overlaps the LastPrediction footprint instead
+          of sitting cleanly below it. The asymmetric overlap is what
+          gives the stack its "dashboard collage" reading. */}
       <TerminalCard
         dataAttr="card-ticker"
         className="
-          absolute top-[32%] left-0 w-[300px] sm:w-[320px]
-          lg:[transform:rotate(0.8deg)]
+          absolute top-[28%] -left-2 sm:left-0 w-[300px] sm:w-[320px]
+          lg:[transform:rotate(1.4deg)]
           motion-safe:lg:[animation:hero-card-drift-b_7.2s_ease-in-out_infinite_0.3s]
           z-10
         "
@@ -119,12 +145,14 @@ export function HeroDataCards() {
         <TickerBody entries={topTickers} />
       </TerminalCard>
 
-      {/* Card 3 — RECEIPTS. Bottom-right. */}
+      {/* Card 3 — RECEIPTS. Bottom-right, widest of the three and tilted
+          back toward the centerline so the trio reads as a fanned
+          composition rather than three parallel planks. */}
       <TerminalCard
         dataAttr="card-receipts"
         className="
-          absolute bottom-0 right-[3%] w-[340px] sm:w-[380px]
-          lg:[transform:rotate(-0.6deg)]
+          absolute bottom-0 right-[2%] w-[340px] sm:w-[380px]
+          lg:[transform:rotate(-0.9deg)]
           motion-safe:lg:[animation:hero-card-drift-c_8s_ease-in-out_infinite_0.6s]
         "
       >
