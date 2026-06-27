@@ -1,0 +1,115 @@
+---
+version: v0.4.0
+codename: Launch
+date: 2026-06-26
+title: Bienvenido a Vizzor
+summary: Qué es Vizzor, cómo funciona, cómo lo instalás en cada superficie y cómo hacés tu primera predicción. La versión larga — leela una vez y quedás listo para todo lo que viene después.
+author: Vizzor team
+tags:
+  - welcome
+  - onboarding
+---
+
+## 👋 ¿Qué es Vizzor?
+
+Vizzor es un motor de inteligencia cripto con IA. Seis familias de señales independientes — flujo on-chain de ballenas, un ensemble de ML, mercados de predicción, flujo social y de narrativa, detección de patrones SMC e ICT, y una capa lógica de 21 reglas — se fusionan en un único score de confianza calibrado. Cuando el motor emite una predicción, ese número está trabajando: 63% significa que aproximadamente el 63% de las calls pasadas con 63% de confianza cayeron dentro del rango.
+
+Cada predicción queda registrada con su snapshot completo de trigger. Qué señales votaron. En qué dirección. Por qué los gates la dejaron pasar. Cuando el horizonte vence, el resultado resuelto se injerta en la misma fila. Nada se borra, nada se backdatea.
+
+El scoreboard de win rate en la home se computa desde ese archivo. Lo podés filtrar por horizonte, tier o chain y reproducir el número vos mismo.
+
+## 🧠 Cómo funciona el motor
+
+La mayoría de los productos de "IA cripto" son un modelo de lenguaje envuelto alrededor de un price feed. Vizzor da vuelta eso — el modelo de lenguaje solamente renderiza resultados. El trabajo real ocurre en seis familias de señales independientes, cada una scoreando una predicción candidata con su propia lógica:
+
+- **Flujo on-chain de ballenas.** Net flow de exchanges, acumulación de wallets grandes, rotación de smart money.
+- **Ensemble de ML.** Modelos de gradient boosting entrenados sobre setups históricos etiquetados, con re-fit continuo.
+- **Mercados de predicción.** Cruces de Polymarket y Kalshi sobre el mismo asset + horizonte.
+- **Flujo social + de narrativa.** Velocidad de menciones, concentración narrativa, slope de sentiment.
+- **Detección de patrones SMC / ICT.** Liquidity sweeps, order blocks, fair-value gaps.
+- **Capa lógica de 21 reglas.** Heurísticas que el motor aprendió a los golpes (guardia anti-manipulación, veto por bajo volumen, dampener de fin de semana, etc.).
+
+Las familias votan con certainty factors crudos. El paso de fusión corre álgebra CF con dampening de señales débiles, después un update bayesiano con priors por familia, y finalmente una calibración de Platt contra la cohorte resuelta. Si menos de 4 de 6 familias devuelven datos limpios, el ciclo aborta — nada de adivinanzas silenciosas.
+
+La salida es un número con un chip de confianza y un snapshot del por qué. Podés entrar en cualquiera de los dos en cualquier momento.
+
+## 🎓 Qué hace distinto a Vizzor
+
+Un chat box con un ticker de precios es paráfrasis fluida, no análisis. El modelo suena confiado porque es un modelo — no tiene acceso a nada que vos no podrías haberle preguntado por tu cuenta.
+
+Vizzor es la construcción opuesta:
+
+- **Los recibos son públicos.** Cada call vive en la tabla `chronovisor_predictions`. Abierta, consultable, reproducible.
+- **Confianza calibrada.** El número es una probabilidad con un track record, no una intuición.
+- **El silencio es una feature.** Cuando el motor no tiene nada que decir, no dice nada — sin opiniones manufacturadas.
+- **Core open-source.** El motor está bajo licencia BUSL. Corrélo local, configurálo, forkéalo.
+
+El producto es el motor y los recibos. El bot, la web app y la CLI son simplemente puertas a la misma habitación.
+
+## 🚀 Instalación
+
+**Web.** Abrí [`vizzor.ai`](https://vizzor.ai), hacé click en "Open App" y conectá una wallet. Un trial Pro de 7 días arranca en tu primer connect. Sin tarjeta, sin KYC.
+
+**Telegram.** Mensajeale a [`@vizzorai_bot`](https://t.me/vizzorai_bot) y mandá `/start`. Misma suscripción atada a la wallet, mismo trial de 7 días.
+
+**CLI.** Instalá el binario global:
+
+```bash
+npm install -g @vizzor/cli
+vizzor setup
+```
+
+La CLI se aparea con tu wallet vía el wizard guiado `vizzor setup` — imprime una URL de un solo uso `vizzor.ai/cli-pair?code=…`, vos la abrís, firmás una vez con SIWS, y todos los comandos subsiguientes se autentican desde el config local.
+
+## 🎯 Tu primera predicción
+
+Conectá una wallet en la web app o mandale DM al bot de Telegram. Pedile al motor algo concreto con un horizonte — por ejemplo, *"¿BTC cierra arriba de $72k para el viernes?"* o *"¿Dirección de ETH a 4h?"*.
+
+El motor te devuelve una predicción con un chip de confianza, las familias de señales que contribuyeron, y el snapshot del trigger. Si las condiciones están demasiado finas o manipuladas, se abstiene y te dice por qué en vez de adivinar.
+
+Cuando el horizonte vence, el resultado se resuelve y la fila aparece en el ledger público. Tu desglose personal de win rate aparece en `/precisions`.
+
+## 📊 Leyendo los recibos
+
+Cada predicción que Vizzor emitió alguna vez es consultable desde `/precisions` (Telegram) o desde el panel de history de `/app/predict` (web). Cada fila carga:
+
+- El asset, el horizonte, la dirección y la confianza calibrada.
+- El snapshot del trigger — qué familias votaron, en qué dirección, con qué certainty factors crudos y calibrados.
+- El resultado resuelto (cuando el horizonte ya pasó) o `pending` (cuando no).
+- La cohorte a la que pertenece la call — por tier, por session, por horizonte, por chain.
+
+Si algo publicado como win rate público no se puede derivar de esa tabla, el número publicado está mal. Avisanos. Somos agresivos en tratar eso como un bug P0 porque el contrato es el producto entero.
+
+## 🔐 Privacidad + self-hosting
+
+El bot hosteado, la web app y la CLI comparten una sola suscripción atada a la wallet. La wallet es tuya. La sesión está firmada por SIWS, no se almacena en plaintext en ningún lado. Hasheamos IPs y user agents antes de que toquen el audit log; nunca vendemos los datos, nunca corremos trackers de terceros sobre la superficie de chat, y nunca compartimos lo que le preguntás al motor con nadie fuera del motor en sí.
+
+Si preferís no depender de nuestro hosting para nada, el motor es open-source. El archivo Docker compose en el repo público levanta el stack completo — motor, bot de Telegram, base de datos, sidecar LLM opcional — en un VPS de $5 en menos de un minuto. Tu suscripción es portable. Los operadores self-hosted corren el mismo código, el mismo schema y el mismo calibrador que nosotros.
+
+## 💸 Pricing
+
+**Free.** Trial Pro de 7 días en el primer connect, después el scanner queda gratis para siempre — sentiment, security checks, market context, feed de discovery.
+
+**Pro.** $19 USD/mes. Predictor unlimited completo, todos los horizontes, las seis familias de señales, chat IA con tool-use, alertas y el audit trail.
+
+**Elite.** $99 USD/mes. El stack de inteligencia entero — Whale Terminal, Smart Money Flow, suite forense, señales pre-news, cross-venue, REST API.
+
+Los pagos se liquidan on-chain en SOL o TON. Sin tarjeta. La CLI, el bot de Telegram y la web app comparten la misma suscripción atada a la wallet, así que un usuario Pro tiene Pro en todos lados en el momento en que el pago aterriza.
+
+## 🛣 Qué viene
+
+Cosas que estamos shipeando en los próximos ciclos, en el orden que esperamos que aterricen:
+
+- **Página de detalle por sesión** — cada predicción tiene su propia URL con el snapshot completo del trigger renderizado en vivo.
+- **Scoreboard histórico por asset** — filtrá el ledger público por símbolo y mirá la calibración a lo largo del tiempo.
+- **Modo autónomo de Telegram** — opt-in, el bot te avisa cuando un setup de alta convicción dispara para un asset que mirás.
+- **Migración a tesorería multi-sig** — la tesorería del operador se mueve de un signer HW único a un setup 2-de-3 con Squads / TON Multisig. Documentado en [`treasury-threat-model.md`](/docs/security).
+- **Refresh de feed OFAC en vivo** — auto-pull diario de la lista SDN del Treasury, además de la seed list curada.
+
+Este roadmap es un snapshot, no una promesa. Lo cambiamos cuando los datos se mueven.
+
+## 🤝 Soporte + comunidad
+
+[Leé los docs](/docs) para la referencia larga. El bot de Telegram es el camino más rápido para preguntas de producto — entiende `/help`, `/wr` y `/diagnose` y te va a decir por qué cualquier predicción específica disparó o se rechazó. Para la filosofía detrás del motor, leé el [manifiesto](/manifesto).
+
+Si querés correr todo el stack vos mismo, el motor es open-source y operable. `docker compose up` levanta una copia local, y tu suscripción es portable entre hosted y self-hosted. PRs bienvenidos, issues triageados en 24 horas.
