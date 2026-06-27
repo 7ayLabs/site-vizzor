@@ -20,7 +20,14 @@ import { Link } from '@/i18n/navigation';
 import { SectionEyebrow } from '@/components/ui/section-eyebrow';
 import { GsapHeadline } from '@/components/ui/gsap-headline';
 import { MotionReveal } from '@/components/ui/motion-reveal';
+import { routing, type Locale } from '@/i18n/routing';
 import { getAllPosts, type BlogPost } from '@/lib/blog';
+
+function toLocale(value: string): Locale {
+  return (routing.locales as readonly string[]).includes(value)
+    ? (value as Locale)
+    : routing.defaultLocale;
+}
 
 type LinkHref = ComponentProps<typeof Link>['href'];
 
@@ -179,7 +186,7 @@ export default async function BlogIndexPage({
   const { locale } = await params;
   setRequestLocale(locale);
   const t = await getTranslations('blog');
-  const posts = await getAllPosts();
+  const posts = await getAllPosts(toLocale(locale));
 
   return (
     <section className="relative">

@@ -7,6 +7,21 @@
  * reads happen at request time but Next.js statically caches the result for
  * the dynamic-routes generation pass.
  *
+ * ## Locale resolution
+ *
+ * Posts can ship as English-only (`welcome-to-vizzor.mdx`) or with per-locale
+ * translations alongside (`welcome-to-vizzor.es.mdx`, `welcome-to-vizzor.fr.mdx`).
+ * Given a `(slug, locale)` pair the loader first looks for
+ * `content/blog/<slug>.<locale>.mdx`; if that file is missing it falls back
+ * to the canonical English source at `content/blog/<slug>.mdx`. The English
+ * source is therefore load-bearing — every post must have one. Tags from
+ * the locale file override the English tags when present; if a locale file
+ * omits `tags`, the English file's tags are inherited.
+ *
+ * URL slugs are locale-independent. The base slug (`welcome-to-vizzor`) is
+ * the routing identity; the locale segment of the URL (`/es/blog/...`)
+ * tells the loader which file to read.
+ *
  * Posts carry the union of *editorial* fields (`title`, `author`, `tags`)
  * and *release-notes* fields (`version`, `codename`). The card and the
  * detail page branch on which set is populated; the loader is agnostic.
@@ -21,9 +36,11 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import matter from 'gray-matter';
+import { routing, type Locale } from '@/i18n/routing';
 
 export interface BlogPost {
-  /** filename without the .mdx extension — used as URL slug. */
+  /** filename without the .mdx extension (and without any `.<locale>` suffix)
+   *  — used as URL slug. Locale-independent. */
   slug: string;
   /** optional semver tag for release-notes posts, e.g. "v0.15.5". */
   version: string;
@@ -52,6 +69,11 @@ export interface BlogPost {
 
 const DIR = path.join(process.cwd(), 'content/blog');
 const WORDS_PER_MINUTE = 200;
+
+/** Validate-and-narrow a string to a known routing locale. */
+function isLocale(value: string): value is Locale {
+  return (routing.locales as readonly string[]).includes(value);
+}
 
 function isMdx(file: string): boolean {
   return file.endsWith('.mdx');
@@ -84,35 +106,145 @@ function readTags(value: unknown): readonly string[] | undefined {
   return cleaned.length > 0 ? cleaned : undefined;
 }
 
-async function readPost(file: string): Promise<BlogPost> {
-  const raw = await fs.readFile(path.join(DIR, file), 'utf-8');
-  const { data, content } = matter(raw);
+/**
+ * Decompose a filename into `{ baseSlug, locale }`. A filename of
+ * `welcome-to-vizzor.es.mdx` yields `{ baseSlug: 'welcome-to-vizzor',
+ * locale: 'es' }`; `welcome-to-vizzor.mdx` yields `{ baseSlug:
+ * 'welcome-to-vizzor', locale: undefined }`. Only suffixes that match a
+ * configured routing locale are treated as a locale tag — any other dot
+ * in the basename is preserved as part of the slug.
+ */
+function parseFilename(
+  file: string,
+): { baseSlug: string; locale: Locale | undefined } | null {
+  if (!isMdx(file)) return null;
+  const withoutExt = file.replace(/\.mdx$/, '');
+  const lastDot = withoutExt.lastIndexOf('.');
+  if (lastDot === -1) {
+    return { baseSlug: withoutExt, locale: undefined };
+  }
+  const candidate = withoutExt.slice(lastDot + 1);
+  if (isLocale(candidate)) {
+    return {
+      baseSlug: withoutExt.slice(0, lastDot),
+      locale: candidate,
+    };
+  }
+  return { baseSlug: withoutExt, locale: undefined };
+}
+
+interface RawFrontmatter {
+  data: Record<string, unknown>;
+  content: string;
+}
+
+async function readRaw(filePath: string): Promise<RawFrontmatter | null> {
+  try {
+    const raw = await fs.readFile(filePath, 'utf-8');
+    const parsed = matter(raw);
+    return { data: parsed.data, content: parsed.content };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Build a `BlogPost` for `slug` in the requested `locale`. The locale
+ * file (if present) provides the canonical content; any frontmatter
+ * field omitted by the locale file falls back to the English source.
+ * `tags` follows the same fallback: a locale file with no `tags` key
+ * inherits the English tag list rather than dropping it.
+ *
+ * Returns `null` when no English source exists for the slug.
+ */
+async function buildPost(
+  baseSlug: string,
+  locale: Locale,
+): Promise<BlogPost | null> {
+  const englishPath = path.join(DIR, `${baseSlug}.mdx`);
+  const englishRaw = await readRaw(englishPath);
+  if (!englishRaw) return null;
+
+  const localeRaw =
+    locale === routing.defaultLocale
+      ? null
+      : await readRaw(path.join(DIR, `${baseSlug}.${locale}.mdx`));
+
+  const source = localeRaw ?? englishRaw;
+
+  const tagsRaw = source.data['tags'];
+  const tags =
+    tagsRaw !== undefined ? readTags(tagsRaw) : readTags(englishRaw.data['tags']);
+
   return {
-    slug: file.replace(/\.mdx$/, ''),
-    version: String(data['version'] ?? ''),
-    codename: data['codename'] ? String(data['codename']) : undefined,
-    date: String(data['date'] ?? ''),
-    title: data['title'] ? String(data['title']) : undefined,
-    summary: String(data['summary'] ?? ''),
-    author: data['author'] ? String(data['author']) : undefined,
-    tags: readTags(data['tags']),
-    readingTimeMinutes: readingTimeMinutes(content),
-    content,
+    slug: baseSlug,
+    version: String(source.data['version'] ?? englishRaw.data['version'] ?? ''),
+    codename:
+      source.data['codename'] !== undefined
+        ? String(source.data['codename'])
+        : englishRaw.data['codename'] !== undefined
+          ? String(englishRaw.data['codename'])
+          : undefined,
+    date: String(source.data['date'] ?? englishRaw.data['date'] ?? ''),
+    title:
+      source.data['title'] !== undefined
+        ? String(source.data['title'])
+        : englishRaw.data['title'] !== undefined
+          ? String(englishRaw.data['title'])
+          : undefined,
+    summary: String(source.data['summary'] ?? englishRaw.data['summary'] ?? ''),
+    author:
+      source.data['author'] !== undefined
+        ? String(source.data['author'])
+        : englishRaw.data['author'] !== undefined
+          ? String(englishRaw.data['author'])
+          : undefined,
+    tags,
+    readingTimeMinutes: readingTimeMinutes(source.content),
+    content: source.content,
   };
 }
 
-export async function getAllPosts(): Promise<BlogPost[]> {
+/**
+ * Enumerate every post in the requested locale, sorted newest-first.
+ * Defaults to the routing default locale (English) so legacy callers
+ * — e.g. the global RSS feed — keep working untouched.
+ */
+export async function getAllPosts(
+  locale: Locale = routing.defaultLocale,
+): Promise<BlogPost[]> {
   let files: string[];
   try {
     files = await fs.readdir(DIR);
   } catch {
     return [];
   }
-  const posts = await Promise.all(files.filter(isMdx).map(readPost));
-  return posts.sort((a, b) => b.date.localeCompare(a.date));
+
+  // Dedup by base slug — both `welcome-to-vizzor.mdx` and
+  // `welcome-to-vizzor.es.mdx` map to the same logical post.
+  const baseSlugs = new Set<string>();
+  for (const file of files) {
+    const parsed = parseFilename(file);
+    if (!parsed) continue;
+    baseSlugs.add(parsed.baseSlug);
+  }
+
+  const posts = await Promise.all(
+    Array.from(baseSlugs).map((slug) => buildPost(slug, locale)),
+  );
+
+  return posts
+    .filter((p): p is BlogPost => p !== null)
+    .sort((a, b) => b.date.localeCompare(a.date));
 }
 
-export async function getPost(slug: string): Promise<BlogPost | null> {
-  const all = await getAllPosts();
-  return all.find((p) => p.slug === slug) ?? null;
+/**
+ * Resolve a single post by its base slug. Returns `null` if no English
+ * source exists for that slug, regardless of locale.
+ */
+export async function getPost(
+  slug: string,
+  locale: Locale = routing.defaultLocale,
+): Promise<BlogPost | null> {
+  return buildPost(slug, locale);
 }

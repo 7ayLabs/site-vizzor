@@ -30,8 +30,14 @@ import { CopyChip } from '@/components/ui/copy-chip';
 import { CtaPrimary } from '@/components/ui/cta-primary';
 import { CtaSecondary } from '@/components/ui/cta-secondary';
 import { SectionEyebrow } from '@/components/ui/section-eyebrow';
-import { routing } from '@/i18n/routing';
+import { routing, type Locale } from '@/i18n/routing';
 import { getAllPosts, getPost } from '@/lib/blog';
+
+function toLocale(value: string): Locale {
+  return (routing.locales as readonly string[]).includes(value)
+    ? (value as Locale)
+    : routing.defaultLocale;
+}
 
 const DEFAULT_AUTHOR = 'Vizzor team';
 
@@ -125,8 +131,8 @@ export async function generateMetadata({
 }: {
   params: Promise<{ locale: string; slug: string }>;
 }): Promise<Metadata> {
-  const { slug } = await params;
-  const post = await getPost(slug);
+  const { locale, slug } = await params;
+  const post = await getPost(slug, toLocale(locale));
   if (!post) return {};
   const title =
     post.title ?? `${post.version}${post.codename ? ` · ${post.codename}` : ''}`;
@@ -158,7 +164,7 @@ export default async function BlogDetailPage({
   const { locale, slug } = await params;
   setRequestLocale(locale);
 
-  const post = await getPost(slug);
+  const post = await getPost(slug, toLocale(locale));
   if (!post) notFound();
 
   const t = await getTranslations('blog');
