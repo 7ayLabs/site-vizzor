@@ -25,7 +25,7 @@
  */
 import { getTranslations } from 'next-intl/server';
 import Image from 'next/image';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, Terminal } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { MobileMenu } from './mobile-menu';
 import { NavLinks } from './nav-links';
@@ -119,8 +119,36 @@ export async function Header() {
           </div>
         </div>
 
-        {/* ── RIGHT: Telegram + Open-App + mobile trigger ───────────── */}
+        {/* ── RIGHT: CLI + Telegram + Open-App + mobile trigger ─────── */}
         <div className="flex items-center gap-1.5 shrink-0">
+          {/* CLI icon button — desktop only. Monochrome (matches the
+              surface palette, no brand color). Links to the CLI docs. */}
+          <Link
+            href="/docs/cli"
+            aria-label="Vizzor CLI"
+            title="Vizzor CLI"
+            className="
+              group hidden sm:inline-flex items-center justify-center shrink-0
+              h-9 w-9 sm:h-11 sm:w-11
+              rounded-full
+              text-[var(--fg-2)] bg-[var(--surface-2)]
+              border border-[var(--border)]
+              transition-[transform,background-color,border-color,color] duration-200 ease-out
+              hover:scale-[1.06] active:scale-[0.98]
+              hover:text-[var(--fg)] hover:border-[var(--border-hi)]
+              focus-visible:outline-none focus-visible:ring-2
+              focus-visible:ring-[var(--accent)]
+              focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]
+            "
+          >
+            <Terminal
+              aria-hidden
+              size={15}
+              strokeWidth={1.75}
+              className="transition-transform duration-200 ease-out group-hover:scale-110"
+            />
+          </Link>
+
           {/* Telegram brand-blue circle button — desktop only. Fixed
               brand color across themes. */}
           <a
