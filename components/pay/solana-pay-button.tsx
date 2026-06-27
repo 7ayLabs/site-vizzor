@@ -222,25 +222,36 @@ export function SolanaPayButton({
       }
       const { connection, blockhash, lastValidBlockHeight } = prep;
 
-      // Pre-flight balance check. The wallet will surface the same
-      // "not enough SOL" error inside its popup, but catching it here
-      // means we can route to a specific banner (with a devnet faucet
-      // link in testnet) instead of leaving the user staring at a
-      // generic wallet error. A 5_000-lamport buffer covers the
-      // network fee + memo program rent.
+      // Pre-flight balance check. Catching insufficient funds here
+      // routes to a specific banner with an actionable hint (buy SOL
+      // on mainnet, faucet link on devnet) instead of letting Phantom
+      // render its "Failed to simulate the results of this request"
+      // red banner — which CodeQL-style reputation scrapers and users
+      // both read as "this dApp is broken or malicious."
       //
-      // The `balance > 0` guard sidesteps a wrong-network false
-      // positive: if our connection is on devnet but the wallet
-      // extension is on mainnet (or vice versa), `getBalance` for the
-      // signer's pubkey returns exactly 0 from the network where the
-      // user never funded that key. Showing "insufficient_balance"
-      // there is wrong — the user IS funded, just on the other
-      // cluster. Falling through lets the wallet's signing popup
-      // surface the real condition (most wallets refuse to sign for a
-      // mismatched cluster with their own clearer message).
+      // Buffer: 80_000 lamports ≈ 0.00008 SOL. Phantom's network-fee
+      // display on a SystemTransfer + Memo bundle currently shows
+      // exactly that figure, and the previous 5_000-lamport buffer
+      // was too tight — a wallet with 6_000 lamports passed our
+      // check, then failed simulation inside the wallet popup.
+      //
+      // The mainnet vs. devnet branch resolves a cluster-mismatch
+      // false positive specific to non-prod testing: on devnet/testnet
+      // builds it's common for the wallet extension to be pinned to
+      // mainnet, so `getBalance(pubkey)` returns 0 from the cluster
+      // the user never funded that key on. We keep the `> 0` guard
+      // there so the wallet's own clearer "wrong network" message
+      // surfaces. On mainnet there's no such ambiguity — a 0 balance
+      // is a real 0 balance, and falling through to Phantom would
+      // produce the simulation-failure red banner the user just
+      // showed us. Treat `balance === 0` as insufficient_balance on
+      // mainnet.
+      const isMainnet =
+        process.env.NEXT_PUBLIC_PAYMENT_NETWORK === 'mainnet';
+      const minRequired = lamports + 80_000;
       try {
         const balance = await connection.getBalance(publicKey);
-        if (balance > 0 && balance < lamports + 5_000) {
+        if (isMainnet ? balance < minRequired : balance > 0 && balance < minRequired) {
           onError('insufficient_balance');
           return;
         }
