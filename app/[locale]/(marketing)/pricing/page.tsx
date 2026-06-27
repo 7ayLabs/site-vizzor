@@ -23,6 +23,7 @@ import { LifetimePromoIsland } from '@/components/pricing/lifetime-promo-island'
 import { ActivePlanIsland } from '@/components/pricing/active-plan-island';
 import { TierCtaButton } from '@/components/pricing/tier-cta-button';
 import { TrialBadge } from '@/components/pricing/trial-badge';
+import { LocalPriceHint } from '@/components/pricing/local-price-hint';
 
 type Cadence = 'monthly' | 'annual' | 'lifetime';
 type TierKey = 'free' | 'pro' | 'elite';
@@ -35,6 +36,10 @@ interface Tier {
   /** Alternative billing cycles, rendered as inline links under the
    *  price. Empty for Free. */
   altCadences: ReadonlyArray<Cadence>;
+  /** Canonical monthly USD amount. Sourced here (not from i18n) so the
+   *  LocalPriceHint can render a numeric local-currency cue without
+   *  parsing the display string. 0 for free tiers (renders no hint). */
+  monthlyUsd: number;
 }
 
 const TIERS: ReadonlyArray<Tier> = [
@@ -48,6 +53,7 @@ const TIERS: ReadonlyArray<Tier> = [
     ctaVariant: 'outline',
     external: false,
     altCadences: [],
+    monthlyUsd: 0,
   },
   {
     key: 'pro',
@@ -57,12 +63,14 @@ const TIERS: ReadonlyArray<Tier> = [
     ctaHref: '/pay/pro/monthly',
     ctaVariant: 'primary',
     altCadences: ['annual'],
+    monthlyUsd: 19,
   },
   {
     key: 'elite',
     ctaHref: '/pay/elite/monthly',
     ctaVariant: 'primary',
     altCadences: ['annual', 'lifetime'],
+    monthlyUsd: 99,
   },
 ];
 
@@ -233,6 +241,13 @@ function TierCard({
             {tierT('priceUnit')}
           </span>
         </div>
+        {/* Geo-aware local-currency hint. Server-renders only when the
+            visitor's country resolves to a non-USD currency; silently
+            no-ops otherwise so the canonical USD price stays the only
+            number for US/CA-en/AU readers. */}
+        {tier.monthlyUsd > 0 && (
+          <LocalPriceHint amountUsd={tier.monthlyUsd} />
+        )}
         {/* Wallet-aware trial chip — only renders on the Pro card when
             the connected wallet is in the 7-day trial window. Pro is
             the natural mount point because trial wallets get
