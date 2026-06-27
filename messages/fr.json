@@ -37,7 +37,9 @@
         "whales": "Baleines",
         "flow": "Flux"
       },
-      "tier": { "elite": "ELITE" },
+      "tier": {
+        "elite": "ELITE"
+      },
       "telegram": {
         "label": "Ouvrir sur Telegram"
       },
@@ -54,7 +56,11 @@
       "degraded": "Dégradé — voir détails",
       "loading": "Vérification…",
       "down": "Sonde de santé hors ligne",
-      "subsystem": { "engine": "Moteur", "rpc": "RPC Solana", "sqlite": "Base de données" },
+      "subsystem": {
+        "engine": "Moteur",
+        "rpc": "RPC Solana",
+        "sqlite": "Base de données"
+      },
       "build": "Build"
     },
     "walletMenu": {
@@ -311,9 +317,19 @@
     "eyebrow": "profil",
     "title": "Compte",
     "sub": "Tout ce que Vizzor sait de votre portefeuille — identité, abonnement, lien Telegram et historique on-chain. Rien ne sort de votre portefeuille sans votre signature.",
-    "tier": { "free": "Free", "pro": "Pro", "elite": "Elite" },
-    "cadence": { "monthly": "Mensuel", "annual": "Annuel", "lifetime": "À vie" },
-    "hero": { "manage": "Gérer le forfait" },
+    "tier": {
+      "free": "Free",
+      "pro": "Pro",
+      "elite": "Elite"
+    },
+    "cadence": {
+      "monthly": "Mensuel",
+      "annual": "Annuel",
+      "lifetime": "À vie"
+    },
+    "hero": {
+      "manage": "Gérer le forfait"
+    },
     "stats": {
       "plan": "Forfait",
       "planNone": "Free",
@@ -562,10 +578,18 @@
         "footer": "Vizzor peut se tromper. Vérifiez on-chain. Pas un conseil financier."
       },
       "quickActions": {
-        "predict": { "label": "Prédire une crypto" },
-        "wr": { "label": "Voir le win rate" },
-        "precisions": { "label": "Précisions récentes" },
-        "price": { "label": "Vérifier le prix" }
+        "predict": {
+          "label": "Prédire une crypto"
+        },
+        "wr": {
+          "label": "Voir le win rate"
+        },
+        "precisions": {
+          "label": "Précisions récentes"
+        },
+        "price": {
+          "label": "Vérifier le prix"
+        }
       },
       "settingsHeader": "Réglages et aide",
       "settings": "Réglages",
@@ -611,9 +635,18 @@
     "tryCta": "Essayer Vizzor",
     "orLabel": "ou en local",
     "stats": {
-      "chains": { "label": "Chaînes en direct", "value": "11" },
-      "signals": { "label": "Familles de signaux", "value": "6" },
-      "license": { "label": "Licence", "value": "BUSL · auto-héb." }
+      "chains": {
+        "label": "Chaînes en direct",
+        "value": "11"
+      },
+      "signals": {
+        "label": "Familles de signaux",
+        "value": "6"
+      },
+      "license": {
+        "label": "Licence",
+        "value": "BUSL · auto-héb."
+      }
     },
     "badges": {
       "chains": "11 chaînes en direct",
@@ -1118,28 +1151,32 @@
         "webFaucet": "Ouvrir le faucet web"
       }
     },
-    "status": {
-      "creating": {
+    "state": {
+      "idle": {
+        "label": "Prêt",
+        "body": "Choisis un mode de paiement et démarre la session."
+      },
+      "connecting": {
         "label": "Création de la session",
         "body": "Verrouillage du taux USD-TON et dérivation de l'adresse de destination…"
       },
-      "awaiting_wallet": {
+      "wrong-network": {
+        "label": "Mauvais réseau",
+        "body": "Ta wallet est sur un réseau différent de celui sélectionné. Change de réseau dans ta wallet et réessaie."
+      },
+      "signing": {
         "label": "Session prête",
         "body": "Connectez votre portefeuille ci-dessous si ce n'est pas déjà fait, puis cliquez sur Payer pour signer."
       },
-      "broadcasting": {
+      "paying": {
         "label": "Diffusion",
         "body": "Le portefeuille a renvoyé la transaction. Envoi sur le réseau TON…"
-      },
-      "pending": {
-        "label": "En attente on-chain",
-        "body": "En attendant que le watcher TON détecte votre paiement. Habituellement <30s."
       },
       "confirming": {
         "label": "Confirmation",
         "body": "Paiement détecté. Finalisation de l'abonnement et émission du code d'accès…"
       },
-      "confirmed": {
+      "done": {
         "label": "Confirmé",
         "body": "Paiement confirmé. Redirection vers votre code d'accès…"
       },
@@ -1151,27 +1188,30 @@
         "label": "Erreur",
         "body": "Une erreur est survenue : {reason}. Vous pouvez réessayer."
       },
-      "retry": "Réessayer",
-      "reasons": {
-        "infraPendingLabel": "infrastructure en attente",
-        "payInTelegram": "Payer dans Telegram",
-        "retryAnyway": "réessayer quand même",
-        "featureDisabled": "Les paiements ne sont pas encore acceptés sur cette chaîne. Essayez l'autre option Phase 1, ou ouvrez le bot Telegram.",
-        "engineOffline": "Le moteur de paiement Vizzor est temporairement injoignable. Le site est en ligne mais ne peut pas créer de session pour le moment. Réessayez sous peu.",
-        "engineError": "Infrastructure de paiement en attente : le moteur Vizzor n'a pas encore déployé les endpoints de paiement. Utilisez le bot Telegram pour payer pour l'instant — même tier, même prix.",
-        "engineMarkedFailed": "Le moteur a rejeté cette session. Réessayez ou contactez le support si le problème persiste.",
-        "invalidInput": "Le tier ou la cadence envoyés au serveur ne sont pas valides. Rafraîchissez et choisissez un tier depuis /pricing.",
-        "unsupportedChain": "Seule Solana est prise en charge dans cette version. Passez à SOL sur Solana.",
-        "priceLookup": "Impossible de récupérer le prix du tier sur le serveur. Rafraîchissez la page.",
-        "sessionFailed": "Échec de la création de session. Réessayez, ou ouvrez le bot Telegram si le problème persiste.",
-        "paymentMisconfigured": "Le service de paiement est en cours de configuration. Réessayez dans un instant, ou utilisez le bot Telegram pour t'abonner en attendant.",
-        "internalError": "Le service de paiement a rencontré une erreur inattendue. Réessayez, ou utilisez le bot Telegram pour t'abonner si le problème persiste.",
-        "rpcUnavailable": "Le RPC Solana est rate-limited en ce moment. Réessayez sous peu, ou passez à TON.",
-        "walletNotConnected": "Connectez un portefeuille pour continuer.",
-        "insufficientBalance": "Votre portefeuille n'a pas assez de SOL pour couvrir ce paiement et les frais réseau. Sur devnet vous pouvez demander un airdrop de 1 SOL depuis le panneau ci-dessus, ou recharger via faucet.solana.com.",
-        "invalidDestination": "L'adresse de la trésorerie de destination est mal configurée pour ce réseau. Vérifiez VIZZOR_SOLANA_TREASURY pour le cluster actif.",
-        "wrongNetwork": "Votre portefeuille est sur le mauvais réseau. Basculez sur Solana mainnet dans l'extension de votre portefeuille puis réessayez."
-      }
+      "retry": "Réessayer"
+    },
+    "error": {
+      "infraPendingLabel": "infrastructure en attente",
+      "payInTelegram": "Payer dans Telegram",
+      "retryAnyway": "réessayer quand même",
+      "featureDisabled": "Les paiements ne sont pas encore acceptés sur cette chaîne. Essayez l'autre option Phase 1, ou ouvrez le bot Telegram.",
+      "engineOffline": "Le moteur de paiement Vizzor est temporairement injoignable. Le site est en ligne mais ne peut pas créer de session pour le moment. Réessayez sous peu.",
+      "engineError": "Infrastructure de paiement en attente : le moteur Vizzor n'a pas encore déployé les endpoints de paiement. Utilisez le bot Telegram pour payer pour l'instant — même tier, même prix.",
+      "engineMarkedFailed": "Le moteur a rejeté cette session. Réessayez ou contactez le support si le problème persiste.",
+      "invalidInput": "Le tier ou la cadence envoyés au serveur ne sont pas valides. Rafraîchissez et choisissez un tier depuis /pricing.",
+      "unsupportedChain": "Seule Solana est prise en charge dans cette version. Passez à SOL sur Solana.",
+      "priceLookup": "Impossible de récupérer le prix du tier sur le serveur. Rafraîchissez la page.",
+      "sessionFailed": "Échec de la création de session. Réessayez, ou ouvrez le bot Telegram si le problème persiste.",
+      "paymentMisconfigured": "Le service de paiement est en cours de configuration. Réessayez dans un instant, ou utilisez le bot Telegram pour t'abonner en attendant.",
+      "internalError": "Le service de paiement a rencontré une erreur inattendue. Réessayez, ou utilisez le bot Telegram pour t'abonner si le problème persiste.",
+      "rpcUnavailable": "Le RPC Solana est rate-limited en ce moment. Réessayez sous peu, ou passez à TON.",
+      "walletNotConnected": "Connectez un portefeuille pour continuer.",
+      "insufficientBalance": "Votre portefeuille n'a pas assez de SOL pour couvrir ce paiement et les frais réseau. Sur devnet vous pouvez demander un airdrop de 1 SOL depuis le panneau ci-dessus, ou recharger via faucet.solana.com.",
+      "invalidDestination": "L'adresse de la trésorerie de destination est mal configurée pour ce réseau. Vérifiez VIZZOR_SOLANA_TREASURY pour le cluster actif.",
+      "wrongNetwork": "Votre portefeuille est sur le mauvais réseau. Basculez sur Solana mainnet dans l'extension de votre portefeuille puis réessayez.",
+      "rateUnavailable": "Impossible de verrouiller le taux de change. Réessaie dans un instant.",
+      "walletRejected": "Tu as refusé la transaction dans ta wallet. Clique sur Payer quand tu seras prêt.",
+      "unknown": "Quelque chose s'est mal passé. Réessaie, ou utilise le bot Telegram si le problème persiste."
     },
     "cta": {
       "start": "Démarrer le paiement",
