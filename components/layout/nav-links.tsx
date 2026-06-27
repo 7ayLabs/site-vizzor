@@ -23,10 +23,10 @@ import type { ComponentProps } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link, usePathname } from '@/i18n/navigation';
 
-type NavKey = 'manifesto' | 'pricing' | 'changelog' | 'docs';
+type NavKey = 'manifesto' | 'pricing' | 'blog' | 'docs';
 type LinkHref = ComponentProps<typeof Link>['href'];
 
-// Marketing nav — Manifesto · Pricing · Changelog · Docs. The CTA into
+// Marketing nav — Manifesto · Pricing · Blog · Docs. The CTA into
 // the product (Open App ↗) is rendered separately by the Header so it
 // can carry a visual distinction (right-arrow, different weight) from
 // the marketing items. Predict no longer earns a nav slot — it's a
@@ -34,7 +34,7 @@ type LinkHref = ComponentProps<typeof Link>['href'];
 const NAV: readonly { href: LinkHref; key: NavKey; match: RegExp }[] = [
   { href: '/manifesto', key: 'manifesto', match: /^\/manifesto(\/|$)/ },
   { href: '/pricing', key: 'pricing', match: /^\/pricing(\/|$)/ },
-  { href: '/changelog', key: 'changelog', match: /^\/changelog(\/|$)/ },
+  { href: '/blog', key: 'blog', match: /^\/blog(\/|$)/ },
   { href: '/docs', key: 'docs', match: /^\/docs($|\/)/ },
 ];
 

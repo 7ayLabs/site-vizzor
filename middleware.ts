@@ -101,15 +101,20 @@ const APP_HOSTS = new Set(
 /** Path prefixes the host-rewrite must NOT touch — even on app.*
  *  these should pass through unchanged. The marketing-route bypasses
  *  (account, pricing, pay, wallet, cli-pair, telegram-pair, legal,
- *  changelog) belong to the marketing route group but are reachable
+ *  blog) belong to the marketing route group but are reachable
  *  from inside the product (profile dropdown, exhausted-banner
  *  upgrade CTA, wallet redirect target, pairing flows, legal/privacy
- *  links, changelog island) — the visitor stays on `app.vizzor.ai`
+ *  links, blog island) — the visitor stays on `app.vizzor.ai`
  *  end-to-end instead of bouncing to vizzor.ai. The marketing layout
  *  detects the app host and strips its chrome so these pages render
- *  in app-style on the product subdomain. */
+ *  in app-style on the product subdomain.
+ *
+ *  `changelog` is still listed so legacy URLs that hit the app host
+ *  (e.g. bookmarks on app.vizzor.ai/changelog) reach the 308 redirect
+ *  declared in next.config.ts rather than being app-host-rewritten
+ *  into /app/changelog (which 404s). */
 const HOST_REWRITE_BYPASS_RE =
-  /^\/(?:api|_next|_vercel|docs|favicon\.ico|sitemap\.xml|robots\.txt|manifest\.webmanifest|account|pricing|pay|wallet|cli-pair|telegram-pair|legal|changelog)(?:\/|$)/;
+  /^\/(?:api|_next|_vercel|docs|favicon\.ico|sitemap\.xml|robots\.txt|manifest\.webmanifest|account|pricing|pay|wallet|cli-pair|telegram-pair|legal|blog|changelog)(?:\/|$)/;
 
 /**
  * On `app.vizzor.ai`, mutate the URL pathname in place so the rest
@@ -282,6 +287,7 @@ export default function middleware(req: NextRequest): NextResponse {
     pathname.startsWith('/_next') ||
     pathname.startsWith('/_vercel') ||
     pathname.startsWith('/docs') ||
+    pathname === '/blog/feed.xml' ||
     pathname === '/changelog/feed.xml' ||
     /\.(?:ico|png|jpg|jpeg|gif|svg|webp|avif|woff|woff2|otf|ttf|eot|map|js|mjs|cjs|css|json|xml|txt|html|pdf|zip|wasm)$/.test(
       pathname,

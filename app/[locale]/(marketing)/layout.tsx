@@ -10,7 +10,7 @@ import { ProductSidebar } from '@/components/app/product-sidebar';
 
 /**
  * Marketing layout — wraps every public page (home, pricing, manifesto,
- * changelog, account, wallet, cli-pair, telegram-pair, pay, legal, dev)
+ * blog, account, wallet, cli-pair, telegram-pair, pay, legal, dev)
  * with the global Header + Footer + ticker tape.
  *
  * Lives in a `(marketing)` route group so it scopes the chrome WITHOUT

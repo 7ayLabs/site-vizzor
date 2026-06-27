@@ -4,7 +4,7 @@
       "openApp": "Abrir app",
       "manifesto": "Manifiesto",
       "pricing": "Precios",
-      "changelog": "Novedades",
+      "blog": "Blog",
       "docs": "Documentación"
     },
     "openApp": "Abrir app",
@@ -407,7 +407,7 @@
         "title": "Proyecto",
         "manifesto": "Manifiesto",
         "pricing": "Precios",
-        "changelog": "Changelog",
+        "blog": "Blog",
         "privacy": "Privacidad",
         "license": "Licencia · BUSL-1.1"
       },
@@ -1254,13 +1254,15 @@
     "ps": "P.D. Si algo de esto te resuena, la prueba dura siete días, la wallet es tuya, y el único costo de averiguar si el motor es real es el tiempo que te lleva hacerle una pregunta honesta.",
     "seeReceipts": "Ver los recibos →"
   },
-  "changelog": {
-    "changelogEyebrow": "notas de versión · semver",
-    "changelogTitle": "Novedades de Vizzor",
-    "changelogSub": "Versiones numeradas. Cada cambio registrado.",
+  "blog": {
+    "blogEyebrow": "del equipo · blog",
+    "blogTitle": "Blog de Vizzor",
+    "blogSub": "Historias, releases y notas del equipo detrás de Vizzor.",
     "subscribeRss": "Suscribirse vía RSS",
-    "readMore": "Leer notas completas",
-    "empty": "Todavía no hay versiones.",
+    "readMore": "Leer post",
+    "readingTime": "{minutes} min de lectura",
+    "tagsLabel": "Etiquetas",
+    "empty": "Todavía no hay posts.",
     "meta": {
       "released": "publicada",
       "version": "versión",

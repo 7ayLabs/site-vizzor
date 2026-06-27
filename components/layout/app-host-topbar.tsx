@@ -6,7 +6,7 @@
  * /pay/...) via the product subdomain we strip the full marketing
  * chrome (Header, TickerCarousel, Footer) because those carry a
  * different visual contract — outbound nav (Manifesto / Pricing /
- * Changelog / Docs), the price ticker tape, the Open App CTA — that
+ * Blog / Docs), the price ticker tape, the Open App CTA — that
  * has no business inside the product host.
  *
  * What stays: a single hairline bar with the Vizzor mark on the left

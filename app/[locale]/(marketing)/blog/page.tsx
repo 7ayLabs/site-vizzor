@@ -1,22 +1,31 @@
 /**
- * /changelog — release notes index, reverse-chronological.
+ * /blog — editorial + release-notes index, reverse-chronological.
  *
- * Each entry is a card; the version/codename/date header sits over a short
- * summary, with a "Read full notes →" link to the detail page. The RSS link
- * sits in the page header, right side, so any operator who wants push gets
- * it without scrolling.
+ * Each post renders as a card. The metadata strip shows the author (or
+ * "Vizzor team" fallback), publish date, and reading-time chip; the
+ * summary sits below the headline; up to three lowercased tag pills
+ * line up under the summary when the frontmatter declares any.
+ *
+ * Release-notes posts (no editorial `title` field) keep the version as
+ * their headline — the same PostCard renders both shapes.
+ *
+ * The RSS link sits in the page header, right side, so any operator who
+ * wants push gets it without scrolling.
  */
 
 import type { ComponentProps } from 'react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
-import { Rss } from 'lucide-react';
+import { Rss, Clock } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { SectionEyebrow } from '@/components/ui/section-eyebrow';
 import { GsapHeadline } from '@/components/ui/gsap-headline';
 import { MotionReveal } from '@/components/ui/motion-reveal';
-import { getAllChangelog, type ChangelogEntry } from '@/lib/changelog';
+import { getAllPosts, type BlogPost } from '@/lib/blog';
 
 type LinkHref = ComponentProps<typeof Link>['href'];
+
+const DEFAULT_AUTHOR = 'Vizzor team';
+const MAX_TAGS = 3;
 
 function formatDate(iso: string, locale: string): string {
   if (!iso) return '';
@@ -31,21 +40,25 @@ function formatDate(iso: string, locale: string): string {
   }
 }
 
-function EntryCard({
-  entry,
+function PostCard({
+  post,
   locale,
   readMoreLabel,
+  readingTimeLabel,
 }: {
-  entry: ChangelogEntry;
+  post: BlogPost;
   locale: string;
   readMoreLabel: string;
+  readingTimeLabel: string;
 }) {
-  const headline = entry.title ?? entry.version;
-  const isEditorial = !!entry.title;
+  const headline = post.title ?? post.version;
+  const isEditorial = !!post.title;
+  const author = post.author ?? DEFAULT_AUTHOR;
+  const tags = post.tags?.slice(0, MAX_TAGS) ?? [];
 
   return (
     <Link
-      href={`/changelog/${entry.slug}` as LinkHref}
+      href={`/blog/${post.slug}` as LinkHref}
       className="
         group flex flex-col gap-3 rounded-2xl
         border border-[var(--border)] bg-[var(--surface)]
@@ -58,12 +71,12 @@ function EntryCard({
         focus-visible:ring-offset-[var(--bg)]
       "
     >
-      {/* Top metadata strip — avatar dot + version + codename + date.
-          For editorial posts (a `title` field set), the version becomes
-          quiet metadata and the title takes the headline slot below.
-          For canonical release-notes entries (no title), the headline
-          IS the version and this strip just shows codename + date. */}
-      <header className="flex items-center gap-2.5 text-[12px] text-[var(--fg-3)]">
+      {/* Top metadata strip — avatar dot · author · date · reading time.
+          Release-notes posts (no editorial `title`) still surface their
+          version as the headline below; the metadata strip stays
+          identical so the index reads as one consistent vertical rhythm
+          regardless of the post shape. */}
+      <header className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px] text-[var(--fg-3)]">
         <span
           aria-hidden
           className="
@@ -76,28 +89,27 @@ function EntryCard({
           V
         </span>
         <span className="mono tabular truncate font-semibold text-[var(--fg-2)]">
-          Vizzor
+          {author}
         </span>
-        {/* Version chip dropped for editorial posts per product
-            decision — release-notes entries (no `title`) still surface
-            the version as their headline below, so they read clean
-            without it here either. The slug remains the URL identity;
-            the version is now purely metadata for the canonical post
-            page, never decoration on the index card. */}
-        {entry.codename && (
+        {post.codename && (
           <span className="hidden sm:inline mono tabular uppercase tracking-[0.12em] text-[10.5px] text-[var(--fg-3)]">
-            · {entry.codename}
+            · {post.codename}
           </span>
         )}
         <span aria-hidden className="mx-1 text-[var(--border)]">·</span>
-        <time className="mono tabular text-[var(--fg-3)]" dateTime={entry.date}>
-          {formatDate(entry.date, locale)}
+        <time className="mono tabular text-[var(--fg-3)]" dateTime={post.date}>
+          {formatDate(post.date, locale)}
         </time>
+        <span aria-hidden className="mx-1 text-[var(--border)]">·</span>
+        <span className="mono tabular inline-flex items-center gap-1 text-[var(--fg-3)]">
+          <Clock size={11} strokeWidth={1.75} aria-hidden />
+          {readingTimeLabel.replace('{minutes}', String(post.readingTimeMinutes))}
+        </span>
       </header>
 
       {/* Headline — title takes the slot when present, otherwise the
-          version steps up. Sized like a real post headline (not a
-          mono-version chip) so editorial posts read like blog posts. */}
+          version steps up. Editorial posts read like blog posts; release
+          notes read like the mono version chips they always were. */}
       <h2
         className={
           isEditorial
@@ -109,8 +121,30 @@ function EntryCard({
       </h2>
 
       <p className="text-[14.5px] leading-relaxed text-[var(--fg-2)] max-w-[64ch]">
-        {entry.summary}
+        {post.summary}
       </p>
+
+      {tags.length > 0 && (
+        <ul
+          className="flex flex-wrap items-center gap-1.5"
+          aria-label="Tags"
+        >
+          {tags.map((tag) => (
+            <li
+              key={tag}
+              className="
+                mono tabular inline-flex items-center
+                rounded-full border border-[var(--border)]
+                bg-[var(--surface-2)] px-2 py-0.5
+                text-[10.5px] lowercase tracking-[0.04em]
+                text-[var(--fg-3)]
+              "
+            >
+              {tag.toLowerCase()}
+            </li>
+          ))}
+        </ul>
+      )}
 
       {/* Subtle CTA — single chevron + label, no chunky button. The
           whole card is already the click target; this is just the
@@ -135,15 +169,15 @@ function EntryCard({
   );
 }
 
-export default async function ChangelogIndexPage({
+export default async function BlogIndexPage({
   params,
 }: {
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
-  const t = await getTranslations('changelog');
-  const entries = await getAllChangelog();
+  const t = await getTranslations('blog');
+  const posts = await getAllPosts();
 
   return (
     <section className="relative">
@@ -152,15 +186,15 @@ export default async function ChangelogIndexPage({
           <GsapHeadline
             as="h1"
             className="flex max-w-[42ch] flex-col gap-4"
-            eyebrow={<SectionEyebrow>{t('changelogEyebrow')}</SectionEyebrow>}
-            title={t('changelogTitle')}
-            sub={t('changelogSub')}
+            eyebrow={<SectionEyebrow>{t('blogEyebrow')}</SectionEyebrow>}
+            title={t('blogTitle')}
+            sub={t('blogSub')}
             titleClassName="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-[var(--fg)]"
             subClassName="mt-4 text-[var(--fg-2)] leading-relaxed max-w-[58ch]"
           />
 
           <a
-            href="/changelog/feed.xml"
+            href="/blog/feed.xml"
             className="mono inline-flex shrink-0 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3.5 py-1.5 text-[12px] text-[var(--fg-2)] transition-colors duration-150 hover:border-[var(--accent)] hover:text-[var(--accent)]"
             aria-label={t('subscribeRss')}
           >
@@ -171,15 +205,16 @@ export default async function ChangelogIndexPage({
         </div>
 
         <div className="mt-14 flex flex-col gap-5">
-          {entries.length === 0 ? (
+          {posts.length === 0 ? (
             <p className="text-[var(--fg-3)]">{t('empty')}</p>
           ) : (
-            entries.map((entry, idx) => (
-              <MotionReveal key={entry.slug} delay={idx * 60}>
-                <EntryCard
-                  entry={entry}
+            posts.map((post, idx) => (
+              <MotionReveal key={post.slug} delay={idx * 60}>
+                <PostCard
+                  post={post}
                   locale={locale}
                   readMoreLabel={t('readMore')}
+                  readingTimeLabel={t('readingTime')}
                 />
               </MotionReveal>
             ))

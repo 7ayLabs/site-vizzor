@@ -113,11 +113,11 @@ export function buildCommandCatalog(): readonly Command[] {
       run: (ctx) => ctx.navigate('/manifesto'),
     },
     {
-      id: 'nav:changelog',
-      label: 'Open Changelog',
-      hint: 'Recent releases',
+      id: 'nav:blog',
+      label: 'Open Blog',
+      hint: 'Stories and releases',
       group: 'navigate',
-      run: (ctx) => ctx.navigate('/changelog'),
+      run: (ctx) => ctx.navigate('/blog'),
     },
     {
       id: 'action:show-onboarding',

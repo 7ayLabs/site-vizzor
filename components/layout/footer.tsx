@@ -1,9 +1,10 @@
 /**
  * Footer — five-column structural footer with a subtle accent hairline.
  *
- * Columns: brand · surfaces · project (with changelog moved here from the
- * header) · community (Telegram/Discord/GitHub/X/Mastodon as external links
- * with icons) · resources. Stacks to a 2-col grid on mobile.
+ * Columns: brand · surfaces · project (with the blog listed here alongside
+ * the manifesto / pricing / privacy / license links) · community
+ * (Telegram/Discord/GitHub/X/Mastodon as external links with icons) ·
+ * resources. Stacks to a 2-col grid on mobile.
  *
  * The license badge and copyright sit on a thin bottom row; the previous
  * separate social row is gone (its links live in the Community column now).
@@ -53,7 +54,7 @@ const SURFACES: readonly FooterItem[] = [
 const PROJECT: readonly FooterItem[] = [
   { href: '/manifesto', key: 'manifesto' },
   { href: '/pricing', key: 'pricing' },
-  { href: '/changelog', key: 'changelog' },
+  { href: '/blog', key: 'blog' },
   { href: '/legal/privacy', key: 'privacy' },
   {
     href: 'https://github.com/7ayLabs/vizzor/blob/main/LICENSE.md',
@@ -94,7 +95,7 @@ const SURFACE_ICONS: Record<string, LucideIcon> = {
 const PROJECT_ICONS: Record<string, LucideIcon> = {
   manifesto: FileText,
   pricing: Receipt,
-  changelog: History,
+  blog: History,
   privacy: Lock,
   license: Scale,
 };
@@ -165,7 +166,7 @@ export async function Footer() {
             labels={{
               manifesto: t('columns.project.manifesto'),
               pricing: t('columns.project.pricing'),
-              changelog: t('columns.project.changelog'),
+              blog: t('columns.project.blog'),
               privacy: t('columns.project.privacy'),
               license: t('columns.project.license'),
             }}

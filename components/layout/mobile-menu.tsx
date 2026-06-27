@@ -14,7 +14,7 @@
  *   2. Primary CTA pill: [Open App ↗] — paper-white solid, matching
  *      the desktop navbar's primary CTA
  *   3. Marketing nav rows: rounded-2xl pill rows for Manifesto,
- *      Pricing, Changelog, Docs
+ *      Pricing, Blog, Docs
  *   4. Footer:
  *      - Telegram outline pill (secondary CTA — Telegram is the #2
  *        product, kept reachable from mobile since the navbar pill
@@ -39,14 +39,14 @@ import { ThemeToggle } from './theme-toggle';
 import { getAppLinkTarget } from '@/lib/app-url';
 
 type LinkHref = ComponentProps<typeof Link>['href'];
-type NavKey = 'manifesto' | 'pricing' | 'changelog' | 'docs';
+type NavKey = 'manifesto' | 'pricing' | 'blog' | 'docs';
 
 // Marketing nav for the drawer. Open App is promoted to its own
 // primary pill above this list, so it's no longer in the loop here.
 const NAV: readonly { href: LinkHref; key: NavKey; match: RegExp }[] = [
   { href: '/manifesto', key: 'manifesto', match: /^\/manifesto(\/|$)/ },
   { href: '/pricing', key: 'pricing', match: /^\/pricing(\/|$)/ },
-  { href: '/changelog', key: 'changelog', match: /^\/changelog(\/|$)/ },
+  { href: '/blog', key: 'blog', match: /^\/blog(\/|$)/ },
   { href: '/docs', key: 'docs', match: /^\/docs($|\/)/ },
 ];
 

@@ -4,7 +4,7 @@
       "openApp": "Open App",
       "manifesto": "Manifesto",
       "pricing": "Pricing",
-      "changelog": "Changelog",
+      "blog": "Blog",
       "docs": "Docs"
     },
     "openApp": "Open App",
@@ -417,7 +417,7 @@
         "title": "Project",
         "manifesto": "Manifesto",
         "pricing": "Pricing",
-        "changelog": "Changelog",
+        "blog": "Blog",
         "privacy": "Privacy",
         "license": "License · BUSL-1.1"
       },
@@ -1271,13 +1271,15 @@
     "ps": "P.S. If any of this resonates, the trial is seven days, the wallet is yours, and the only cost of finding out whether the engine is real is the time it takes to ask it one honest question.",
     "seeReceipts": "See the receipts →"
   },
-  "changelog": {
-    "changelogEyebrow": "release notes · semver",
-    "changelogTitle": "Vizzor changelog",
-    "changelogSub": "Versioned releases. Every change tracked.",
+  "blog": {
+    "blogEyebrow": "from the team · blog",
+    "blogTitle": "Vizzor blog",
+    "blogSub": "Stories, releases, and notes from the team behind Vizzor.",
     "subscribeRss": "Subscribe via RSS",
-    "readMore": "Read full notes",
-    "empty": "No releases yet.",
+    "readMore": "Read post",
+    "readingTime": "{minutes} min read",
+    "tagsLabel": "Tags",
+    "empty": "No posts yet.",
     "meta": {
       "released": "released",
       "version": "version",
