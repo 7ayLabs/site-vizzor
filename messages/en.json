@@ -646,25 +646,27 @@
     "learnMore": "See the math"
   },
   "howItWorks": {
-    "eyebrow": "how it works",
+    "eyebrow": "how easy is it to set up",
     "title": "Three steps. That's the whole product.",
     "lede": "You don't need to know what's inside. You need a call you can act on, in seconds, with a receipt at the end.",
     "footer": "See what runs under the hood",
+    "primaryCta": "Open App",
+    "secondaryCta": "See pricing",
     "steps": {
-      "fetch": {
-        "title": "Ask",
-        "description": "Type a coin. Pick a timeframe. That's it.",
-        "ariaLabel": "Step one: type a symbol and a timeframe to ask Vizzor for a call"
+      "connect": {
+        "eyebrow": "Sign in",
+        "title": "Connect your wallet",
+        "description": "One signature with the wallet you already have. No email. No password. No KYC."
       },
-      "fuse": {
-        "title": "Get a call",
-        "description": "A clear direction, a confidence number, and the reasons behind it. In seconds.",
-        "ariaLabel": "Step two: receive a directional call with a calibrated confidence number"
+      "predict": {
+        "eyebrow": "Predict",
+        "title": "Ask a prediction",
+        "description": "Type the question in plain language. Vizzor returns a direction with a calibrated confidence number."
       },
-      "emit": {
-        "title": "Track the result",
-        "description": "Every call is logged on a public scoreboard. You see the wins. You see the misses. No edits.",
-        "ariaLabel": "Step three: every call lands on a public scoreboard, wins and misses both"
+      "resolve": {
+        "eyebrow": "Resolve",
+        "title": "Get the receipt",
+        "description": "Every call resolves on a public scoreboard. Hit or miss, the receipt lands in your chat."
       }
     }
   },

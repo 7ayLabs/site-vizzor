@@ -636,25 +636,27 @@
     "learnMore": "Voir la math"
   },
   "howItWorks": {
-    "eyebrow": "comment ça marche",
+    "eyebrow": "à quel point c'est facile",
     "title": "Trois étapes. C'est tout le produit.",
     "lede": "Pas besoin de savoir ce qu'il y a sous le capot. Il vous faut un call actionnable, en quelques secondes, avec un reçu à la fin.",
     "footer": "Voir ce qui tourne en dessous",
+    "primaryCta": "Ouvrir l'app",
+    "secondaryCta": "Voir les prix",
     "steps": {
-      "fetch": {
-        "title": "Demandez",
-        "description": "Tapez une crypto. Choisissez un horizon. C'est tout.",
-        "ariaLabel": "Étape un : tapez un symbole et un horizon pour demander un call à Vizzor"
+      "connect": {
+        "eyebrow": "Connexion",
+        "title": "Connectez votre wallet",
+        "description": "Une signature avec la wallet que vous avez déjà. Pas d'email. Pas de mot de passe. Pas de KYC."
       },
-      "fuse": {
-        "title": "Recevez un call",
-        "description": "Une direction claire, un chiffre de confiance et les raisons derrière. En quelques secondes.",
-        "ariaLabel": "Étape deux : recevez un call directionnel avec une confiance calibrée"
+      "predict": {
+        "eyebrow": "Prédisez",
+        "title": "Demandez une prédiction",
+        "description": "Posez la question en langage naturel. Vizzor renvoie une direction avec une confiance calibrée."
       },
-      "emit": {
-        "title": "Suivez le résultat",
-        "description": "Chaque call est inscrit au tableau public. Vous voyez les wins. Vous voyez les misses. Aucune retouche.",
-        "ariaLabel": "Étape trois : chaque call atterrit sur un tableau public, wins et misses ensemble"
+      "resolve": {
+        "eyebrow": "Résolution",
+        "title": "Recevez le reçu",
+        "description": "Chaque call se résout au tableau public. Hit ou miss, le reçu atterrit dans votre chat."
       }
     }
   },

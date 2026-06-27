@@ -636,25 +636,27 @@
     "learnMore": "Ver la matemática"
   },
   "howItWorks": {
-    "eyebrow": "cómo funciona",
+    "eyebrow": "qué tan fácil es empezar",
     "title": "Tres pasos. Ese es todo el producto.",
     "lede": "No te hace falta saber qué hay dentro. Te hace falta una llamada accionable, en segundos, con un recibo al final.",
     "footer": "Ver qué corre por debajo",
+    "primaryCta": "Abrir app",
+    "secondaryCta": "Ver precios",
     "steps": {
-      "fetch": {
-        "title": "Pregunta",
-        "description": "Escribe una moneda. Elige un horizonte. Ya está.",
-        "ariaLabel": "Paso uno: escribe un símbolo y un horizonte para pedirle una llamada a Vizzor"
+      "connect": {
+        "eyebrow": "Inicia sesión",
+        "title": "Conecta tu wallet",
+        "description": "Una firma con la wallet que ya tienes. Sin email. Sin contraseña. Sin KYC."
       },
-      "fuse": {
-        "title": "Recibe la llamada",
-        "description": "Una dirección clara, un número de confianza y las razones detrás. En segundos.",
-        "ariaLabel": "Paso dos: recibe una llamada direccional con confianza calibrada"
+      "predict": {
+        "eyebrow": "Predice",
+        "title": "Pide una predicción",
+        "description": "Escribe la pregunta en lenguaje natural. Vizzor devuelve una dirección con un número de confianza calibrado."
       },
-      "emit": {
-        "title": "Sigue el resultado",
-        "description": "Cada llamada queda en el marcador público. Ves los aciertos. Ves los fallos. Sin ediciones.",
-        "ariaLabel": "Paso tres: cada llamada aterriza en un marcador público, aciertos y fallos a la vez"
+      "resolve": {
+        "eyebrow": "Resuelve",
+        "title": "Recibe el recibo",
+        "description": "Cada llamada se resuelve en un marcador público. Acierto o fallo, el recibo aterriza en tu chat."
       }
     }
   },
