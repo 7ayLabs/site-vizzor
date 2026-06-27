@@ -1,0 +1,9 @@
+# Legacy fallback for crawlers that only probe /security.txt.
+# Authoritative copy lives at /.well-known/security.txt per RFC 9116.
+
+Contact: https://github.com/7ayLabs/site-vizzor/security/advisories/new
+Contact: mailto:security@vizzor.ai
+Expires: 2027-06-27T00:00:00Z
+Preferred-Languages: en, es, fr
+Canonical: https://vizzor.ai/.well-known/security.txt
+Policy: https://vizzor.ai/legal/security

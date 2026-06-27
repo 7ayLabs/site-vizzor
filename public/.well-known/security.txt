@@ -1,0 +1,10 @@
+# If you find a security vulnerability in Vizzor, please report it via
+# the GitHub Security Advisories link below (preferred) or by email.
+# We acknowledge inside 72h and aim to triage inside 7 days.
+
+Contact: https://github.com/7ayLabs/site-vizzor/security/advisories/new
+Contact: mailto:security@vizzor.ai
+Expires: 2027-06-27T00:00:00Z
+Preferred-Languages: en, es, fr
+Canonical: https://vizzor.ai/.well-known/security.txt
+Policy: https://vizzor.ai/legal/security

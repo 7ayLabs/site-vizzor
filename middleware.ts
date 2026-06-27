@@ -248,6 +248,36 @@ function buildCsp(): string {
 }
 
 /**
+ * Public-asset path that crawlers from wallet vendors fetch
+ * cross-origin (TonConnect manifest crawled by Tonkeeper / TON Space;
+ * RFC 9116 security.txt occasionally checked by reputation services).
+ * These need permissive CORS + relaxed CORP so the fetch succeeds.
+ */
+const CROSS_ORIGIN_PUBLIC_PATHS = new Set<string>([
+  '/tonconnect-manifest.json',
+  '/.well-known/security.txt',
+  '/security.txt',
+]);
+
+/**
+ * Relax CORS + CORP on the cross-origin public paths so wallet
+ * vendors (TonConnect crawler, Phantom domain classifier) and the
+ * security-disclosure crawlers can fetch them without the same-site
+ * CORP block. We don't widen anything else — the allowlist is
+ * explicit and tiny.
+ */
+function applyPublicAssetCors(res: NextResponse): NextResponse {
+  res.headers.set('Access-Control-Allow-Origin', '*');
+  res.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  // Override the same-site CORP set by applySecurityHeaders so the
+  // cross-origin fetch isn't blocked at the browser. The manifest +
+  // security.txt are intentionally public; no risk in relaxing CORP
+  // for these specific paths.
+  res.headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  return res;
+}
+
+/**
  * Attach security headers to an arbitrary response in place. Used for
  * both the locale-rewritten response and the static-pass response.
  */
@@ -316,7 +346,11 @@ export default function middleware(req: NextRequest): NextResponse {
     );
 
   if (skipLocale) {
-    return applySecurityHeaders(NextResponse.next());
+    const res = applySecurityHeaders(NextResponse.next());
+    if (CROSS_ORIGIN_PUBLIC_PATHS.has(pathname)) {
+      applyPublicAssetCors(res);
+    }
+    return res;
   }
 
   // Geo-based first-visit redirect runs BEFORE next-intl negotiation.
