@@ -643,7 +643,25 @@
       "targets": "Smart-money flow on the same call — see what whales just moved",
       "snapshot": "Alerts arm themselves at the level the engine flagged — zero setup"
     },
-    "learnMore": "See the math"
+    "learnMore": "See the math",
+    "surfacesEyebrow": "where you use it",
+    "surfaces": {
+      "telegram": {
+        "title": "Telegram",
+        "description": "Ask a prediction in the chat you already check. Alerts ping you when the level hits.",
+        "cta": "Open in Telegram"
+      },
+      "cli": {
+        "title": "CLI",
+        "description": "Pipe predictions into your own scripts, notebooks, and trading bots.",
+        "cta": "Read the CLI docs"
+      },
+      "web": {
+        "title": "Web",
+        "description": "The full dashboard — receipts, charts, watchlist, billing — all on one screen.",
+        "cta": "Open the web app"
+      }
+    }
   },
   "howItWorks": {
     "eyebrow": "how easy is it to set up",

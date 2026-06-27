@@ -633,7 +633,25 @@
       "targets": "Smart-money flow sur le même call — voyez ce que les whales viennent de bouger",
       "snapshot": "Les alertes s'arment toutes seules au niveau marqué par le moteur — zéro setup"
     },
-    "learnMore": "Voir la math"
+    "learnMore": "Voir la math",
+    "surfacesEyebrow": "où vous l'utilisez",
+    "surfaces": {
+      "telegram": {
+        "title": "Telegram",
+        "description": "Demandez une prédiction dans le chat que vous regardez déjà. Les alertes vous pingent quand le niveau tombe.",
+        "cta": "Ouvrir dans Telegram"
+      },
+      "cli": {
+        "title": "CLI",
+        "description": "Pipez les prédictions dans vos scripts, notebooks et bots de trading.",
+        "cta": "Lire les docs du CLI"
+      },
+      "web": {
+        "title": "Web",
+        "description": "Le dashboard complet — reçus, charts, watchlist et facturation — tout sur un seul écran.",
+        "cta": "Ouvrir la web app"
+      }
+    }
   },
   "howItWorks": {
     "eyebrow": "à quel point c'est facile",
