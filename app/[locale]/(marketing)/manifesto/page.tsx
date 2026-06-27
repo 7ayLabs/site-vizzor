@@ -95,13 +95,21 @@ export default async function ManifestoPage({
           })}
         </div>
 
-        {/* Signature */}
+        {/* Signature + optional P.S. — the P.S. is a single-sentence
+            invitation rendered in body type (not mono) so it reads like
+            a continuation of the letter, not chrome. Guarded by `t.has`
+            so older locale bundles without the key fail soft. */}
         <MotionReveal delay={120}>
           <div className="mx-auto mt-20 max-w-[58ch]">
             <hr className="border-[var(--border)]" />
             <p className="mono mt-6 text-[12px] text-[var(--fg-3)]">
               {t('signature')}
             </p>
+            {t.has('ps') && (
+              <p className="mt-6 text-[15px] italic leading-[1.7] text-[var(--fg-2)]">
+                {t('ps')}
+              </p>
+            )}
             <div className="mt-10">
               <Link
                 href="/docs/chronovisor"
