@@ -1,0 +1,9 @@
+# https://www.robotstxt.org/
+# Allow everything. Vizzor is a public dApp — discoverability is wanted.
+
+User-agent: *
+Allow: /
+
+# Authoritative security disclosure path per RFC 9116.
+# Listed here so crawlers that look for it find the right URL.
+# Sitemap: (none — Vizzor is a small app, paths are linked from /).
