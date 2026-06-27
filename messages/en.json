@@ -418,16 +418,14 @@
         "manifesto": "Manifesto",
         "pricing": "Pricing",
         "blog": "Blog",
-        "privacy": "Privacy",
-        "license": "License · BUSL-1.1"
+        "privacy": "Privacy"
       },
       "community": {
         "title": "Community",
         "telegramChannel": "Telegram channel",
         "discord": "Discord server",
-        "github": "GitHub Discussions",
-        "x": "X",
-        "mastodon": "Mastodon"
+        "whatsapp": "WhatsApp community",
+        "x": "X"
       },
       "resources": {
         "title": "Resources",
@@ -436,7 +434,6 @@
         "docsIndex": "All docs"
       }
     },
-    "license": "BUSL-1.1",
     "copyright": "© {year} Vizzor — Built by",
     "builder": "7ayLabs ↗",
     "social": {

@@ -19,16 +19,13 @@ import { getTranslations } from 'next-intl/server';
 import Image from 'next/image';
 import {
   Activity,
-  AtSign,
   BookOpen,
   Code2,
   FileText,
-  Github,
   History,
   Lock,
   MessagesSquare,
   Receipt,
-  Scale,
   Send,
   Terminal,
   Twitter,
@@ -56,23 +53,13 @@ const PROJECT: readonly FooterItem[] = [
   { href: '/pricing', key: 'pricing' },
   { href: '/blog', key: 'blog' },
   { href: '/legal/privacy', key: 'privacy' },
-  {
-    href: 'https://github.com/7ayLabs/vizzor/blob/main/LICENSE.md',
-    key: 'license',
-    external: true,
-  },
 ];
 
 const COMMUNITY: readonly FooterItem[] = [
   { href: 'https://t.me/vizzorlabs', key: 'telegramChannel', external: true },
-  { href: 'https://discord.gg/vizzor', key: 'discord', external: true },
-  {
-    href: 'https://github.com/7ayLabs/vizzor/discussions',
-    key: 'github',
-    external: true,
-  },
+  { href: 'https://discord.gg/sz7AR2Vab', key: 'discord', external: true },
+  { href: 'https://chat.whatsapp.com/FdMSZq9M02N7Nw1NcaftIV?mode=gi_t', key: 'whatsapp', external: true },
   { href: 'https://x.com/vizzorlabs', key: 'x', external: true },
-  { href: 'https://hachyderm.io/@vizzorlabs', key: 'mastodon', external: true },
 ];
 
 const RESOURCES: readonly FooterItem[] = [
@@ -81,8 +68,29 @@ const RESOURCES: readonly FooterItem[] = [
   { href: '/docs', key: 'docsIndex' },
 ];
 
-// Lucide doesn't export a dedicated Mastodon glyph; AtSign is the canonical
-// fallback used across the design system for fediverse identifiers.
+// Lucide doesn't expose a brand-correct WhatsApp glyph. For brand
+// recognition we ship an inline SVG of the official speech-bubble +
+// handset mark; everything else stays on lucide for visual coherence.
+function WhatsAppIcon({
+  size = 14,
+  strokeWidth: _strokeWidth = 1.75,
+}: {
+  size?: number;
+  strokeWidth?: number;
+}): React.ReactElement {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden
+    >
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.768.966-.94 1.164-.174.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51l-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479s1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.71.306 1.263.489 1.695.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM12.05 21.785h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.511-5.26c.002-5.45 4.436-9.884 9.888-9.884a9.825 9.825 0 016.992 2.897 9.825 9.825 0 012.894 6.994c-.003 5.45-4.437 9.885-9.889 9.885zm8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.336 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+    </svg>
+  );
+}
+
 type LucideIcon = React.ComponentType<{ size?: number; strokeWidth?: number }>;
 
 const SURFACE_ICONS: Record<string, LucideIcon> = {
@@ -97,15 +105,13 @@ const PROJECT_ICONS: Record<string, LucideIcon> = {
   pricing: Receipt,
   blog: History,
   privacy: Lock,
-  license: Scale,
 };
 
 const COMMUNITY_ICONS: Record<string, LucideIcon> = {
   telegramChannel: Send,
   discord: MessagesSquare,
-  github: Github,
+  whatsapp: WhatsAppIcon,
   x: Twitter,
-  mastodon: AtSign,
 };
 
 const RESOURCE_ICONS: Record<string, LucideIcon> = {
@@ -168,7 +174,6 @@ export async function Footer() {
               pricing: t('columns.project.pricing'),
               blog: t('columns.project.blog'),
               privacy: t('columns.project.privacy'),
-              license: t('columns.project.license'),
             }}
             icons={PROJECT_ICONS}
           />
@@ -178,9 +183,8 @@ export async function Footer() {
             labels={{
               telegramChannel: t('columns.community.telegramChannel'),
               discord: t('columns.community.discord'),
-              github: t('columns.community.github'),
+              whatsapp: t('columns.community.whatsapp'),
               x: t('columns.community.x'),
-              mastodon: t('columns.community.mastodon'),
             }}
             icons={COMMUNITY_ICONS}
           />
@@ -198,9 +202,6 @@ export async function Footer() {
 
         <div className="mt-14 flex flex-col gap-4 border-t border-[var(--border)] pt-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3 text-[12px] text-[var(--fg-3)]">
-            <span className="rounded border border-[var(--border)] px-2 py-0.5 mono tabular text-[10px]">
-              {t('license')}
-            </span>
             <span>
               {t('copyright', { year: new Date().getFullYear() })}{' '}
               <a
