@@ -1184,7 +1184,7 @@
       "paymentMisconfigured": "Payment service is being configured. Try again shortly, or use the Telegram bot to subscribe in the meantime.",
       "internalError": "Payment service hit an unexpected error. Retry, or use the Telegram bot to subscribe if the issue persists.",
       "walletNotConnected": "Connect a wallet to continue.",
-      "insufficientBalance": "Your wallet doesn't have enough SOL to cover this payment plus the network fee. On devnet you can airdrop 1 SOL from the panel above, or top up at faucet.solana.com.",
+      "insufficientBalance": "Your wallet doesn't have enough SOL to cover this payment plus the network fee. Buy SOL inside your wallet's Buy flow, send from an exchange (Coinbase, Binance, Kraken), or — on devnet — airdrop from the panel above.",
       "invalidDestination": "The destination treasury address is misconfigured for this network. Check VIZZOR_SOLANA_TREASURY for the active cluster.",
       "walletRejected": "You rejected the transaction in your wallet. Click Pay again when you're ready.",
       "wrongNetwork": "Your wallet is on the wrong network. Switch to Solana mainnet in your wallet extension and try again.",
