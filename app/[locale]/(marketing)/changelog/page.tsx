@@ -78,11 +78,12 @@ function EntryCard({
         <span className="mono tabular truncate font-semibold text-[var(--fg-2)]">
           Vizzor
         </span>
-        {isEditorial && (
-          <span className="mono tabular text-[var(--fg-3)]">
-            · <span className="text-[var(--fg-2)]">{entry.version}</span>
-          </span>
-        )}
+        {/* Version chip dropped for editorial posts per product
+            decision — release-notes entries (no `title`) still surface
+            the version as their headline below, so they read clean
+            without it here either. The slug remains the URL identity;
+            the version is now purely metadata for the canonical post
+            page, never decoration on the index card. */}
         {entry.codename && (
           <span className="hidden sm:inline mono tabular uppercase tracking-[0.12em] text-[10.5px] text-[var(--fg-3)]">
             · {entry.codename}
