@@ -23,7 +23,8 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { runGsapReveal, useReducedMotionSafe } from '@/lib/motion';
+import gsap from 'gsap';
+import { useReducedMotionSafe } from '@/lib/motion';
 import { CoinIcon } from '@/components/ui/coin-icon';
 import { cn } from '@/lib/utils';
 
@@ -44,6 +45,12 @@ export function HowItWorksClient({ steps }: HowItWorksClientProps) {
   const cardRefs = useRef<HTMLDivElement[]>([]);
   const reduced = useReducedMotionSafe();
 
+  // Scroll-triggered stagger reveal — single-shot IntersectionObserver,
+  // fires when the card grid first enters the viewport. The bespoke
+  // timeline (vs. the canonical `runGsapReveal`) layers a slight
+  // overshoot ease + scale settle so the three cards feel like they're
+  // dropping into a grid, not fading in flat. Reduced-motion users snap
+  // to the final state.
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
@@ -51,13 +58,47 @@ export function HowItWorksClient({ steps }: HowItWorksClientProps) {
       (el): el is HTMLDivElement => el !== null,
     );
     if (targets.length === 0) return;
-    return runGsapReveal({
-      root,
-      targets,
-      reduced,
-      stagger: 0.14,
-      duration: 0.6,
-    });
+
+    if (reduced) {
+      gsap.set(targets, { opacity: 1, y: 0, scale: 1 });
+      return;
+    }
+
+    gsap.set(targets, { opacity: 0, y: 24, scale: 0.985 });
+
+    let played = false;
+    let tween: gsap.core.Tween | null = null;
+    const play = (): void => {
+      if (played) return;
+      played = true;
+      tween = gsap.to(targets, {
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        duration: 0.72,
+        ease: 'back.out(1.25)',
+        stagger: 0.12,
+      });
+    };
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            play();
+            io.unobserve(entry.target);
+            break;
+          }
+        }
+      },
+      { threshold: 0.12, rootMargin: '0px 0px -6% 0px' },
+    );
+    io.observe(root);
+
+    return () => {
+      io.disconnect();
+      if (tween) tween.kill();
+    };
   }, [reduced]);
 
   const setCardRef = (idx: number) => (el: HTMLDivElement | null): void => {
@@ -82,11 +123,17 @@ export function HowItWorksClient({ steps }: HowItWorksClientProps) {
           className={cn(
             'group relative flex flex-col',
             'rounded-2xl bg-[var(--surface)] border border-[var(--border)]',
-            'shadow-[0_8px_32px_-16px_rgba(0,0,0,0.18)]',
-            'dark:shadow-[0_8px_32px_-10px_rgba(0,0,0,0.55)]',
+            // Stacked shadows: a hairline inset highlight at the top
+            // (reads like light catching the upper edge of a card lifted
+            // off the page) + the existing drop shadow underneath. The
+            // inset uses color-mix against --fg so it stays correct
+            // across light and dark modes without per-theme overrides.
+            'shadow-[inset_0_1px_0_0_color-mix(in_oklab,var(--fg)_4%,transparent),0_8px_32px_-16px_rgba(0,0,0,0.18)]',
+            'dark:shadow-[inset_0_1px_0_0_color-mix(in_oklab,var(--fg)_6%,transparent),0_8px_32px_-10px_rgba(0,0,0,0.55)]',
             'transition-[transform,box-shadow,border-color] duration-300 ease-out',
             'hover:border-[var(--border-hi)]',
-            'hover:shadow-[0_16px_40px_-16px_rgba(0,0,0,0.25)]',
+            'hover:shadow-[inset_0_1px_0_0_color-mix(in_oklab,var(--fg)_6%,transparent),0_16px_40px_-16px_rgba(0,0,0,0.28)]',
+            'dark:hover:shadow-[inset_0_1px_0_0_color-mix(in_oklab,var(--fg)_8%,transparent),0_16px_40px_-12px_rgba(0,0,0,0.65)]',
             'motion-safe:hover:[transform:translateY(-2px)]',
             'overflow-hidden',
           )}
