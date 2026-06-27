@@ -2,7 +2,7 @@
 
 /**
  * HeroDataCards — three floating "terminal display" cards that anchor
- * the right side of the redesigned hero.
+ * the right side of the hero.
  *
  * Composition note: the visual reference (a generic SaaS fintech hero
  * with glassmorphic blue/purple cards) is reinterpreted through
@@ -11,31 +11,32 @@
  * overlap, dense above-the-fold data, slight off-axis tilt) is
  * preserved; the *chrome language* is Bloomberg-terminal, not glass.
  *
- * Each card fetches live data via the same SWR hooks the rest of the
- * site uses (`useTrackerWR`, `useTicker`, `useRecentPredictions`) so
- * the hero is genuine product evidence, not decorative imagery. When
- * the API is unreachable the hooks fall back to the build-time snapshot
- * — visitors never see broken numbers.
+ * Card slots (top → bottom):
+ *   1. Last Prediction — most recent confirmed call (HIT / MISS / NEU
+ *      chip + direction + confidence + relative timestamp). Replaces the
+ *      old TrackerWR ring — same anchor position, same corner-bracket
+ *      treatment, but tells a per-call story instead of an aggregate
+ *      number.
+ *   2. Live Ticker     — top-4 spot prices with up/down delta chevrons.
+ *   3. Receipts        — last N calls with outcome badges.
  *
- * Animation scope (per your direction): the cards themselves stay
- * STATIC except for the slow Y-axis drift loop and the GSAP stagger-in
- * on first paint. The animation budget goes to the values inside —
- * numbers tween via `AnimatedNumber`, up/down chevrons flash on Δ
- * change (louder on direction reversal), receipt badges fade-swap on
- * outcome resolution. No card-level carousel, no channel sweep, no
- * glitch eyebrow, no pip progress.
+ * Each card binds to a live SWR hook with snapshot fallback, so the
+ * hero is genuine product evidence and visitors never see "no data."
  *
- * All animations are gated by `motion-safe:` or by `AnimatedNumber`'s
- * own reduced-motion check, so the entire animation layer collapses
- * under `prefers-reduced-motion: reduce`.
+ * Animation contract: stagger-reveal on first paint via `runGsapReveal`,
+ * slow Y-axis drift loop per card, value-level micro-animations
+ * (`AnimatedNumber`, DeltaChevron flash, ReceiptBadge fade-swap). All
+ * gated by `motion-safe:` or by the primitive's own reduced-motion
+ * check, so the entire animation layer collapses under
+ * `prefers-reduced-motion: reduce`.
  */
 
 import { useEffect, useMemo, useRef } from 'react';
-import { useTicker, useTrackerWR, useRecentPredictions } from '@/lib/api';
+import { useTicker, useRecentPredictions } from '@/lib/api';
 import { useReducedMotionSafe, runGsapReveal } from '@/lib/motion';
-import { WRRing } from '@/components/ui/wr-ring';
 import { CoinIcon } from '@/components/ui/coin-icon';
 import { AnimatedNumber } from '@/components/ui/animated-number';
+import { LastPredictionCard } from './last-prediction-card';
 import type { Prediction, TickerEntry } from '@/lib/types';
 
 const TICKER_TOP_N = 4;
@@ -44,7 +45,6 @@ const RECEIPTS_LIMIT = 4;
 export function HeroDataCards() {
   const reduced = useReducedMotionSafe();
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const trackerWR = useTrackerWR(60_000);
   const ticker = useTicker(30_000);
   const recents = useRecentPredictions({ limit: RECEIPTS_LIMIT });
 
@@ -92,26 +92,25 @@ export function HeroDataCards() {
         }}
       />
 
-      {/* Card 1 — TRACKER WR. Top-right anchor, slight ccw tilt. */}
-      <TerminalCard
-        dataAttr="card-wr"
+      {/* Card 1 — LAST PREDICTION. Top-right anchor, slight ccw tilt.
+          Replaces the previous TrackerWR ring slot. */}
+      <div
+        data-hero-card="card-last-prediction"
         className="
-          absolute top-0 right-0 w-[280px] sm:w-[300px]
+          absolute top-0 right-0 w-[300px] sm:w-[330px]
           lg:[transform:rotate(-1.2deg)]
           motion-safe:lg:[animation:hero-card-drift-a_6.5s_ease-in-out_infinite]
+          will-change-transform
         "
       >
-        <TrackerWRBody
-          wr={trackerWR.data.aggregate.wr}
-          samples={trackerWR.data.aggregate.samples}
-        />
-      </TerminalCard>
+        <LastPredictionCard variant="compact" />
+      </div>
 
       {/* Card 2 — LIVE TICKER. Center-left, foreground stack. */}
       <TerminalCard
         dataAttr="card-ticker"
         className="
-          absolute top-[30%] left-0 w-[300px] sm:w-[320px]
+          absolute top-[32%] left-0 w-[300px] sm:w-[320px]
           lg:[transform:rotate(0.8deg)]
           motion-safe:lg:[animation:hero-card-drift-b_7.2s_ease-in-out_infinite_0.3s]
           z-10
@@ -175,37 +174,6 @@ function TerminalCard({
 }
 
 /* ─────────────────────────── card bodies ─────────────────────────── */
-
-function TrackerWRBody({ wr, samples }: { wr: number; samples: number }) {
-  return (
-    <div className="flex items-center gap-4">
-      <WRRing percent={wr} samples={samples} size={108} variant="classic" />
-      <div className="flex flex-col gap-1.5 min-w-0">
-        <p className="text-[13px] font-semibold text-[var(--fg)] leading-tight">
-          Calibrated win rate
-        </p>
-        <p className="mono tabular text-[10.5px] text-[var(--fg-3)] leading-relaxed">
-          Public ledger.
-          <br />
-          Hit / miss audited.
-        </p>
-        {/* Samples tally — ticks up to its real value on first paint
-            (and on the very rare case the count updates between SWR
-            refreshes). The WR % display lives inside the ring itself
-            (managed by WRRing's own dashoffset keyframe). */}
-        <p className="mono tabular text-[10.5px] text-[var(--fg-2)] mt-1">
-          <AnimatedNumber
-            value={samples}
-            format="int"
-            duration={1100}
-            className="mono tabular text-[var(--fg)] font-semibold"
-          />
-          <span className="ml-1 text-[var(--fg-3)]">tracked</span>
-        </p>
-      </div>
-    </div>
-  );
-}
 
 function TickerBody({
   entries,
