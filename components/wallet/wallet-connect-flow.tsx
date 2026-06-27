@@ -527,16 +527,34 @@ export function WalletConnectFlow({
             }
 
             if (!signMessage) throw signInErr;
-            // Only fall back on non-production chains. The
-            // signMessage workaround exists for Phantom's localhost
-            // + Devnet multi-chain Testnet Mode rejection; running it
-            // on mainnet just produces a second extension popup with
-            // no benefit. Surface stale_session directly so the user
-            // sees the actionable hint instead.
-            const allowFallback =
-              nonceData.chainId === 'solana:devnet' ||
-              nonceData.chainId === 'solana:testnet';
-            if (!allowFallback) throw signInErr;
+            // Fall back on EVERY chain, including mainnet.
+            //
+            // Original policy (kept here for context): the cascade only
+            // fired on devnet/testnet because Phantom's mainnet `signIn`
+            // worked reliably and the second extension popup the
+            // fallback produces is real UX friction. The mainnet gate
+            // surfaced the stale-session error so users got an
+            // actionable hint instead.
+            //
+            // Phantom 26.x changed that. The 26.x Wallet Standard
+            // `signIn` implementation enforces strict SIWS validation
+            // internally and returns the generic "Unexpected error"
+            // wrapper with NO inner cause chain when validation fails
+            // — exactly what `walkErrorChain` captures as
+            // `[{message: "Unexpected error"}, {message: "Unexpected
+            // error"}]`. Same dapp, same site: Solflare 25.x/26.x
+            // signs cleanly because Solflare's `signIn` is permissive
+            // (sign-and-return, no internal SIWS gate). The user has
+            // no recovery path beyond installing a different wallet.
+            //
+            // The fallback `signMessage` bypasses Phantom's Wallet-
+            // Standard SIWS validator entirely — it just signs the
+            // canonical message bytes the dapp passes. The cost is a
+            // second extension popup ("Sign Message" after the failed
+            // "Sign In With Solana"); the benefit is desktop mainnet
+            // sign-in works at all on Phantom 26.x. Re-tighten this
+            // gate when Phantom's `signIn` recovers an actionable
+            // failure mode.
             if (typeof console !== 'undefined') {
               console.warn(
                 '[vizzor] signIn returned generic error, falling back to signMessage',
