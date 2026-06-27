@@ -832,35 +832,11 @@
       }
     }
   },
-  "availableOn": {
-    "eyebrow": "donde sea que trabajes",
-    "title": "Disponible en",
-    "lede": "Mismo motor en cada superficie. Inicia sesión una vez y los recibos te siguen.",
-    "web": {
-      "eyebrow": "Web",
-      "title": "vizzor.ai",
-      "description": "El dashboard completo — recibos, charts, watchlist y facturación.",
-      "cta": "Abrir app"
-    },
-    "telegram": {
-      "eyebrow": "Telegram",
-      "title": "@vizzorai_bot",
-      "description": "Pide una predicción en el chat que ya miras. Las alertas te avisan cuando el nivel toca.",
-      "cta": "Abrir en Telegram"
-    },
-    "cli": {
-      "eyebrow": "CLI",
-      "title": "Línea de comandos",
-      "description": "Mete predicciones en tus scripts, notebooks o bots de trading.",
-      "cta": "Leer las docs del CLI"
-    }
-  },
   "ctaBlock": {
     "eyebrow": "empieza con una llamada",
     "title": "Deja de adivinar. Empieza a trackear.",
-    "body": "Abre Vizzor en Telegram. Tier gratis. Sin tarjeta. Sin KYC. Corre una llamada, mírala resolverse, ve el recibo aterrizar en el ledger público.",
-    "ctaTelegram": "Abrir en Telegram",
-    "ctaCli": "Instalar el CLI",
+    "body": "Conecta tu wallet en vizzor.ai. Prueba Pro de 7 días. Sin tarjeta, sin KYC. Corre una predicción, mírala resolverse, ve el recibo aterrizar en el ledger público.",
+    "ctaWeb": "Abrir la web app",
     "manifesto": "Leer el manifiesto"
   },
   "languageSwitch": {

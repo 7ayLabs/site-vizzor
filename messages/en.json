@@ -842,35 +842,11 @@
       }
     }
   },
-  "availableOn": {
-    "eyebrow": "wherever you work",
-    "title": "Available on",
-    "lede": "Same engine across every surface. Sign in once, the receipts follow you.",
-    "web": {
-      "eyebrow": "Web",
-      "title": "vizzor.ai",
-      "description": "The full dashboard — receipts, charts, watchlist, billing.",
-      "cta": "Open app"
-    },
-    "telegram": {
-      "eyebrow": "Telegram",
-      "title": "@vizzorai_bot",
-      "description": "Ask a prediction in the chat you already check. Alerts ping you when the level hits.",
-      "cta": "Open in Telegram"
-    },
-    "cli": {
-      "eyebrow": "CLI",
-      "title": "Command line",
-      "description": "Pipe predictions into your own scripts, notebooks, or trading bots.",
-      "cta": "Read the CLI docs"
-    }
-  },
   "ctaBlock": {
     "eyebrow": "start with one call",
     "title": "Stop guessing. Start tracking.",
-    "body": "Open Vizzor in Telegram. Free tier. No card. No KYC. Run a call, watch it resolve, see the receipt land in the public ledger.",
-    "ctaTelegram": "Open in Telegram",
-    "ctaCli": "Install the CLI",
+    "body": "Connect your wallet on vizzor.ai. 7-day Pro trial. No card, no KYC. Run a prediction, watch it resolve, see the receipt land on the public ledger.",
+    "ctaWeb": "Open the web app",
     "manifesto": "Read the manifesto"
   },
   "languageSwitch": {
