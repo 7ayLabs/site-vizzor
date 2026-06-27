@@ -1003,9 +1003,6 @@ function WalletGate() {
         <h2 className="text-[28px] sm:text-[36px] font-semibold tracking-[-0.022em] leading-[1.05] text-[var(--fg)] text-balance">
           {t('title')}
         </h2>
-        <p className="text-[13.5px] leading-relaxed text-[var(--fg-2)] max-w-[48ch] mx-auto text-balance">
-          {t('body')}
-        </p>
       </div>
 
       <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 w-full max-w-[420px] mx-auto justify-items-start vz-rise" style={{ animationDelay: '120ms' }}>
@@ -1019,28 +1016,28 @@ function WalletGate() {
 }
 
 function WalletGateMini({ onSignedIn }: { onSignedIn: () => void }) {
-  const t = useTranslations('predict.gate');
   useEffect(() => {
     const id = window.setInterval(onSignedIn, 6_000);
     return () => window.clearInterval(id);
   }, [onSignedIn]);
 
+  // Trimmed surface — the previous layout coupled a wallet icon, a
+  // hint paragraph ("Connect your wallet to enable the composer"),
+  // and the connect button into one row. Removing the hint + icon
+  // promotes the button to a single centered call-to-action so the
+  // composer footer reads as one action, not three glance points.
+  // The wallet provider context note that originally lived above the
+  // button is preserved below for the next reader.
   return (
-    <div className="flex items-center gap-3 vz-rise">
-      <Wallet size={14} strokeWidth={1.5} className="text-[var(--fg-3)] shrink-0" aria-hidden />
-      <p className="flex-1 text-[13px] font-medium tracking-tight text-[var(--fg-2)] min-w-0">
-        {t('composerHint')}
-      </p>
-      <div className="shrink-0">
-        {/* Open the same selector modal the navbar uses, but signal
-            that an outer wallet provider is already mounted (we're
-            inside `<SolanaWalletAdapter>` on /predict). The modal
-            then SKIPS its own LazyWalletAdapter mount and runs the
-            connect flow inside the existing provider context — Phantom
-            actually pops the extension instead of hanging on
-            "Open Phantom to approve". */}
-        <WalletAuthButton hasProvider={true} useModal={true} />
-      </div>
+    <div className="flex items-center justify-center vz-rise">
+      {/* Open the same selector modal the navbar uses, but signal
+          that an outer wallet provider is already mounted (we're
+          inside `<SolanaWalletAdapter>` on /predict). The modal
+          then SKIPS its own LazyWalletAdapter mount and runs the
+          connect flow inside the existing provider context — Phantom
+          actually pops the extension instead of hanging on
+          "Open Phantom to approve". */}
+      <WalletAuthButton hasProvider={true} useModal={true} />
     </div>
   );
 }
