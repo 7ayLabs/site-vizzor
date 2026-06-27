@@ -40,31 +40,95 @@ function EntryCard({
   locale: string;
   readMoreLabel: string;
 }) {
+  const headline = entry.title ?? entry.version;
+  const isEditorial = !!entry.title;
+
   return (
     <Link
       href={`/changelog/${entry.slug}` as LinkHref}
-      className="group flex flex-col gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 transition-colors duration-150 hover:border-[var(--accent)]"
+      className="
+        group flex flex-col gap-3 rounded-2xl
+        border border-[var(--border)] bg-[var(--surface)]
+        p-6 sm:p-7
+        transition-[border-color,transform,box-shadow] duration-200 ease-out
+        hover:border-[var(--fg-3)] hover:-translate-y-0.5
+        hover:shadow-[0_8px_24px_-12px_color-mix(in_oklab,var(--fg)_18%,transparent)]
+        focus-visible:outline-none focus-visible:ring-2
+        focus-visible:ring-[var(--fg)] focus-visible:ring-offset-2
+        focus-visible:ring-offset-[var(--bg)]
+      "
     >
-      <header className="flex flex-wrap items-baseline gap-3">
-        <span className="mono tabular text-lg font-bold text-[var(--fg)]">
-          {entry.version}
+      {/* Top metadata strip — avatar dot + version + codename + date.
+          For editorial posts (a `title` field set), the version becomes
+          quiet metadata and the title takes the headline slot below.
+          For canonical release-notes entries (no title), the headline
+          IS the version and this strip just shows codename + date. */}
+      <header className="flex items-center gap-2.5 text-[12px] text-[var(--fg-3)]">
+        <span
+          aria-hidden
+          className="
+            inline-flex h-7 w-7 shrink-0 items-center justify-center
+            rounded-full border border-[var(--border)]
+            bg-[var(--surface-2)]
+            text-[10px] font-bold tracking-tight text-[var(--fg-2)]
+          "
+        >
+          V
         </span>
-        {entry.codename && (
-          <span className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--accent)]">
-            {entry.codename}
+        <span className="mono tabular truncate font-semibold text-[var(--fg-2)]">
+          Vizzor
+        </span>
+        {isEditorial && (
+          <span className="mono tabular text-[var(--fg-3)]">
+            · <span className="text-[var(--fg-2)]">{entry.version}</span>
           </span>
         )}
-        <span className="mono tabular ml-auto text-[12px] text-[var(--fg-3)]">
+        {entry.codename && (
+          <span className="hidden sm:inline mono tabular uppercase tracking-[0.12em] text-[10.5px] text-[var(--fg-3)]">
+            · {entry.codename}
+          </span>
+        )}
+        <span aria-hidden className="mx-1 text-[var(--border)]">·</span>
+        <time className="mono tabular text-[var(--fg-3)]" dateTime={entry.date}>
           {formatDate(entry.date, locale)}
-        </span>
+        </time>
       </header>
 
-      <p className="text-[15px] leading-relaxed text-[var(--fg-2)]">
+      {/* Headline — title takes the slot when present, otherwise the
+          version steps up. Sized like a real post headline (not a
+          mono-version chip) so editorial posts read like blog posts. */}
+      <h2
+        className={
+          isEditorial
+            ? 'display text-[22px] sm:text-[26px] leading-[1.15] tracking-tight font-semibold text-[var(--fg)]'
+            : 'mono tabular text-[20px] sm:text-[22px] leading-none font-bold tracking-tight text-[var(--fg)]'
+        }
+      >
+        {headline}
+      </h2>
+
+      <p className="text-[14.5px] leading-relaxed text-[var(--fg-2)] max-w-[64ch]">
         {entry.summary}
       </p>
 
-      <span className="text-[13px] font-medium text-[var(--fg-3)] transition-colors duration-150 group-hover:text-[var(--accent)]">
-        {readMoreLabel} →
+      {/* Subtle CTA — single chevron + label, no chunky button. The
+          whole card is already the click target; this is just the
+          visible affordance. */}
+      <span
+        className="
+          mt-1 inline-flex items-center gap-1
+          text-[12.5px] font-medium text-[var(--fg-3)]
+          transition-colors duration-150
+          group-hover:text-[var(--fg)]
+        "
+      >
+        <span>{readMoreLabel}</span>
+        <span
+          aria-hidden
+          className="transition-transform duration-200 ease-out group-hover:translate-x-0.5"
+        >
+          →
+        </span>
       </span>
     </Link>
   );

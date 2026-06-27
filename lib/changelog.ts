@@ -21,6 +21,13 @@ export interface ChangelogEntry {
   codename?: string;
   /** ISO 8601 release date. */
   date: string;
+  /**
+   * Optional editorial post title. When set, the changelog index renders
+   * this as the headline of the card and demotes the version + codename
+   * to faint metadata. When absent, the version stays the headline (the
+   * default for canonical release-notes entries).
+   */
+  title?: string;
   /** one-line summary, surfaced in the index and RSS description. */
   summary: string;
   /** raw MDX body — render via next-mdx-remote/rsc. */
@@ -41,6 +48,7 @@ async function readEntry(file: string): Promise<ChangelogEntry> {
     version: String(data['version'] ?? ''),
     codename: data['codename'] ? String(data['codename']) : undefined,
     date: String(data['date'] ?? ''),
+    title: data['title'] ? String(data['title']) : undefined,
     summary: String(data['summary'] ?? ''),
     content,
   };
