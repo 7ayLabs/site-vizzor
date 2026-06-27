@@ -194,9 +194,28 @@ function buildCsp(): string {
     // embedding Vizzor — is still blocked.
     'frame-ancestors': ["'self'"],
     'form-action': ["'self'"],
-    'script-src': ["'self'", "'unsafe-inline'"],
-    'style-src': ["'self'", "'unsafe-inline'"],
-    'font-src': ["'self'", 'data:'],
+    // Cloudflare auto-injects its Web Analytics beacon
+    // (`static.cloudflareinsights.com/beacon.min.js`) on every HTML
+    // response from a proxied domain. Without the allowlist, the CSP
+    // blocks the script and produces noisy violations in the console.
+    'script-src': [
+      "'self'",
+      "'unsafe-inline'",
+      'https://static.cloudflareinsights.com',
+    ],
+    // `@solana/wallet-adapter-react-ui/styles.css` (bundled with the
+    // wallet adapter we import in `components/wallet/wallet-provider.tsx`)
+    // contains `@import url("https://fonts.googleapis.com/...")` for
+    // DM Sans. Allowing the Google Fonts CSS origin is the lower-risk
+    // option vs forking the upstream package.
+    'style-src': [
+      "'self'",
+      "'unsafe-inline'",
+      'https://fonts.googleapis.com',
+    ],
+    // `https://fonts.gstatic.com` serves the `.woff2` files referenced
+    // by the Google Fonts CSS above.
+    'font-src': ["'self'", 'data:', 'https://fonts.gstatic.com'],
     'img-src': [
       "'self'",
       'data:',
@@ -214,6 +233,9 @@ function buildCsp(): string {
       'https://solana-rpc.publicnode.com',
       'https://*.helius-rpc.com',
       'https://api.coingecko.com',
+      // Cloudflare Insights beacon reporting endpoint — paired with the
+      // `script-src` allow-listing of `static.cloudflareinsights.com`.
+      'https://cloudflareinsights.com',
     ],
     'worker-src': ["'self'", 'blob:'],
     'manifest-src': ["'self'"],
