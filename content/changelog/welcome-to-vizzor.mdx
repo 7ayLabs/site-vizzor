@@ -1,0 +1,53 @@
+---
+version: v0.4.0
+codename: Launch
+date: 2026-06-26
+summary: Welcome to Vizzor — what it is, how to install, how to make your first prediction.
+---
+
+## 👋 What is Vizzor?
+
+Vizzor is an AI-powered crypto intelligence engine. Six independent signal families — on-chain whale flow, an ML ensemble, prediction markets, social and narrative flow, SMC and ICT pattern detection, and a 21-rule logic layer — get fused into a single calibrated confidence score. When the engine emits a prediction, that number is doing work: 63% means roughly 63% of past 63%-confidence calls landed in band.
+
+Every prediction is logged with its full trigger snapshot. Which signals voted. Which direction. Why the gates let it through. When the horizon expires, the resolved outcome gets grafted onto the same row. Nothing gets deleted, nothing gets backdated.
+
+The win-rate scoreboard on the homepage is computed from that archive. You can filter by horizon, tier, or chain and reproduce the number yourself.
+
+## 🚀 Install
+
+**Web.** Open [`vizzor.ai`](https://vizzor.ai), click "Open App," connect a wallet. A 7-day Pro trial starts on your first connect. No card, no KYC.
+
+**Telegram.** Message [`@vizzorai_bot`](https://t.me/vizzorai_bot) and send `/start`. Same wallet-scoped subscription, same 7-day trial.
+
+**CLI.** Install the binary globally:
+
+<TerminalBlock
+  code={`npm install -g @vizzor/cli
+vizzor login`}
+/>
+
+The CLI pairs to your wallet via a one-time code printed by `vizzor login` — visit the URL it prints, sign once, and every subsequent command authenticates from the local config.
+
+## 🎯 Your first prediction
+
+Connect a wallet on the web app or DM the Telegram bot. Ask the engine something concrete with a horizon — for example, *"Will BTC close above $72k by Friday?"* or *"ETH 4h direction?"*.
+
+The engine returns a prediction with a confidence chip, the contributing signal families, and the trigger snapshot. If conditions are too thin or manipulated, it abstains and tells you why instead of guessing.
+
+When the horizon expires, the outcome resolves and the row appears on the public ledger. Your personal win-rate breakdown shows up in `/precisions`.
+
+## 💸 Pricing
+
+**Free.** 7-day Pro trial on first connect, then the scanner stays free forever — sentiment, security checks, market context, discovery feed.
+
+**Pro.** $19 USD/mo. Full unlimited Predictor, every horizon, all six signal families, AI chat with tool-use, alerts, and the audit trail.
+
+**Elite.** $99 USD/mo. The full intelligence stack — Whale Terminal, Smart Money Flow, forensics suite, pre-news signals, cross-venue, REST API.
+
+Payments settle on-chain on SOL or TON. No card. The CLI, the Telegram bot, and the web app all share the same wallet-scoped subscription, so a Pro user gets Pro everywhere the moment payment lands.
+
+## 🛠 Support
+
+[Read the docs](/docs) for the long-form reference. The Telegram bot is the fastest path for product questions — it understands `/help`, `/wr`, and `/diagnose` and will tell you why any specific prediction fired or got refused. For the philosophy behind the engine, read the [manifesto](/manifesto).
+
+If you want to run the whole stack yourself, the engine is open-source and operator-runnable. `docker compose up` brings up a local copy, and your subscription is portable across hosted and self-hosted.
