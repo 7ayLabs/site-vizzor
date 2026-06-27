@@ -46,7 +46,7 @@ export async function WhatsInIt() {
   const t = await getTranslations('whatsInIt');
 
   return (
-    <section className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8 py-24 lg:py-32">
+    <section className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8 py-20 md:py-28 lg:py-32">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12">
         {/* Headline + bullets — copy band */}
         <div className="lg:col-span-7">
