@@ -1,0 +1,115 @@
+---
+version: v0.4.0
+codename: Launch
+date: 2026-06-26
+title: Welcome to Vizzor
+summary: What Vizzor is, how it works, how to install it on every surface, and how to make your first prediction. The long version — read it once and you are set up for everything that follows.
+author: Vizzor team
+tags:
+  - welcome
+  - onboarding
+---
+
+## 👋 What is Vizzor?
+
+Vizzor is an AI-powered crypto intelligence engine. Six independent signal families — on-chain whale flow, an ML ensemble, prediction markets, social and narrative flow, SMC and ICT pattern detection, and a 21-rule logic layer — get fused into a single calibrated confidence score. When the engine emits a prediction, that number is doing work: 63% means roughly 63% of past 63%-confidence calls landed in band.
+
+Every prediction is logged with its full trigger snapshot. Which signals voted. Which direction. Why the gates let it through. When the horizon expires, the resolved outcome gets grafted onto the same row. Nothing gets deleted, nothing gets backdated.
+
+The win-rate scoreboard on the homepage is computed from that archive. You can filter by horizon, tier, or chain and reproduce the number yourself.
+
+## 🧠 How the engine actually works
+
+Most "AI crypto" products are a language model wrapped around a price feed. Vizzor flips that — the language model only renders results. The real work happens in six independent signal families, each scoring a candidate prediction with its own logic:
+
+- **On-chain whale flow.** Net exchange in/out, large wallet accumulation, smart-money rotation.
+- **ML ensemble.** Gradient-boosted models trained on labeled historical setups with continuous re-fit.
+- **Prediction markets.** Polymarket and Kalshi cross-references on the same asset + horizon.
+- **Social + narrative flow.** Velocity of mentions, narrative concentration, sentiment slope.
+- **SMC / ICT pattern detection.** Liquidity sweeps, order blocks, fair-value gaps.
+- **21-rule logic layer.** Heuristics the engine has learned the hard way (manipulation guard, low-volume veto, weekend dampener, etc.).
+
+The families vote with raw certainty factors. The fusion step runs CF algebra with weak-signal dampening, then a Bayesian update with family-aware priors, then a Platt calibration against the resolved cohort. If fewer than 4 of 6 families return clean data, the cycle aborts — no silent guess.
+
+The output is a number with a confidence chip and a snapshot of why. You can drill into either at any time.
+
+## 🎓 What makes Vizzor different
+
+A chat box with a price ticker is fluent paraphrase, not analysis. The model sounds confident because it's a model — it doesn't have access to anything you couldn't have asked it yourself.
+
+Vizzor is the opposite construction:
+
+- **Receipts are public.** Every call lives in the `chronovisor_predictions` table. Open, queryable, reproducible.
+- **Calibrated confidence.** The number is a probability with a track record, not a vibe.
+- **Silence is a feature.** When the engine has nothing to say, it says nothing — no manufactured opinion.
+- **Open-source core.** The engine is BUSL-licensed. Run it locally, configure it, fork it.
+
+The product is the engine and the receipts. The bot, the web app, and the CLI are just doors into the same room.
+
+## 🚀 Install
+
+**Web.** Open [`vizzor.ai`](https://vizzor.ai), click "Open App," connect a wallet. A 7-day Pro trial starts on your first connect. No card, no KYC.
+
+**Telegram.** Message [`@vizzorai_bot`](https://t.me/vizzorai_bot) and send `/start`. Same wallet-scoped subscription, same 7-day trial.
+
+**CLI.** Install the binary globally:
+
+```bash
+npm install -g @vizzor/cli
+vizzor setup
+```
+
+The CLI pairs to your wallet via the guided `vizzor setup` wizard — it prints a one-time `vizzor.ai/cli-pair?code=…` URL, you open it, sign once with SIWS, and every subsequent command authenticates from the local config.
+
+## 🎯 Your first prediction
+
+Connect a wallet on the web app or DM the Telegram bot. Ask the engine something concrete with a horizon — for example, *"Will BTC close above $72k by Friday?"* or *"ETH 4h direction?"*.
+
+The engine returns a prediction with a confidence chip, the contributing signal families, and the trigger snapshot. If conditions are too thin or manipulated, it abstains and tells you why instead of guessing.
+
+When the horizon expires, the outcome resolves and the row appears on the public ledger. Your personal win-rate breakdown shows up in `/precisions`.
+
+## 📊 Reading the receipts
+
+Every prediction Vizzor ever emitted is queryable from `/precisions` (Telegram) or the `/app/predict` history panel (web). Each row carries:
+
+- The asset, horizon, direction, and calibrated confidence.
+- The trigger snapshot — which families voted, in which direction, with what raw and calibrated certainty factors.
+- The resolved outcome (when the horizon has passed) or `pending` (when it hasn't).
+- The cohort the call belongs to — by tier, by session, by horizon, by chain.
+
+If anything published as a public win rate cannot be derived from that table, the published number is wrong. Tell us. We are aggressive about treating that as a P0 bug because the contract is the whole product.
+
+## 🔐 Privacy + self-hosting
+
+The hosted bot, web app, and CLI all share one wallet-scoped subscription. The wallet is yours. The session is signed by SIWS, not stored in plaintext anywhere. We hash IPs and user agents before they hit the audit log; we never sell the data, never run third-party trackers on the chat surface, and never share what you ask the engine with anyone outside the engine itself.
+
+If you would rather not depend on our hosting at all, the engine is open-source. The Docker compose file in the public repo brings up the full stack — engine, Telegram bot, database, optional LLM sidecar — on a $5 VPS in under a minute. Your subscription is portable. Self-hosted operators run the same code, the same schema, and the same calibrator we do.
+
+## 💸 Pricing
+
+**Free.** 7-day Pro trial on first connect, then the scanner stays free forever — sentiment, security checks, market context, discovery feed.
+
+**Pro.** $19 USD/mo. Full unlimited Predictor, every horizon, all six signal families, AI chat with tool-use, alerts, and the audit trail.
+
+**Elite.** $99 USD/mo. The full intelligence stack — Whale Terminal, Smart Money Flow, forensics suite, pre-news signals, cross-venue, REST API.
+
+Payments settle on-chain on SOL or TON. No card. The CLI, the Telegram bot, and the web app all share the same wallet-scoped subscription, so a Pro user gets Pro everywhere the moment payment lands.
+
+## 🛣 What's next
+
+Things we are shipping in the next few cycles, in the order we expect to land them:
+
+- **Per-session detail page** — every prediction gets its own URL with the full trigger snapshot rendered live.
+- **Per-asset historical scoreboard** — filter the public ledger by symbol and see calibration over time.
+- **Telegram autonomous mode** — opt-in, the bot pings you when a high-conviction setup fires for an asset you watch.
+- **Multi-sig treasury migration** — the operator treasury moves from a single HW signer to a 2-of-3 Squads / TON Multisig setup. Documented in [`treasury-threat-model.md`](/docs/security).
+- **Live OFAC feed refresh** — daily auto-pull from the Treasury SDN list, in addition to the curated seed list.
+
+This roadmap is a snapshot, not a promise. We change it when the data moves.
+
+## 🤝 Support + community
+
+[Read the docs](/docs) for the long-form reference. The Telegram bot is the fastest path for product questions — it understands `/help`, `/wr`, and `/diagnose` and will tell you why any specific prediction fired or got refused. For the philosophy behind the engine, read the [manifesto](/manifesto).
+
+If you want to run the whole stack yourself, the engine is open-source and operator-runnable. `docker compose up` brings up a local copy, and your subscription is portable across hosted and self-hosted. PRs welcome, issues triaged in 24 hours.

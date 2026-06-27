@@ -47,9 +47,20 @@ async function fetcher<T>(url: string): Promise<T> {
 }
 
 const SWR_DEFAULTS: SWRConfiguration = {
-  revalidateOnFocus: false,
+  // Refresh when the tab regains focus or the network comes back online,
+  // so a back-button revisit / iOS bfcache restore re-pulls live prices
+  // instead of showing whatever was on screen when the user navigated away.
+  // The `/api/ticker` route is already cached upstream (engine + 15s
+  // aggregator window), so a focus-fired revalidation is essentially free.
+  revalidateOnFocus: true,
+  revalidateOnReconnect: true,
   keepPreviousData: true,
-  shouldRetryOnError: false,
+  // We do want a short retry on transient errors so a single flaky fetch
+  // doesn't pin the ticker to the snapshot for 30s. Two retries is enough
+  // to ride out a brief edge hiccup without hammering the engine.
+  shouldRetryOnError: true,
+  errorRetryCount: 2,
+  errorRetryInterval: 1_000,
 };
 
 export interface LiveResult<T> {

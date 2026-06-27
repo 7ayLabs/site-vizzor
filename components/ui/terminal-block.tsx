@@ -26,17 +26,25 @@ export function TerminalBlock({
 }: TerminalBlockProps) {
   const [copied, setCopied] = useState(false);
 
+  // Defensive coercion — MDX call sites occasionally pass an undefined
+  // `code` prop (e.g., when a template literal evaluates to undefined
+  // inside an MDX expression), and the split below would crash the
+  // whole route. Empty string renders a single blank line + no copy
+  // action, which is graceful and matches the visual rest state.
+  const safeCode = typeof code === 'string' ? code : '';
+
   const handleCopy = useCallback(async () => {
+    if (!safeCode) return;
     try {
-      await navigator.clipboard.writeText(code);
+      await navigator.clipboard.writeText(safeCode);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
       // Clipboard API unavailable; swallow silently — UI stays in default state.
     }
-  }, [code]);
+  }, [safeCode]);
 
-  const lines = useMemo(() => code.split('\n'), [code]);
+  const lines = useMemo(() => safeCode.split('\n'), [safeCode]);
   const highlight = useMemo(
     () => new Set(highlightLines ?? []),
     [highlightLines],

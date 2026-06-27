@@ -150,7 +150,7 @@ export async function SurfaceCompare() {
   return (
     <section
       aria-labelledby="surface-compare-title"
-      className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8 py-24 lg:py-32"
+      className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8 py-20 md:py-28 lg:py-32"
     >
       <GsapHeadline
         className="flex flex-col gap-4 max-w-[58ch]"

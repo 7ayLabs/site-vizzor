@@ -94,8 +94,8 @@ export async function Hero() {
               as="h1"
               title={t('headline')}
               sub={t('sub')}
-              titleClassName="display text-[var(--fg)] text-balance text-[44px] sm:text-[60px] lg:text-[80px] leading-[0.98] tracking-[-0.035em] font-semibold"
-              subClassName="mt-6 text-[16px] sm:text-[17px] leading-relaxed text-[var(--fg-2)] max-w-[52ch]"
+              titleClassName="display text-[var(--fg)] text-balance text-[44px] sm:text-[60px] lg:text-[80px] leading-[0.94] tracking-[-0.045em] font-semibold"
+              subClassName="mt-7 text-[16px] sm:text-[17px] leading-[1.55] text-[var(--fg-2)] max-w-[48ch]"
             />
 
             {/* CTA cluster — primary into the product, secondary into

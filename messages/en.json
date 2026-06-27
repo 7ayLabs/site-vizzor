@@ -4,7 +4,7 @@
       "openApp": "Open App",
       "manifesto": "Manifesto",
       "pricing": "Pricing",
-      "changelog": "Changelog",
+      "blog": "Blog",
       "docs": "Docs"
     },
     "openApp": "Open App",
@@ -417,17 +417,15 @@
         "title": "Project",
         "manifesto": "Manifesto",
         "pricing": "Pricing",
-        "changelog": "Changelog",
-        "privacy": "Privacy",
-        "license": "License · BUSL-1.1"
+        "blog": "Blog",
+        "privacy": "Privacy"
       },
       "community": {
         "title": "Community",
         "telegramChannel": "Telegram channel",
         "discord": "Discord server",
-        "github": "GitHub Discussions",
-        "x": "X",
-        "mastodon": "Mastodon"
+        "whatsapp": "WhatsApp community",
+        "x": "X"
       },
       "resources": {
         "title": "Resources",
@@ -436,7 +434,6 @@
         "docsIndex": "All docs"
       }
     },
-    "license": "BUSL-1.1",
     "copyright": "© {year} Vizzor — Built by",
     "builder": "7ayLabs ↗",
     "social": {
@@ -643,28 +640,48 @@
       "targets": "Smart-money flow on the same call — see what whales just moved",
       "snapshot": "Alerts arm themselves at the level the engine flagged — zero setup"
     },
-    "learnMore": "See the math"
+    "learnMore": "See the math",
+    "surfacesEyebrow": "where you use it",
+    "surfaces": {
+      "telegram": {
+        "title": "Telegram",
+        "description": "Ask a prediction in the chat you already check. Alerts ping you when the level hits.",
+        "cta": "Open in Telegram"
+      },
+      "cli": {
+        "title": "CLI",
+        "description": "Pipe predictions into your own scripts, notebooks, and trading bots.",
+        "cta": "Read the CLI docs"
+      },
+      "web": {
+        "title": "Web",
+        "description": "The full dashboard — receipts, charts, watchlist, billing — all on one screen.",
+        "cta": "Open the web app"
+      }
+    }
   },
   "howItWorks": {
-    "eyebrow": "how it works",
+    "eyebrow": "how easy is it to set up",
     "title": "Three steps. That's the whole product.",
     "lede": "You don't need to know what's inside. You need a call you can act on, in seconds, with a receipt at the end.",
     "footer": "See what runs under the hood",
+    "primaryCta": "Open App",
+    "secondaryCta": "See pricing",
     "steps": {
-      "fetch": {
-        "title": "Ask",
-        "description": "Type a coin. Pick a timeframe. That's it.",
-        "ariaLabel": "Step one: type a symbol and a timeframe to ask Vizzor for a call"
+      "connect": {
+        "eyebrow": "Sign in",
+        "title": "Connect your wallet",
+        "description": "One signature with the wallet you already have. No email. No password. No KYC."
       },
-      "fuse": {
-        "title": "Get a call",
-        "description": "A clear direction, a confidence number, and the reasons behind it. In seconds.",
-        "ariaLabel": "Step two: receive a directional call with a calibrated confidence number"
+      "predict": {
+        "eyebrow": "Predict",
+        "title": "Ask a prediction",
+        "description": "Type the question in plain language. Vizzor returns a direction with a calibrated confidence number."
       },
-      "emit": {
-        "title": "Track the result",
-        "description": "Every call is logged on a public scoreboard. You see the wins. You see the misses. No edits.",
-        "ariaLabel": "Step three: every call lands on a public scoreboard, wins and misses both"
+      "resolve": {
+        "eyebrow": "Resolve",
+        "title": "Get the receipt",
+        "description": "Every call resolves on a public scoreboard. Hit or miss, the receipt lands in your chat."
       }
     }
   },
@@ -798,8 +815,6 @@
     "eyebrow": "the receipts",
     "title": "Real receipts. Real traders.",
     "lede": "Used by Web3-native traders across eleven chains. Every win, every miss, on the same public scoreboard. Nothing buried, nothing edited.",
-    "ringLabel": "public scoreboard",
-    "ringCaption": "all horizons · last 90 days · nothing dropped",
     "proofEyebrow": "what the community has tracked so far",
     "proof": {
       "traders": {
@@ -827,9 +842,8 @@
   "ctaBlock": {
     "eyebrow": "start with one call",
     "title": "Stop guessing. Start tracking.",
-    "body": "Open Vizzor in Telegram. Free tier. No card. No KYC. Run a call, watch it resolve, see the receipt land in the public ledger.",
-    "ctaTelegram": "Open in Telegram",
-    "ctaCli": "Install the CLI",
+    "body": "Connect your wallet on vizzor.ai. 7-day Pro trial. No card, no KYC. Run a prediction, watch it resolve, see the receipt land on the public ledger.",
+    "ctaWeb": "Open the web app",
     "manifesto": "Read the manifesto"
   },
   "languageSwitch": {
@@ -897,12 +911,12 @@
         "name": "Pro",
         "sub": "The work bench for the active trader",
         "price": "$19",
-        "priceUnit": "/ mo",
+        "priceUnit": "USD / mo",
         "cta": "Get Pro",
         "cadences": {
           "annual": {
-            "label": "Pay annually · $190/yr (save $38)",
-            "inline": "$190/yr billed annually"
+            "label": "Pay annually · $190 USD/yr (save $38)",
+            "inline": "$190 USD/yr billed annually"
           }
         },
         "everythingIn": "Everything in Free, plus:",
@@ -937,16 +951,16 @@
         "name": "Elite",
         "sub": "The full intelligence stack",
         "price": "$99",
-        "priceUnit": "/ mo",
+        "priceUnit": "USD / mo",
         "cta": "Get Elite",
         "cadences": {
           "annual": {
-            "label": "Pay annually · $990/yr (save $198)",
-            "inline": "$990/yr billed annually"
+            "label": "Pay annually · $990 USD/yr (save $198)",
+            "inline": "$990 USD/yr billed annually"
           },
           "lifetime": {
-            "label": "Pay once · $1,499 lifetime (break-even ~year 1.3)",
-            "inline": "$1,499 paid once · lifetime"
+            "label": "Pay once · $1,499 USD lifetime (break-even ~year 1.3)",
+            "inline": "$1,499 USD paid once · lifetime"
           }
         },
         "everythingIn": "Everything in Pro, plus:",
@@ -1227,39 +1241,42 @@
     }
   },
   "manifesto": {
-    "manifestoEyebrow": "the manifesto · signed by 7ayLabs",
-    "manifestoTitle": "Numbers, not opinions.",
-    "manifestoLede": "Vizzor exists because the crypto information layer is broken. Not bearish — broken. We're trying to repair one specific part of it.",
+    "manifestoEyebrow": "the manifesto · a letter from 7ayLabs",
+    "manifestoTitle": "A letter from the people building Vizzor.",
+    "manifestoLede": "This is the long version. It is the story of why Vizzor exists, what we found broken when we went looking, and what we have decided to build instead.",
     "section1": {
-      "title": "Most crypto AI is a chat box with a price feed.",
-      "body": "The pattern is everywhere. Take a language model, give it the BTC price, wrap it in a chat interface, call it an AI trader. The output reads like analysis. It is not analysis. It is a fluent paraphrase of whatever happened to be near the model's context window.\n\nFluent paraphrase is dangerous in markets because the surface looks like a quantitative tool and the substance is a vibe. When the vibe is wrong, the user has no way to know why — there are no signals, no votes, no resolved cohort, nothing to grade. Just a confident sentence that didn't pan out.\n\nVizzor is the opposite construction. Six independent signal families do the work; the language model only renders the result. If the engine has nothing to say, the language model says nothing. Silence is a feature."
+      "title": "§01 — Why I started this.",
+      "body": "I started building Vizzor between classes on a university campus, on a laptop with a bad battery, after losing a position that I had no business taking. The trade was not the point. The point was that I had asked three different AI assistants what they thought, and all three had given me a confident, well-written, completely fabricated answer. None of them had access to real on-chain data. None of them could explain where their conviction came from. One of them quoted a price that was eleven thousand dollars off.\n\nI sat there for a while and thought about how strange it was that the most expensive surface in finance — the one that moves twenty-four hours a day, the one with the highest velocity of capital per capita on the planet — was being served by tools that were essentially autocomplete with a price ticker glued on. The information layer was broken. Not bearish. Not in a slump. Broken.\n\nWhat I wanted was simple. I wanted an instrument that read the chain directly, fused independent signals, told me how confident it was in a way I could verify, and kept a public ledger of every call it had ever made so I could see if it was actually any good. Nothing on the market did that. So I started writing it."
     },
     "section2": {
-      "title": "Calibrated confidence is a feature.",
-      "body": "Every prediction carries a confidence number that has been Platt-scaled against the resolved cohort. When Vizzor says 72%, it means that across the last several hundred 72%-confidence calls, roughly 72% landed in band. Not metaphor — calibration.\n\nThat number does work. It tells you when to size up, when to size down, and when to ignore the call entirely. It is also how the engine catches itself drifting: if the calibrated 72% bucket starts hitting at 58%, the calibrator notices and pulls the curve. Models that don't track their own calibration cannot do this."
+      "title": "§02 — What is wrong with crypto AI.",
+      "body": "The dominant pattern in this space is a language model behind a chat window, fed a price feed and a system prompt that tells it to sound knowledgeable. The model produces text that has the cadence of analysis. It uses the vocabulary of analysis. It looks like analysis. None of it is grounded in anything you can audit, because there are no signals underneath, no votes, no resolved cohort, no record of what the system thought yesterday and whether yesterday's thought turned out to be true.\n\nThis is a category error, and it is a dangerous one. In markets, a fluent paraphrase that sounds correct is worse than silence. Silence makes you do your own work. A fluent paraphrase replaces your work with a guess that costs the same amount of money to act on. The user has no way to grade the system, because there is nothing to grade. There is only a sentence.\n\nI have watched friends drain accounts following one of these systems. The system was never wrong, in the way that a horoscope is never wrong — it spoke in shapes that could be reinterpreted after the fact. That is not what I want to build. That is the opposite of what I want to build."
     },
     "section3": {
-      "title": "The receipts are the product.",
-      "body": "Every prediction the engine ever emitted lives in `chronovisor_predictions`, with its full trigger snapshot — which signals voted, which direction, what CF, why it passed the gates. The resolved outcome is grafted on when the horizon expires.\n\nThat archive is public. The win rate on the home page is computed from that archive. Filter by horizon, filter by tier, filter by chain — the WR you see is the WR you'd compute yourself.\n\nThis is the part of the product that earns the rest. A prediction engine that hides its history is not a prediction engine, it is a marketing surface for a forecast that has not been tested."
+      "title": "§03 — The receipts are the product.",
+      "body": "Every prediction Vizzor has ever emitted lives in a table called `chronovisor_predictions`. The row is written the moment the call goes out. It carries the symbol, the horizon, the direction, the calibrated confidence, the full snapshot of which signal families voted, which way they voted, what their raw and calibrated certainty factors were, and which gates the call had to clear to leave the engine. When the horizon expires, the resolved outcome is grafted on. Nothing is edited. Nothing is deleted.\n\nThat archive is public. The win-rate number on the homepage is computed from it in real time. You can filter by horizon, by tier, by chain, by session, and reproduce the number with your own eyes. If we ever publish a win rate that you cannot derive from that table, we are lying, and you should leave.\n\nThis is the part of the product that earns the rest of it. A prediction engine that hides its history is not a prediction engine. It is a marketing surface for a forecast that has never been tested. Most things in this space are the second one. We are trying to be the first."
     },
     "section4": {
-      "title": "Free-tier APIs are the moat, not the bottleneck.",
-      "body": "We are sometimes asked why Vizzor doesn't integrate Nansen, Arkham, or one of the paid intelligence stacks. The answer is that the moat is in the synthesis, not the data. Anyone willing to pay can buy the same Nansen feed.\n\nVizzor reads whale flow, smart-money accumulation, exchange premia, and stablecoin velocity from chain RPCs and free-tier endpoints. The interesting work is fusing six families through certainty-factor algebra with weak-signal dampening, Bayesian update with family-aware priors, and Platt calibration against the resolved cohort.\n\nThat work travels. It runs on a $5 VPS or a laptop. It does not get more interesting when you bolt on a $1,200/month feed."
+      "title": "§04 — The value is in the synthesis, not the subscription.",
+      "body": "People ask, sometimes politely and sometimes not, why Vizzor does not plug into Nansen, or Arkham, or whichever twelve-hundred-dollar-a-month intelligence stack is fashionable this quarter. The honest answer is that I do not believe those subscriptions are where the value lives. Anyone with a corporate card can rent the same feed. The interesting work is downstream of the data.\n\nVizzor reads whale flow, smart-money accumulation, exchange premia and stablecoin velocity directly from chain RPCs and from the free public tiers of every reputable provider. The signal families are then fused through certainty-factor algebra with weak-signal dampening, a Bayesian update with family-aware priors, and a Platt calibration that runs continuously against the resolved cohort. That pipeline is the asset. It runs on a five-dollar VPS. It does not get smarter when you bolt a twelve-hundred-dollar-a-month feed onto it.\n\nThis is a stance, not a feature list. We believe paid intelligence stacks are a tax on the assumption that more data must equal more edge. Our experience is the opposite. The edge is in what you do with the data you already have, and most teams skip that step because synthesis is harder than procurement."
     },
     "section5": {
-      "title": "Operators run Vizzor. We just maintain it.",
-      "body": "The hosted Telegram bot is convenient. It is also a courtesy, not the product. The product is the open-source engine, the configurable thresholds, the CLI you can pipe into your own shell scripts, the docker-compose file that brings up an entire local stack.\n\nWe will keep hosting the bot as long as the bill stays sane. If it ever doesn't, the project keeps working — every operator already has the code, the config, and the data schema. Vizzor was built to outlast its hosting."
+      "title": "§05 — Built to outlast us.",
+      "body": "The hosted Telegram bot is a convenience. It is not the product. The product is the open-source engine in the public repository, the configurable thresholds, the CLI you can pipe into your own shell scripts, the docker-compose file that brings the entire stack up on your laptop in under a minute.\n\nWe run the hosted version because most people do not want to operate infrastructure to ask a question about Bitcoin, and that is a reasonable preference. We will keep running it as long as the bill stays sane. If the bill ever stops being sane, the project does not die — every operator already has the code, the config schema, the data model, and a clear migration path off our servers. Your subscription is portable. The engine is portable. The receipts are portable.\n\nVizzor was built so that the people who care about it can keep using it even if we get hit by a bus, lose interest, or sell out. I think that is what software is supposed to be in 2026. I am tired of products that turn into shells the moment their company has a bad quarter, and I do not want to build one of those. So I have done what I can to make sure Vizzor is something else."
     },
-    "signature": "Signed, 7ayLabs · 2026-05-31",
+    "signature": "Signed, 7ayLabs · 2026-06-26",
+    "ps": "P.S. If any of this resonates, the trial is seven days, the wallet is yours, and the only cost of finding out whether the engine is real is the time it takes to ask it one honest question.",
     "seeReceipts": "See the receipts →"
   },
-  "changelog": {
-    "changelogEyebrow": "release notes · semver",
-    "changelogTitle": "Vizzor changelog",
-    "changelogSub": "Versioned releases. Every change tracked.",
+  "blog": {
+    "blogEyebrow": "from the team · blog",
+    "blogTitle": "Vizzor blog",
+    "blogSub": "Stories, releases, and notes from the team behind Vizzor.",
     "subscribeRss": "Subscribe via RSS",
-    "readMore": "Read full notes",
-    "empty": "No releases yet.",
+    "readMore": "Read post",
+    "readingTime": "{minutes} min read",
+    "tagsLabel": "Tags",
+    "empty": "No posts yet.",
     "meta": {
       "released": "released",
       "version": "version",

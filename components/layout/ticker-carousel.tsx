@@ -33,6 +33,7 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { CoinIcon } from '@/components/ui/coin-icon';
 import { AnimatedNumber } from '@/components/ui/animated-number';
+import { Link } from '@/i18n/navigation';
 import { useTicker } from '@/lib/api';
 import { getTicker } from '@/lib/snapshot';
 import type { TickerEntry } from '@/lib/types';
@@ -47,7 +48,12 @@ function TickerPill({ entry }: { entry: TickerEntry }) {
   const positive = entry.changePct >= 0;
   const directionColor = positive ? 'var(--up)' : 'var(--down)';
 
-  const predictHref = `https://t.me/vizzorai_bot?start=predict_${entry.symbol}`;
+  // Deep-link into the web Predict surface with the symbol pre-selected.
+  // The composer on `/app/predict` can read `?asset=` to pre-fill the
+  // ticker context (follow-up if it doesn't yet). Locale-aware Link so
+  // /es and /fr visitors stay inside their language. Href is constructed
+  // inline below using next-intl's object form so the query string types
+  // cleanly under typedRoutes without an `as never` escape hatch.
 
   return (
     <span
@@ -122,11 +128,12 @@ function TickerPill({ entry }: { entry: TickerEntry }) {
               whitespace-nowrap overflow-hidden
             "
           >
-            <a
+            <Link
               role="menuitem"
-              href={predictHref}
-              target="_blank"
-              rel="noopener"
+              href={{
+                pathname: '/app/predict',
+                query: { asset: entry.symbol },
+              }}
               className="
                 block px-3.5 py-2 mono tabular text-[10.5px]
                 uppercase tracking-[0.14em] text-[var(--fg)]
@@ -135,7 +142,7 @@ function TickerPill({ entry }: { entry: TickerEntry }) {
               "
             >
               {t('predict', { symbol: entry.symbol })}
-            </a>
+            </Link>
             <div
               role="menuitem"
               aria-disabled="true"

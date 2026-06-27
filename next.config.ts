@@ -32,6 +32,12 @@ const nextConfig: NextConfig = {
   // preserves SEO + browser history; handled at the edge before any
   // route resolution. Per-locale variants explicit because next-intl's
   // `as-needed` localePrefix puts `en` at the root.
+  //
+  // `/changelog` → `/blog` follows the same shape: the section was
+  // renamed (and broadened from release-notes-only to editorial +
+  // release-notes) in this commit, but operators may have bookmarks
+  // and the old RSS feed URL is in third-party readers. 308 keeps
+  // every legacy link live and tells crawlers the move is permanent.
   async redirects() {
     return [
       // English (root) — preserves the canonical /predict, /dashboard/*
@@ -47,6 +53,21 @@ const nextConfig: NextConfig = {
       { source: '/:locale(es|fr)/dashboard', destination: '/:locale/app', permanent: true },
       { source: '/:locale(es|fr)/dashboard/flow', destination: '/:locale/app/flow', permanent: true },
       { source: '/:locale(es|fr)/dashboard/whales', destination: '/:locale/app/whales', permanent: true },
+      // Changelog → blog rename. RSS feed gets its own entry above the
+      // wildcard so the more-specific path matches first.
+      { source: '/changelog/feed.xml', destination: '/blog/feed.xml', permanent: true },
+      { source: '/changelog', destination: '/blog', permanent: true },
+      { source: '/changelog/:slug', destination: '/blog/:slug', permanent: true },
+      { source: '/:locale(es|fr)/changelog/feed.xml', destination: '/blog/feed.xml', permanent: true },
+      { source: '/:locale(es|fr)/changelog', destination: '/:locale/blog', permanent: true },
+      { source: '/:locale(es|fr)/changelog/:slug', destination: '/:locale/blog/:slug', permanent: true },
+      // Docs live OUTSIDE `[locale]` (Fumadocs ships its own router; see
+      // app/docs/layout.tsx). Without these, `/es/docs` and `/fr/docs`
+      // 404 instead of resolving to the EN-only docs zone. Permanent:
+      // false so we can localize docs later without an immutable
+      // browser-cached redirect blocking the rollout.
+      { source: '/:locale(es|fr)/docs', destination: '/docs', permanent: false },
+      { source: '/:locale(es|fr)/docs/:slug*', destination: '/docs/:slug*', permanent: false },
     ];
   },
 };

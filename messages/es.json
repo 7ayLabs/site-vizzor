@@ -4,7 +4,7 @@
       "openApp": "Abrir app",
       "manifesto": "Manifiesto",
       "pricing": "Precios",
-      "changelog": "Novedades",
+      "blog": "Blog",
       "docs": "Documentación"
     },
     "openApp": "Abrir app",
@@ -407,17 +407,15 @@
         "title": "Proyecto",
         "manifesto": "Manifiesto",
         "pricing": "Precios",
-        "changelog": "Changelog",
-        "privacy": "Privacidad",
-        "license": "Licencia · BUSL-1.1"
+        "blog": "Blog",
+        "privacy": "Privacidad"
       },
       "community": {
         "title": "Comunidad",
         "telegramChannel": "Canal de Telegram",
         "discord": "Servidor de Discord",
-        "github": "Discusiones en GitHub",
-        "x": "X",
-        "mastodon": "Mastodon"
+        "whatsapp": "Comunidad de WhatsApp",
+        "x": "X"
       },
       "resources": {
         "title": "Recursos",
@@ -426,7 +424,6 @@
         "docsIndex": "Toda la documentación"
       }
     },
-    "license": "BUSL-1.1",
     "copyright": "© {year} Vizzor — Hecho por",
     "builder": "7ayLabs ↗",
     "social": {
@@ -633,28 +630,48 @@
       "targets": "Smart-money flow en la misma llamada — ve qué acaban de mover las whales",
       "snapshot": "Las alertas se arman solas en el nivel que marcó el motor — cero setup"
     },
-    "learnMore": "Ver la matemática"
+    "learnMore": "Ver la matemática",
+    "surfacesEyebrow": "dónde lo usas",
+    "surfaces": {
+      "telegram": {
+        "title": "Telegram",
+        "description": "Pide una predicción en el chat que ya miras. Las alertas te avisan cuando el nivel toca.",
+        "cta": "Abrir en Telegram"
+      },
+      "cli": {
+        "title": "CLI",
+        "description": "Mete predicciones en tus scripts, notebooks y bots de trading.",
+        "cta": "Leer las docs del CLI"
+      },
+      "web": {
+        "title": "Web",
+        "description": "El dashboard completo — recibos, charts, watchlist y facturación — todo en una pantalla.",
+        "cta": "Abrir la web app"
+      }
+    }
   },
   "howItWorks": {
-    "eyebrow": "cómo funciona",
+    "eyebrow": "qué tan fácil es empezar",
     "title": "Tres pasos. Ese es todo el producto.",
     "lede": "No te hace falta saber qué hay dentro. Te hace falta una llamada accionable, en segundos, con un recibo al final.",
     "footer": "Ver qué corre por debajo",
+    "primaryCta": "Abrir app",
+    "secondaryCta": "Ver precios",
     "steps": {
-      "fetch": {
-        "title": "Pregunta",
-        "description": "Escribe una moneda. Elige un horizonte. Ya está.",
-        "ariaLabel": "Paso uno: escribe un símbolo y un horizonte para pedirle una llamada a Vizzor"
+      "connect": {
+        "eyebrow": "Inicia sesión",
+        "title": "Conecta tu wallet",
+        "description": "Una firma con la wallet que ya tienes. Sin email. Sin contraseña. Sin KYC."
       },
-      "fuse": {
-        "title": "Recibe la llamada",
-        "description": "Una dirección clara, un número de confianza y las razones detrás. En segundos.",
-        "ariaLabel": "Paso dos: recibe una llamada direccional con confianza calibrada"
+      "predict": {
+        "eyebrow": "Predice",
+        "title": "Pide una predicción",
+        "description": "Escribe la pregunta en lenguaje natural. Vizzor devuelve una dirección con un número de confianza calibrado."
       },
-      "emit": {
-        "title": "Sigue el resultado",
-        "description": "Cada llamada queda en el marcador público. Ves los aciertos. Ves los fallos. Sin ediciones.",
-        "ariaLabel": "Paso tres: cada llamada aterriza en un marcador público, aciertos y fallos a la vez"
+      "resolve": {
+        "eyebrow": "Resuelve",
+        "title": "Recibe el recibo",
+        "description": "Cada llamada se resuelve en un marcador público. Acierto o fallo, el recibo aterriza en tu chat."
       }
     }
   },
@@ -788,8 +805,6 @@
     "eyebrow": "los recibos",
     "title": "Recibos reales. Traders reales.",
     "lede": "Lo usan traders Web3-native en once cadenas. Cada acierto, cada fallo, en el mismo marcador público. Nada enterrado, nada editado.",
-    "ringLabel": "marcador público",
-    "ringCaption": "todos los horizontes · últimos 90 días · nada descartado",
     "proofEyebrow": "lo que ha registrado la comunidad hasta ahora",
     "proof": {
       "traders": {
@@ -817,9 +832,8 @@
   "ctaBlock": {
     "eyebrow": "empieza con una llamada",
     "title": "Deja de adivinar. Empieza a trackear.",
-    "body": "Abre Vizzor en Telegram. Tier gratis. Sin tarjeta. Sin KYC. Corre una llamada, mírala resolverse, ve el recibo aterrizar en el ledger público.",
-    "ctaTelegram": "Abrir en Telegram",
-    "ctaCli": "Instalar el CLI",
+    "body": "Conecta tu wallet en vizzor.ai. Prueba Pro de 7 días. Sin tarjeta, sin KYC. Corre una predicción, mírala resolverse, ve el recibo aterrizar en el ledger público.",
+    "ctaWeb": "Abrir la web app",
     "manifesto": "Leer el manifiesto"
   },
   "languageSwitch": {
@@ -887,12 +901,12 @@
         "name": "Pro",
         "sub": "El banco de trabajo del trader activo",
         "price": "$19",
-        "priceUnit": "/ mes",
+        "priceUnit": "USD / mes",
         "cta": "Obtener Pro",
         "cadences": {
           "annual": {
-            "label": "Pagar anualmente · $190/año (ahorras $38)",
-            "inline": "$190/año facturado anualmente"
+            "label": "Pagar anualmente · US$190/año (ahorras US$38)",
+            "inline": "US$190/año facturado anualmente"
           }
         },
         "everythingIn": "Todo lo de Free, más:",
@@ -927,16 +941,16 @@
         "name": "Elite",
         "sub": "El stack completo de inteligencia",
         "price": "$99",
-        "priceUnit": "/ mes",
+        "priceUnit": "USD / mes",
         "cta": "Obtener Elite",
         "cadences": {
           "annual": {
-            "label": "Pagar anualmente · $990/año (ahorras $198)",
-            "inline": "$990/año facturado anualmente"
+            "label": "Pagar anualmente · US$990/año (ahorras US$198)",
+            "inline": "US$990/año facturado anualmente"
           },
           "lifetime": {
-            "label": "Pago único · $1,499 vitalicio (rentabiliza ~año 1.3)",
-            "inline": "$1,499 una vez · acceso vitalicio"
+            "label": "Pago único · US$1,499 vitalicio (rentabiliza ~año 1.3)",
+            "inline": "US$1,499 una vez · acceso vitalicio"
           }
         },
         "everythingIn": "Todo lo de Pro, más:",
@@ -1210,39 +1224,42 @@
     }
   },
   "manifesto": {
-    "manifestoEyebrow": "el manifiesto · firmado por 7ayLabs",
-    "manifestoTitle": "Números, no opiniones.",
-    "manifestoLede": "Vizzor existe porque la capa de información de las criptomonedas está rota. No bajista — rota. Intentamos reparar una parte concreta.",
+    "manifestoEyebrow": "el manifiesto · una carta de 7ayLabs",
+    "manifestoTitle": "Una carta de la gente que está construyendo Vizzor.",
+    "manifestoLede": "Esta es la versión larga. Es la historia de por qué existe Vizzor, qué nos pareció roto cuando salimos a buscar, y qué decidimos construir en su lugar.",
     "section1": {
-      "title": "La mayoría de la IA cripto es una caja de chat con un feed de precios.",
-      "body": "El patrón se ve en todas partes. Coges un modelo de lenguaje, le pasas el precio de BTC, lo envuelves en una interfaz de chat y lo llamas «trader con IA». La salida parece análisis. No es análisis. Es una paráfrasis fluida de lo que estuviese cerca del contexto del modelo.\n\nUna paráfrasis fluida es peligrosa en los mercados porque la superficie parece una herramienta cuantitativa y el fondo es un estado de ánimo. Cuando el ánimo se equivoca, el usuario no tiene forma de saber por qué — no hay señales, ni votos, ni cohorte resuelta, nada que se pueda calificar. Sólo una frase segura que no funcionó.\n\nVizzor es la construcción opuesta. Seis familias de señales independientes hacen el trabajo; el modelo de lenguaje sólo presenta el resultado. Si el motor no tiene nada que decir, el modelo no dice nada. El silencio es una característica."
+      "title": "§01 — Por qué arranqué con esto.",
+      "body": "Empecé a construir Vizzor entre clases en el campus, en un laptop con batería en las últimas, después de perder una posición que nunca tendría que haber tomado. La operación no es lo importante. Lo importante es que antes de entrar le había preguntado a tres asistentes de IA distintos qué pensaban, y los tres me dieron una respuesta segura, bien escrita y completamente inventada. Ninguno tenía acceso real a datos on-chain. Ninguno podía explicar de dónde salía su convicción. Uno me citó un precio que estaba once mil dólares fuera del mercado.\n\nMe quedé un rato pensando lo raro que era eso. El mercado más caro del mundo, el que se mueve veinticuatro horas al día, el que probablemente tiene la mayor velocidad de capital per cápita del planeta, estaba siendo servido por herramientas que son básicamente un autocompletado con un ticker de precios pegado encima. La capa de información estaba rota. No bajista. No en un mal momento. Rota.\n\nLo que yo quería era simple. Quería un instrumento que leyera la cadena directamente, fusionara señales independientes, me dijera cuánta confianza tenía de una forma que yo pudiera verificar, y guardara un registro público de cada llamada que hubiera hecho, para que yo pudiera ver si servía o no. Nada en el mercado hacía eso. Así que lo empecé a escribir."
     },
     "section2": {
-      "title": "La confianza calibrada es una característica.",
-      "body": "Cada predicción lleva un número de confianza que ha sido calibrado por Platt contra la cohorte resuelta. Cuando Vizzor dice 72%, significa que en las últimas centenas de llamadas con 72% de confianza, aproximadamente el 72% cayó dentro de la banda. No es metáfora — es calibración.\n\nEse número trabaja. Te dice cuándo subir el tamaño, cuándo bajarlo y cuándo ignorar la llamada. También es como el motor se detecta a sí mismo derivando: si el grupo del 72% calibrado empieza a acertar al 58%, el calibrador lo nota y mueve la curva. Los modelos que no siguen su propia calibración no pueden hacer esto."
+      "title": "§02 — Qué está mal con la IA cripto.",
+      "body": "El patrón que domina el espacio es un modelo de lenguaje detrás de una ventana de chat, con un feed de precios y un system prompt que le dice que suene experto. El modelo produce texto con cadencia de análisis. Usa el vocabulario del análisis. Parece análisis. Pero nada de eso está aterrizado en algo que vos puedas auditar, porque debajo no hay señales, no hay votos, no hay cohorte resuelta, no hay registro de lo que el sistema pensó ayer ni de si lo de ayer terminó siendo cierto.\n\nEsto es un error de categoría, y es un error peligroso. En mercados, una paráfrasis fluida que suena bien es peor que el silencio. El silencio te obliga a hacer tu propio trabajo. La paráfrasis te reemplaza el trabajo por una suposición que cuesta la misma plata ejecutar. El usuario no tiene forma de calificar al sistema, porque no hay nada para calificar. Solo hay una frase.\n\nVi a amigos vaciarse cuentas siguiendo uno de estos sistemas. El sistema nunca estaba equivocado, en el sentido en que un horóscopo nunca está equivocado: hablaba en formas que se podían reinterpretar después. Eso no es lo que quiero construir. Es exactamente lo opuesto a lo que quiero construir."
     },
     "section3": {
-      "title": "Los recibos son el producto.",
-      "body": "Cada predicción que el motor ha emitido vive en `chronovisor_predictions`, con su snapshot completo — qué señales votaron, en qué dirección, con qué CF, por qué pasó los filtros. El resultado resuelto se injerta cuando expira el horizonte.\n\nEse archivo es público. El win rate de la página principal se calcula desde ese archivo. Filtra por horizonte, por tier, por cadena — el WR que ves es el WR que tú mismo calcularías.\n\nEsta es la parte del producto que se gana el resto. Un motor de predicción que esconde su historial no es un motor de predicción, es una superficie de marketing para un pronóstico que no ha sido puesto a prueba."
+      "title": "§03 — Los recibos son el producto.",
+      "body": "Cada predicción que Vizzor emitió alguna vez vive en una tabla que se llama `chronovisor_predictions`. La fila se escribe en el momento en que sale la llamada. Lleva el símbolo, el horizonte, la dirección, la confianza calibrada, el snapshot completo de qué familias de señal votaron, en qué dirección, con qué factores de certeza crudos y calibrados, y qué filtros tuvo que pasar para salir del motor. Cuando expira el horizonte, se injerta el resultado resuelto. Nada se edita. Nada se borra.\n\nEse archivo es público. El número de win rate que aparece en la home se calcula desde ahí en tiempo real. Podés filtrar por horizonte, por tier, por cadena, por sesión, y reproducir el número con tus propios ojos. Si alguna vez publicamos un win rate que vos no puedas derivar desde esa tabla, estamos mintiendo, y deberías irte.\n\nEsta es la parte del producto que se gana al resto. Un motor de predicción que esconde su historial no es un motor de predicción. Es una superficie de marketing para un pronóstico que nunca fue puesto a prueba. La mayoría de las cosas en este espacio son lo segundo. Nosotros estamos tratando de ser lo primero."
     },
     "section4": {
-      "title": "Las APIs gratuitas son el foso, no el cuello de botella.",
-      "body": "A veces nos preguntan por qué Vizzor no integra Nansen, Arkham u otra pila de inteligencia de pago. La respuesta es que el foso está en la síntesis, no en los datos. Cualquiera con dinero puede comprar el mismo feed de Nansen.\n\nVizzor lee flujos de ballenas, acumulación de smart money, primas de exchange y velocidad de stablecoins desde RPCs de cadena y endpoints gratuitos. El trabajo interesante es fusionar seis familias mediante álgebra de factores de certeza con amortiguación de señales débiles, actualización bayesiana con priors por familia y calibración de Platt contra la cohorte resuelta.\n\nEse trabajo viaja. Corre en un VPS de 5 $ o en un portátil. No se vuelve más interesante al añadirle un feed de 1.200 $ al mes."
+      "title": "§04 — El valor está en la síntesis, no en la suscripción.",
+      "body": "A veces nos preguntan, con buena o mala onda, por qué Vizzor no se conecta a Nansen, ni a Arkham, ni a la pila de inteligencia de mil doscientos dólares al mes que esté de moda este trimestre. La respuesta honesta es que no creemos que el valor esté ahí. Cualquiera con tarjeta corporativa puede alquilar el mismo feed. El trabajo interesante está aguas abajo del dato.\n\nVizzor lee flujos de ballenas, acumulación de smart money, primas de exchange y velocidad de stablecoins directamente desde RPCs de cadena y desde los tiers públicos gratuitos de cada proveedor decente. Las familias de señal después se fusionan con álgebra de factores de certeza, amortiguación de señales débiles, una actualización bayesiana con priors por familia, y una calibración de Platt que corre de forma continua contra la cohorte resuelta. Ese pipeline es el activo. Corre en un VPS de cinco dólares. No se vuelve más inteligente porque le enchufes un feed de mil doscientos al mes.\n\nEsto es una postura, no una lista de features. Creemos que las pilas de inteligencia pagas son un impuesto sobre la suposición de que más datos es igual a más edge. Nuestra experiencia es lo opuesto. El edge está en qué hacés con los datos que ya tenés, y la mayoría de los equipos se saltean ese paso porque sintetizar es más difícil que comprar."
     },
     "section5": {
-      "title": "Los operadores ejecutan Vizzor. Nosotros sólo lo mantenemos.",
-      "body": "El bot de Telegram alojado es cómodo. También es una cortesía, no el producto. El producto es el motor de código abierto, los umbrales configurables, el CLI que puedes encadenar en tus propios scripts y el docker-compose que levanta toda la pila localmente.\n\nMantendremos el bot alojado mientras la factura siga siendo razonable. Si alguna vez deja de serlo, el proyecto sigue funcionando — cada operador ya tiene el código, la config y el esquema de datos. Vizzor se construyó para sobrevivir a su propio hosting."
+      "title": "§05 — Construido para sobrevivirnos.",
+      "body": "El bot de Telegram alojado es una comodidad. No es el producto. El producto es el motor open-source en el repo público, los umbrales configurables, el CLI que podés encadenar en tus propios scripts, y el docker-compose que te levanta todo el stack en el laptop en menos de un minuto.\n\nNosotros corremos la versión alojada porque la mayoría de la gente no quiere operar infraestructura solo para hacerle una pregunta a Bitcoin, y nos parece una preferencia razonable. La vamos a seguir corriendo mientras la factura se mantenga sensata. Si alguna vez deja de serlo, el proyecto no se muere — cada operador ya tiene el código, el esquema de config, el modelo de datos, y un camino claro para migrarse de nuestros servidores. Tu suscripción es portable. El motor es portable. Los recibos son portables.\n\nVizzor se construyó para que la gente a la que le importa lo pueda seguir usando aunque a nosotros nos atropelle un bondi, perdamos el interés o vendamos la empresa. Creo que eso es lo que el software tendría que ser en 2026. Estoy cansado de productos que se vuelven una cáscara apenas la compañía detrás tiene un mal trimestre, y no quiero construir uno de esos. Así que hice lo que pude para que Vizzor sea otra cosa."
     },
-    "signature": "Firmado, 7ayLabs · 2026-05-31",
+    "signature": "Firmado, 7ayLabs · 2026-06-26",
+    "ps": "P.D. Si algo de esto te resuena, la prueba dura siete días, la wallet es tuya, y el único costo de averiguar si el motor es real es el tiempo que te lleva hacerle una pregunta honesta.",
     "seeReceipts": "Ver los recibos →"
   },
-  "changelog": {
-    "changelogEyebrow": "notas de versión · semver",
-    "changelogTitle": "Novedades de Vizzor",
-    "changelogSub": "Versiones numeradas. Cada cambio registrado.",
+  "blog": {
+    "blogEyebrow": "del equipo · blog",
+    "blogTitle": "Blog de Vizzor",
+    "blogSub": "Historias, releases y notas del equipo detrás de Vizzor.",
     "subscribeRss": "Suscribirse vía RSS",
-    "readMore": "Leer notas completas",
-    "empty": "Todavía no hay versiones.",
+    "readMore": "Leer post",
+    "readingTime": "{minutes} min de lectura",
+    "tagsLabel": "Etiquetas",
+    "empty": "Todavía no hay posts.",
     "meta": {
       "released": "publicada",
       "version": "versión",
