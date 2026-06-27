@@ -61,6 +61,13 @@ const nextConfig: NextConfig = {
       { source: '/:locale(es|fr)/changelog/feed.xml', destination: '/blog/feed.xml', permanent: true },
       { source: '/:locale(es|fr)/changelog', destination: '/:locale/blog', permanent: true },
       { source: '/:locale(es|fr)/changelog/:slug', destination: '/:locale/blog/:slug', permanent: true },
+      // Docs live OUTSIDE `[locale]` (Fumadocs ships its own router; see
+      // app/docs/layout.tsx). Without these, `/es/docs` and `/fr/docs`
+      // 404 instead of resolving to the EN-only docs zone. Permanent:
+      // false so we can localize docs later without an immutable
+      // browser-cached redirect blocking the rollout.
+      { source: '/:locale(es|fr)/docs', destination: '/docs', permanent: false },
+      { source: '/:locale(es|fr)/docs/:slug*', destination: '/docs/:slug*', permanent: false },
     ];
   },
 };
