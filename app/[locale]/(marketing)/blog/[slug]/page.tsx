@@ -164,10 +164,10 @@ export default async function BlogDetailPage({
   const t = await getTranslations('blog');
   const isEditorial = !!post.title;
   const author = post.author ?? DEFAULT_AUTHOR;
-  const readingTime = t('readingTime').replace(
-    '{minutes}',
-    String(post.readingTimeMinutes),
-  );
+  // Proper next-intl ICU interpolation — `.replace()` on the raw
+  // template silently broke when the underlying string ever picked up
+  // a real ICU plural / select clause (e.g. "1 min read" vs "n min read").
+  const readingTime = t('readingTime', { minutes: post.readingTimeMinutes });
 
   return (
     <section className="relative">

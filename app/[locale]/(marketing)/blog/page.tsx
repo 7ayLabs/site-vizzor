@@ -49,6 +49,8 @@ function PostCard({
   post: BlogPost;
   locale: string;
   readMoreLabel: string;
+  /** Pre-interpolated reading-time string for this post (already
+   *  resolved through next-intl ICU). PostCard renders it as-is. */
   readingTimeLabel: string;
 }) {
   const headline = post.title ?? post.version;
@@ -103,7 +105,7 @@ function PostCard({
         <span aria-hidden className="mx-1 text-[var(--border)]">·</span>
         <span className="mono tabular inline-flex items-center gap-1 text-[var(--fg-3)]">
           <Clock size={11} strokeWidth={1.75} aria-hidden />
-          {readingTimeLabel.replace('{minutes}', String(post.readingTimeMinutes))}
+          {readingTimeLabel}
         </span>
       </header>
 
@@ -214,7 +216,12 @@ export default async function BlogIndexPage({
                   post={post}
                   locale={locale}
                   readMoreLabel={t('readMore')}
-                  readingTimeLabel={t('readingTime')}
+                  // Interpolate per-post via proper next-intl ICU so the
+                  // string is render-ready (no `.replace('{minutes}', …)`
+                  // fallback that breaks on plural/select clauses).
+                  readingTimeLabel={t('readingTime', {
+                    minutes: post.readingTimeMinutes,
+                  })}
                 />
               </MotionReveal>
             ))
