@@ -824,6 +824,29 @@
       }
     }
   },
+  "availableOn": {
+    "eyebrow": "wherever you work",
+    "title": "Available on",
+    "lede": "Same engine across every surface. Sign in once, the receipts follow you.",
+    "web": {
+      "eyebrow": "Web",
+      "title": "vizzor.ai",
+      "description": "The full dashboard — receipts, charts, watchlist, billing.",
+      "cta": "Open app"
+    },
+    "telegram": {
+      "eyebrow": "Telegram",
+      "title": "@vizzorai_bot",
+      "description": "Ask a prediction in the chat you already check. Alerts ping you when the level hits.",
+      "cta": "Open in Telegram"
+    },
+    "cli": {
+      "eyebrow": "CLI",
+      "title": "Command line",
+      "description": "Pipe predictions into your own scripts, notebooks, or trading bots.",
+      "cta": "Read the CLI docs"
+    }
+  },
   "ctaBlock": {
     "eyebrow": "start with one call",
     "title": "Stop guessing. Start tracking.",
