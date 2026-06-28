@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { headers } from 'next/headers';
 import { Toaster } from 'sonner';
 import { AppShellProvider } from '@/components/app/app-shell-provider';
-import { AppSidebar } from '@/components/app/app-sidebar';
+import { AppShellRail } from '@/components/app/app-shell-rail';
 import { CommandPaletteProvider } from '@/components/app/command-palette-context';
 import { CommandPalette } from '@/components/app/command-palette';
 import { OnboardingStepper } from '@/components/app/onboarding-stepper';
@@ -53,7 +53,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       <OnboardingControlsProvider>
         <CommandPaletteProvider>
           <div className="flex min-h-dvh bg-[var(--bg)]">
-            {!isAppOnlyHost && <AppSidebar />}
+            <AppShellRail isAppOnlyHost={isAppOnlyHost} />
             <main className="flex-1 min-w-0">{children}</main>
           </div>
           <CommandPalette />
