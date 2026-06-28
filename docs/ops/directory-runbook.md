@@ -104,6 +104,41 @@ wallet_preferences (
 )
 ```
 
+## Tier ↔ /pricing alignment (v0.4.1)
+
+Single source of truth: `data/connectors.json` (site) and
+`src/core/chronovisor/skills.ts` + `src/data/plugins/registry.ts` (engine).
+`scripts/check-directory-parity.mjs` fails the build if `required_tier` drifts
+between any matched entry across the two repos.
+
+| Catalog entry | Category | `required_tier` | Maps to pricing feature |
+|---|---|---|---|
+| `telegram` | connector | free | included with trial / lapsed accounts |
+| `discord-webhook` | connector | free | included with trial / lapsed accounts |
+| `memecoin-sniper` | skill | free | trial skill ("7-day Pro trial") |
+| `coingecko-meta` | plugin | free | basic data feed |
+| `slack-webhook` | connector | pro | "AI chat with tool-use" workflow surface |
+| `generic-webhook` | connector | pro | power-user output channel |
+| `conservative-trend` | skill | pro | "4 calibrated prediction tiers" |
+| `helius-rpc` | plugin | pro | upgraded data path (reserved until gatherer wires) |
+| `dexscreener-flow` | plugin | pro | upgraded flow feed (reserved) |
+| `whale-tracker` | skill | elite | "Whale Terminal" |
+| `flow-driven` | skill | elite | "Smart Money Flow · Cross-venue intelligence" |
+| `vizzor-mcp` | connector | elite | **"REST API + priority queue"** — MCP is the v0.4.1 surface |
+
+The `pricing.tiers.{tier}.features.directory` i18n key on /pricing surfaces
+this directly so a wallet buying Pro / Elite knows the Directory entries
+that ladder in. Update both this table and the i18n bullets if a new entry
+is added or an existing one moves tier.
+
+Enforcement points (every entry hit by a caller goes through at least one):
+- Site `POST /api/directory/install` — `tierGateForEntry(entry, effective)` → 402.
+- Site `PATCH /api/directory/skills/active` — same gate.
+- Site `POST /api/directory/import` — refused entries land in `to_install` with `reason: 'tier_required'`.
+- Site `POST /api/directory/mcp/token` — gated by the MCP catalog entry's tier.
+- Engine `/v1/chat` — `resolveSkillForTier(skillId, jwtTier)` throws `TierRequiredError` → 402.
+- UI catalog response carries `locked: boolean` (advisory only) so cards render an upgrade chip.
+
 ## What actually works end-to-end today
 
 Reality check after the `feat/v0.4.1/connector-directory` branches merge:

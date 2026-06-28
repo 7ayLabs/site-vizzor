@@ -138,7 +138,7 @@
         "predict.read",
         "agent.invoke"
       ],
-      "required_tier": "pro",
+      "required_tier": "elite",
       "status_text": "Mint a personal MCP token, paste it into your agent.",
       "config_schema": null,
       "external_docs": "https://vizzor.ai/docs/integrations/mcp"

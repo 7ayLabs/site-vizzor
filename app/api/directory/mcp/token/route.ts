@@ -14,7 +14,8 @@
  * instead of a new auth surface.
  *
  * Gated by `directory.mcp.token` rate-limit (5/min/wallet) and
- * required_tier 'pro' (matches the catalog entry).
+ * required_tier 'elite' (matches the catalog entry — MCP is the v0.4.1
+ * expression of the pricing page's 'REST API + priority queue' allowance).
  */
 
 import { NextResponse } from 'next/server';

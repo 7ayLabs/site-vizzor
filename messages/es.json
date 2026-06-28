@@ -280,7 +280,8 @@
           "unauthenticated": "Conecta tu wallet para instalar conectores.",
           "rate_limited": "Demasiadas instalaciones en poco tiempo — un momento.",
           "generic": "No se pudo instalar. Inténtalo en un momento.",
-          "install_failed": "No se pudo instalar. Inténtalo en un momento."
+          "install_failed": "No se pudo instalar. Inténtalo en un momento.",
+          "tier_required": "Disponible en un plan superior. Mejora en /pricing — tu wallet mantiene todo lo que ya tienes instalado."
         },
         "notice": {
           "reserved": "Tu credencial se cifra al guardarla. Los signal gatherers del engine aún no leen los overrides de plugins, así que las predicciones no cambiarán hasta la próxima versión."
@@ -1041,6 +1042,10 @@
           "trial": {
             "title": "Prueba Pro de 7 días · 5 predicciones/día",
             "body": "Se activa sola al primer connect — en la web o Telegram. Sin tarjeta, sin KYC, baja a Free después de 7 días."
+          },
+          "directory": {
+            "title": "Directorio · paquete inicial",
+            "body": "Skill Memecoin Sniper, Telegram, webhook de Discord y plugin de metadatos Coingecko — incluidos."
           }
         }
       },
@@ -1081,6 +1086,10 @@
           "audit": {
             "title": "Alertas, audit trail, watchlist",
             "body": "/alerts ilimitadas · cada llamada firmada y guardada · desglose /precisions + /wr · watchlist personal"
+          },
+          "directory": {
+            "title": "Directorio · skills + conectores Pro",
+            "body": "Skill Conservative Trend, webhooks Slack y genérico para tus pipelines, plugins Helius RPC y Dexscreener Flow."
           }
         }
       },
@@ -1125,6 +1134,10 @@
           "api": {
             "title": "REST API + cola prioritaria",
             "body": "REST API (60 req/min) para señales, snapshots y Predictor · tus símbolos de watchlist emiten primero · cards de señal compartibles"
+          },
+          "directory": {
+            "title": "Directorio · skills Elite + Vizzor MCP",
+            "body": "Skills Whale Tracker y Flow-Driven, más Vizzor MCP — llama a Vizzor desde Claude Desktop, Cursor o cualquier cliente MCP. Acompaña al cupo de la REST API."
           }
         }
       }
