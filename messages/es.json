@@ -706,6 +706,17 @@
       "activeSkill": {
         "label": "Skill activa",
         "tooltip": "Abre el Directorio para cambiarla o quitarla."
+      },
+      "picker": {
+        "trigger": "Abrir Directorio",
+        "triggerDisabled": "Conecta tu wallet para abrir el Directorio",
+        "section": {
+          "skill": "Skills",
+          "connector": "Conectores",
+          "plugin": "Plugins"
+        },
+        "manage": "Abrir Directorio",
+        "reserved": "Pronto"
       }
     },
     "settings": {

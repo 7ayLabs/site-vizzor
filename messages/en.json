@@ -706,6 +706,17 @@
       "activeSkill": {
         "label": "Active skill",
         "tooltip": "Open the Directory to change or clear it."
+      },
+      "picker": {
+        "trigger": "Open Directory",
+        "triggerDisabled": "Sign in to open the Directory",
+        "section": {
+          "skill": "Skills",
+          "connector": "Connectors",
+          "plugin": "Plugins"
+        },
+        "manage": "Open Directory",
+        "reserved": "Soon"
       }
     },
     "settings": {

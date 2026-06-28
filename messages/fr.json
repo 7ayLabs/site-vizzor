@@ -706,6 +706,17 @@
       "activeSkill": {
         "label": "Skill active",
         "tooltip": "Ouvrir l'annuaire pour la changer ou la désactiver."
+      },
+      "picker": {
+        "trigger": "Ouvrir l'annuaire",
+        "triggerDisabled": "Connectez votre wallet pour ouvrir l’annuaire",
+        "section": {
+          "skill": "Skills",
+          "connector": "Connecteurs",
+          "plugin": "Plugins"
+        },
+        "manage": "Ouvrir l'annuaire",
+        "reserved": "Bientôt"
       }
     },
     "settings": {

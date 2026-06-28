@@ -47,6 +47,7 @@ import { toast } from 'sonner';
 import { useTicker } from '@/lib/api';
 import { ChatBubble } from '@/components/predict/chat-bubble';
 import { TickerStack } from '@/components/predict/ticker-banner';
+import { DirectoryPicker } from '@/components/predict/directory-picker';
 import { CoinIcon } from '@/components/ui/coin-icon';
 import { Link } from '@/i18n/navigation';
 import { WalletAuthButton } from '@/components/auth/wallet-auth-button';
@@ -928,26 +929,19 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
               ) : composerLocked ? (
                 <ExhaustedBanner onReset={onInlineReset} quota={quota} />
               ) : (
-                <>
-                  {/* v0.4.1 — active-skill pill. Surfaces the wallet's
-                      current Directory skill above the composer so the
-                      user has constant evidence the bias is engaged
-                      without opening /app/directory. Quiet by default;
-                      shows nothing when no skill is active. */}
-                  <ActiveSkillPill signedIn={signedIn} />
-                  <Composer
-                    inputRef={inputRef}
-                    value={input}
-                    onChange={setInput}
-                    onSubmit={onSubmit}
-                    onStop={stop}
-                    isStreaming={isStreaming}
-                    placeholder={t('shell.composer.placeholder')}
-                    sendLabel={t('send')}
-                    stopLabel={t('shell.composer.stop')}
-                    hintLabel={t('shell.composer.kbdHint')}
-                  />
-                </>
+                <Composer
+                  inputRef={inputRef}
+                  value={input}
+                  onChange={setInput}
+                  onSubmit={onSubmit}
+                  onStop={stop}
+                  isStreaming={isStreaming}
+                  placeholder={t('shell.composer.placeholder')}
+                  sendLabel={t('send')}
+                  stopLabel={t('shell.composer.stop')}
+                  hintLabel={t('shell.composer.kbdHint')}
+                  signedIn={signedIn}
+                />
               )}
             </div>
           </div>
@@ -2018,69 +2012,6 @@ function MobileDrawer({
   );
 }
 
-/* ──────────────────── Active-skill pill (v0.4.1) ─────────────────── */
-
-interface SkillsActiveResponse {
-  ok: boolean;
-  skill_id: string | null;
-}
-interface DirectoryCatalogEntry {
-  id: string;
-  name: string;
-  category: 'skill' | 'connector' | 'plugin';
-}
-interface DirectoryCatalogResponse {
-  ok: boolean;
-  entries: DirectoryCatalogEntry[];
-}
-
-const skillsActiveFetcher = (url: string): Promise<SkillsActiveResponse> =>
-  fetch(url, { credentials: 'same-origin' }).then((r) =>
-    r.ok ? (r.json() as Promise<SkillsActiveResponse>) : { ok: false, skill_id: null },
-  );
-
-const directoryCatalogFetcher = (url: string): Promise<DirectoryCatalogResponse> =>
-  fetch(url, { credentials: 'same-origin' }).then((r) =>
-    r.ok
-      ? (r.json() as Promise<DirectoryCatalogResponse>)
-      : { ok: false, entries: [] },
-  );
-
-function ActiveSkillPill({ signedIn }: { signedIn: boolean }) {
-  const t = useTranslations('predict');
-  const locale = useLocale();
-  const { data: active } = useSWR<SkillsActiveResponse>(
-    signedIn ? '/api/directory/skills/active' : null,
-    skillsActiveFetcher,
-    { revalidateOnFocus: true, refreshInterval: 60_000 },
-  );
-  const { data: catalog } = useSWR<DirectoryCatalogResponse>(
-    active?.skill_id ? '/api/directory/catalog' : null,
-    directoryCatalogFetcher,
-    { revalidateOnFocus: false, refreshInterval: 0 },
-  );
-  const skillId = active?.skill_id ?? null;
-  if (!skillId) return null;
-  const skillName =
-    catalog?.entries.find((e) => e.id === skillId && e.category === 'skill')
-      ?.name ?? skillId;
-  return (
-    <div className="mb-2 flex items-center gap-2 text-[11px] text-[var(--fg-3)]">
-      <a
-        href={`/${locale}/app/directory`}
-        className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 hover:border-[var(--fg-3)] hover:text-[var(--fg-2)] transition-colors"
-        title={t('shell.activeSkill.tooltip')}
-      >
-        <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" aria-hidden />
-        <span>
-          {t('shell.activeSkill.label')}
-          <span className="text-[var(--fg-2)] font-medium ml-1">{skillName}</span>
-        </span>
-      </a>
-    </div>
-  );
-}
-
 /* ─────────────────────────── Composer ─────────────────────────── */
 
 function Composer({
@@ -2094,6 +2025,7 @@ function Composer({
   sendLabel,
   stopLabel,
   hintLabel,
+  signedIn,
 }: {
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   value: string;
@@ -2106,6 +2038,8 @@ function Composer({
   sendLabel: string;
   stopLabel: string;
   hintLabel: string;
+  /** Gates the Directory picker — the menu only opens when SIWS-bound. */
+  signedIn: boolean;
 }) {
   // The palette opens whenever the input starts with `/` and a space
   // hasn't been typed yet (i.e. the user is still naming the command).
@@ -2186,6 +2120,14 @@ function Composer({
           onClose={onPaletteClose}
         />
       )}
+
+      {/* v0.4.1 — Claude-style Directory picker. Opens a menu with the
+          wallet's Skills, Connectors, Plugins; activating a skill takes
+          effect on the next message without leaving the chat. The
+          trigger sits to the left of the textarea so the action surface
+          reads in left-to-right order: pick context (skill/connector),
+          type, send. */}
+      <DirectoryPicker signedIn={signedIn} disabled={isStreaming} />
 
       <textarea
         ref={inputRef}
