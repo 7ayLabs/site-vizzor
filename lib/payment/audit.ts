@@ -30,7 +30,14 @@ export type AuditEventType =
   | 'wallet_link.create'
   | 'wallet_link.delete'
   | 'account.delete'
-  | 'retention.sweep';
+  | 'retention.sweep'
+  // v0.4.1 — directory (connector store) events. `subject` is the
+  // connector_id from data/connectors.json; never a credential.
+  | 'directory.install'
+  | 'directory.uninstall'
+  | 'directory.credentials.rotated'
+  | 'directory.skill.activated'
+  | 'directory.connector.circuit_open';
 
 export type AuditOutcome = 'found' | 'not_found' | 'denied' | 'ok' | 'error';
 

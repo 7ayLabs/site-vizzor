@@ -122,6 +122,7 @@ function init(): DB {
   `);
   runV020Migrations(db);
   runV04TreasuryMigrations(db);
+  runV041DirectoryMigrations(db);
   return db;
 }
 
@@ -433,6 +434,49 @@ function runV04TreasuryMigrations(db: DB): void {
     );
     INSERT OR IGNORE INTO pool_state (chain, next_index) VALUES ('solana', 0);
     INSERT OR IGNORE INTO pool_state (chain, next_index) VALUES ('ton', 0);
+  `);
+}
+
+/* ------------------------------------------------------------------ *\
+ * v0.4.1 directory migrations — connector store + per-wallet skill
+ * activation. Additive only; a fresh DB and an upgraded DB behave the
+ * same when no rows exist.
+ *
+ * `user_connections` is the install ledger — one row per (wallet,
+ * connector) pair. Credentials are AES-256-GCM blobs (see
+ * lib/security/connector-crypto.ts); the encryption key never lives in
+ * the DB. Soft-revoke via `status='revoked'` so audit + analytics
+ * keep the install history.
+ *
+ * `wallet_preferences` is a kv-by-wallet table whose first column is
+ * `active_skill_id`. New preferences land here without further migration.
+\* ------------------------------------------------------------------ */
+function runV041DirectoryMigrations(db: DB): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_connections (
+      id                      TEXT PRIMARY KEY,
+      wallet_address          TEXT NOT NULL,
+      connector_id            TEXT NOT NULL,
+      status                  TEXT NOT NULL DEFAULT 'active',
+      credentials_ciphertext  BLOB,
+      credentials_iv          BLOB,
+      credentials_tag         BLOB,
+      scopes                  TEXT NOT NULL DEFAULT '[]',
+      installed_at            INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000),
+      last_used_at            INTEGER,
+      revoked_at              INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_connections_wallet
+      ON user_connections(wallet_address);
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_user_connections_wallet_connector_active
+      ON user_connections(wallet_address, connector_id)
+      WHERE status = 'active';
+
+    CREATE TABLE IF NOT EXISTS wallet_preferences (
+      wallet_address    TEXT PRIMARY KEY,
+      active_skill_id   TEXT,
+      updated_at        INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000)
+    );
   `);
 }
 
@@ -1352,4 +1396,151 @@ export function pruneExpiredMobileHandoffs(): number {
     .prepare(`DELETE FROM mobile_handoffs WHERE expires_at < ?`)
     .run(Date.now());
   return r.changes;
+}
+
+/* ------------------------------------------------------------------ *\
+ * v0.4.1 — directory (connector / skill / plugin) helpers.
+\* ------------------------------------------------------------------ */
+
+export type ConnectorStatus = 'active' | 'paused' | 'revoked';
+
+export interface UserConnectionRow {
+  id: string;
+  wallet_address: string;
+  connector_id: string;
+  status: ConnectorStatus;
+  credentials_ciphertext: Buffer | null;
+  credentials_iv: Buffer | null;
+  credentials_tag: Buffer | null;
+  scopes: string;
+  installed_at: number;
+  last_used_at: number | null;
+  revoked_at: number | null;
+}
+
+export function insertUserConnection(row: {
+  id: string;
+  wallet: string;
+  connectorId: string;
+  scopes: string[];
+  ciphertext: Buffer | null;
+  iv: Buffer | null;
+  tag: Buffer | null;
+}): void {
+  getDb()
+    .prepare(
+      `INSERT INTO user_connections
+         (id, wallet_address, connector_id, status,
+          credentials_ciphertext, credentials_iv, credentials_tag, scopes)
+       VALUES (@id, @wallet, @connectorId, 'active',
+          @ciphertext, @iv, @tag, @scopes)`,
+    )
+    .run({
+      id: row.id,
+      wallet: row.wallet,
+      connectorId: row.connectorId,
+      ciphertext: row.ciphertext,
+      iv: row.iv,
+      tag: row.tag,
+      scopes: JSON.stringify(row.scopes),
+    });
+}
+
+export function listActiveConnectionsForWallet(
+  wallet: string,
+): UserConnectionRow[] {
+  return getDb()
+    .prepare(
+      `SELECT * FROM user_connections
+         WHERE wallet_address = ? AND status = 'active'
+         ORDER BY installed_at DESC`,
+    )
+    .all(wallet) as UserConnectionRow[];
+}
+
+export function getUserConnection(
+  id: string,
+  wallet: string,
+): UserConnectionRow | null {
+  const row = getDb()
+    .prepare(
+      `SELECT * FROM user_connections WHERE id = ? AND wallet_address = ?`,
+    )
+    .get(id, wallet) as UserConnectionRow | undefined;
+  return row ?? null;
+}
+
+export function revokeUserConnection(id: string, wallet: string): boolean {
+  const r = getDb()
+    .prepare(
+      `UPDATE user_connections
+         SET status = 'revoked', revoked_at = ?
+         WHERE id = ? AND wallet_address = ? AND status = 'active'`,
+    )
+    .run(Date.now(), id, wallet);
+  return r.changes > 0;
+}
+
+export function rotateUserConnectionCredentials(
+  id: string,
+  wallet: string,
+  ciphertext: Buffer,
+  iv: Buffer,
+  tag: Buffer,
+): boolean {
+  const r = getDb()
+    .prepare(
+      `UPDATE user_connections
+         SET credentials_ciphertext = ?, credentials_iv = ?, credentials_tag = ?
+         WHERE id = ? AND wallet_address = ? AND status = 'active'`,
+    )
+    .run(ciphertext, iv, tag, id, wallet);
+  return r.changes > 0;
+}
+
+export function markConnectionUsed(id: string): void {
+  getDb()
+    .prepare(`UPDATE user_connections SET last_used_at = ? WHERE id = ?`)
+    .run(Date.now(), id);
+}
+
+/**
+ * Per-wallet preferences. Only `active_skill_id` lives here today, but
+ * the table is intentionally a kv-row so future preferences (timezone,
+ * default surface, etc.) extend by ALTER instead of new tables.
+ */
+export interface WalletPreferencesRow {
+  wallet_address: string;
+  active_skill_id: string | null;
+  updated_at: number;
+}
+
+export function getWalletPreferences(
+  wallet: string,
+): WalletPreferencesRow | null {
+  const row = getDb()
+    .prepare(`SELECT * FROM wallet_preferences WHERE wallet_address = ?`)
+    .get(wallet) as WalletPreferencesRow | undefined;
+  return row ?? null;
+}
+
+/**
+ * Upsert the wallet's active skill id. Pass `null` to clear the
+ * selection (engine falls back to default behavior). Caller is
+ * responsible for validating that `skillId` exists in the catalog —
+ * the table stores any string for migration flexibility.
+ */
+export function setActiveSkillForWallet(
+  wallet: string,
+  skillId: string | null,
+): void {
+  getDb()
+    .prepare(
+      `INSERT INTO wallet_preferences (wallet_address, active_skill_id, updated_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(wallet_address) DO UPDATE SET
+         active_skill_id = excluded.active_skill_id,
+         updated_at      = excluded.updated_at`,
+    )
+    .run(wallet, skillId, Date.now());
 }
