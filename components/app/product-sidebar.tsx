@@ -102,7 +102,7 @@ export function ProductSidebar() {
   const onOpenSettings = () => setSettingsOpen(true);
   const onOpenReceipts = () => {
     // typedRoutes doesn't yet know about hashes — cast through never.
-    router.push('/account#payments' as never);
+    router.push('/app/account#payments' as never);
   };
 
   // Collapse state — shares the same localStorage key as the predict
@@ -647,7 +647,7 @@ function Identity({
             />
             {signedIn && (
               <MenuLink
-                href="/account"
+                href="/app/account"
                 icon={<IconClose size={15} />}
                 label={tAuth('viewProfile')}
                 onClick={() => setOpen(false)}

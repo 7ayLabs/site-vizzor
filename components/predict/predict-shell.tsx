@@ -506,7 +506,7 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
 
   const onOpenReceipts = useCallback(() => {
     // typedRoutes doesn't yet know about hashes — cast through never.
-    router.push('/account#payments' as never);
+    router.push('/app/account#payments' as never);
     setDrawerOpen(false);
   }, [router]);
 
@@ -1138,7 +1138,7 @@ function LeftRail({
       >
         {!collapsed && (
           <Link
-            href="/"
+            href="/app/predict"
             aria-label="Vizzor home"
             className="inline-flex items-center gap-2.5 text-[17px] font-semibold tracking-tight text-[var(--fg)] hover:opacity-80 transition-opacity leading-none"
           >
@@ -1704,7 +1704,7 @@ function Identity({
             />
             {signedIn && (
               <DropdownLink
-                href="/account"
+                href="/app/account"
                 icon={<IconUser size={15} />}
                 label={tAuth('viewProfile')}
                 onClick={() => setOpen(false)}
@@ -1924,7 +1924,7 @@ function MobileDrawer({
         `}</style>
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
           <Link
-            href="/"
+            href="/app/predict"
             aria-label="Vizzor home"
             className="inline-flex items-center gap-2.5 text-[16px] font-semibold tracking-tight text-[var(--fg)] leading-none hover:opacity-80 transition-opacity"
           >
