@@ -45,6 +45,11 @@ import {
 } from '@/lib/payment/tier-resolver';
 import { promptByteCap } from '@/lib/feature-flags';
 import {
+  getActivePluginIds,
+  getActiveSkillId,
+  dispatchPrediction,
+} from '@/lib/directory/runtime';
+import {
   PREDICT_ROUTE_REQUIREMENTS,
   assertRequiredEnv,
 } from '@/lib/env';
@@ -296,6 +301,23 @@ async function forwardToVizzor(
     };
     if (apiKey) upstreamHeaders['x-api-key'] = apiKey;
 
+    // v0.4.1 — Directory wiring. Pull the wallet's active skill +
+    // plugin selections from `wallet_preferences` + `user_connections`
+    // and forward them to the engine. Empty values are omitted so a
+    // wallet without any directory state behaves bit-identically to
+    // pre-v0.4.1 callers (the engine treats missing fields as "use
+    // defaults"). Lookups are cheap SQLite reads on indexed columns;
+    // failures fall back to "no skill, no plugins" rather than
+    // breaking the predict path.
+    let activeSkillId: string | null = null;
+    let activePluginIds: string[] = [];
+    try {
+      activeSkillId = getActiveSkillId(ctx.wallet);
+      activePluginIds = getActivePluginIds(ctx.wallet);
+    } catch {
+      /* directory unavailable — degrade to defaults */
+    }
+
     const upstreamRes = await fetch(`${base}/v1/chat`, {
       method: 'POST',
       headers: upstreamHeaders,
@@ -309,6 +331,8 @@ async function forwardToVizzor(
           timezone,
           client: 'site-web',
         },
+        ...(activeSkillId ? { skill_id: activeSkillId } : {}),
+        ...(activePluginIds.length > 0 ? { plugin_ids: activePluginIds } : {}),
       }),
       signal: controller.signal,
       cache: 'no-store',
@@ -343,6 +367,33 @@ async function forwardToVizzor(
     // can see when the engine hit a billing limit or invoked a tool.
     const transformed = transformVizzorStream(upstreamRes.body);
 
+    // v0.4.1 — Directory connector fan-out. When the upstream stream
+    // closes cleanly, fire-and-forget dispatch a minimal payload to
+    // every active webhook connector for this wallet (Discord, Slack,
+    // generic). dispatchPrediction is best-effort and never blocks
+    // the client response: failures are audit-logged inside the
+    // helper. We don't parse the response text — predict is a chat
+    // stream, not a single structured prediction, so the dispatched
+    // payload carries just the engagement signal ("a chat reply
+    // happened for wallet X") with timestamp. Per-prediction symbol
+    // + direction land downstream once /v1/chronovisor/<symbol> is
+    // surfaced through this route as its own dispatch path.
+    const fanoutStream = transformed.pipeThrough(
+      new TransformStream({
+        flush: () => {
+          dispatchPrediction(ctx.wallet, {
+            symbol: '',
+            direction: 'neutral',
+            confidence: 0,
+            horizon: 'chat',
+            generated_at: new Date().toISOString(),
+          }).catch(() => {
+            /* dispatchPrediction logs its own audit row on failure */
+          });
+        },
+      }),
+    );
+
     const headers = new Headers({
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-store',
@@ -350,7 +401,7 @@ async function forwardToVizzor(
       'x-vizzor-source': 'engine',
     });
 
-    return new Response(transformed, { status: 200, headers });
+    return new Response(fanoutStream, { status: 200, headers });
   } catch {
     return offlineResponse();
   } finally {

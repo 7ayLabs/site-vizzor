@@ -104,6 +104,85 @@ wallet_preferences (
 )
 ```
 
+## What actually works end-to-end today
+
+Reality check after the `feat/v0.4.1/connector-directory` branches merge:
+
+### Skills — fully wired
+
+| Entry | Weight overrides | Prompt prefix | Status |
+|---|---|---|---|
+| `memecoin-sniper` | ✅ applied in `engine.predict` (mergeWeights) | ✅ prepended in `buildTaskAwareChatSystemPrompt` | works |
+| `whale-tracker` | ✅ | ✅ | works |
+| `conservative-trend` | ✅ | ✅ | works |
+| `flow-driven` | ✅ | ✅ | works |
+
+End-to-end sequence:
+
+1. User clicks `+` on a skill card in `/app/directory`.
+2. UI calls `PATCH /api/directory/skills/active` with the `skill_id`.
+3. Server validates the id against the catalog (`isKnownSkill`), upserts
+   `wallet_preferences.active_skill_id` for the SIWS-authenticated wallet,
+   audit-logs `directory.skill.activated`.
+4. Next time the wallet hits `/api/predict`, the route reads
+   `getActiveSkillId(wallet)` from `wallet_preferences` and forwards it
+   to the engine in the `/v1/chat` body as `skill_id`.
+5. Engine `chat.ts` resolves the skill via `resolveSkill(skill_id)`. Unknown
+   id → 400 `unknown_skill`. Known id → the skill's `systemPromptPrefix`
+   is threaded into `buildTaskAwareChatSystemPrompt` (lines 414-421) and
+   prepended to the system prompt above the site-locale block so it
+   carries authoritative weight.
+6. Inside the same predict pipeline, `engine.predict()` resolves the
+   same skill from its `opts.skillId` and deep-merges
+   `signal_weight_overrides` onto the per-horizon `blendedWeights`
+   before `applyWeights` + `computeComposite` run. The `signalBreakdown`
+   the UI surfaces matches the post-merge math.
+
+### Connectors — partially wired
+
+| Entry | Dispatch path | Status |
+|---|---|---|
+| `telegram` | existing `wallet_links` + `pending_notifications` (engine repo); paired wallets receive on-demand bot output today | works **today via the existing pair flow**; broadcast fan-out to paired wallets is a separate roadmap item |
+| `discord-webhook` | site-side `dispatchPrediction` via `safeFetch` | works after install — fires once per `/api/predict` stream close |
+| `slack-webhook` | same | works after install |
+| `generic-webhook` | same | works after install |
+
+End-to-end sequence (Discord / Slack / generic):
+
+1. User clicks `+` on the connector card → install sheet collects the
+   webhook URL.
+2. POST `/api/directory/install` validates the URL against the entry's
+   schema (regex for Discord/Slack hosts), runs `validateOutboundUrl`
+   for SSRF protection, encrypts the payload with AES-256-GCM, inserts
+   `user_connections` row with `status='active'`.
+3. When the wallet runs a chat, `/api/predict` calls the engine, pipes
+   the SSE response back to the client, and on stream close
+   `dispatchPrediction(ctx.wallet, payload)` fires. The fan-out reads
+   every active webhook for the wallet, decrypts its URL, posts a JSON
+   body via `safeFetch` with a 3.5s timeout, and audit-logs failures as
+   `directory.connector.circuit_open`. Per-connector failures are
+   isolated; the user's chat reply never blocks on dispatch.
+
+### Plugins — scaffolding only, no behavior change yet
+
+| Entry | Resolver | Behavior change | Status |
+|---|---|---|---|
+| `helius-rpc` | ✅ `resolvePlugins` (engine) | ❌ `solana-whale-monitor` still reads `HELIUS_API_KEY` env | scaffolding |
+| `dexscreener-flow` | ✅ | ❌ `dex-pair-tracker` still reads `DEXSCREENER_BASE` env | scaffolding |
+| `coingecko-meta` | ✅ | ❌ `token-resolver` still reads `COINGECKO_API_KEY` env | scaffolding |
+
+The boundary contract is in place: a wallet's plugin selection flows
+from `/api/directory/catalog` → `wallet_preferences`/`user_connections`
+→ `/api/predict` body `plugin_ids` → `chat.ts` (the chat route receives
+them; see `void pluginIdsRaw`) → engine `resolvePlugins`. The remaining
+hookup — signal gatherers reading `pluginsForTarget()` and substituting
+the user's API key in their fetch path — requires a server-to-server
+key forwarding channel (the user's encrypted credentials live on the
+site, not the engine). Marked as deferred until that surface ships.
+A user who installs `helius-rpc` today sees `Installed` in the UI and
+the choice is audit-logged, but predictions reason against the engine's
+default RPC.
+
 ## Where to look in code
 
 - Catalog loader + types: `lib/directory/catalog.ts`
