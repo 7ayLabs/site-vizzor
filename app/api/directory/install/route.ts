@@ -33,6 +33,8 @@ import {
 import { encrypt } from '@/lib/security/connector-crypto';
 import { validateOutboundUrl, SsrfBlockedError } from '@/lib/security/safe-fetch';
 import { insertUserConnection } from '@/lib/payment/db';
+import { resolveTier } from '@/lib/payment/tier-resolver';
+import { tierGateForEntry } from '@/lib/directory/runtime';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -69,6 +71,26 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { ok: false, reason: 'unknown_connector' },
       { status: 400 },
+    );
+  }
+
+  // v0.4.1 — server-enforced required_tier. The catalog's `locked` flag
+  // is advisory only; the source of truth is here. Never trust the UI
+  // gate. A wallet on the trial tier installs anything that the
+  // EffectiveTier → RequiredTier mapping treats as `pro` (matches the
+  // predict-route policy: trial users get pro-equivalent access).
+  const effective = resolveTier(session.wallet);
+  if (tierGateForEntry(entry, effective)) {
+    recordAudit({
+      eventType: 'directory.install',
+      actor: actorFromWallet(session.wallet),
+      subject: entry.id,
+      outcome: 'denied',
+      req,
+    });
+    return NextResponse.json(
+      { ok: false, reason: 'tier_required', required_tier: entry.required_tier },
+      { status: 402 },
     );
   }
 

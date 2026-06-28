@@ -17,7 +17,28 @@ import { join } from 'node:path';
 
 export type ConnectorCategory = 'connector' | 'skill' | 'plugin';
 export type PartnerTier = 'vizzor' | 'partner' | 'community';
-export type InstallKind = 'internal' | 'webhook' | 'apikey' | 'skill';
+export type InstallKind = 'internal' | 'webhook' | 'apikey' | 'skill' | 'mcp';
+export type RequiredTier = 'free' | 'pro' | 'elite';
+
+/**
+ * Tier hierarchy for catalog access checks. A wallet at `pro` can install
+ * entries marked `free` or `pro` but not `elite`. The order is shared with
+ * the engine's tier check so install + skill resolution use the same rule.
+ */
+const TIER_RANK: Record<RequiredTier, number> = { free: 0, pro: 1, elite: 2 };
+
+/**
+ * `requiredTier` of `null` means "no caller tier known" (anonymous). It
+ * passes only `free` entries. A known tier passes anything at or below
+ * its rank.
+ */
+export function tierSatisfies(
+  callerTier: RequiredTier | null,
+  required: RequiredTier,
+): boolean {
+  if (callerTier === null) return required === 'free';
+  return TIER_RANK[callerTier] >= TIER_RANK[required];
+}
 
 export interface ConfigField {
   name: string;
@@ -45,6 +66,14 @@ export interface CatalogEntry {
   partner_tier: PartnerTier;
   install_kind: InstallKind;
   scopes: string[];
+  /**
+   * v0.4.1 — minimum subscription tier needed to install / activate
+   * this entry. Optional in the JSON for backwards compatibility;
+   * missing = 'free'. Enforced server-side at the install API and (for
+   * skills) at the engine's chat route. Never trust the UI lock — the
+   * `locked` flag the catalog API surfaces is purely advisory.
+   */
+  required_tier: RequiredTier;
   status_text?: string;
   config_schema: ConfigSchema | null;
   external_docs?: string;
@@ -75,7 +104,8 @@ function isStringArray(x: unknown): x is string[] {
 
 const VALID_CATEGORIES = new Set<ConnectorCategory>(['connector', 'skill', 'plugin']);
 const VALID_TIERS = new Set<PartnerTier>(['vizzor', 'partner', 'community']);
-const VALID_INSTALL_KINDS = new Set<InstallKind>(['internal', 'webhook', 'apikey', 'skill']);
+const VALID_INSTALL_KINDS = new Set<InstallKind>(['internal', 'webhook', 'apikey', 'skill', 'mcp']);
+const VALID_REQUIRED_TIERS = new Set<RequiredTier>(['free', 'pro', 'elite']);
 
 function validateField(field: unknown, ctx: string): ConfigField {
   if (!field || typeof field !== 'object') {
@@ -124,6 +154,19 @@ function validateEntry(raw: unknown): CatalogEntry {
     throw new Error(`${ctx}: install_kind must be one of ${[...VALID_INSTALL_KINDS].join(',')}`);
   }
   if (!isStringArray(e.scopes)) throw new Error(`${ctx}: scopes must be string[]`);
+  // required_tier defaults to 'free' so the existing JSON file stays
+  // valid without bumping every entry at once.
+  const rawTier = e.required_tier;
+  if (
+    rawTier !== undefined &&
+    rawTier !== null &&
+    !VALID_REQUIRED_TIERS.has(rawTier as RequiredTier)
+  ) {
+    throw new Error(
+      `${ctx}: required_tier must be one of ${[...VALID_REQUIRED_TIERS].join(',')}`,
+    );
+  }
+  const required_tier: RequiredTier = (rawTier as RequiredTier | undefined) ?? 'free';
 
   let configSchema: ConfigSchema | null = null;
   if (e.config_schema !== null && e.config_schema !== undefined) {
@@ -152,6 +195,7 @@ function validateEntry(raw: unknown): CatalogEntry {
     partner_tier: e.partner_tier as PartnerTier,
     install_kind: e.install_kind as InstallKind,
     scopes: e.scopes,
+    required_tier,
     status_text: typeof e.status_text === 'string' ? e.status_text : undefined,
     config_schema: configSchema,
     external_docs: typeof e.external_docs === 'string' ? e.external_docs : undefined,

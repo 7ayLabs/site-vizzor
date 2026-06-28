@@ -477,6 +477,34 @@ function runV041DirectoryMigrations(db: DB): void {
       active_skill_id   TEXT,
       updated_at        INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000)
     );
+
+    /* v0.4.1 — MCP personal access tokens.
+     *
+     * Per-wallet bearer tokens for external AI agents (Claude Desktop,
+     * Cursor, ChatGPT custom GPTs). Never store the raw token — the
+     * mint route returns it once and persists only sha256(token) here,
+     * matching the auth-session token-hash hardening from v0.2.x.
+     * Revocation is soft (status='revoked' + revoked_at) so the audit
+     * trail survives.
+     *
+     * scopes is a JSON-array string the engine consumes to bound the
+     * agent's reach (e.g. predict.read, whales.read). The engine
+     * v1 MCP endpoints aren't live in v0.4.1 yet — the token surface
+     * is what we ship now so the day MCP becomes urgent the table
+     * already exists with real data. */
+    CREATE TABLE IF NOT EXISTS mcp_personal_tokens (
+      token_hash      TEXT PRIMARY KEY,
+      wallet_address  TEXT NOT NULL,
+      label           TEXT,
+      scopes          TEXT NOT NULL DEFAULT '["predict.read"]',
+      status          TEXT NOT NULL DEFAULT 'active',
+      created_at      INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000),
+      last_used_at    INTEGER,
+      expires_at      INTEGER,
+      revoked_at      INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_mcp_tokens_wallet
+      ON mcp_personal_tokens(wallet_address);
   `);
 }
 
@@ -1543,4 +1571,63 @@ export function setActiveSkillForWallet(
          updated_at      = excluded.updated_at`,
     )
     .run(wallet, skillId, Date.now());
+}
+
+/* ------------------------------------------------------------------ *\
+ * v0.4.1 — MCP personal token helpers.
+\* ------------------------------------------------------------------ */
+
+export interface McpTokenRow {
+  token_hash: string;
+  wallet_address: string;
+  label: string | null;
+  scopes: string;
+  status: 'active' | 'revoked';
+  created_at: number;
+  last_used_at: number | null;
+  expires_at: number | null;
+  revoked_at: number | null;
+}
+
+export function insertMcpToken(row: {
+  tokenHash: string;
+  wallet: string;
+  label: string | null;
+  scopes: string[];
+  expiresAt: number | null;
+}): void {
+  getDb()
+    .prepare(
+      `INSERT INTO mcp_personal_tokens
+         (token_hash, wallet_address, label, scopes, expires_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+    .run(
+      row.tokenHash,
+      row.wallet,
+      row.label,
+      JSON.stringify(row.scopes),
+      row.expiresAt,
+    );
+}
+
+export function listMcpTokensForWallet(wallet: string): McpTokenRow[] {
+  return getDb()
+    .prepare(
+      `SELECT * FROM mcp_personal_tokens
+         WHERE wallet_address = ? AND status = 'active'
+         ORDER BY created_at DESC`,
+    )
+    .all(wallet) as McpTokenRow[];
+}
+
+export function revokeMcpToken(tokenHash: string, wallet: string): boolean {
+  const r = getDb()
+    .prepare(
+      `UPDATE mcp_personal_tokens
+         SET status = 'revoked', revoked_at = ?
+         WHERE token_hash = ? AND wallet_address = ? AND status = 'active'`,
+    )
+    .run(Date.now(), tokenHash, wallet);
+  return r.changes > 0;
 }

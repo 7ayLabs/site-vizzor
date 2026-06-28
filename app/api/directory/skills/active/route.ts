@@ -12,11 +12,13 @@ import { NextResponse } from 'next/server';
 import { getActiveSession } from '@/lib/payment/auth-session';
 import { enforceRateLimit } from '@/lib/payment/rate-limit';
 import { recordAudit, actorFromWallet } from '@/lib/payment/audit';
-import { isKnownSkill } from '@/lib/directory/catalog';
+import { getEntry, isKnownSkill } from '@/lib/directory/catalog';
 import {
   getWalletPreferences,
   setActiveSkillForWallet,
 } from '@/lib/payment/db';
+import { resolveTier } from '@/lib/payment/tier-resolver';
+import { tierGateForEntry } from '@/lib/directory/runtime';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -73,6 +75,19 @@ export async function PATCH(req: Request) {
       { ok: false, reason: 'unknown_skill' },
       { status: 400 },
     );
+  }
+  // v0.4.1 — server-enforced required_tier on skill activation. The
+  // engine reapplies the same check on every predict so a wallet
+  // can't escalate by setting the active skill via direct DB write
+  // either.
+  if (typeof skillId === 'string') {
+    const entry = getEntry(skillId);
+    if (entry && tierGateForEntry(entry, resolveTier(session.wallet))) {
+      return NextResponse.json(
+        { ok: false, reason: 'tier_required', required_tier: entry.required_tier },
+        { status: 402 },
+      );
+    }
   }
 
   setActiveSkillForWallet(session.wallet, skillId);

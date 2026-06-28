@@ -11,13 +11,19 @@
       "summary": "Get predictions in your Telegram DMs.",
       "description": "Pair your Vizzor account with @vizzor_bot to receive every prediction, signal change, and confidence shift as a Telegram DM. Pairs via SIWS — no API key required.",
       "popular_rank": 1,
-      "popular_for": ["predict"],
+      "popular_for": [
+        "predict"
+      ],
       "partner_tier": "vizzor",
       "install_kind": "internal",
-      "scopes": ["predict.read", "alerts.deliver"],
+      "scopes": [
+        "predict.read",
+        "alerts.deliver"
+      ],
       "status_text": "Installed via the Telegram pair flow",
       "config_schema": null,
-      "external_docs": "https://vizzor.ai/docs/integrations/telegram"
+      "external_docs": "https://vizzor.ai/docs/integrations/telegram",
+      "required_tier": "free"
     },
     {
       "id": "discord-webhook",
@@ -28,10 +34,14 @@
       "summary": "Pipe predictions into any Discord channel.",
       "description": "Paste a Discord channel webhook URL. Every prediction (and confidence change above the threshold) posts as a formatted embed. Bring your own alpha to your squad.",
       "popular_rank": 2,
-      "popular_for": ["predict"],
+      "popular_for": [
+        "predict"
+      ],
       "partner_tier": "partner",
       "install_kind": "webhook",
-      "scopes": ["predict.read"],
+      "scopes": [
+        "predict.read"
+      ],
       "config_schema": {
         "fields": [
           {
@@ -44,7 +54,8 @@
           }
         ]
       },
-      "external_docs": "https://support.discord.com/hc/en-us/articles/228383668"
+      "external_docs": "https://support.discord.com/hc/en-us/articles/228383668",
+      "required_tier": "free"
     },
     {
       "id": "slack-webhook",
@@ -55,10 +66,14 @@
       "summary": "Post Vizzor predictions to a Slack channel.",
       "description": "Use a Slack incoming webhook URL to forward predictions and signal events into any workspace channel.",
       "popular_rank": 3,
-      "popular_for": ["predict"],
+      "popular_for": [
+        "predict"
+      ],
       "partner_tier": "partner",
       "install_kind": "webhook",
-      "scopes": ["predict.read"],
+      "scopes": [
+        "predict.read"
+      ],
       "config_schema": {
         "fields": [
           {
@@ -71,7 +86,8 @@
           }
         ]
       },
-      "external_docs": "https://api.slack.com/messaging/webhooks"
+      "external_docs": "https://api.slack.com/messaging/webhooks",
+      "required_tier": "pro"
     },
     {
       "id": "generic-webhook",
@@ -82,10 +98,14 @@
       "summary": "Send predictions to any HTTPS endpoint you control.",
       "description": "Bring your own HTTPS endpoint. Vizzor POSTs the prediction payload as JSON with a signature header so you can verify origin. SSRF-guarded — internal IPs are refused.",
       "popular_rank": 4,
-      "popular_for": ["predict"],
+      "popular_for": [
+        "predict"
+      ],
       "partner_tier": "vizzor",
       "install_kind": "webhook",
-      "scopes": ["predict.read"],
+      "scopes": [
+        "predict.read"
+      ],
       "config_schema": {
         "fields": [
           {
@@ -97,7 +117,31 @@
           }
         ]
       },
-      "external_docs": "https://vizzor.ai/docs/integrations/webhooks"
+      "external_docs": "https://vizzor.ai/docs/integrations/webhooks",
+      "required_tier": "pro"
+    },
+    {
+      "id": "vizzor-mcp",
+      "slug": "vizzor-mcp",
+      "name": "Vizzor MCP",
+      "category": "connector",
+      "icon": "/connectors/vizzor-mcp.svg",
+      "summary": "Call Vizzor predictions as a tool from Claude Desktop, Cursor, or any MCP client.",
+      "description": "Mint a personal Model Context Protocol token and paste a config snippet into your AI agent. Predictions, whale flow, and signal breakdown become tool calls in your editor or desktop chat. Token-scoped to your wallet; revocable any time.",
+      "popular_rank": 5,
+      "popular_for": [
+        "predict"
+      ],
+      "partner_tier": "vizzor",
+      "install_kind": "mcp",
+      "scopes": [
+        "predict.read",
+        "agent.invoke"
+      ],
+      "required_tier": "pro",
+      "status_text": "Mint a personal MCP token, paste it into your agent.",
+      "config_schema": null,
+      "external_docs": "https://vizzor.ai/docs/integrations/mcp"
     },
     {
       "id": "memecoin-sniper",
@@ -108,11 +152,16 @@
       "summary": "Bias the engine toward new-token momentum and social signal.",
       "description": "Weights social narrative, dex flow, and pattern match higher than the default config. Best for sub-24h-old listings where on-chain history is thin.",
       "popular_rank": 1,
-      "popular_for": ["predict"],
+      "popular_for": [
+        "predict"
+      ],
       "partner_tier": "vizzor",
       "install_kind": "skill",
-      "scopes": ["skill.activate"],
-      "config_schema": null
+      "scopes": [
+        "skill.activate"
+      ],
+      "config_schema": null,
+      "required_tier": "free"
     },
     {
       "id": "whale-tracker",
@@ -123,11 +172,16 @@
       "summary": "Lean heavily on on-chain whale activity.",
       "description": "Boosts the on-chain signal weight and folds whale-watcher events into the reasoning prompt. Best for established tokens with deep wallet history.",
       "popular_rank": 2,
-      "popular_for": ["predict"],
+      "popular_for": [
+        "predict"
+      ],
       "partner_tier": "vizzor",
       "install_kind": "skill",
-      "scopes": ["skill.activate"],
-      "config_schema": null
+      "scopes": [
+        "skill.activate"
+      ],
+      "config_schema": null,
+      "required_tier": "elite"
     },
     {
       "id": "conservative-trend",
@@ -138,11 +192,16 @@
       "summary": "Only high-confidence predictions; smooths volatility.",
       "description": "Increases logic-rules weight and softens pattern-match. Surfaces fewer predictions, with tighter confidence bounds. Best for swing trades.",
       "popular_rank": 3,
-      "popular_for": ["predict"],
+      "popular_for": [
+        "predict"
+      ],
       "partner_tier": "vizzor",
       "install_kind": "skill",
-      "scopes": ["skill.activate"],
-      "config_schema": null
+      "scopes": [
+        "skill.activate"
+      ],
+      "config_schema": null,
+      "required_tier": "pro"
     },
     {
       "id": "flow-driven",
@@ -153,11 +212,16 @@
       "summary": "Weights live order flow over slower signals.",
       "description": "Boosts ML ensemble + on-chain flow; deemphasizes social. Best when you're already in the Flow surface and want predictions that mirror what the tape is saying right now.",
       "popular_rank": 4,
-      "popular_for": ["predict"],
+      "popular_for": [
+        "predict"
+      ],
       "partner_tier": "vizzor",
       "install_kind": "skill",
-      "scopes": ["skill.activate"],
-      "config_schema": null
+      "scopes": [
+        "skill.activate"
+      ],
+      "config_schema": null,
+      "required_tier": "elite"
     },
     {
       "id": "helius-rpc",
@@ -168,10 +232,14 @@
       "summary": "Replace the default Solana RPC with your own Helius key.",
       "description": "Vizzor's signal pipeline uses Helius for tx history and whale lookups. Plug in your own paid Helius key to lift rate limits and (optionally) target a private RPC.",
       "popular_rank": 1,
-      "popular_for": ["predict"],
+      "popular_for": [
+        "predict"
+      ],
       "partner_tier": "partner",
       "install_kind": "apikey",
-      "scopes": ["plugin.rpc_override"],
+      "scopes": [
+        "plugin.rpc_override"
+      ],
       "config_schema": {
         "fields": [
           {
@@ -183,7 +251,8 @@
           }
         ]
       },
-      "external_docs": "https://helius.dev"
+      "external_docs": "https://helius.dev",
+      "required_tier": "pro"
     },
     {
       "id": "dexscreener-flow",
@@ -194,10 +263,14 @@
       "summary": "Use a Dexscreener pro key for live dex flow data.",
       "description": "Augment the engine's flow signal with Dexscreener pro-tier feeds. Higher refresh rate, more pairs, fewer rate-limit cliffs.",
       "popular_rank": 2,
-      "popular_for": ["predict"],
+      "popular_for": [
+        "predict"
+      ],
       "partner_tier": "partner",
       "install_kind": "apikey",
-      "scopes": ["plugin.feed_merge"],
+      "scopes": [
+        "plugin.feed_merge"
+      ],
       "config_schema": {
         "fields": [
           {
@@ -209,7 +282,8 @@
           }
         ]
       },
-      "external_docs": "https://docs.dexscreener.com"
+      "external_docs": "https://docs.dexscreener.com",
+      "required_tier": "pro"
     },
     {
       "id": "coingecko-meta",
@@ -220,10 +294,14 @@
       "summary": "Bring your Coingecko pro key for richer token metadata.",
       "description": "Vizzor resolves tokens via Coingecko. A pro key removes rate caps and unlocks additional fields (developer activity, social score).",
       "popular_rank": 3,
-      "popular_for": ["predict"],
+      "popular_for": [
+        "predict"
+      ],
       "partner_tier": "partner",
       "install_kind": "apikey",
-      "scopes": ["plugin.feed_merge"],
+      "scopes": [
+        "plugin.feed_merge"
+      ],
       "config_schema": {
         "fields": [
           {
@@ -235,7 +313,8 @@
           }
         ]
       },
-      "external_docs": "https://docs.coingecko.com"
+      "external_docs": "https://docs.coingecko.com",
+      "required_tier": "free"
     }
   ]
 }
