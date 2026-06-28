@@ -89,6 +89,14 @@ export const ROUTE_LIMITS: Readonly<Record<string, RateLimitConfig>> = {
   // shield). Keyed on the SIWS-bound wallet, not the IP, so a NAT'd
   // user behind a shared IP isn't unfairly penalized.
   'predict.burst': { capacity: 1, refillPerSecond: 1 / 5 },
+  // 60 req/min — Directory catalog GET. The route hydrates per-wallet
+  // install state, so even anonymous users hit it (gets cached at the
+  // edge). 60/min is comfortable for a single-page browse flow.
+  'directory.read': { capacity: 60, refillPerSecond: 60 / 60 },
+  // 5 req/min — install/uninstall/rotate/skill-switch. Any wallet
+  // doing more than that is scripting; legitimate users click "Install"
+  // a few times in a sitting.
+  'directory.write': { capacity: 5, refillPerSecond: 5 / 60 },
 };
 
 export type RateLimitResult =

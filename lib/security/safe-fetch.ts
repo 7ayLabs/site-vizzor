@@ -33,7 +33,12 @@
  *   - 240.0.0.0/4 (reserved)
  */
 
-import { lookup, type LookupAddress } from 'node:dns/promises';
+import { lookup } from 'node:dns/promises';
+
+interface LookupAddress {
+  address: string;
+  family: number;
+}
 
 export class SsrfBlockedError extends Error {
   readonly code = 'ssrf_blocked';
@@ -60,16 +65,24 @@ const IPV4_DENY: ReadonlyArray<readonly [string, number]> = [
 
 function ipv4ToInt(ip: string): number {
   const parts = ip.split('.').map((s) => Number(s));
-  if (parts.length !== 4 || parts.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) {
+  if (parts.length !== 4) return NaN;
+  const [a, b, c, d] = parts as [number, number, number, number];
+  if (
+    !Number.isInteger(a) || a < 0 || a > 255 ||
+    !Number.isInteger(b) || b < 0 || b > 255 ||
+    !Number.isInteger(c) || c < 0 || c > 255 ||
+    !Number.isInteger(d) || d < 0 || d > 255
+  ) {
     return NaN;
   }
-  return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
+  return (((a << 24) | (b << 16) | (c << 8) | d) >>> 0);
 }
 
 function isIpv4Denied(ip: string): boolean {
   const x = ipv4ToInt(ip);
   if (Number.isNaN(x)) return false;
-  for (const [net, prefix] of IPV4_DENY) {
+  for (const entry of IPV4_DENY) {
+    const [net, prefix] = entry;
     const n = ipv4ToInt(net);
     const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
     if ((x & mask) === (n & mask)) return true;
@@ -87,11 +100,11 @@ function isIpv6Denied(ip: string): boolean {
   if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // fc00::/7
   // IPv4-mapped IPv6 ("dotted" form): ::ffff:127.0.0.1
   const dotted = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (dotted) return isIpv4Denied(dotted[1]);
+  if (dotted && dotted[1]) return isIpv4Denied(dotted[1]);
   // IPv4-mapped IPv6 ("compressed hex" form, what URL normalizes to):
   // ::ffff:7f00:1 — last 32 bits is the embedded IPv4. Convert and recheck.
   const hex = lower.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
-  if (hex) {
+  if (hex && hex[1] && hex[2]) {
     const high = parseInt(hex[1], 16);
     const low = parseInt(hex[2], 16);
     const v4 = `${(high >> 8) & 0xff}.${high & 0xff}.${(low >> 8) & 0xff}.${low & 0xff}`;
@@ -165,6 +178,7 @@ export async function validateOutboundUrl(rawUrl: string): Promise<{
   // Pin the first record (most lookups return one A); the connect
   // path uses this exact IP so rebind doesn't help an attacker.
   const pin = records[0];
+  if (!pin) throw new SsrfBlockedError('host did not resolve');
   return { url, ip: pin.address, family: pin.family === 6 ? 6 : 4 };
 }
 
