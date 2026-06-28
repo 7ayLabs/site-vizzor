@@ -57,7 +57,7 @@ import {
   useConversations,
   type ConversationSummary,
 } from './use-conversations';
-import { Check, Wallet, ArrowUpRight } from 'lucide-react';
+import { Check, Wallet, ArrowUpRight, Boxes } from 'lucide-react';
 import { paymentNetwork } from '@/lib/payment/network';
 import { buildSolscanAccountUrl } from '@/lib/explorer/solana';
 import {
@@ -510,6 +510,14 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
     setDrawerOpen(false);
   }, [router]);
 
+  const onOpenDirectory = useCallback(() => {
+    // Directory lives outside the predict surface; this is real
+    // navigation, not a sheet. We close the mobile drawer in case the
+    // tap originated from inside it.
+    router.push('/app/directory' as never);
+    setDrawerOpen(false);
+  }, [router]);
+
   const onOpenAlerts = useCallback(() => {
     // Open the in-shell modal instead of navigating away. The modal
     // mounts the same AlertsList component as /app/alerts so the
@@ -714,6 +722,7 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
           onNewChat={onNewChat}
           onOpenAlerts={onOpenAlerts}
           onOpenReceipts={onOpenReceipts}
+          onOpenDirectory={onOpenDirectory}
           onOpenSettings={onOpenSettings}
           signedIn={signedIn}
           wallet={auth?.wallet}
@@ -950,6 +959,7 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
           onNewChat={onNewChat}
           onOpenAlerts={onOpenAlerts}
           onOpenReceipts={onOpenReceipts}
+          onOpenDirectory={onOpenDirectory}
           onOpenSettings={onOpenSettings}
           signedIn={signedIn}
           wallet={auth?.wallet}
@@ -1073,6 +1083,7 @@ interface LeftRailProps {
   onNewChat: () => void;
   onOpenAlerts: () => void;
   onOpenReceipts: () => void;
+  onOpenDirectory: () => void;
   onOpenSettings: () => void;
   signedIn: boolean;
   wallet: string | undefined;
@@ -1096,6 +1107,7 @@ function LeftRail({
   onNewChat,
   onOpenAlerts,
   onOpenReceipts,
+  onOpenDirectory,
   onOpenSettings,
   signedIn,
   wallet,
@@ -1225,6 +1237,17 @@ function LeftRail({
             icon={<IconBell size={collapsed ? 20 : 17} />}
             label={t('shell.nav.alerts')}
             onClick={onOpenAlerts}
+            collapsed={collapsed}
+          />
+          {/* Directory — Skills / Connectors / Plugins. Mounted here so
+              the entry stays reachable from inside the predict surface
+              (which suppresses both AppSidebar and ProductSidebar in
+              favor of this rail). Stroke + size match the predict-icons
+              treatment so Boxes (lucide) sits visually with IconBell. */}
+          <NavButton
+            icon={<Boxes size={collapsed ? 20 : 17} strokeWidth={1.6} />}
+            label={t('shell.nav.directory')}
+            onClick={onOpenDirectory}
             collapsed={collapsed}
           />
           <NavButton
@@ -1866,6 +1889,7 @@ function MobileDrawer({
   onNewChat,
   onOpenAlerts,
   onOpenReceipts,
+  onOpenDirectory,
   onOpenSettings,
   signedIn,
   wallet,
@@ -1881,6 +1905,7 @@ function MobileDrawer({
   onNewChat: () => void;
   onOpenAlerts: () => void;
   onOpenReceipts: () => void;
+  onOpenDirectory: () => void;
   onOpenSettings: () => void;
   signedIn: boolean;
   wallet: string | undefined;
@@ -1971,6 +1996,7 @@ function MobileDrawer({
             onNewChat={onNewChat}
             onOpenAlerts={onOpenAlerts}
             onOpenReceipts={onOpenReceipts}
+            onOpenDirectory={onOpenDirectory}
             onOpenSettings={onOpenSettings}
             signedIn={signedIn}
             wallet={wallet}
