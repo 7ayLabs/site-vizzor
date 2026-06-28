@@ -131,6 +131,7 @@ export function ProductSidebar() {
   };
 
   return (
+    <>
     <aside
       className={cn(
         // Mirror predict-shell's LeftRail: NO `--surface` fill (so the
@@ -310,11 +311,22 @@ export function ProductSidebar() {
         />
       </div>
 
+    </aside>
+
       {/* In-place modals — mirror predict-shell. AlertsModal renders
           the same AlertsList the standalone surface uses; SettingsSheet
           owns theme + locale + clear-local-data. Mounted at sidebar
           level so any page on app.vizzor.ai can summon them without
-          page navigation. */}
+          page navigation.
+
+          MUST sit OUTSIDE the sticky `<aside>` above. `position: sticky`
+          creates a stacking context, which traps the sheets' `fixed
+          inset-0 z-[55]` at the rail's z-index — so the sheet renders
+          BEHIND the main column instead of as a fullscreen overlay
+          (the bug Zaid hit on /app/account where opening Settings
+          revealed `TEMA` peeking out from behind the page). Hoisting
+          the modals to a sibling fragment lets them paint at the
+          document's stacking root. */}
       <AlertsModal open={alertsOpen} onClose={() => setAlertsOpen(false)} />
       {settingsOpen && (
         <SettingsSheet
@@ -323,7 +335,7 @@ export function ProductSidebar() {
           onClose={() => setSettingsOpen(false)}
         />
       )}
-    </aside>
+    </>
   );
 }
 
