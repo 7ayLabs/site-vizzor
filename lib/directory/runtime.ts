@@ -74,6 +74,81 @@ export function getActiveSkillId(wallet: string): string | null {
   return getWalletPreferences(wallet)?.active_skill_id ?? null;
 }
 
+/* ------------------------------------------------------------------ *\
+ * Site-side mirror of the engine's skill prompt prefixes.
+ *
+ * The engine's `src/core/chronovisor/skills.ts` is the source of truth
+ * for what biases reasoning. We keep a parallel copy here ONLY for the
+ * in-conversation priming workaround that lets skills shape replies
+ * even when the engine on the other side hasn't shipped the
+ * `skill_id` plumbing yet. Once every engine instance speaks v0.4.1
+ * (chat route honours body.skill_id → buildTaskAwareChatSystemPrompt
+ * prefix), this map can shrink to a `Set<SkillId>` since the priming
+ * messages would be redundant.
+\* ------------------------------------------------------------------ */
+
+interface SkillPriming {
+  name: string;
+  directive: string;
+}
+
+const SKILL_PRIMING: Record<string, SkillPriming> = {
+  'memecoin-sniper': {
+    name: 'Memecoin Sniper',
+    directive:
+      'Prioritize social-narrative momentum, pattern-match flow, and very-short horizons (sub-24h). Treat thin on-chain history as expected, not as a disqualifier. Favor decisive directional calls over hedged neutrality when the social + pattern signals align.',
+  },
+  'whale-tracker': {
+    name: 'Whale Tracker focus',
+    directive:
+      'Weight on-chain whale flow + accumulation as the dominant signal. Treat social and pattern signals as confirmation, not as primary drivers. Surface specific wallet activity in the reasoning when it is the load-bearing input.',
+  },
+  'conservative-trend': {
+    name: 'Conservative Trend',
+    directive:
+      'Issue a directional call only when logic-rules + ML ensemble agree. When the signals disagree, prefer "neutral" with explicit reasoning over a low-confidence directional bet. Avoid pattern-match calls in isolation.',
+  },
+  'flow-driven': {
+    name: 'Flow-Driven',
+    directive:
+      'Weight ML ensemble + on-chain flow as primary; treat social-narrative as noise unless it is corroborated by flow. Lean into shorter horizons when flow is strong.',
+  },
+};
+
+export interface PrimingMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+/**
+ * Build a two-message priming exchange that biases the model toward
+ * the active skill. Inserted at the head of the engine's message
+ * history so prior turns establish the active mode — works against
+ * any chat-completion engine regardless of whether it knows about
+ * `skill_id`.
+ *
+ * Returns `[]` when no skill is active or the id isn't in the local
+ * map (treat as no priming; the engine still receives skill_id in
+ * the body, so a v0.4.1-aware engine applies the proper prefix).
+ */
+export function buildSkillPrimingMessages(
+  skillId: string | null,
+): PrimingMessage[] {
+  if (!skillId) return [];
+  const skill = SKILL_PRIMING[skillId];
+  if (!skill) return [];
+  return [
+    {
+      role: 'user',
+      content: `Active reasoning skill: ${skill.name}. Apply this bias to every reply in this thread: ${skill.directive}`,
+    },
+    {
+      role: 'assistant',
+      content: `Understood — ${skill.name} mode is active for this thread. I will apply that bias and acknowledge it when asked.`,
+    },
+  ];
+}
+
 /**
  * Map the site's EffectiveTier shape to a RequiredTier. Trial users
  * get pro-equivalent access for catalog gating (matches the existing

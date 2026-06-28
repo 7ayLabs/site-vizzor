@@ -702,7 +702,11 @@
       "rightRailTitle": "Recibos",
       "wr": "Win rate",
       "watch": "Watchlist",
-      "subscribed": "Suscrito"
+      "subscribed": "Suscrito",
+      "activeSkill": {
+        "label": "Skill activa",
+        "tooltip": "Abre el Directorio para cambiarla o quitarla."
+      }
     },
     "settings": {
       "eyebrow": "Preferencias",

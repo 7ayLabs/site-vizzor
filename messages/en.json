@@ -702,7 +702,11 @@
       "rightRailTitle": "Receipts",
       "wr": "Win rate",
       "watch": "Watch",
-      "subscribed": "Subscribed"
+      "subscribed": "Subscribed",
+      "activeSkill": {
+        "label": "Active skill",
+        "tooltip": "Open the Directory to change or clear it."
+      }
     },
     "settings": {
       "eyebrow": "Preferences",

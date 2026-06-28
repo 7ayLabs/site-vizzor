@@ -48,6 +48,7 @@ import {
   getActivePluginIds,
   getActiveSkillId,
   dispatchPrediction,
+  buildSkillPrimingMessages,
 } from '@/lib/directory/runtime';
 import {
   PREDICT_ROUTE_REQUIREMENTS,
@@ -318,11 +319,37 @@ async function forwardToVizzor(
       /* directory unavailable — degrade to defaults */
     }
 
+    // v0.4.1 — defense-in-depth priming for skills. The engine on
+    // `feat/v0.4.1/connector-directory` honours body.skill_id by
+    // prepending the skill's systemPromptPrefix to the chat system
+    // prompt; the engine on `main` (what api.vizzor.ai runs today)
+    // doesn't yet. Prepending a two-message priming exchange at the
+    // start of the message history makes the skill bias take hold
+    // against EITHER engine — the v0.4.1 engine sees both signals
+    // and the prefix wins; the legacy engine sees only the priming
+    // exchange and treats it as established conversation context.
+    //
+    // Once every engine is on v0.4.1, the priming becomes redundant
+    // and this block can collapse into just the body.skill_id pass-
+    // through.
+    const primingMessages = buildSkillPrimingMessages(activeSkillId);
+    const primedMessages = primingMessages.length
+      ? [...primingMessages, ...vizzorMessages]
+      : vizzorMessages;
+
+    if (activeSkillId) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[directory] /api/predict wallet=${ctx.walletHash.slice(0, 8)}… ` +
+          `skill=${activeSkillId} plugins=${activePluginIds.join(',') || '∅'}`,
+      );
+    }
+
     const upstreamRes = await fetch(`${base}/v1/chat`, {
       method: 'POST',
       headers: upstreamHeaders,
       body: JSON.stringify({
-        messages: vizzorMessages,
+        messages: primedMessages,
         userId,
         metadata: {
           tier,

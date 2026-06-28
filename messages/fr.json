@@ -702,7 +702,11 @@
       "rightRailTitle": "Reçus",
       "wr": "Win rate",
       "watch": "Suivi",
-      "subscribed": "Abonné"
+      "subscribed": "Abonné",
+      "activeSkill": {
+        "label": "Skill active",
+        "tooltip": "Ouvrir l'annuaire pour la changer ou la désactiver."
+      }
     },
     "settings": {
       "eyebrow": "Préférences",
