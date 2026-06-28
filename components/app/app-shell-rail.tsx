@@ -3,7 +3,7 @@
 /**
  * AppShellRail — picks the right left rail per `/app/*` route.
  *
- * Three cases:
+ * Four cases:
  *
  *   1. `/app/predict(/...)` — predict-shell already renders its own
  *      `LeftRail` inline. Return `null` to avoid a double rail.
@@ -13,7 +13,11 @@
  *      every host (mainnet vizzor.ai and product app.vizzor.ai) — this
  *      is the chrome Zaid signed off on for the account view before
  *      the route moved from `(marketing)/account` to `/app/account`.
- *   3. Everything else (`/app/whales`, `/app/flow`, `/app/billing`,
+ *   3. `/app/directory(/...)` — same `ProductSidebar` chrome as the
+ *      account surface. The Directory is a product extension surface
+ *      ("here's what your account can do"), so it shares the predict-
+ *      style rail rather than the umbrella switcher.
+ *   4. Everything else (`/app/whales`, `/app/flow`, `/app/billing`,
  *      `/app/settings`, `/app/alerts`) — the umbrella `AppSidebar`
  *      with the Chat/Whales/Flow surface switcher, gated on
  *      `isAppOnlyHost` so the app subdomain doesn't double up on
@@ -33,11 +37,11 @@ interface AppShellRailProps {
 }
 
 const PREDICT_RE = /^\/(?:[a-z]{2}\/)?app\/predict(\/|$)/;
-const ACCOUNT_RE = /^\/(?:[a-z]{2}\/)?app\/account(\/|$)/;
+const PRODUCT_RAIL_RE = /^\/(?:[a-z]{2}\/)?app\/(?:account|directory)(\/|$)/;
 
 export function AppShellRail({ isAppOnlyHost }: AppShellRailProps) {
   const pathname = usePathname();
   if (PREDICT_RE.test(pathname)) return null;
-  if (ACCOUNT_RE.test(pathname)) return <ProductSidebar />;
+  if (PRODUCT_RAIL_RE.test(pathname)) return <ProductSidebar />;
   return isAppOnlyHost ? null : <AppSidebar />;
 }

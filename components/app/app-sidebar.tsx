@@ -26,17 +26,18 @@ import {
   Receipt,
   BookOpen,
   Tag,
+  Boxes,
 } from 'lucide-react';
 import { Link, usePathname } from '@/i18n/navigation';
 import Image from 'next/image';
 import { WalletAuthButton } from '@/components/auth/wallet-auth-button';
 import { StatusPill } from './status-pill';
 
-type SurfaceKey = 'predict' | 'whales' | 'flow';
+type SurfaceKey = 'predict' | 'whales' | 'flow' | 'directory';
 
 interface SurfaceItem {
   key: SurfaceKey;
-  href: '/app/predict' | '/app/whales' | '/app/flow';
+  href: '/app/predict' | '/app/whales' | '/app/flow' | '/app/directory';
   match: RegExp;
   icon: typeof MessageSquare;
   tier?: 'elite';
@@ -46,6 +47,10 @@ const SURFACES: ReadonlyArray<SurfaceItem> = [
   { key: 'predict', href: '/app/predict', match: /^\/app\/predict(\/|$)/, icon: MessageSquare },
   { key: 'whales', href: '/app/whales', match: /^\/app\/whales(\/|$)/, icon: Waves, tier: 'elite' },
   { key: 'flow', href: '/app/flow', match: /^\/app\/flow(\/|$)/, icon: Activity, tier: 'elite' },
+  // Directory — Skills / Connectors / Plugins. Not tier-gated for v1
+  // (everyone can browse and install free Telegram / Discord); the
+  // page itself gates write paths behind SIWS.
+  { key: 'directory', href: '/app/directory', match: /^\/app\/directory(\/|$)/, icon: Boxes },
 ];
 
 interface FooterItem {

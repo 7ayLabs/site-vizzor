@@ -51,6 +51,7 @@ import {
   IconReceipts,
   IconSettings,
 } from '@/components/predict/predict-icons';
+import { Boxes } from 'lucide-react';
 
 interface SessionState {
   ok?: boolean;
@@ -226,6 +227,13 @@ export function ProductSidebar() {
           icon={<IconBell size={collapsed ? 20 : 17} />}
           label={t('shell.nav.alerts')}
           onClick={onOpenAlerts}
+          collapsed={collapsed}
+        />
+        <NavLink
+          href="/app/directory"
+          icon={<Boxes size={collapsed ? 20 : 17} strokeWidth={1.6} />}
+          label={t('shell.nav.directory')}
+          active={/^\/app\/directory(\/|$)/.test(pathname)}
           collapsed={collapsed}
         />
         <NavButton
