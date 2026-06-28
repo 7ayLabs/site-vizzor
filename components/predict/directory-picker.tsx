@@ -22,7 +22,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowUpRight, Boxes, Check, Layers, Plug, Puzzle } from 'lucide-react';
+import { ArrowUpRight, Check, Layers, Plug, Plus, Puzzle } from 'lucide-react';
 
 type Category = 'skill' | 'connector' | 'plugin';
 
@@ -144,7 +144,7 @@ export function DirectoryPicker({ signedIn, disabled = false }: Props) {
         aria-label={t('triggerDisabled')}
         className="shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--fg-3)] cursor-not-allowed self-end mb-px"
       >
-        <Boxes size={16} strokeWidth={1.75} />
+        <Plus size={18} strokeWidth={2} />
       </button>
     );
   }
@@ -165,7 +165,7 @@ export function DirectoryPicker({ signedIn, disabled = false }: Props) {
             : 'text-[var(--fg-3)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]'
         } disabled:opacity-50`}
       >
-        <Boxes size={16} strokeWidth={1.75} />
+        <Plus size={18} strokeWidth={2} />
       </button>
 
       {open && (
