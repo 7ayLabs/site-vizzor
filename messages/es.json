@@ -35,7 +35,8 @@
       "surface": {
         "predict": "Chat",
         "whales": "Ballenas",
-        "flow": "Flujo"
+        "flow": "Flujo",
+        "directory": "Directorio"
       },
       "tier": {
         "elite": "ELITE"
@@ -226,6 +227,63 @@
       "accountLink": {
         "label": "Perfil de cuenta",
         "cta": "Abrir perfil de cuenta →"
+      }
+    },
+    "directory": {
+      "meta": {
+        "title": "Directorio",
+        "description": "Skills, conectores y plugins para tu cuenta de Vizzor."
+      },
+      "eyebrow": "Directorio · Cuenta",
+      "title": "Skills, conectores, plugins",
+      "body": "Amplía tu cuenta de Vizzor: activa skills de predicción, conecta tus herramientas y trae tus propias fuentes de datos. Telegram aparece preinstalado al vincular tu wallet.",
+      "tabs": {
+        "skill": "Skills",
+        "connector": "Conectores",
+        "plugin": "Plugins"
+      },
+      "search": {
+        "placeholder": "Buscar conectores…"
+      },
+      "section": {
+        "vizzor_partners": "Vizzor y partners",
+        "popular_for": "Popular en"
+      },
+      "popular": {
+        "predict": "Predict"
+      },
+      "loading": "Cargando directorio…",
+      "empty": "Aún no hay coincidencias para esa búsqueda.",
+      "card": {
+        "popular_rank": "populares",
+        "new": "Nuevo",
+        "installed": "Instalado",
+        "install_cta": "Instalar"
+      },
+      "install": {
+        "title": "Instalar {name}",
+        "close": "Cerrar",
+        "cancel": "Cancelar",
+        "submit": "Instalar",
+        "submitting": "Instalando…",
+        "error": {
+          "ssrf_blocked": "Esa URL apunta a un rango bloqueado. Usa un endpoint HTTPS público.",
+          "invalid_webhook_url": "La URL del webhook no parece válida para ese servicio.",
+          "missing_webhook_url": "La URL del webhook es obligatoria.",
+          "missing_api_key": "La API key es obligatoria.",
+          "invalid_api_key": "Esa API key no es válida.",
+          "already_installed": "Este conector ya está instalado en tu wallet.",
+          "unauthenticated": "Conecta tu wallet para instalar conectores.",
+          "rate_limited": "Demasiadas instalaciones en poco tiempo — un momento.",
+          "generic": "No se pudo instalar. Inténtalo en un momento.",
+          "install_failed": "No se pudo instalar. Inténtalo en un momento."
+        }
+      },
+      "manage": {
+        "title": "Gestionar {name}",
+        "rotate": "Rotar credenciales",
+        "uninstall": "Desinstalar",
+        "confirm": "Sí, desinstalar"
       }
     }
   },
@@ -537,7 +595,8 @@
         "libraryHint": "/precisions",
         "receipts": "Recibos",
         "tools": "Herramientas",
-        "toolsHint": "/help"
+        "toolsHint": "/help",
+        "directory": "Directorio"
       },
       "recents": {
         "label": "Chats recientes",

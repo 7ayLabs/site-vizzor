@@ -35,9 +35,12 @@
       "surface": {
         "predict": "Chat",
         "whales": "Whales",
-        "flow": "Flow"
+        "flow": "Flow",
+        "directory": "Directory"
       },
-      "tier": { "elite": "ELITE" },
+      "tier": {
+        "elite": "ELITE"
+      },
       "telegram": {
         "label": "Open on Telegram"
       },
@@ -54,7 +57,11 @@
       "degraded": "Degraded — see details",
       "loading": "Checking…",
       "down": "Health probe offline",
-      "subsystem": { "engine": "Engine", "rpc": "Solana RPC", "sqlite": "Database" },
+      "subsystem": {
+        "engine": "Engine",
+        "rpc": "Solana RPC",
+        "sqlite": "Database"
+      },
       "build": "Build"
     },
     "walletMenu": {
@@ -220,6 +227,63 @@
       "accountLink": {
         "label": "Account profile",
         "cta": "Open account profile →"
+      }
+    },
+    "directory": {
+      "meta": {
+        "title": "Directory",
+        "description": "Skills, connectors, and plugins for your Vizzor account."
+      },
+      "eyebrow": "Directory · Account",
+      "title": "Skills, connectors, plugins",
+      "body": "Extend your Vizzor account: activate prediction skills, wire predictions into your tools, and bring your own data sources. Telegram comes pre-installed once you pair your wallet.",
+      "tabs": {
+        "skill": "Skills",
+        "connector": "Connectors",
+        "plugin": "Plugins"
+      },
+      "search": {
+        "placeholder": "Search connectors…"
+      },
+      "section": {
+        "vizzor_partners": "Vizzor & Partners",
+        "popular_for": "Popular for"
+      },
+      "popular": {
+        "predict": "Predict"
+      },
+      "loading": "Loading directory…",
+      "empty": "Nothing matches that search yet.",
+      "card": {
+        "popular_rank": "popular",
+        "new": "New",
+        "installed": "Installed",
+        "install_cta": "Install"
+      },
+      "install": {
+        "title": "Install {name}",
+        "close": "Close",
+        "cancel": "Cancel",
+        "submit": "Install",
+        "submitting": "Installing…",
+        "error": {
+          "ssrf_blocked": "That URL points to a blocked address range. Use a public HTTPS endpoint.",
+          "invalid_webhook_url": "Webhook URL doesn't look right for that provider.",
+          "missing_webhook_url": "Webhook URL is required.",
+          "missing_api_key": "API key is required.",
+          "invalid_api_key": "That API key isn't valid.",
+          "already_installed": "This connector is already installed for your wallet.",
+          "unauthenticated": "Sign in with your wallet to install connectors.",
+          "rate_limited": "Too many installs in a short window — slow down.",
+          "generic": "Install failed. Try again in a moment.",
+          "install_failed": "Install failed. Try again in a moment."
+        }
+      },
+      "manage": {
+        "title": "Manage {name}",
+        "rotate": "Rotate credentials",
+        "uninstall": "Uninstall",
+        "confirm": "Yes, uninstall"
       }
     }
   },
@@ -531,7 +595,8 @@
         "libraryHint": "/precisions",
         "receipts": "Receipts",
         "tools": "Tools",
-        "toolsHint": "/help"
+        "toolsHint": "/help",
+        "directory": "Directory"
       },
       "recents": {
         "label": "Recent chats",
@@ -572,10 +637,18 @@
         "footer": "Vizzor can miss. Verify on-chain. Not financial advice."
       },
       "quickActions": {
-        "predict": { "label": "Predict a coin" },
-        "wr": { "label": "Check win rate" },
-        "precisions": { "label": "Recent precisions" },
-        "price": { "label": "Price check" }
+        "predict": {
+          "label": "Predict a coin"
+        },
+        "wr": {
+          "label": "Check win rate"
+        },
+        "precisions": {
+          "label": "Recent precisions"
+        },
+        "price": {
+          "label": "Price check"
+        }
       },
       "settingsHeader": "Settings & Help",
       "settings": "Settings",
@@ -621,9 +694,18 @@
     "tryCta": "Try Vizzor",
     "orLabel": "or run it locally",
     "stats": {
-      "chains": { "label": "Chains live", "value": "11" },
-      "signals": { "label": "Signal families", "value": "6" },
-      "license": { "label": "License", "value": "BUSL · self-host" }
+      "chains": {
+        "label": "Chains live",
+        "value": "11"
+      },
+      "signals": {
+        "label": "Signal families",
+        "value": "6"
+      },
+      "license": {
+        "label": "License",
+        "value": "BUSL · self-host"
+      }
     },
     "badges": {
       "chains": "11 chains live",

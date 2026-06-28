@@ -35,7 +35,8 @@
       "surface": {
         "predict": "Chat",
         "whales": "Baleines",
-        "flow": "Flux"
+        "flow": "Flux",
+        "directory": "Annuaire"
       },
       "tier": {
         "elite": "ELITE"
@@ -226,6 +227,63 @@
       "accountLink": {
         "label": "Profil du compte",
         "cta": "Ouvrir le profil du compte →"
+      }
+    },
+    "directory": {
+      "meta": {
+        "title": "Annuaire",
+        "description": "Skills, connecteurs et plugins pour votre compte Vizzor."
+      },
+      "eyebrow": "Annuaire · Compte",
+      "title": "Skills, connecteurs, plugins",
+      "body": "Étendez votre compte Vizzor : activez des skills de prédiction, branchez vos outils et apportez vos propres sources de données. Telegram est préinstallé dès que vous liez votre wallet.",
+      "tabs": {
+        "skill": "Skills",
+        "connector": "Connecteurs",
+        "plugin": "Plugins"
+      },
+      "search": {
+        "placeholder": "Rechercher des connecteurs…"
+      },
+      "section": {
+        "vizzor_partners": "Vizzor et partenaires",
+        "popular_for": "Populaire pour"
+      },
+      "popular": {
+        "predict": "Predict"
+      },
+      "loading": "Chargement de l'annuaire…",
+      "empty": "Aucun résultat pour cette recherche.",
+      "card": {
+        "popular_rank": "populaire",
+        "new": "Nouveau",
+        "installed": "Installé",
+        "install_cta": "Installer"
+      },
+      "install": {
+        "title": "Installer {name}",
+        "close": "Fermer",
+        "cancel": "Annuler",
+        "submit": "Installer",
+        "submitting": "Installation…",
+        "error": {
+          "ssrf_blocked": "Cette URL pointe vers une plage bloquée. Utilisez un endpoint HTTPS public.",
+          "invalid_webhook_url": "L'URL du webhook ne semble pas valide pour ce service.",
+          "missing_webhook_url": "L'URL du webhook est requise.",
+          "missing_api_key": "La clé d'API est requise.",
+          "invalid_api_key": "Cette clé d'API n'est pas valide.",
+          "already_installed": "Ce connecteur est déjà installé pour votre wallet.",
+          "unauthenticated": "Connectez votre wallet pour installer des connecteurs.",
+          "rate_limited": "Trop d'installations en peu de temps — patientez un instant.",
+          "generic": "Installation échouée. Réessayez dans un instant.",
+          "install_failed": "Installation échouée. Réessayez dans un instant."
+        }
+      },
+      "manage": {
+        "title": "Gérer {name}",
+        "rotate": "Faire pivoter les identifiants",
+        "uninstall": "Désinstaller",
+        "confirm": "Oui, désinstaller"
       }
     }
   },
@@ -537,7 +595,8 @@
         "libraryHint": "/precisions",
         "receipts": "Reçus",
         "tools": "Outils",
-        "toolsHint": "/help"
+        "toolsHint": "/help",
+        "directory": "Annuaire"
       },
       "recents": {
         "label": "Chats récents",
