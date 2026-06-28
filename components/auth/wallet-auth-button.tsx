@@ -276,7 +276,7 @@ function SignedInBadge({
             </div>
           </div>
           <Link
-            href="/account"
+            href="/app/account"
             role="menuitem"
             onClick={() => setOpen(false)}
             className="
