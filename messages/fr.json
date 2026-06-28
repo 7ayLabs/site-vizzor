@@ -253,7 +253,11 @@
         "predict": "Predict"
       },
       "loading": "Chargement de l'annuaire…",
-      "empty": "Aucun résultat pour cette recherche.",
+      "empty": {
+        "skill": "Aucune skill ne correspond à cette recherche.",
+        "connector": "Aucun connecteur ne correspond à cette recherche.",
+        "plugin": "Aucun plugin ne correspond à cette recherche."
+      },
       "card": {
         "popular_rank": "populaire",
         "new": "Nouveau",
@@ -277,6 +281,9 @@
           "rate_limited": "Trop d'installations en peu de temps — patientez un instant.",
           "generic": "Installation échouée. Réessayez dans un instant.",
           "install_failed": "Installation échouée. Réessayez dans un instant."
+        },
+        "notice": {
+          "reserved": "Votre identifiant est chiffré au repos. Les signal gatherers du moteur ne lisent pas encore les overrides de plugins, donc les prédictions ne changeront pas avant la prochaine version."
         }
       },
       "manage": {
@@ -284,6 +291,39 @@
         "rotate": "Faire pivoter les identifiants",
         "uninstall": "Désinstaller",
         "confirm": "Oui, désinstaller"
+      },
+      "nav": {
+        "label": "Catégories de l’annuaire"
+      },
+      "category": {
+        "skill": {
+          "label": "Skill",
+          "summary": "Les skills déterminent comment Vizzor raisonne. Choisissez-en une — les prédictions suivront son biais."
+        },
+        "connector": {
+          "label": "Connecteur",
+          "summary": "Les connecteurs livrent les prédictions là où vous les lisez — Discord, Slack, Telegram ou votre propre webhook."
+        },
+        "plugin": {
+          "label": "Plugin",
+          "summary": "Les plugins enrichissent les données vues par Vizzor. Réservé pour la prochaine version — les installations sont enregistrées, mais les prédictions utilisent encore les sources par défaut du moteur."
+        }
+      },
+      "action": {
+        "install": "Installer",
+        "installed": "Installé",
+        "remove": "Retirer",
+        "skill": {
+          "activate": "Activer",
+          "active": "● Actif"
+        },
+        "internal": {
+          "pair": "Lier",
+          "paired": "Lié"
+        }
+      },
+      "badge": {
+        "reserved": "Réservé"
       }
     }
   },

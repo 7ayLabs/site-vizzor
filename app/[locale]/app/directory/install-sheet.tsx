@@ -1,26 +1,33 @@
 'use client';
 
 /**
- * InstallSheet — modal side-panel for collecting credentials when the
- * user clicks `+` on a webhook or apikey entry. Renders the entry's
- * config_schema fields with kind-aware inputs (url, secret, text).
+ * InstallSheet — side-panel for installing a connector or plugin.
  *
- * Submits to POST /api/directory/install. Server-side validation runs
- * the regex + SSRF guard; client-side validation is only for fast UX
- * feedback (the wire is the source of truth).
+ * Skills never open this sheet — they're a single PATCH on the catalog
+ * shell. Connectors and plugins both arrive here with a `config_schema`
+ * declaring the fields to collect.
  *
- * Hoisted out of the page's main layout via fixed positioning so it
- * never gets trapped by a sticky stacking context (the same fix that
- * unblocked ProductSidebar modals — see commit 5c0170b).
+ * For plugins, the sheet surfaces a `Reserved` notice so the user knows
+ * the credential is stored securely but predictions don't yet read it
+ * (signal gatherers still use engine defaults — see the runbook). The
+ * install still completes end-to-end so the credential is ready when
+ * the engine catches up.
+ *
+ * Mounted via `fixed inset-0 z-[60]` to escape any sticky parent stacking
+ * context (same defense pattern as the predict-shell modals — see
+ * commit 5c0170b).
  */
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { X } from 'lucide-react';
 
+type Category = 'connector' | 'plugin' | 'skill';
+
 export interface InstallTarget {
   connectorId: string;
   name: string;
+  category: Category;
   schema: {
     fields: Array<{
       name: string;
@@ -47,6 +54,7 @@ export function InstallSheet({ target, onClose, onInstalled }: Props) {
 
   if (!target) return null;
   const fields = target.schema?.fields ?? [];
+  const showReservedNotice = target.category === 'plugin';
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -84,20 +92,34 @@ export function InstallSheet({ target, onClose, onInstalled }: Props) {
         onClick={onClose}
         aria-hidden
       />
-      <aside className="relative w-full max-w-[420px] h-dvh bg-[var(--surface)] border-l border-[var(--border)] p-6 overflow-y-auto">
-        <header className="flex items-center justify-between mb-6">
-          <h2 className="text-[16px] font-semibold text-[var(--fg)]">
-            {t('install.title', { name: target.name })}
-          </h2>
+      <aside className="relative w-full max-w-[400px] h-dvh bg-[var(--surface)] border-l border-[var(--border)] p-6 overflow-y-auto flex flex-col gap-5">
+        <header className="flex items-start justify-between gap-3">
+          <div>
+            <p className="mono tabular text-[10px] uppercase tracking-[0.16em] text-[var(--fg-3)]">
+              {t(`category.${target.category}.label`)}
+            </p>
+            <h2 className="mt-1 text-[15px] font-semibold text-[var(--fg)] leading-tight">
+              {target.name}
+            </h2>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1 text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)]"
+            className="rounded-md p-1 text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)] transition-colors shrink-0"
             aria-label={t('install.close')}
           >
             <X size={16} strokeWidth={2} />
           </button>
         </header>
+
+        {showReservedNotice && (
+          <div className="rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 text-[12px] leading-snug text-[var(--fg-2)]">
+            <p className="mono tabular text-[9.5px] uppercase tracking-[0.16em] text-[var(--fg-3)] mb-1">
+              {t('badge.reserved')}
+            </p>
+            {t('install.notice.reserved')}
+          </div>
+        )}
 
         <form className="flex flex-col gap-4" onSubmit={onSubmit}>
           {fields.map((f) => (
@@ -115,31 +137,33 @@ export function InstallSheet({ target, onClose, onInstalled }: Props) {
                 placeholder={f.placeholder}
                 required={f.required}
                 pattern={f.pattern}
-                className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[13px] text-[var(--fg)] outline-none focus:border-[var(--fg-3)]"
+                autoComplete="off"
+                spellCheck={false}
+                className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[13px] text-[var(--fg)] outline-none focus:border-[var(--fg-3)] font-mono"
               />
             </label>
           ))}
 
           {error && (
-            <p className="text-[12px] text-red-400">
+            <p className="text-[12px] text-red-400 leading-snug">
               {t(`install.error.${error}`, {
                 fallback: t('install.error.generic'),
               } as never)}
             </p>
           )}
 
-          <div className="flex items-center justify-end gap-2 mt-2">
+          <div className="flex items-center justify-end gap-2 mt-1">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md px-3 py-2 text-[13px] text-[var(--fg-2)] hover:bg-[var(--surface-2)]"
+              className="rounded-md px-3 py-2 text-[12.5px] text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)] transition-colors"
             >
               {t('install.cancel')}
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-md bg-[var(--accent)] px-3 py-2 text-[13px] font-medium text-black hover:opacity-90 disabled:opacity-50"
+              className="rounded-md bg-[var(--accent)] px-3 py-2 text-[12.5px] font-medium text-black hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               {submitting ? t('install.submitting') : t('install.submit')}
             </button>

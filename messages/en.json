@@ -253,7 +253,11 @@
         "predict": "Predict"
       },
       "loading": "Loading directory…",
-      "empty": "Nothing matches that search yet.",
+      "empty": {
+        "skill": "No skills match that search.",
+        "connector": "No connectors match that search.",
+        "plugin": "No plugins match that search."
+      },
       "card": {
         "popular_rank": "popular",
         "new": "New",
@@ -277,6 +281,9 @@
           "rate_limited": "Too many installs in a short window — slow down.",
           "generic": "Install failed. Try again in a moment.",
           "install_failed": "Install failed. Try again in a moment."
+        },
+        "notice": {
+          "reserved": "Your credential is encrypted at rest. The engine’s signal gatherers don’t read plugin overrides yet, so predictions won’t change until the next release."
         }
       },
       "manage": {
@@ -284,6 +291,39 @@
         "rotate": "Rotate credentials",
         "uninstall": "Uninstall",
         "confirm": "Yes, uninstall"
+      },
+      "nav": {
+        "label": "Directory categories"
+      },
+      "category": {
+        "skill": {
+          "label": "Skill",
+          "summary": "Skills shape how Vizzor reasons. Pick one — predictions follow its bias."
+        },
+        "connector": {
+          "label": "Connector",
+          "summary": "Connectors deliver predictions where you read them — Discord, Slack, Telegram, or your own webhook."
+        },
+        "plugin": {
+          "label": "Plugin",
+          "summary": "Plugins augment the data Vizzor sees. Reserved for the next release — installs are stored but predictions still use the engine’s default data sources today."
+        }
+      },
+      "action": {
+        "install": "Install",
+        "installed": "Installed",
+        "remove": "Remove",
+        "skill": {
+          "activate": "Set as active",
+          "active": "● Active"
+        },
+        "internal": {
+          "pair": "Pair",
+          "paired": "Paired"
+        }
+      },
+      "badge": {
+        "reserved": "Reserved"
       }
     }
   },

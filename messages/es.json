@@ -253,7 +253,11 @@
         "predict": "Predict"
       },
       "loading": "Cargando directorio…",
-      "empty": "Aún no hay coincidencias para esa búsqueda.",
+      "empty": {
+        "skill": "Ninguna skill coincide con esa búsqueda.",
+        "connector": "Ningún conector coincide con esa búsqueda.",
+        "plugin": "Ningún plugin coincide con esa búsqueda."
+      },
       "card": {
         "popular_rank": "populares",
         "new": "Nuevo",
@@ -277,6 +281,9 @@
           "rate_limited": "Demasiadas instalaciones en poco tiempo — un momento.",
           "generic": "No se pudo instalar. Inténtalo en un momento.",
           "install_failed": "No se pudo instalar. Inténtalo en un momento."
+        },
+        "notice": {
+          "reserved": "Tu credencial se cifra al guardarla. Los signal gatherers del engine aún no leen los overrides de plugins, así que las predicciones no cambiarán hasta la próxima versión."
         }
       },
       "manage": {
@@ -284,6 +291,39 @@
         "rotate": "Rotar credenciales",
         "uninstall": "Desinstalar",
         "confirm": "Sí, desinstalar"
+      },
+      "nav": {
+        "label": "Categorías del directorio"
+      },
+      "category": {
+        "skill": {
+          "label": "Skill",
+          "summary": "Las skills moldean cómo razona Vizzor. Elige una — las predicciones seguirán su sesgo."
+        },
+        "connector": {
+          "label": "Conector",
+          "summary": "Los conectores llevan las predicciones a donde las lees — Discord, Slack, Telegram o tu propio webhook."
+        },
+        "plugin": {
+          "label": "Plugin",
+          "summary": "Los plugins enriquecen los datos que ve Vizzor. Reservado para la próxima versión — las instalaciones se guardan, pero las predicciones siguen usando las fuentes por defecto del engine."
+        }
+      },
+      "action": {
+        "install": "Instalar",
+        "installed": "Instalado",
+        "remove": "Quitar",
+        "skill": {
+          "activate": "Activar",
+          "active": "● Activa"
+        },
+        "internal": {
+          "pair": "Vincular",
+          "paired": "Vinculado"
+        }
+      },
+      "badge": {
+        "reserved": "Reservado"
       }
     }
   },
