@@ -115,16 +115,37 @@ between any matched entry across the two repos.
 |---|---|---|---|
 | `telegram` | connector | free | included with trial / lapsed accounts |
 | `discord-webhook` | connector | free | included with trial / lapsed accounts |
-| `memecoin-sniper` | skill | free | trial skill ("7-day Pro trial") |
+| `nostr` | connector | free | **web3-native social**, user runs a self-hosted relay bridge (no nsec on Vizzor) |
+| `memecoin-sniper` | skill | free | trial skill |
+| `solana-native` | skill | free | trial skill — Solana-first bias |
+| `degen-hours` | skill | free | trial skill — off-hours microstructure bias |
 | `coingecko-meta` | plugin | free | basic data feed |
-| `slack-webhook` | connector | pro | "AI chat with tool-use" workflow surface |
-| `generic-webhook` | connector | pro | power-user output channel |
+| `farcaster` | connector | pro | Warpcast via Neynar (paid feed, paid users) |
+| `telegram-channel` | connector | pro | broadcast variant — your own bot, your own channel |
 | `conservative-trend` | skill | pro | "4 calibrated prediction tiers" |
+| `cult-mode` | skill | pro | community-driven reasoning |
 | `helius-rpc` | plugin | pro | upgraded data path (reserved until gatherer wires) |
 | `dexscreener-flow` | plugin | pro | upgraded flow feed (reserved) |
 | `whale-tracker` | skill | elite | "Whale Terminal" |
 | `flow-driven` | skill | elite | "Smart Money Flow · Cross-venue intelligence" |
+| `diamond-hands` | skill | elite | long-horizon conviction filter — sub-week predictions return as hold |
 | `vizzor-mcp` | connector | elite | **"REST API + priority queue"** — MCP is the v0.4.1 surface |
+
+### Web3 alignment notes
+
+- **No Web2 connectors.** Slack and the generic webhook were dropped
+  in this iteration. Output rails are Telegram (DM + channel), Discord
+  (webhook is anon by design), Farcaster (Web3 social via Neynar),
+  Nostr (sovereign relay), or Vizzor MCP (agent surface).
+- **Nostr never holds your nsec.** `install_kind: 'webhook'` and the
+  field is a relay-bridge HTTPS endpoint the user controls. Any open-
+  source nostr signer (njump, nostr-rs-relay, NIP-46) works. AES-256-GCM
+  still encrypts the bridge URL; `safeFetch` runs the SSRF deny-list
+  before any outbound dial.
+- **Vizzor-original skills** ship with real `signalWeightOverrides` —
+  the engine reasons measurably differently when one is active. See
+  `src/core/chronovisor/skills.ts` for the exact weight deltas vs the
+  fallback set.
 
 The `pricing.tiers.{tier}.features.directory` i18n key on /pricing surfaces
 this directly so a wallet buying Pro / Elite knows the Directory entries

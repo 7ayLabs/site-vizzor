@@ -1044,8 +1044,8 @@
             "body": "Auto-starts on your first connect — web or Telegram. No card, no KYC, downgrades back to Free after 7 days."
           },
           "directory": {
-            "title": "Directory · starter set",
-            "body": "Memecoin Sniper skill, Telegram delivery, Discord webhook, and Coingecko metadata plugin — included."
+            "title": "Directory · trial starter set",
+            "body": "Memecoin Sniper · Solana Native · Degen Hours skills, Telegram + Discord + Nostr delivery (your own relay bridge), Coingecko metadata plugin — included."
           }
         }
       },
@@ -1088,8 +1088,8 @@
             "body": "Unlimited /alerts · every call signed and stored · /precisions + /wr breakdown · personal watchlist"
           },
           "directory": {
-            "title": "Directory · Pro skills + connectors",
-            "body": "Conservative Trend skill, Slack and Generic webhooks for your own pipelines, Helius RPC and Dexscreener Flow plugins."
+            "title": "Directory · Pro skills + web3 connectors",
+            "body": "Conservative Trend + Cult Mode skills, Farcaster casts via Neynar, Telegram channel broadcasts, Helius RPC and Dexscreener Flow plugins."
           }
         }
       },
@@ -1137,7 +1137,7 @@
           },
           "directory": {
             "title": "Directory · Elite skills + Vizzor MCP",
-            "body": "Whale Tracker and Flow-Driven skills, plus Vizzor MCP — call Vizzor from Claude Desktop, Cursor, or any MCP client. Companion to the REST API allowance."
+            "body": "Whale Tracker · Flow-Driven · Diamond Hands skills, plus Vizzor MCP — call Vizzor from Claude Desktop, Cursor, or any MCP client. Companion to the REST API allowance."
           }
         }
       }

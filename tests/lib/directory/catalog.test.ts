@@ -19,9 +19,32 @@ describe('catalog', () => {
   });
 
   it('contains all v1 ship categories', () => {
-    expect(getEntriesByCategory('connector').length).toBeGreaterThanOrEqual(4);
-    expect(getEntriesByCategory('skill').length).toBeGreaterThanOrEqual(4);
+    expect(getEntriesByCategory('connector').length).toBeGreaterThanOrEqual(6);
+    expect(getEntriesByCategory('skill').length).toBeGreaterThanOrEqual(8);
     expect(getEntriesByCategory('plugin').length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('connector list is web3-only (no slack, no generic-webhook)', () => {
+    const ids = getEntriesByCategory('connector').map((e) => e.id);
+    expect(ids).not.toContain('slack-webhook');
+    expect(ids).not.toContain('generic-webhook');
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        'telegram',
+        'discord-webhook',
+        'nostr',
+        'farcaster',
+        'telegram-channel',
+        'vizzor-mcp',
+      ]),
+    );
+  });
+
+  it('Vizzor-original skills are present with correct tiers', () => {
+    expect(getEntry('solana-native')?.required_tier).toBe('free');
+    expect(getEntry('degen-hours')?.required_tier).toBe('free');
+    expect(getEntry('cult-mode')?.required_tier).toBe('pro');
+    expect(getEntry('diamond-hands')?.required_tier).toBe('elite');
   });
 
   it('has Telegram pre-installed as the popular #1', () => {
@@ -62,7 +85,9 @@ describe('validate', () => {
   });
 
   it('rejects non-https URL fields', () => {
-    const entry = getEntry('generic-webhook')!;
+    // Nostr replaces the old generic-webhook fixture: same shape (single
+    // url field, no host regex), tests the pure-http rejection branch.
+    const entry = getEntry('nostr')!;
     expect(() =>
       validateInstallPayload(entry, { webhook_url: 'http://example.com/x' }),
     ).toThrow(InstallValidationError);

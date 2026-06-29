@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-06-28T00:00:00Z",
+  "generated_at": "2026-06-29T16:42:27.096Z",
   "entries": [
     {
       "id": "telegram",
@@ -9,7 +9,7 @@
       "category": "connector",
       "icon": "/connectors/telegram.svg",
       "summary": "Get predictions in your Telegram DMs.",
-      "description": "Pair your Vizzor account with @vizzor_bot to receive every prediction, signal change, and confidence shift as a Telegram DM. Pairs via SIWS — no API key required.",
+      "description": "Pair your Vizzor account with @vizzor_bot to receive every prediction, signal change, and confidence shift as a Telegram DM. Pairs via SIWS — no email, no profile.",
       "popular_rank": 1,
       "popular_for": [
         "predict"
@@ -32,7 +32,7 @@
       "category": "connector",
       "icon": "/connectors/discord.svg",
       "summary": "Pipe predictions into any Discord channel.",
-      "description": "Paste a Discord channel webhook URL. Every prediction (and confidence change above the threshold) posts as a formatted embed. Bring your own alpha to your squad.",
+      "description": "Paste a Discord channel webhook URL. Every prediction (and confidence change above the threshold) posts as a formatted embed. Anon by design — Discord never sees your wallet.",
       "popular_rank": 2,
       "popular_for": [
         "predict"
@@ -58,69 +58,6 @@
       "required_tier": "free"
     },
     {
-      "id": "slack-webhook",
-      "slug": "slack",
-      "name": "Slack",
-      "category": "connector",
-      "icon": "/connectors/slack.svg",
-      "summary": "Post Vizzor predictions to a Slack channel.",
-      "description": "Use a Slack incoming webhook URL to forward predictions and signal events into any workspace channel.",
-      "popular_rank": 3,
-      "popular_for": [
-        "predict"
-      ],
-      "partner_tier": "partner",
-      "install_kind": "webhook",
-      "scopes": [
-        "predict.read"
-      ],
-      "config_schema": {
-        "fields": [
-          {
-            "name": "webhook_url",
-            "label": "Slack webhook URL",
-            "placeholder": "https://hooks.slack.com/services/…",
-            "kind": "url",
-            "pattern": "^https://hooks\\.slack\\.com/services/",
-            "required": true
-          }
-        ]
-      },
-      "external_docs": "https://api.slack.com/messaging/webhooks",
-      "required_tier": "pro"
-    },
-    {
-      "id": "generic-webhook",
-      "slug": "webhook",
-      "name": "Generic webhook",
-      "category": "connector",
-      "icon": "/connectors/webhook.svg",
-      "summary": "Send predictions to any HTTPS endpoint you control.",
-      "description": "Bring your own HTTPS endpoint. Vizzor POSTs the prediction payload as JSON with a signature header so you can verify origin. SSRF-guarded — internal IPs are refused.",
-      "popular_rank": 4,
-      "popular_for": [
-        "predict"
-      ],
-      "partner_tier": "vizzor",
-      "install_kind": "webhook",
-      "scopes": [
-        "predict.read"
-      ],
-      "config_schema": {
-        "fields": [
-          {
-            "name": "webhook_url",
-            "label": "HTTPS endpoint",
-            "placeholder": "https://your-domain.com/webhook",
-            "kind": "url",
-            "required": true
-          }
-        ]
-      },
-      "external_docs": "https://vizzor.ai/docs/integrations/webhooks",
-      "required_tier": "pro"
-    },
-    {
       "id": "vizzor-mcp",
       "slug": "vizzor-mcp",
       "name": "Vizzor MCP",
@@ -142,6 +79,120 @@
       "status_text": "Mint a personal MCP token, paste it into your agent.",
       "config_schema": null,
       "external_docs": "https://vizzor.ai/docs/integrations/mcp"
+    },
+    {
+      "id": "nostr",
+      "slug": "nostr",
+      "name": "Nostr",
+      "category": "connector",
+      "icon": "/connectors/nostr.svg",
+      "summary": "Publish predictions to your Nostr identity via a self-hosted relay bridge.",
+      "description": "Vizzor never sees your nsec. You deploy any open-source nostr signer or relay bridge that exposes an HTTPS endpoint; we POST the event JSON, your bridge signs and publishes. SSRF-guarded — internal IPs are refused. Sovereign by default.",
+      "popular_rank": 6,
+      "popular_for": [
+        "predict"
+      ],
+      "partner_tier": "community",
+      "install_kind": "webhook",
+      "scopes": [
+        "predict.read"
+      ],
+      "required_tier": "free",
+      "config_schema": {
+        "fields": [
+          {
+            "name": "webhook_url",
+            "label": "Nostr relay bridge URL",
+            "placeholder": "https://your-bridge.example/sign-and-publish",
+            "kind": "url",
+            "required": true
+          }
+        ]
+      },
+      "external_docs": "https://vizzor.ai/docs/integrations/nostr"
+    },
+    {
+      "id": "farcaster",
+      "slug": "farcaster",
+      "name": "Farcaster",
+      "category": "connector",
+      "icon": "/connectors/farcaster.svg",
+      "summary": "Cast predictions to Warpcast through your Neynar account.",
+      "description": "Web3-native reach without a Web2 attestation layer. Provide a Neynar API key + your signer UUID + FID; Vizzor posts the cast on your behalf. Revoke any time on the Neynar side.",
+      "popular_rank": 7,
+      "popular_for": [
+        "predict"
+      ],
+      "partner_tier": "partner",
+      "install_kind": "apikey",
+      "scopes": [
+        "predict.read"
+      ],
+      "required_tier": "pro",
+      "config_schema": {
+        "fields": [
+          {
+            "name": "neynar_api_key",
+            "label": "Neynar API key",
+            "placeholder": "NEYNAR_...",
+            "kind": "secret",
+            "required": true
+          },
+          {
+            "name": "signer_uuid",
+            "label": "Signer UUID",
+            "placeholder": "00000000-0000-0000-0000-000000000000",
+            "kind": "text",
+            "required": true
+          },
+          {
+            "name": "fid",
+            "label": "FID",
+            "placeholder": "12345",
+            "kind": "text",
+            "required": true
+          }
+        ]
+      },
+      "external_docs": "https://docs.neynar.com"
+    },
+    {
+      "id": "telegram-channel",
+      "slug": "telegram-channel",
+      "name": "Telegram channel",
+      "category": "connector",
+      "icon": "/connectors/telegram-channel.svg",
+      "summary": "Broadcast predictions from your own bot to a channel you control.",
+      "description": "Distinct from the Telegram DM connector — this one posts to a public or private channel via the bot token you generated with @BotFather. No Vizzor brand on the message unless you put it there.",
+      "popular_rank": 8,
+      "popular_for": [
+        "predict"
+      ],
+      "partner_tier": "partner",
+      "install_kind": "apikey",
+      "scopes": [
+        "predict.read"
+      ],
+      "required_tier": "pro",
+      "config_schema": {
+        "fields": [
+          {
+            "name": "bot_token",
+            "label": "Telegram bot token",
+            "placeholder": "1234567890:ABC...",
+            "kind": "secret",
+            "required": true
+          },
+          {
+            "name": "chat_id",
+            "label": "Channel chat_id",
+            "placeholder": "-1001234567890",
+            "kind": "text",
+            "required": true
+          }
+        ]
+      },
+      "external_docs": "https://core.telegram.org/bots/api"
     },
     {
       "id": "memecoin-sniper",
@@ -222,6 +273,86 @@
       ],
       "config_schema": null,
       "required_tier": "elite"
+    },
+    {
+      "id": "solana-native",
+      "slug": "solana-native",
+      "name": "Solana Native",
+      "category": "skill",
+      "icon": "/connectors/skill-solana-native.svg",
+      "summary": "Solana-first lens — Helius depth beats Polymarket meta on a Solana wallet.",
+      "description": "Weights on-chain depth and dex flow over prediction-market sentiment (which skews ETH-flavored). The engine defaults to SPL token mechanics, bonding-curve launches, and Jupiter route depth when reasoning.",
+      "popular_rank": 5,
+      "popular_for": [
+        "predict"
+      ],
+      "partner_tier": "vizzor",
+      "install_kind": "skill",
+      "scopes": [
+        "skill.activate"
+      ],
+      "required_tier": "free",
+      "config_schema": null
+    },
+    {
+      "id": "degen-hours",
+      "slug": "degen-hours",
+      "name": "Degen Hours",
+      "category": "skill",
+      "icon": "/connectors/skill-degen-hours.svg",
+      "summary": "Off-hours tape > timeline. When bots fight each other, read the orderbook.",
+      "description": "Biases the reasoning toward thin-liquidity, off-hours (00:00–06:00 UTC) conditions. Pattern-match + microstructure signals lead; social-narrative is treated as noise unless it is pre-CEX-listing chatter. Short horizons preferred.",
+      "popular_rank": 6,
+      "popular_for": [
+        "predict"
+      ],
+      "partner_tier": "vizzor",
+      "install_kind": "skill",
+      "scopes": [
+        "skill.activate"
+      ],
+      "required_tier": "free",
+      "config_schema": null
+    },
+    {
+      "id": "cult-mode",
+      "slug": "cult-mode",
+      "name": "Cult Mode",
+      "category": "skill",
+      "icon": "/connectors/skill-cult-mode.svg",
+      "summary": "Community is the moat. Holder distribution + social momentum lead; fundamentals confirm.",
+      "description": "Weights holder-base behavior + social-narrative momentum as the primary drivers; technical fundamentals are confirmation. Surfaces top-10 concentration and new-wallet inflow explicitly. Best for memecoins and community-driven plays.",
+      "popular_rank": 7,
+      "popular_for": [
+        "predict"
+      ],
+      "partner_tier": "vizzor",
+      "install_kind": "skill",
+      "scopes": [
+        "skill.activate"
+      ],
+      "required_tier": "pro",
+      "config_schema": null
+    },
+    {
+      "id": "diamond-hands",
+      "slug": "diamond-hands",
+      "name": "Diamond Hands",
+      "category": "skill",
+      "icon": "/connectors/skill-diamond-hands.svg",
+      "summary": "Long-horizon conviction. Sub-7-day predictions return as \"hold position\".",
+      "description": "Refuses to issue a directional call on sub-7-day horizons unless ML ensemble + logic-rules agree unanimously. Deemphasizes pattern-match (noise) and social-narrative (resolves first). Reasoning cites multi-week / multi-month comparables.",
+      "popular_rank": 8,
+      "popular_for": [
+        "predict"
+      ],
+      "partner_tier": "vizzor",
+      "install_kind": "skill",
+      "scopes": [
+        "skill.activate"
+      ],
+      "required_tier": "elite",
+      "config_schema": null
     },
     {
       "id": "helius-rpc",

@@ -21,7 +21,13 @@ import { join } from 'node:path';
 
 const CATALOG_PATH = join(process.cwd(), 'data', 'connectors.json');
 const VALID_CATEGORIES = new Set(['connector', 'skill', 'plugin']);
-const VALID_INSTALL_KINDS = new Set(['internal', 'webhook', 'apikey', 'skill']);
+const VALID_INSTALL_KINDS = new Set([
+  'internal',
+  'webhook',
+  'apikey',
+  'skill',
+  'mcp',
+]);
 
 function fail(msg) {
   console.error(`[parity] ${msg}`);
