@@ -717,7 +717,12 @@
           "plugin": "Plugins"
         },
         "manage": "Ouvrir l'annuaire",
-        "reserved": "Bientôt"
+        "reserved": "Bientôt",
+        "empty": {
+          "skill": "Aucun skill.",
+          "connector": "Aucun connecteur.",
+          "plugin": "Aucun plugin."
+        }
       }
     },
     "settings": {

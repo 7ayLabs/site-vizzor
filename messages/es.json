@@ -717,7 +717,12 @@
           "plugin": "Plugins"
         },
         "manage": "Abrir Directorio",
-        "reserved": "Pronto"
+        "reserved": "Pronto",
+        "empty": {
+          "skill": "Sin skills.",
+          "connector": "Sin conectores.",
+          "plugin": "Sin plugins."
+        }
       }
     },
     "settings": {

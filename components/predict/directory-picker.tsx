@@ -3,26 +3,28 @@
 /**
  * DirectoryPicker — Claude-style "+" menu inside the chat composer.
  *
- * Opens a popover above the `+` button with three sections (Skills /
- * Connectors / Plugins). Each section lists entries from
- * `/api/directory/catalog`. Interactions:
+ * Compact tabbed popover above the `+` button — one tab per category
+ * (Skills / Connectors / Plugins). The previous stacked-sections
+ * layout grew to 17 rows tall when every category was populated,
+ * overshooting the composer area. Tabs keep the menu fixed-height:
+ * at most 8 rows visible per tab, anything beyond scrolls inside a
+ * 240px viewport.
  *
- *   - Skill: clicking activates it via PATCH /api/directory/skills/active
- *     (single-select — the previously-active skill is auto-cleared);
- *     clicking the active skill clears it.
- *   - Connector / Plugin: clicking unimported entries deep-links to
- *     /app/directory where the install sheet handles credentials.
- *     Clicking an installed entry is a no-op (state is already on).
- *
- * The user never leaves the chat for the common case (switching a
- * skill). Catalog state is mutated via SWR so the chip in the
- * composer and the directory page agree without a refresh.
+ * Interactions:
+ *   - Skill: clicking activates via PATCH /api/directory/skills/active
+ *     (single-select — the previously-active skill auto-clears);
+ *     clicking the active skill clears it. Menu stays open so the
+ *     user can swap quickly.
+ *   - Connector / Plugin: not-yet-installed deep-links to
+ *     /app/directory (install needs the credentials sheet); already-
+ *     installed entries are a no-op + close.
+ *   - Tier-locked: routes to /pricing for the upgrade story.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowUpRight, Check, Layers, Plug, Plus, Puzzle } from 'lucide-react';
+import { ArrowUpRight, Check, Plus } from 'lucide-react';
 
 type Category = 'skill' | 'connector' | 'plugin';
 
@@ -46,6 +48,7 @@ interface CatalogResponse {
 }
 
 const CATALOG_URL = '/api/directory/catalog';
+const CATEGORIES: ReadonlyArray<Category> = ['skill', 'connector', 'plugin'];
 
 const catalogFetcher = (url: string): Promise<CatalogResponse> =>
   fetch(url, { credentials: 'same-origin' }).then((r) =>
@@ -61,8 +64,8 @@ export function DirectoryPicker({ signedIn, disabled = false }: Props) {
   const t = useTranslations('predict.shell.picker');
   const locale = useLocale();
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<Category>('skill');
   const wrapRef = useRef<HTMLDivElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
   const { mutate } = useSWRConfig();
 
   const { data } = useSWR<CatalogResponse>(
@@ -90,14 +93,17 @@ export function DirectoryPicker({ signedIn, disabled = false }: Props) {
     };
   }, [open]);
 
-  const entries = data?.entries ?? [];
-  const sections = useMemo(
-    () => ({
-      skill: entries.filter((e) => e.category === 'skill'),
-      connector: entries.filter((e) => e.category === 'connector'),
-      plugin: entries.filter((e) => e.category === 'plugin'),
-    }),
-    [entries],
+  const entries = useMemo(
+    () =>
+      (data?.entries ?? [])
+        .filter((e) => e.category === tab)
+        .sort((a, b) => {
+          // Active skill first, installed second, alphabetical.
+          if (a.active_skill !== b.active_skill) return a.active_skill ? -1 : 1;
+          if (a.installed !== b.installed) return a.installed ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        }),
+    [data, tab],
   );
 
   async function activateSkill(entry: HydratedEntry) {
@@ -120,18 +126,8 @@ export function DirectoryPicker({ signedIn, disabled = false }: Props) {
     }
     if (entry.category === 'skill') {
       void activateSkill(entry);
-      // Keep open — user might want to swap quickly.
-      return;
+      return; // keep open
     }
-    if (entry.installed) {
-      // Already installed; nothing to do here. User can manage via
-      // the directory page.
-      window.location.href = `/${locale}/app/directory`;
-      setOpen(false);
-      return;
-    }
-    // Connector / plugin not installed yet — install needs credentials,
-    // which live behind the directory's install sheet.
     window.location.href = `/${locale}/app/directory`;
     setOpen(false);
   }
@@ -152,7 +148,6 @@ export function DirectoryPicker({ signedIn, disabled = false }: Props) {
   return (
     <div ref={wrapRef} className="relative shrink-0 self-end mb-px">
       <button
-        ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         disabled={disabled}
@@ -172,36 +167,65 @@ export function DirectoryPicker({ signedIn, disabled = false }: Props) {
         <div
           role="menu"
           aria-label={t('trigger')}
-          className="absolute bottom-full left-0 mb-2 w-[280px] rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_8px_30px_rgba(0,0,0,0.40)] overflow-hidden z-[60]"
+          className="absolute bottom-full left-0 mb-2 w-[260px] rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_8px_30px_rgba(0,0,0,0.40)] overflow-hidden z-[60] flex flex-col"
         >
-          <PickerSection
-            title={t('section.skill')}
-            icon={<Layers size={13} strokeWidth={1.75} />}
-            entries={sections.skill}
-            onSelect={onSelect}
-            kind="skill"
-          />
-          <PickerSection
-            title={t('section.connector')}
-            icon={<Plug size={13} strokeWidth={1.75} />}
-            entries={sections.connector}
-            onSelect={onSelect}
-            kind="connector"
-          />
-          <PickerSection
-            title={t('section.plugin')}
-            icon={<Puzzle size={13} strokeWidth={1.75} />}
-            entries={sections.plugin}
-            onSelect={onSelect}
-            kind="plugin"
-          />
+          {/* Tab strip — 32px tall, underline on active */}
+          <div className="flex border-b border-[var(--border)] px-1 pt-1">
+            {CATEGORIES.map((key) => {
+              const active = tab === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setTab(key)}
+                  aria-current={active ? 'page' : undefined}
+                  className={`relative flex-1 px-2 pt-1.5 pb-2 text-[11.5px] transition-colors ${
+                    active
+                      ? 'text-[var(--fg)] font-medium'
+                      : 'text-[var(--fg-3)] hover:text-[var(--fg-2)]'
+                  }`}
+                >
+                  {t(`section.${key}`)}
+                  {active && (
+                    <span
+                      className="absolute left-2 right-2 -bottom-px h-px bg-[var(--fg)]"
+                      aria-hidden
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Scroll viewport — fixed max-height keeps the menu compact */}
+          <div className="max-h-[240px] overflow-y-auto py-1">
+            {entries.length === 0 ? (
+              <p className="px-3 py-3 text-[11.5px] text-[var(--fg-3)]">
+                {t(`empty.${tab}`)}
+              </p>
+            ) : (
+              <ul className="px-1">
+                {entries.map((entry) => (
+                  <li key={entry.id}>
+                    <Row entry={entry} onSelect={onSelect} tab={tab} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Footer */}
           <a
             href={`/${locale}/app/directory`}
-            className="flex items-center justify-between px-3 py-2 text-[12px] text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)] border-t border-[var(--border)] transition-colors"
+            className="flex items-center justify-between px-3 py-2 text-[11.5px] text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)] border-t border-[var(--border)] transition-colors"
             onClick={() => setOpen(false)}
           >
             <span>{t('manage')}</span>
-            <ArrowUpRight size={12} className="text-[var(--fg-3)]" strokeWidth={1.75} />
+            <ArrowUpRight
+              size={11}
+              className="text-[var(--fg-3)]"
+              strokeWidth={1.75}
+            />
           </a>
         </div>
       )}
@@ -209,74 +233,53 @@ export function DirectoryPicker({ signedIn, disabled = false }: Props) {
   );
 }
 
-function PickerSection({
-  title,
-  icon,
-  entries,
+function Row({
+  entry,
   onSelect,
-  kind,
+  tab,
 }: {
-  title: string;
-  icon: React.ReactNode;
-  entries: HydratedEntry[];
+  entry: HydratedEntry;
   onSelect: (entry: HydratedEntry) => void;
-  kind: Category;
+  tab: Category;
 }) {
   const t = useTranslations('predict.shell.picker');
-  if (entries.length === 0) return null;
+  const active = entry.active_skill || (tab !== 'skill' && entry.installed);
   return (
-    <div className="py-1.5 border-b border-[var(--border)] last:border-b-0">
-      <div className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
-        <span aria-hidden>{icon}</span>
-        <span>{title}</span>
-      </div>
-      <ul className="px-1">
-        {entries.map((entry) => {
-          const active = entry.active_skill || (kind !== 'skill' && entry.installed);
-          return (
-            <li key={entry.id}>
-              <button
-                type="button"
-                onClick={() => onSelect(entry)}
-                role="menuitem"
-                className={`group w-full flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[12.5px] text-left transition-colors ${
-                  active
-                    ? 'text-[var(--fg)]'
-                    : 'text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]'
-                }`}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={entry.icon}
-                  alt=""
-                  className="w-4 h-4 rounded shrink-0 opacity-90"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-                <span className="flex-1 truncate">{entry.name}</span>
-                {entry.locked && (
-                  <span className="text-[9px] uppercase tracking-[0.14em] text-[var(--fg-3)] border border-[var(--border)] rounded-sm px-1 py-0.5">
-                    {entry.required_tier}
-                  </span>
-                )}
-                {active && (
-                  <Check
-                    size={13}
-                    className="text-[var(--accent)] shrink-0"
-                    strokeWidth={2}
-                  />
-                )}
-                {!active && kind === 'plugin' && (
-                  <span className="text-[9px] uppercase tracking-[0.14em] text-[var(--fg-3)]">
-                    {t('reserved')}
-                  </span>
-                )}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+    <button
+      type="button"
+      onClick={() => onSelect(entry)}
+      role="menuitem"
+      className={`group w-full flex items-center gap-2 rounded-md px-2 py-1 text-[12px] text-left transition-colors ${
+        active
+          ? 'text-[var(--fg)]'
+          : 'text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]'
+      }`}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={entry.icon}
+        alt=""
+        className="w-[18px] h-[18px] rounded shrink-0 opacity-95"
+        onError={(e) => {
+          (e.currentTarget as HTMLImageElement).style.display = 'none';
+        }}
+      />
+      <span className="flex-1 truncate leading-[1.4]">{entry.name}</span>
+      {entry.locked ? (
+        <span className="text-[9px] uppercase tracking-[0.12em] text-[var(--fg-3)] border border-[var(--border)] rounded-sm px-1 py-px shrink-0">
+          {entry.required_tier}
+        </span>
+      ) : active ? (
+        <Check
+          size={12}
+          className="text-[var(--accent)] shrink-0"
+          strokeWidth={2.5}
+        />
+      ) : tab === 'plugin' ? (
+        <span className="text-[9px] uppercase tracking-[0.12em] text-[var(--fg-3)] shrink-0">
+          {t('reserved')}
+        </span>
+      ) : null}
+    </button>
   );
 }

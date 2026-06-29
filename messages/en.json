@@ -717,7 +717,12 @@
           "plugin": "Plugins"
         },
         "manage": "Open Directory",
-        "reserved": "Soon"
+        "reserved": "Soon",
+        "empty": {
+          "skill": "No skills.",
+          "connector": "No connectors.",
+          "plugin": "No plugins."
+        }
       }
     },
     "settings": {
