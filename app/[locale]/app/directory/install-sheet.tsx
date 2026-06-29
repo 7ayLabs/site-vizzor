@@ -156,14 +156,14 @@ export function InstallSheet({ target, onClose, onInstalled }: Props) {
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md px-3 py-2 text-[12.5px] text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)] transition-colors"
+              className="rounded-md px-3 py-2 text-[12.5px] text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)] active:scale-[0.97] transition-all duration-150"
             >
               {t('install.cancel')}
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-md bg-[var(--accent)] px-3 py-2 text-[12.5px] font-medium text-black hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className="rounded-md bg-[var(--accent)] px-3 py-2 text-[12.5px] font-medium text-black hover:opacity-90 active:scale-[0.97] disabled:opacity-50 disabled:active:scale-100 transition-all duration-150"
             >
               {submitting ? t('install.submitting') : t('install.submit')}
             </button>

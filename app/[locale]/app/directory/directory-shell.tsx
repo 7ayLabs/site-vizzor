@@ -287,7 +287,7 @@ function EntryAction({ entry, onAction, onUninstall }: CardProps) {
         type="button"
         onClick={onAction}
         aria-pressed={active}
-        className={`self-start text-[12px] rounded-md px-3 py-1.5 font-medium transition-colors ${
+        className={`self-start text-[12px] rounded-md px-3 py-1.5 font-medium active:scale-[0.97] transition-all duration-150 ${
           active
             ? 'bg-[var(--accent)] text-black hover:opacity-90'
             : 'bg-[var(--surface-2)] text-[var(--fg-2)] hover:bg-[var(--surface-3)] hover:text-[var(--fg)]'
@@ -303,7 +303,7 @@ function EntryAction({ entry, onAction, onUninstall }: CardProps) {
       <button
         type="button"
         onClick={onAction}
-        className="self-start text-[12px] rounded-md px-3 py-1.5 bg-[var(--surface-2)] text-[var(--fg-2)] hover:bg-[var(--surface-3)] hover:text-[var(--fg)] transition-colors"
+        className="self-start text-[12px] rounded-md px-3 py-1.5 bg-[var(--surface-2)] text-[var(--fg-2)] hover:bg-[var(--surface-3)] hover:text-[var(--fg)] active:scale-[0.97] transition-all duration-150"
       >
         {entry.installed
           ? t('action.internal.paired')
@@ -333,7 +333,7 @@ function EntryAction({ entry, onAction, onUninstall }: CardProps) {
     <button
       type="button"
       onClick={onAction}
-      className="self-start text-[12px] rounded-md px-3 py-1.5 bg-[var(--surface-2)] text-[var(--fg-2)] hover:bg-[var(--surface-3)] hover:text-[var(--fg)] transition-colors"
+      className="self-start text-[12px] rounded-md px-3 py-1.5 bg-[var(--surface-2)] text-[var(--fg-2)] hover:bg-[var(--surface-3)] hover:text-[var(--fg)] active:scale-[0.97] transition-all duration-150"
     >
       {t('action.install')}
     </button>

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-06-29T16:42:27.096Z",
+  "generated_at": "2026-06-29T18:59:48.130Z",
   "entries": [
     {
       "id": "telegram",
@@ -352,6 +352,26 @@
         "skill.activate"
       ],
       "required_tier": "elite",
+      "config_schema": null
+    },
+    {
+      "id": "prediction-markets",
+      "slug": "prediction-markets",
+      "name": "Prediction Markets",
+      "category": "skill",
+      "icon": "/connectors/skill-prediction-markets.svg",
+      "summary": "Predict Polymarket / Kalshi binary outcomes — probabilities, not prices.",
+      "description": "Shifts the engine into a yes/no probability frame for prediction-market questions. Outputs read as 'YES at 62%' / 'NO at 38%' / 'no edge', not direction + confidence. PredictionMarkets signal dominates; thin-liquidity markets get a confidence haircut. Works for political, sports, and macro markets — Vizzor becomes a probability engine, not just a token engine.",
+      "popular_rank": 9,
+      "popular_for": [
+        "predict"
+      ],
+      "partner_tier": "vizzor",
+      "install_kind": "skill",
+      "scopes": [
+        "skill.activate"
+      ],
+      "required_tier": "pro",
       "config_schema": null
     },
     {

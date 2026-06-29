@@ -3,6 +3,45 @@
 Operator-facing reference for the `/app/directory` connector store
 shipped on `feat/v0.4.1/connector-directory`.
 
+## Production-readiness audit (as of 2026-06-29)
+
+What ships on the current branch:
+- 6 connectors · 9 skills · 3 plugins, parity-checked across repos.
+- Tier-gated install + skill activation (free/pro/elite), server-enforced at site + engine.
+- AES-256-GCM credential storage with SSRF-guarded outbound dispatch.
+- Personal MCP token mint (Elite).
+- Export / import endpoints.
+- Branded dispatch envelope (Vizzor source block + referral attribution).
+- Tabbed Claude-style `+` picker in the chat composer with fluid transitions.
+
+Blockers before flipping the branch to main:
+1. **Engine deploy gap.** All engine commits are on `feat/v0.4.1/connector-directory`. `api.vizzor.ai` still runs from `main` (last commit `59c81b2`). Until the engine deploys, `skill_id` is honored ONLY through the site-side priming workaround (`lib/directory/runtime.ts:buildSkillPrimingMessages`). Plan: merge engine PR + redeploy, then drop the priming map in a follow-up commit.
+2. **`CONNECTOR_ENC_KEY` env var.** AES-256-GCM key for `lib/security/connector-crypto.ts`. Not yet provisioned in prod env. Generate via `openssl rand -base64 32` and store in 1Password / fly secrets BEFORE the first install attempt — otherwise the POST /install route throws at the first webhook install.
+3. **Plugin scaffolding only.** `pluginsForTarget()` resolves ids on the engine side but no signal gatherer reads it. UI carries a "Reserved" badge to be honest about this. Closing it requires server-to-server forwarding of the user's encrypted key from site → engine, plus per-gatherer fetch-path adapters. Ship as v0.4.2.
+4. **No E2E test for the directory flow.** Unit tests cover crypto, SSRF, catalog validation, tier gating, and weight math (59 site + 16 engine tests). End-to-end (install Discord webhook → activate skill → send chat → confirm webhook delivery) requires Playwright + a local engine stub. Manual smoke is the current gate.
+5. **Site PR not opened.** User instruction: keep on `feat/v0.4.1/connector-directory`. When ready, open against `develop` first, then `develop → main` is its own release gate.
+
+Operational warm-up checklist before announcing:
+- [ ] `CONNECTOR_ENC_KEY` set in prod.
+- [ ] Engine feature branch merged to `develop` + redeployed.
+- [ ] `pnpm exec tsc --noEmit` clean on both repos at HEAD.
+- [ ] `pnpm vitest run tests/lib` (site) + `pnpm vitest run test/unit` (engine) green.
+- [ ] `SITE_CATALOG_URL=https://vizzor.ai/api/directory/catalog node scripts/check-directory-parity.mjs` green from a workstation.
+- [ ] `/api/directory/catalog` returns 200 (anonymous) with cached headers.
+- [ ] Manual: install one webhook connector, watch the connector's endpoint receive a POST after a chat.
+- [ ] Manual: activate Memecoin Sniper, ask chat for "what skill is active" — model names the skill.
+- [ ] Audit log row for `directory.install` lands on every install.
+- [ ] Rotate any test API keys / webhooks before going public.
+
+Known follow-up workstreams (post v0.4.1):
+- Full prediction-markets surface (`/app/markets` page, Polymarket data fetcher, dedicated chat composer chips). The `prediction-markets` skill is a v0.4.1-scope MVP that reuses the existing chronovisor pipeline; the dedicated surface is v0.5.
+- Plugin wire-up to signal gatherers (the deferred work above).
+- Nostr signer service deployed at vizzor.ai (today users must run their own bridge). NIP-46 delegated signer flow.
+- Telegram broadcast bot template repo so users can deploy a channel bot in one click.
+- Per-skill accuracy badges on directory cards (engine `accuracy-tracker.ts` already records hit rate per-skill via `chronovisor_predictions.skill_id`).
+- E2E Playwright suite for install / activate / dispatch flows.
+- ENS-resolved webhook targets (`https://you.eth`).
+
 ## What the directory is
 
 A curated allowlist of Skills, Connectors, and Plugins listed at

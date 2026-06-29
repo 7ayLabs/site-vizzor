@@ -33,7 +33,7 @@
         "alsoOn": "Also on"
       },
       "surface": {
-        "predict": "Chat",
+        "predict": "Predict",
         "whales": "Whales",
         "flow": "Flow",
         "directory": "Directory"
@@ -620,7 +620,7 @@
     "shell": {
       "model": "Vizzor",
       "modelVersion": "v0.15.5 Helios",
-      "newChat": "New run",
+      "newChat": "New prediction",
       "collapseSidebar": "Collapse sidebar",
       "openSidebar": "Open sidebar",
       "searchPlaceholder": "Symbol or receipt…",
@@ -630,7 +630,7 @@
       "eliteLine": "Elite · unlimited",
       "freeLine": "Trial expired · /pricing",
       "nav": {
-        "chat": "Run",
+        "chat": "Predict",
         "alerts": "Alerts",
         "library": "Receipts",
         "libraryHint": "/precisions",
