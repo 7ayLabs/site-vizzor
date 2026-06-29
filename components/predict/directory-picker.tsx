@@ -167,10 +167,27 @@ export function DirectoryPicker({ signedIn, disabled = false }: Props) {
         <div
           role="menu"
           aria-label={t('trigger')}
-          className="absolute bottom-full left-0 mb-2 w-[260px] rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_8px_30px_rgba(0,0,0,0.40)] overflow-hidden z-[60] flex flex-col"
+          className="absolute bottom-full left-0 mb-2 w-[284px] rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_8px_30px_rgba(0,0,0,0.40)] overflow-hidden z-[60] flex flex-col motion-safe:animate-[vt-pick-pop_180ms_ease-out]"
         >
-          {/* Tab strip — 32px tall, underline on active */}
-          <div className="flex border-b border-[var(--border)] px-1 pt-1">
+          {/* Local keyframes — the rest of the file is Tailwind only.
+              vt-pick-pop:  the whole menu slides up + fades in on open.
+              vt-pick-in:   the content swap when the active tab changes.
+              Keys are namespaced (vt-pick-*) so they don't collide
+              with other components' animations. */}
+          <style>{`
+            @keyframes vt-pick-pop {
+              from { opacity: 0; transform: translateY(6px) scale(0.985); }
+              to   { opacity: 1; transform: translateY(0) scale(1); }
+            }
+            @keyframes vt-pick-in {
+              from { opacity: 0; transform: translateY(3px); }
+              to   { opacity: 1; transform: translateY(0); }
+            }
+          `}</style>
+
+          {/* Tab strip — 36px tall, animated underline that slides
+              between tabs instead of popping per tab. */}
+          <div className="relative flex border-b border-[var(--border)] px-1 pt-1">
             {CATEGORIES.map((key) => {
               const active = tab === key;
               return (
@@ -179,50 +196,60 @@ export function DirectoryPicker({ signedIn, disabled = false }: Props) {
                   type="button"
                   onClick={() => setTab(key)}
                   aria-current={active ? 'page' : undefined}
-                  className={`relative flex-1 px-2 pt-1.5 pb-2 text-[11.5px] transition-colors ${
+                  className={`relative flex-1 px-2 pt-2 pb-2.5 text-[12px] transition-colors duration-150 ${
                     active
                       ? 'text-[var(--fg)] font-medium'
                       : 'text-[var(--fg-3)] hover:text-[var(--fg-2)]'
                   }`}
                 >
                   {t(`section.${key}`)}
-                  {active && (
-                    <span
-                      className="absolute left-2 right-2 -bottom-px h-px bg-[var(--fg)]"
-                      aria-hidden
-                    />
-                  )}
                 </button>
               );
             })}
+            {/* Sliding underline — width = 1/3 of strip, translates by
+                tab index. Eased so the eye tracks the move instead of
+                seeing the underline jump between tabs. */}
+            <span
+              aria-hidden
+              className="absolute -bottom-px h-px bg-[var(--fg)] transition-transform duration-200 ease-out"
+              style={{
+                width: 'calc((100% - 8px) / 3)',
+                left: '4px',
+                transform: `translateX(calc(${CATEGORIES.indexOf(tab)} * (100% + 0px)))`,
+              }}
+            />
           </div>
 
-          {/* Scroll viewport — fixed max-height keeps the menu compact */}
-          <div className="max-h-[240px] overflow-y-auto py-1">
-            {entries.length === 0 ? (
-              <p className="px-3 py-3 text-[11.5px] text-[var(--fg-3)]">
-                {t(`empty.${tab}`)}
-              </p>
-            ) : (
-              <ul className="px-1">
-                {entries.map((entry) => (
-                  <li key={entry.id}>
-                    <Row entry={entry} onSelect={onSelect} tab={tab} />
-                  </li>
-                ))}
-              </ul>
-            )}
+          {/* Scroll viewport — fixed max-height keeps the menu compact.
+              key={tab} re-mounts the list, retriggering the fade-in
+              animation so swapping tabs feels intentional. */}
+          <div className="max-h-[300px] overflow-y-auto py-1.5">
+            <div key={tab} className="motion-safe:animate-[vt-pick-in_180ms_ease-out]">
+              {entries.length === 0 ? (
+                <p className="px-3 py-3 text-[12px] text-[var(--fg-3)]">
+                  {t(`empty.${tab}`)}
+                </p>
+              ) : (
+                <ul className="px-1">
+                  {entries.map((entry) => (
+                    <li key={entry.id}>
+                      <Row entry={entry} onSelect={onSelect} tab={tab} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
 
           {/* Footer */}
           <a
             href={`/${locale}/app/directory`}
-            className="flex items-center justify-between px-3 py-2 text-[11.5px] text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)] border-t border-[var(--border)] transition-colors"
+            className="flex items-center justify-between px-3 py-2 text-[12px] text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)] border-t border-[var(--border)] transition-colors"
             onClick={() => setOpen(false)}
           >
             <span>{t('manage')}</span>
             <ArrowUpRight
-              size={11}
+              size={12}
               className="text-[var(--fg-3)]"
               strokeWidth={1.75}
             />
@@ -249,7 +276,7 @@ function Row({
       type="button"
       onClick={() => onSelect(entry)}
       role="menuitem"
-      className={`group w-full flex items-center gap-2 rounded-md px-2 py-1 text-[12px] text-left transition-colors ${
+      className={`group w-full flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[12.5px] text-left transition-colors duration-150 ${
         active
           ? 'text-[var(--fg)]'
           : 'text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]'
@@ -259,24 +286,24 @@ function Row({
       <img
         src={entry.icon}
         alt=""
-        className="w-[18px] h-[18px] rounded shrink-0 opacity-95"
+        className="w-5 h-5 rounded shrink-0 opacity-95 transition-transform duration-150 group-hover:scale-[1.04]"
         onError={(e) => {
           (e.currentTarget as HTMLImageElement).style.display = 'none';
         }}
       />
-      <span className="flex-1 truncate leading-[1.4]">{entry.name}</span>
+      <span className="flex-1 truncate leading-[1.35]">{entry.name}</span>
       {entry.locked ? (
-        <span className="text-[9px] uppercase tracking-[0.12em] text-[var(--fg-3)] border border-[var(--border)] rounded-sm px-1 py-px shrink-0">
+        <span className="text-[9.5px] uppercase tracking-[0.12em] text-[var(--fg-3)] border border-[var(--border)] rounded-sm px-1 py-px shrink-0">
           {entry.required_tier}
         </span>
       ) : active ? (
         <Check
-          size={12}
+          size={13}
           className="text-[var(--accent)] shrink-0"
           strokeWidth={2.5}
         />
       ) : tab === 'plugin' ? (
-        <span className="text-[9px] uppercase tracking-[0.12em] text-[var(--fg-3)] shrink-0">
+        <span className="text-[9.5px] uppercase tracking-[0.12em] text-[var(--fg-3)] shrink-0">
           {t('reserved')}
         </span>
       ) : null}
