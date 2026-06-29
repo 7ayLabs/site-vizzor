@@ -3086,32 +3086,31 @@ function TopicAddPanel({
         // run off the viewport on narrow widths. Opening above also keeps
         // the panel out of the composer textarea below.
         'right-0 bottom-full mb-2',
-        'min-w-[240px] max-h-[280px] overflow-y-auto',
-        // Solid minimalist surface — matches SlashPalette. Transparent
-        // popovers bleed the chips bar through and confuse the reading
-        // hierarchy, so both popovers on this screen stay fully opaque.
-        'rounded-2xl border border-[var(--border)]',
+        // v0.4.1 — chrome aligned to DirectoryPicker so both composer
+        // popovers read as one design system: same width, radius,
+        // border, shadow, and motion. Row paddings + font sizes below
+        // also mirror the picker's reference values.
+        'w-[284px]',
+        'rounded-xl border border-[var(--border)]',
         'bg-[var(--surface)]',
-        'shadow-[0_12px_36px_-18px_color-mix(in_oklab,#000_85%,transparent)]',
+        'shadow-[0_8px_30px_rgba(0,0,0,0.40)]',
+        'overflow-hidden flex flex-col',
         'motion-safe:will-change-transform',
         closing
           ? 'motion-safe:slash-palette-slide-out'
           : 'motion-safe:slash-palette-slide-in',
-        'overflow-hidden pb-1',
       )}
     >
-      {/* Section stamp — mono eyebrow vocabulary matches the home-page
-          cards (how-it-works, hero stat tiles) so the popover reads as
-          part of the same design system, not a separate dropdown chrome. */}
-      <p className="px-3 pt-3 pb-1.5 mono tabular text-[10px] uppercase tracking-[0.2em] font-semibold text-[var(--fg-3)]">
+      {/* Section stamp — same mono eyebrow vocabulary as the picker's
+          tab labels, sized to leave the popover top-edge at the same
+          ~36px chrome rhythm. */}
+      <p className="px-3 pt-2.5 pb-1.5 mono tabular text-[10px] uppercase tracking-[0.16em] font-semibold text-[var(--fg-3)]">
         Add topic
       </p>
       {/* Custom token entry — type any symbol the engine knows (BTC,
-          HYPE, etc.). The chip is added immediately and persists in
-          localStorage so the user's bar feels theirs. Validation
-          lives in the parent (CUSTOM_TOKEN_SYMBOL_RE); we only flash
-          a hairline error when the parent rejects. */}
-      <div className="px-2 pb-2 border-b border-[var(--border)]/60">
+          HYPE, etc.). Form chrome aligns to the picker's row padding
+          rhythm (px-2 outer, py-1.5 inner). */}
+      <div className="px-2 pb-2 border-b border-[var(--border)]">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -3119,7 +3118,7 @@ function TopicAddPanel({
           }}
           className={cn(
             'flex items-center gap-1.5 h-8 px-2 rounded-md border',
-            'bg-[var(--surface-2)] transition-colors',
+            'bg-[var(--surface-2)] transition-colors duration-150',
             customError
               ? 'border-[var(--danger)]'
               : 'border-[var(--border)] focus-within:border-[var(--border-hi)]',
@@ -3140,7 +3139,7 @@ function TopicAddPanel({
             autoCapitalize="characters"
             className={cn(
               'flex-1 min-w-0 bg-transparent outline-none',
-              'mono tabular text-[12px] uppercase tracking-tight text-[var(--fg)]',
+              'mono tabular text-[12.5px] uppercase tracking-tight text-[var(--fg)]',
               'placeholder:text-[var(--fg-3)] placeholder:normal-case placeholder:tracking-normal placeholder:font-normal',
             )}
             maxLength={11}
@@ -3152,7 +3151,7 @@ function TopicAddPanel({
             className={cn(
               'shrink-0 inline-flex items-center justify-center h-6 w-6 rounded-full',
               'text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface)]',
-              'transition-colors',
+              'transition-colors duration-150',
               'disabled:opacity-40 disabled:pointer-events-none',
             )}
           >
@@ -3162,53 +3161,56 @@ function TopicAddPanel({
           </button>
         </form>
       </div>
-      {available.length === 0 ? (
-        <p className="px-3 py-2 text-[12.5px] leading-snug text-[var(--fg-3)]">
-          Every topic is already in the bar.
-        </p>
-      ) : (
-        <ul ref={listRef} className="flex flex-col max-h-[220px] overflow-y-auto">
-          {available.map((t, idx) => {
-            const active = idx === activeIdx;
-            return (
-              <li key={t.id} data-idx={idx}>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onMouseEnter={() => setActiveIdx(idx)}
-                  onClick={() => onAdd(t.id)}
-                  className={cn(
-                    'relative w-full flex items-center gap-2.5 px-3 py-2 text-left',
-                    // Home-page list-item vocabulary: sans, slightly
-                    // larger, medium weight, tight tracking. Matches the
-                    // CTA chip rhythm in `how-it-works.client.tsx`.
-                    'text-[13px] font-medium tracking-tight leading-snug transition-colors',
-                    // Left-edge accent — same focus-cue pattern as the
-                    // slash palette. No heavy background flood.
-                    'before:absolute before:left-0 before:top-1.5 before:bottom-1.5',
-                    'before:w-[2px] before:rounded-r-full',
-                    'before:transition-colors',
-                    active
-                      ? 'bg-[color-mix(in_oklab,var(--fg)_4%,transparent)] text-[var(--fg)] before:bg-[var(--fg)]'
-                      : 'text-[var(--fg-2)] before:bg-transparent hover:text-[var(--fg)] hover:bg-[color-mix(in_oklab,var(--fg)_3%,transparent)]',
-                  )}
-                >
-                  <span aria-hidden className="inline-flex items-center justify-center shrink-0 w-4 text-[var(--fg-3)]">
-                    {t.ticker ? (
-                      <CoinIcon symbol={t.ticker} size={14} />
-                    ) : t.icon ? (
-                      <TopicIcon kind={t.icon} size={12} />
-                    ) : (
-                      <TopicIcon kind="spark" size={12} />
+      {/* Scroll viewport — fixed max-height matches the picker's 300px
+          ceiling so neither popover can overshoot the composer area. */}
+      <div className="max-h-[300px] overflow-y-auto py-1.5">
+        {available.length === 0 ? (
+          <p className="px-3 py-2 text-[12.5px] leading-snug text-[var(--fg-3)]">
+            Every topic is already in the bar.
+          </p>
+        ) : (
+          <ul ref={listRef} className="px-1">
+            {available.map((t, idx) => {
+              const active = idx === activeIdx;
+              return (
+                <li key={t.id} data-idx={idx}>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onMouseEnter={() => setActiveIdx(idx)}
+                    onClick={() => onAdd(t.id)}
+                    className={cn(
+                      'group relative w-full flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left',
+                      // Row vocabulary mirrors DirectoryPicker exactly:
+                      // 12.5px / 1.35 line-height / 150ms color
+                      // transition. Active row keeps the slash-palette
+                      // left-edge bar for keyboard-focus parity.
+                      'text-[12.5px] leading-[1.35] transition-colors duration-150',
+                      'before:absolute before:left-0 before:top-1.5 before:bottom-1.5',
+                      'before:w-[2px] before:rounded-r-full',
+                      'before:transition-colors',
+                      active
+                        ? 'bg-[color-mix(in_oklab,var(--fg)_4%,transparent)] text-[var(--fg)] before:bg-[var(--fg)]'
+                        : 'text-[var(--fg-2)] before:bg-transparent hover:text-[var(--fg)] hover:bg-[var(--surface-2)]',
                     )}
-                  </span>
-                  <span className="flex-1">{t.label}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                  >
+                    <span aria-hidden className="inline-flex items-center justify-center shrink-0 w-5 h-5 text-[var(--fg-3)] transition-transform duration-150 group-hover:scale-[1.04]">
+                      {t.ticker ? (
+                        <CoinIcon symbol={t.ticker} size={16} />
+                      ) : t.icon ? (
+                        <TopicIcon kind={t.icon} size={14} />
+                      ) : (
+                        <TopicIcon kind="spark" size={14} />
+                      )}
+                    </span>
+                    <span className="flex-1 truncate">{t.label}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
