@@ -28,9 +28,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import type { useChat } from '@ai-sdk/react';
-import { Check, ChevronDown, ChevronUp, Copy, Pencil, Quote, Share2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Copy, Pencil, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useReducedMotionSafe } from '@/lib/motion';
+import {
+  InlineTickerChipGroup,
+  type InlineTickerChipEntry,
+} from '@/components/predict/inline-ticker-chip';
 
 type Message = ReturnType<typeof useChat>['messages'][number];
 
@@ -75,7 +79,8 @@ export interface ChatBubbleProps {
   };
   /**
    * Localized label for the Copy affordance (both roles).
-   * Defaults to "Copy". Hidden until hover/focus.
+   * Defaults to "Copy". Hidden until hover/focus on user side, always
+   * visible once streaming completes on assistant side.
    */
   copyLabel?: string;
   /**
@@ -84,26 +89,30 @@ export interface ChatBubbleProps {
    */
   copiedLabel?: string;
   /**
-   * Quote action — when fired, the parent prepends `> {text}\n\n` to
-   * the composer and focuses it. Receives the bubble's plain-text
-   * body. Available on both user and assistant bubbles.
+   * Feedback action — fired with the assistant message id and the new
+   * value. `null` clears the prior selection (un-vote). The parent
+   * POSTs to /api/predict/feedback which persists locally and best-
+   * effort forwards to the engine for calibration learning. Only
+   * surfaced on assistant bubbles.
    */
-  onQuote?: (text: string) => void;
-  /** Localized label for the Quote affordance. Defaults to "Quote". */
-  quoteLabel?: string;
-  /** Localized confirmation flashed after a successful quote action. */
-  quotedLabel?: string;
+  onFeedback?: (
+    messageId: string,
+    value: 'up' | 'down' | null,
+  ) => void | Promise<void>;
+  /** Current persisted feedback value for this assistant message. */
+  currentFeedback?: 'up' | 'down' | null;
+  /** Localized labels for the feedback affordances. */
+  feedbackUpLabel?: string;
+  feedbackDownLabel?: string;
+  feedbackSentLabel?: string;
   /**
-   * Share action — receives the message id. Parent composes the
-   * conversation-anchored deep link and copies it to the clipboard.
-   * Available on both user and assistant bubbles. Returns optional
-   * promise so the button can wait for confirmation before flashing.
+   * Inline ticker chips rendered next to the role+timestamp header on
+   * assistant bubbles. Replaces the wide TickerStack card that used to
+   * sit between the user prompt and the assistant response — the wide
+   * card was being read as the prediction itself. Pass an empty array
+   * (or omit) to render the header without any ticker chip.
    */
-  onShare?: (messageId: string) => void | Promise<void>;
-  /** Localized label for the Share affordance. */
-  shareLabel?: string;
-  /** Localized confirmation flashed after a successful share action. */
-  sharedLabel?: string;
+  inlineTickers?: ReadonlyArray<InlineTickerChipEntry>;
   /** Localized label for the per-bubble compact toggle (assistant
    *  bubbles only). When clicked, the assistant bubble collapses to
    *  a tighter density — text size + padding shrink. State is LOCAL
@@ -163,12 +172,12 @@ export function ChatBubble({
   priceCheck,
   copyLabel = 'Copy',
   copiedLabel = 'Copied',
-  onQuote,
-  quoteLabel = 'Quote',
-  quotedLabel = 'Quoted',
-  onShare,
-  shareLabel = 'Share',
-  sharedLabel = 'Shared',
+  onFeedback,
+  currentFeedback = null,
+  feedbackUpLabel = 'Helpful',
+  feedbackDownLabel = 'Not helpful',
+  feedbackSentLabel = 'Thanks',
+  inlineTickers,
   compactLabel = 'Compact',
   compactedLabel = 'Compacted',
 }: ChatBubbleProps) {
@@ -184,13 +193,16 @@ export function ChatBubble({
   const actionLabels = {
     copyLabel,
     copiedLabel,
-    quoteLabel,
-    quotedLabel,
-    shareLabel,
-    sharedLabel,
     compactLabel,
     compactedLabel,
+    feedbackUpLabel,
+    feedbackDownLabel,
+    feedbackSentLabel,
   };
+
+  // Inline tickers only ride along with assistant turns — they identify
+  // what the response is about, not what the prompt asked.
+  const headerTickers = !isUser ? inlineTickers ?? [] : [];
 
   return (
     <div
@@ -202,12 +214,18 @@ export function ChatBubble({
       <div
         className={cn(
           'mono tabular text-[9.5px] uppercase tracking-[0.18em] text-[var(--fg-3)]',
-          'flex items-center gap-2',
+          'flex items-center gap-2 flex-wrap',
         )}
       >
         <span>{roleLabel}</span>
         <span aria-hidden className="text-[var(--fg-3)]/60">·</span>
         <span aria-label={`sent ${timestamp}`}>{timestamp}</span>
+        {headerTickers.length > 0 && (
+          <>
+            <span aria-hidden className="text-[var(--fg-3)]/60">·</span>
+            <InlineTickerChipGroup entries={headerTickers} />
+          </>
+        )}
       </div>
 
       {isUser ? (
@@ -216,8 +234,6 @@ export function ChatBubble({
           messageId={message.id}
           onEdit={onEdit ? () => onEdit(message.id, text) : undefined}
           editLabel={editLabel}
-          onQuote={onQuote}
-          onShare={onShare}
           actionLabels={actionLabels}
         />
       ) : (
@@ -228,8 +244,8 @@ export function ChatBubble({
           sourcesLabel={sourcesLabel}
           tickerByCoin={tickerByCoin}
           priceCheck={priceCheck}
-          onQuote={onQuote}
-          onShare={onShare}
+          onFeedback={onFeedback}
+          currentFeedback={currentFeedback}
           actionLabels={actionLabels}
         />
       )}
@@ -242,37 +258,30 @@ export function ChatBubble({
 interface ActionLabels {
   copyLabel: string;
   copiedLabel: string;
-  quoteLabel: string;
-  quotedLabel: string;
-  shareLabel: string;
-  sharedLabel: string;
   compactLabel: string;
   compactedLabel: string;
+  feedbackUpLabel: string;
+  feedbackDownLabel: string;
+  feedbackSentLabel: string;
 }
 
 /* ────────────── user bubble ────────────── */
 
 function UserBubble({
   text,
-  messageId,
   onEdit,
   editLabel,
-  onQuote,
-  onShare,
   actionLabels,
 }: {
   text: string;
   messageId: string;
   onEdit?: () => void;
   editLabel: string;
-  onQuote?: (text: string) => void;
-  onShare?: (messageId: string) => void | Promise<void>;
   actionLabels: ActionLabels;
 }) {
-  // The row is rendered whenever ANY action is wired — Edit can be
-  // gated to the latest editable turn (parent decides) while Copy /
-  // Quote / Share are universal once their callbacks are bound.
-  const hasActions = Boolean(onEdit || onQuote || onShare) || text.length > 0;
+  // The row is rendered whenever Edit is wired or the bubble has text
+  // (Copy is universal once there's something to copy).
+  const hasActions = Boolean(onEdit) || text.length > 0;
 
   return (
     // Named group covers BOTH the bubble and the action row underneath.
@@ -294,8 +303,8 @@ function UserBubble({
         </p>
       </div>
       {hasActions && (
-        // Action row — Edit (when wired), Copy, Quote, Share. Hover-
-        // revealed via the named `group/user` on the outer column.
+        // Action row — Edit (when wired) + Copy. Hover-revealed via the
+        // named `group/user` on the outer column.
         <div className="flex items-center gap-0.5 -mt-0.5 pr-1">
           {onEdit && (
             <BubbleActionButton
@@ -306,17 +315,6 @@ function UserBubble({
             />
           )}
           <CopyAction text={text} groupName="user" labels={actionLabels} />
-          {onQuote && (
-            <QuoteAction text={text} onQuote={onQuote} groupName="user" labels={actionLabels} />
-          )}
-          {onShare && (
-            <ShareAction
-              messageId={messageId}
-              onShare={onShare}
-              groupName="user"
-              labels={actionLabels}
-            />
-          )}
         </div>
       )}
     </div>
@@ -332,8 +330,8 @@ function AssistantBubble({
   sourcesLabel,
   tickerByCoin,
   priceCheck,
-  onQuote,
-  onShare,
+  onFeedback,
+  currentFeedback,
   actionLabels,
 }: {
   text: string;
@@ -342,8 +340,11 @@ function AssistantBubble({
   sourcesLabel: string;
   tickerByCoin?: ReadonlyMap<string, number>;
   priceCheck?: { label: string; body: string };
-  onQuote?: (text: string) => void;
-  onShare?: (messageId: string) => void | Promise<void>;
+  onFeedback?: (
+    messageId: string,
+    value: 'up' | 'down' | null,
+  ) => void | Promise<void>;
+  currentFeedback: 'up' | 'down' | null;
   actionLabels: ActionLabels;
 }) {
   // Per-bubble compact toggle — each assistant answer can collapse to
@@ -497,23 +498,23 @@ function AssistantBubble({
       )}
     </div>
       {!streaming && hasContent && (
-        // Action row sits BELOW the bubble — Copy, Quote, Share.
-        // Hover-revealed via the named `group/asst` on the outer column.
+        // Action row sits BELOW the bubble — Copy + 👍 / 👎. Becomes
+        // fully visible once the stream completes (no longer
+        // hover-gated) so the feedback affordance is discoverable. The
+        // feedback selection feeds the engine's calibration loop via
+        // POST /api/predict/feedback.
         <div className="flex items-center gap-0.5 -mt-0.5 pl-1">
-          <CopyAction text={text} groupName="asst" labels={actionLabels} />
-          {onQuote && (
-            <QuoteAction
-              text={text}
-              onQuote={onQuote}
-              groupName="asst"
-              labels={actionLabels}
-            />
-          )}
-          {onShare && (
-            <ShareAction
+          <CopyAction
+            text={text}
+            groupName="asst"
+            labels={actionLabels}
+            alwaysVisible
+          />
+          {onFeedback && (
+            <FeedbackAction
               messageId={messageId}
-              onShare={onShare}
-              groupName="asst"
+              onFeedback={onFeedback}
+              currentValue={currentFeedback}
               labels={actionLabels}
             />
           )}
@@ -742,6 +743,13 @@ interface BubbleActionButtonProps {
    *  the aria-label swaps to `flashLabel`. */
   flashLabel?: string;
   flashed?: boolean;
+  /** When true, skip the hover-reveal gate — the button is fully
+   *  visible regardless of mouse state. Used by the assistant action
+   *  row once streaming completes so 👍 / 👎 is discoverable. */
+  alwaysVisible?: boolean;
+  /** When true, render the button in a "selected" state (filled icon
+   *  + accent color). Used by the paired feedback toggle. */
+  selected?: boolean;
 }
 
 /**
@@ -765,12 +773,17 @@ function BubbleActionButton({
   onActivate,
   flashLabel,
   flashed = false,
+  alwaysVisible = false,
+  selected = false,
 }: BubbleActionButtonProps) {
   const displayLabel = flashed && flashLabel ? flashLabel : label;
   // Pre-baked hover-reveal classes for each named group. Tailwind needs
-  // these as literals so JIT can pick them up.
-  const hoverClass =
-    groupName === 'user'
+  // these as literals so JIT can pick them up. When `alwaysVisible` is
+  // set, the hover gate is skipped — used by the assistant row once
+  // streaming completes so the affordance is discoverable.
+  const visibilityClass = alwaysVisible
+    ? 'opacity-100'
+    : groupName === 'user'
       ? 'opacity-0 group-hover/user:opacity-100 focus-visible:opacity-100'
       : 'opacity-0 group-hover/asst:opacity-100 focus-visible:opacity-100';
 
@@ -779,15 +792,17 @@ function BubbleActionButton({
       type="button"
       onClick={onActivate}
       aria-label={displayLabel}
+      aria-pressed={selected || undefined}
       title={displayLabel}
       className={cn(
-        hoverClass,
+        visibilityClass,
         'transition-opacity duration-150',
         'inline-flex items-center justify-center',
         'h-7 w-7 rounded-md',
-        'text-[var(--fg-3)] hover:text-[var(--fg)]',
-        'hover:bg-[color-mix(in_oklab,var(--surface)_80%,transparent)]',
-        flashed && 'text-[var(--fg)] opacity-100',
+        selected
+          ? 'text-[var(--accent)] bg-[color-mix(in_oklab,var(--accent)_12%,transparent)]'
+          : 'text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[color-mix(in_oklab,var(--surface)_80%,transparent)]',
+        flashed && !selected && 'text-[var(--fg)] opacity-100',
       )}
     >
       <span className="sr-only" aria-live="polite">
@@ -796,7 +811,10 @@ function BubbleActionButton({
       {flashed ? (
         <Check className="h-3.5 w-3.5" aria-hidden />
       ) : (
-        <Icon className="h-3.5 w-3.5" aria-hidden />
+        <Icon
+          className={cn('h-3.5 w-3.5', selected && 'fill-current')}
+          aria-hidden
+        />
       )}
     </button>
   );
@@ -844,10 +862,12 @@ function CopyAction({
   text,
   groupName,
   labels,
+  alwaysVisible = false,
 }: {
   text: string;
   groupName: 'user' | 'asst';
   labels: ActionLabels;
+  alwaysVisible?: boolean;
 }) {
   const { flashed, flash } = useFlash();
   const handle = useCallback(async () => {
@@ -883,83 +903,72 @@ function CopyAction({
       onActivate={() => void handle()}
       flashLabel={labels.copiedLabel}
       flashed={flashed}
+      alwaysVisible={alwaysVisible}
     />
   );
 }
 
 /**
- * Fire the `onQuote` callback with the bubble's text. The parent
- * (predict-shell) prepends `> {text}\n\n` to the composer and focuses
- * the textarea — that focus shift IS the primary feedback, the flash
- * is just a confirmation that the click was registered.
+ * Paired 👍 / 👎 toggle for assistant responses. Selecting one fires
+ * `onFeedback(messageId, value)`; clicking the currently-selected thumb
+ * clears the vote by passing `null`. Optimistic UI — the selected state
+ * flips immediately and the parent rolls back if the request fails.
+ *
+ * Always visible (no hover gate) so the affordance is discoverable
+ * once the response stops streaming.
  */
-function QuoteAction({
-  text,
-  onQuote,
-  groupName,
-  labels,
-}: {
-  text: string;
-  onQuote: (text: string) => void;
-  groupName: 'user' | 'asst';
-  labels: ActionLabels;
-}) {
-  const { flashed, flash } = useFlash();
-  const handle = useCallback(() => {
-    if (!text) return;
-    onQuote(text);
-    flash();
-  }, [text, onQuote, flash]);
-
-  return (
-    <BubbleActionButton
-      groupName={groupName}
-      icon={Quote}
-      label={labels.quoteLabel}
-      onActivate={handle}
-      flashLabel={labels.quotedLabel}
-      flashed={flashed}
-    />
-  );
-}
-
-/**
- * Fire the `onShare` callback with the message id. The parent composes
- * the conversation-anchored deep link, copies it to the clipboard, and
- * shows a sonner toast for the visible feedback. The local flash just
- * confirms the click landed.
- */
-function ShareAction({
+function FeedbackAction({
   messageId,
-  onShare,
-  groupName,
+  onFeedback,
+  currentValue,
   labels,
 }: {
   messageId: string;
-  onShare: (messageId: string) => void | Promise<void>;
-  groupName: 'user' | 'asst';
+  onFeedback: (
+    messageId: string,
+    value: 'up' | 'down' | null,
+  ) => void | Promise<void>;
+  currentValue: 'up' | 'down' | null;
   labels: ActionLabels;
 }) {
   const { flashed, flash } = useFlash();
-  const handle = useCallback(async () => {
-    try {
-      await onShare(messageId);
-      flash();
-    } catch {
-      // Parent toast carries the error message; the button just doesn't
-      // flash, which reads correctly as "didn't work, try again".
-    }
-  }, [messageId, onShare, flash]);
+  const choose = useCallback(
+    async (value: 'up' | 'down') => {
+      const next = currentValue === value ? null : value;
+      try {
+        await onFeedback(messageId, next);
+        flash();
+      } catch {
+        // Swallow — parent surfaces any error toast, button just doesn't
+        // flash which reads correctly as "didn't land, try again".
+      }
+    },
+    [messageId, onFeedback, currentValue, flash],
+  );
 
   return (
-    <BubbleActionButton
-      groupName={groupName}
-      icon={Share2}
-      label={labels.shareLabel}
-      onActivate={() => void handle()}
-      flashLabel={labels.sharedLabel}
-      flashed={flashed}
-    />
+    <>
+      <BubbleActionButton
+        groupName="asst"
+        icon={ThumbsUp}
+        label={labels.feedbackUpLabel}
+        onActivate={() => void choose('up')}
+        flashLabel={labels.feedbackSentLabel}
+        flashed={flashed && currentValue === 'up'}
+        alwaysVisible
+        selected={currentValue === 'up'}
+      />
+      <BubbleActionButton
+        groupName="asst"
+        icon={ThumbsDown}
+        label={labels.feedbackDownLabel}
+        onActivate={() => void choose('down')}
+        flashLabel={labels.feedbackSentLabel}
+        flashed={flashed && currentValue === 'down'}
+        alwaysVisible
+        selected={currentValue === 'down'}
+      />
+    </>
   );
 }
 

@@ -43,10 +43,9 @@ import {
   type ReactNode,
 } from 'react';
 import useSWR from 'swr';
-import { toast } from 'sonner';
-import { useTicker } from '@/lib/api';
+import { useTicker, useExtraTickers } from '@/lib/api';
 import { ChatBubble } from '@/components/predict/chat-bubble';
-import { TickerStack } from '@/components/predict/ticker-banner';
+import type { InlineTickerChipEntry } from '@/components/predict/inline-ticker-chip';
 import { DirectoryPicker } from '@/components/predict/directory-picker';
 import { CoinIcon } from '@/components/ui/coin-icon';
 import { Link } from '@/i18n/navigation';
@@ -157,6 +156,14 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
   const locale = useLocale();
 
   const [input, setInput] = useState('');
+  // Token pills selected from the carousel — each pill renders inside
+  // the composer as a low-opacity icon + ticker chip with an "×".
+  // On submit the symbols are concatenated ahead of the typed text
+  // ("BTC ETH " + "4h con funding") and the pill row clears. Carousel
+  // chips without a `ticker` field (high-conviction, whale flow, …)
+  // bypass this and still drop their canned prompt straight into
+  // the textarea like before.
+  const [tokenPills, setTokenPills] = useState<ReadonlyArray<string>>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
@@ -219,68 +226,6 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
   // hallucinations (a known incident: BTC quoted at $105k while the
   // resolver was reading $63k) without claiming to fix the root cause.
   const ticker = useTicker(15_000);
-  const tickerByCoin = useMemo<ReadonlyMap<string, number>>(() => {
-    const m = new Map<string, number>();
-    for (const e of ticker.data) {
-      if (!e.symbol || !Number.isFinite(e.price)) continue;
-      m.set(e.symbol.toUpperCase(), e.price);
-    }
-    return m;
-  }, [ticker.data]);
-
-  // Full ticker entry map — used by TickerBanner to render name +
-  // price + 24h delta in a single lookup.
-  const tickerEntryBySymbol = useMemo(() => {
-    const m = new Map<string, { price: number; changePct: number }>();
-    for (const e of ticker.data) {
-      if (!e.symbol || !Number.isFinite(e.price)) continue;
-      m.set(e.symbol.toUpperCase(), { price: e.price, changePct: e.changePct });
-    }
-    return m;
-  }, [ticker.data]);
-
-  // In-session price history per symbol. We append one sample on
-  // every ticker poll (≈30s) and keep the last 30 — enough for a
-  // smooth ~15min sparkline without ballooning memory. Stored in a
-  // ref-backed state so React re-renders banners as samples accrue,
-  // but the writes are O(1) and don't churn anything else.
-  const [priceHistory, setPriceHistory] = useState<ReadonlyMap<string, readonly number[]>>(
-    () => new Map(),
-  );
-  useEffect(() => {
-    if (!ticker.data || ticker.data.length === 0) return;
-    setPriceHistory((prev) => {
-      const next = new Map(prev);
-      for (const e of ticker.data) {
-        if (!e.symbol || !Number.isFinite(e.price) || e.price <= 0) continue;
-        const sym = e.symbol.toUpperCase();
-        const tail = next.get(sym) ?? [];
-        // First sample for this symbol: seed the history with the
-        // derived 24h-open price + current price so the banner can
-        // render a meaningful 2-point curve immediately instead of
-        // waiting 30s for the second poll. The open is engine-
-        // authoritative (price / (1 + changePct)) so the seed
-        // doesn't lie about the trajectory.
-        if (tail.length === 0) {
-          const denom = 1 + (e.changePct ?? 0);
-          const open = denom > 0 ? e.price / denom : null;
-          const seeded =
-            open && Number.isFinite(open) && open > 0 && open !== e.price
-              ? [open, e.price]
-              : [e.price];
-          next.set(sym, seeded);
-          continue;
-        }
-        // Skip dedup-equal back-to-back samples on subsequent polls
-        // to keep the line honest when the ticker returns the same
-        // price twice.
-        if (tail[tail.length - 1] === e.price) continue;
-        const updated = [...tail, e.price].slice(-30);
-        next.set(sym, updated);
-      }
-      return next;
-    });
-  }, [ticker.data]);
 
   const signedIn = auth?.signedIn === true;
   const composerLocked =
@@ -327,6 +272,41 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
       void mutateQuota();
     },
   });
+
+  // ---------- ticker symbol maps ----------
+  // Built AFTER useChat so we can scan `messages` for arbitrary coin
+  // symbols. The default ticker only covers TOP_20; anything outside
+  // (DASH, LINK, AVAX, …) gets lazy-fetched here in one batched
+  // request so the inline ticker chip on each assistant turn works
+  // for any coin the user mentions.
+  const baseSymbols = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of ticker.data) {
+      if (e.symbol) set.add(e.symbol.toUpperCase());
+    }
+    return set;
+  }, [ticker.data]);
+
+  const extraSymbols = useExtraSymbolsFromMessages(messages, baseSymbols);
+  const extraTickers = useExtraTickers(extraSymbols);
+
+  const tickerByCoin = useMemo<ReadonlyMap<string, number>>(() => {
+    const m = new Map<string, number>();
+    for (const e of [...ticker.data, ...extraTickers]) {
+      if (!e.symbol || !Number.isFinite(e.price)) continue;
+      m.set(e.symbol.toUpperCase(), e.price);
+    }
+    return m;
+  }, [ticker.data, extraTickers]);
+
+  const tickerEntryBySymbol = useMemo(() => {
+    const m = new Map<string, { price: number; changePct: number }>();
+    for (const e of [...ticker.data, ...extraTickers]) {
+      if (!e.symbol || !Number.isFinite(e.price)) continue;
+      m.set(e.symbol.toUpperCase(), { price: e.price, changePct: e.changePct });
+    }
+    return m;
+  }, [ticker.data, extraTickers]);
 
   // Deep-link hydration — when the page is /app/predict/[conversationId]
   // the server pre-loads the thread and passes it down. We seed useChat
@@ -404,6 +384,7 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
       }
       sendMessage({ text: trimmed });
       setInput('');
+      setTokenPills([]);
       setDrawerOpen(false);
     },
     [
@@ -418,12 +399,17 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
 
   const onSubmit = (e: FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
-    submitPrompt(input);
+    // Pills ride ahead of the typed text — sent as space-separated
+    // tickers so the engine picks them up the same way it does when a
+    // user types "BTC ETH 4h" directly.
+    const prefix = tokenPills.length > 0 ? `${tokenPills.join(' ')} ` : '';
+    submitPrompt(`${prefix}${input}`.trim());
   };
 
   const onNewChat = (): void => {
     setMessages([]);
     setInput('');
+    setTokenPills([]);
     setActiveConversationId(null);
     persistedRef.current = new Set();
     setDrawerOpen(false);
@@ -598,67 +584,52 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
   );
 
   /**
-   * Quote a message — prepend `> {text}\n\n` to the composer + focus.
-   * Each line of the quoted text is prefixed individually so multi-
-   * line quotes still read as a block-quote in the composer. Works
-   * for both user and assistant bubbles.
+   * Per-assistant-message thumbs-up / thumbs-down state. Optimistic:
+   * the UI flips immediately, then POSTs to /api/predict/feedback.
+   * On failure we roll back so the button truthfully reflects what the
+   * server has on file. Cleared when the conversation switches.
    */
-  const onQuoteMessage = useCallback(
-    (text: string): void => {
-      if (!text) return;
-      const quoted = text
-        .split('\n')
-        .map((line) => `> ${line}`)
-        .join('\n');
-      setInput((prev) => {
-        // If there's existing composer content, leave a blank line
-        // between the quote and the user's draft.
-        const separator = prev.trim().length > 0 ? '\n\n' : '\n\n';
-        return `${quoted}${separator}${prev}`;
-      });
-      setTimeout(() => {
-        const el = inputRef.current;
-        if (!el) return;
-        el.focus();
-        // Cursor lands AT the end so the user types their follow-up
-        // immediately after the quote without arrow-key gymnastics.
-        const len = el.value.length;
-        el.setSelectionRange(len, len);
-      }, 0);
-    },
-    [],
-  );
+  const [feedbackByMessageId, setFeedbackByMessageId] = useState<
+    ReadonlyMap<string, 'up' | 'down'>
+  >(() => new Map());
+  useEffect(() => {
+    // Switching conversations wipes the optimistic feedback map — the
+    // server is the source of truth and we'll re-hydrate on demand if a
+    // feedback-history endpoint ships in a later pass.
+    setFeedbackByMessageId(new Map());
+  }, [activeConversationId]);
 
-  /**
-   * Share a message — copy a deep-link URL to the clipboard that
-   * resolves to the conversation + message anchor. The conversation
-   * route is SIWS-gated and ownership-checked server-side, so a
-   * leaked URL still 404s for non-owners. Visible feedback via sonner
-   * toast; the chat-bubble action button also flashes on resolution.
-   */
-  const onShareMessage = useCallback(
-    async (messageId: string): Promise<void> => {
-      if (typeof window === 'undefined') return;
-      if (!activeConversationId) {
-        toast.error(t('share.unsavedTitle'), {
-          description: t('share.unsavedBody'),
-        });
-        throw new Error('no_conversation');
-      }
-      const origin = window.location.origin;
-      const localePrefix = locale === 'en' ? '' : `/${locale}`;
-      const url = `${origin}${localePrefix}/app/predict/${activeConversationId}#m-${messageId}`;
+  const onFeedbackMessage = useCallback(
+    async (
+      messageId: string,
+      value: 'up' | 'down' | null,
+    ): Promise<void> => {
+      if (!activeConversationId) return;
+      const prevMap = feedbackByMessageId;
+      setFeedbackByMessageId((map) => {
+        const next = new Map(map);
+        if (value === null) next.delete(messageId);
+        else next.set(messageId, value);
+        return next;
+      });
       try {
-        await navigator.clipboard.writeText(url);
-        toast.success(t('share.copied'), { description: url });
-      } catch (e) {
-        toast.error(t('share.copyFailed'), {
-          description: (e as Error).message,
+        const res = await fetch('/api/predict/feedback', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            conversation_id: activeConversationId,
+            message_id: messageId,
+            value,
+          }),
         });
-        throw e;
+        if (!res.ok) throw new Error(`feedback_${res.status}`);
+      } catch (err) {
+        setFeedbackByMessageId(prevMap);
+        throw err;
       }
     },
-    [activeConversationId, locale, t],
+    [activeConversationId, feedbackByMessageId],
   );
 
   /**
@@ -770,29 +741,47 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
               <Welcome onPick={submitPrompt} />
             ) : (
               <div className="mx-auto max-w-[860px] w-full px-4 sm:px-6 py-6 flex flex-col gap-6">
-                {messages.map((m) => {
-                  // For user turns, surface a TickerBanner per ticker
-                  // mentioned in the prompt. The banner sits BETWEEN
-                  // the user bubble and the assistant bubble (= "ground
-                  // truth before the model adds its analysis"). Web3
-                  // UX precedent: DexScreener / Phantom / Etherscan
-                  // pin live market context to the top of any ticker
-                  // query. Banners only render for symbols the live
-                  // ticker recognizes (avoids false positives like
-                  // "TO" or "AND" matching the bare-ticker regex).
-                  const isUserTurn = m.role === 'user';
-                  const userText = isUserTurn
-                    ? m.parts
+                {messages.map((m, idx) => {
+                  // For assistant turns, derive inline ticker chips
+                  // from the user prompt that immediately precedes
+                  // this assistant turn (one-shot lookback). The chips
+                  // render in the "VIZZOR · HH:MM:SS" header so the
+                  // live price reads as context tied to the response
+                  // rather than the response itself. Recognized
+                  // tickers only — same allow-list as before to avoid
+                  // false positives like "TO" or "AND".
+                  const isAssistantTurn = m.role === 'assistant';
+                  let inlineTickers: InlineTickerChipEntry[] = [];
+                  if (isAssistantTurn) {
+                    let promptText = '';
+                    for (let i = idx - 1; i >= 0; i--) {
+                      const prev = messages[i];
+                      if (!prev || prev.role !== 'user') continue;
+                      promptText = prev.parts
                         .filter((p) => p.type === 'text')
                         .map((p) => ('text' in p ? p.text : ''))
-                        .join(' ')
-                    : '';
-                  const detectedSymbols = isUserTurn
-                    ? extractTickersFromText(
-                        userText,
-                        new Set(tickerEntryBySymbol.keys()),
-                      )
-                    : [];
+                        .join(' ');
+                      break;
+                    }
+                    if (promptText) {
+                      const detected = extractTickersFromText(promptText);
+                      // Render a chip for every detected symbol; if
+                      // the lazy lookup hasn't returned price yet (or
+                      // the engine doesn't know the coin), the chip
+                      // renders symbol-only (no price/% spans). The
+                      // CoinIcon shows the symbol's monogram when the
+                      // logo CDN 404s, so unknown coins still get a
+                      // recognizable circle + ticker label.
+                      inlineTickers = detected.map((sym) => {
+                        const entry = tickerEntryBySymbol.get(sym);
+                        return {
+                          symbol: sym,
+                          price: entry?.price,
+                          changePct: entry?.changePct,
+                        };
+                      });
+                    }
+                  }
                   return (
                     <div key={m.id} className="flex flex-col gap-3">
                       <ChatBubble
@@ -803,16 +792,20 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
                             ? onEditUserMessage
                             : undefined
                         }
-                        onQuote={onQuoteMessage}
-                        onShare={onShareMessage}
+                        onFeedback={isAssistantTurn ? onFeedbackMessage : undefined}
+                        currentFeedback={
+                          isAssistantTurn
+                            ? feedbackByMessageId.get(m.id) ?? null
+                            : null
+                        }
+                        inlineTickers={inlineTickers}
                         editLabel={t('shell.composer.edit')}
                         sourcesLabel={t('shell.composer.sources')}
                         copyLabel={t('shell.composer.copy')}
                         copiedLabel={t('shell.composer.copied')}
-                        quoteLabel={t('shell.composer.quote')}
-                        quotedLabel={t('shell.composer.quoted')}
-                        shareLabel={t('shell.composer.share')}
-                        sharedLabel={t('shell.composer.shared')}
+                        feedbackUpLabel={t('shell.composer.feedbackUp')}
+                        feedbackDownLabel={t('shell.composer.feedbackDown')}
+                        feedbackSentLabel={t('shell.composer.feedbackSent')}
                         compactLabel={t('shell.composer.compact')}
                         compactedLabel={t('shell.composer.compacted')}
                         tickerByCoin={tickerByCoin}
@@ -821,20 +814,6 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
                           body: t('shell.composer.priceCheckBody'),
                         }}
                       />
-                      {detectedSymbols.length > 0 && (
-                        <TickerStack
-                          entries={detectedSymbols.map((sym) => {
-                            const entry = tickerEntryBySymbol.get(sym);
-                            return {
-                              symbol: sym,
-                              name: tickerDisplayName(sym),
-                              price: entry?.price,
-                              changePct: entry?.changePct,
-                              history: priceHistory.get(sym),
-                            };
-                          })}
-                        />
-                      )}
                     </div>
                   );
                 })}
@@ -889,16 +868,23 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
           {signedIn && !composerLocked && !isStreaming && (
             <ChatTopics
               onSubmit={submitPrompt}
-              onInsert={(seed) => {
-                // Token chips pre-fill the composer with the bare
-                // ticker + space so the user can complete the prompt
-                // ("BTC " → user types "4h con funding"). Focusing the
-                // textarea is deferred a tick so React's state commit
-                // lands before the caret moves to end-of-input.
+              onInsert={(seed, meta) => {
+                // Token chips (anything with a `ticker`) drop a visual
+                // pill inside the composer instead of typing into the
+                // textarea — same end result on submit (ticker is
+                // prefixed to the message) but the user sees a
+                // recognizable icon+symbol chip while they compose.
+                // Non-token insert chips keep the prior behavior of
+                // seeding the textarea with text.
+                if (meta?.ticker) {
+                  const sym = meta.ticker.toUpperCase();
+                  setTokenPills((prev) =>
+                    prev.includes(sym) ? prev : [...prev, sym],
+                  );
+                  setTimeout(() => inputRef.current?.focus(), 0);
+                  return;
+                }
                 setInput((v) => {
-                  // If the textarea is empty, just drop the seed. If
-                  // it already has content, append a space + seed so
-                  // both flow together without surprise reformatting.
                   if (!v) return seed;
                   return v.endsWith(' ') ? `${v}${seed}` : `${v} ${seed}`;
                 });
@@ -941,6 +927,10 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
                   stopLabel={t('shell.composer.stop')}
                   hintLabel={t('shell.composer.kbdHint')}
                   signedIn={signedIn}
+                  tokenPills={tokenPills}
+                  onRemovePill={(sym) =>
+                    setTokenPills((prev) => prev.filter((s) => s !== sym))
+                  }
                 />
               )}
             </div>
@@ -2012,6 +2002,91 @@ function MobileDrawer({
   );
 }
 
+/* ─────────────────────────── ComposerPill ─────────────────────────── */
+
+/**
+ * ComposerPill — token chip rendered inline inside the composer when
+ * the user picks a coin from the carousel. CoinIcon at 70% opacity
+ * keeps the chip clearly subordinate to the typed text that follows;
+ * the "×" removes the pill. Once the user has 3+ pills the chip
+ * collapses to icon-only — the symbol shifts to a hover tooltip and
+ * the entire chip becomes the click target for removal. Keeps the
+ * textarea space honest while staying recognizable.
+ */
+function ComposerPill({
+  symbol,
+  compact = false,
+  onRemove,
+}: {
+  symbol: string;
+  compact?: boolean;
+  onRemove: () => void;
+}) {
+  if (compact) {
+    // Icon-only mode — the entire chip is the remove button. Hover
+    // dims the icon and reveals a faint ring so the user reads "click
+    // to remove" without an explicit "×" eating pixels.
+    return (
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`Remove ${symbol}`}
+        title={symbol}
+        className={cn(
+          'group inline-flex items-center justify-center',
+          'h-6 w-6 rounded-full',
+          'border border-[var(--border)]',
+          'bg-[color-mix(in_oklab,var(--surface-2)_60%,transparent)]',
+          'hover:border-[var(--border-hi)] hover:bg-[var(--surface-2)]',
+          'transition-colors',
+        )}
+      >
+        <span className="opacity-70 group-hover:opacity-100 inline-flex items-center transition-opacity">
+          <CoinIcon symbol={symbol} size={12} />
+        </span>
+      </button>
+    );
+  }
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5',
+        'h-6 pl-1.5 pr-1 rounded-full',
+        'border border-[var(--border)]',
+        'bg-[color-mix(in_oklab,var(--surface-2)_60%,transparent)]',
+        'text-[var(--fg)]',
+      )}
+    >
+      <span className="opacity-70 inline-flex items-center">
+        <CoinIcon symbol={symbol} size={12} />
+      </span>
+      <span className="mono tabular text-[11px] font-semibold leading-none">
+        {symbol}
+      </span>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`Remove ${symbol}`}
+        title={`Remove ${symbol}`}
+        className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface)] transition-colors"
+      >
+        <svg
+          width={8}
+          height={8}
+          viewBox="0 0 8 8"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          aria-hidden
+        >
+          <path d="M1.5 1.5 L6.5 6.5 M6.5 1.5 L1.5 6.5" />
+        </svg>
+      </button>
+    </span>
+  );
+}
+
 /* ─────────────────────────── Composer ─────────────────────────── */
 
 function Composer({
@@ -2026,6 +2101,8 @@ function Composer({
   stopLabel,
   hintLabel,
   signedIn,
+  tokenPills,
+  onRemovePill,
 }: {
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   value: string;
@@ -2040,6 +2117,10 @@ function Composer({
   hintLabel: string;
   /** Gates the Directory picker — the menu only opens when SIWS-bound. */
   signedIn: boolean;
+  /** Tickers the user picked from the carousel — render inline as
+   *  icon + symbol pills before the textarea. Cleared on submit. */
+  tokenPills: ReadonlyArray<string>;
+  onRemovePill: (symbol: string) => void;
 }) {
   // The palette opens whenever the input starts with `/` and a space
   // hasn't been typed yet (i.e. the user is still naming the command).
@@ -2087,7 +2168,7 @@ function Composer({
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
-  const hasValue = value.trim().length > 0;
+  const hasValue = value.trim().length > 0 || tokenPills.length > 0;
   const canSend = hasValue && !isStreaming;
 
   return (
@@ -2102,12 +2183,17 @@ function Composer({
         // gives the slight chromatic lift you see on iOS / macOS
         // glass surfaces — what stops it from feeling like a frosted
         // dialog and starts feeling like a refractive material.
-        'relative flex items-end gap-1.5',
+        'relative flex flex-wrap items-end gap-1.5',
         'rounded-3xl px-3 py-2',
         'border border-[var(--border)]',
         'bg-[color-mix(in_oklab,var(--surface)_18%,transparent)]',
         'backdrop-blur-[10px] backdrop-saturate-[140%]',
-        'focus-within:border-[var(--fg)]',
+        // Focus: brighten the existing hairline (no white). The border
+        // moves from --border to a slightly stronger --border-hi token
+        // and the surface darkens a touch so the composer reads as
+        // "active" without any high-contrast outline competing with
+        // the prose inside.
+        'focus-within:border-[var(--border-hi)]',
         'focus-within:bg-[color-mix(in_oklab,var(--surface)_28%,transparent)]',
         'transition-[border-color,background-color] duration-200 ease-out',
         'vz-rise',
@@ -2129,6 +2215,26 @@ function Composer({
           type, send. */}
       <DirectoryPicker signedIn={signedIn} disabled={isStreaming} />
 
+      {/* Token pill row — sits between the Directory picker and the
+          textarea so a typed prompt visually continues from the last
+          pill. Each pill carries a CoinIcon (at 70% opacity) +
+          uppercase ticker + an "×" to remove. On submit the parent
+          concatenates symbols ahead of the typed text and clears the
+          row. The pills wrap to a new line when the row overflows so
+          the textarea never gets squeezed off-screen. */}
+      {tokenPills.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1 self-center py-1">
+          {tokenPills.map((sym) => (
+            <ComposerPill
+              key={sym}
+              symbol={sym}
+              compact={tokenPills.length >= 3}
+              onRemove={() => onRemovePill(sym)}
+            />
+          ))}
+        </div>
+      )}
+
       <textarea
         ref={inputRef}
         value={value}
@@ -2143,6 +2249,17 @@ function Composer({
           if (cmdEnter) {
             e.preventDefault();
             e.currentTarget.form?.requestSubmit();
+            return;
+          }
+          // Backspace on an empty textarea pops the trailing pill —
+          // mirrors how chat clients let you delete @mentions.
+          if (
+            e.key === 'Backspace' &&
+            value.length === 0 &&
+            tokenPills.length > 0
+          ) {
+            e.preventDefault();
+            onRemovePill(tokenPills[tokenPills.length - 1]!);
             return;
           }
           if (e.key === 'Enter' && !e.shiftKey) {
@@ -2481,25 +2598,57 @@ const BARE_TICKER_RE = /\b([A-Z]{2,10})\b/g;
  *
  *   1. `$BTC` / `$eth` — explicit ticker mentions (case-insensitive
  *      thanks to the `i` flag on DOLLAR_TICKER_RE).
- *   2. Bare uppercase `BTC` — only when the symbol is in
- *      `knownSymbols` so "TO" or "AND" don't trigger banners.
+ *   2. Bare uppercase tokens (3-10 chars) — DASH, LINK, AVAX, etc.
+ *      Filtered against `STOPLIST` to drop common acronyms (USD, API,
+ *      FAQ) that aren't crypto tickers. We previously gated this on a
+ *      known-symbols set, which meant any coin outside the top-20 was
+ *      silently dropped — now we let everything through and the
+ *      downstream price lookup decides whether to render a chip.
  *   3. Friendly names (`bitcoin`, `Solana`) → mapped via
  *      TICKER_NAME_MAP.
  *
  * Order preserved (first mention wins) so banners stack in the order
  * the user thought about them.
  */
-function extractTickersFromText(
-  text: string,
-  knownSymbols: ReadonlySet<string>,
-): string[] {
+/**
+ * Walk every user turn, extract ticker symbols, and return the ones
+ * that aren't already covered by the standard TOP_20 ticker. The
+ * shell feeds the result into `useExtraTickers` so the inline chip
+ * works for arbitrary coins (DASH, LINK, AVAX, …) without forcing the
+ * default ticker request to grow unbounded.
+ *
+ * The return value is sorted + deduped so the SWR cache key is stable
+ * across re-renders (otherwise we'd re-fetch on every render even
+ * when the symbol set is unchanged).
+ */
+function useExtraSymbolsFromMessages(
+  messages: ReadonlyArray<{ role: string; parts: ReadonlyArray<unknown> }>,
+  baseSymbols: ReadonlySet<string>,
+): ReadonlyArray<string> {
+  return useMemo(() => {
+    const out = new Set<string>();
+    for (const m of messages) {
+      if (m.role !== 'user') continue;
+      const text = (m.parts as ReadonlyArray<{ type?: string; text?: string }>)
+        .filter((p) => p?.type === 'text')
+        .map((p) => p?.text ?? '')
+        .join(' ');
+      for (const sym of extractTickersFromText(text)) {
+        if (!baseSymbols.has(sym)) out.add(sym);
+      }
+    }
+    return [...out].sort();
+  }, [messages, baseSymbols]);
+}
+
+function extractTickersFromText(text: string): string[] {
   if (!text) return [];
   const out: string[] = [];
   const seen = new Set<string>();
   const push = (sym: string): void => {
     const up = sym.toUpperCase();
     if (seen.has(up)) return;
-    if (!knownSymbols.has(up)) return;
+    if (TICKER_STOPLIST.has(up)) return;
     seen.add(up);
     out.push(up);
   };
@@ -2507,9 +2656,10 @@ function extractTickersFromText(
   for (const m of text.matchAll(DOLLAR_TICKER_RE)) {
     if (m[1]) push(m[1]);
   }
-  // Bare uppercase ticker — exact case to avoid false positives.
+  // Bare uppercase ticker — 3+ chars to drop tiny English words
+  // ("TO", "BY", "EN") that would otherwise match the regex.
   for (const m of text.matchAll(BARE_TICKER_RE)) {
-    if (m[1]) push(m[1]);
+    if (m[1] && m[1].length >= 3) push(m[1]);
   }
   // Friendly names — case-insensitive whole-word scan.
   const lower = text.toLowerCase();
@@ -2520,20 +2670,20 @@ function extractTickersFromText(
   return out;
 }
 
-/** Friendly display name for a banner — falls back to the symbol. */
-function tickerDisplayName(symbol: string): string {
-  const up = symbol.toUpperCase();
-  const inverted: Record<string, string> = {
-    BTC: 'Bitcoin',
-    ETH: 'Ethereum',
-    SOL: 'Solana',
-    TON: 'Toncoin',
-    HYPE: 'Hyperliquid',
-    PYTH: 'Pyth Network',
-    JUP: 'Jupiter',
-  };
-  return inverted[up] ?? up;
-}
+/**
+ * Common ALL-CAPS acronyms that pass the regex but are clearly not
+ * crypto tickers. Conservative on purpose — when in doubt, let it
+ * through and the price-lookup miss takes care of the rest. The cost
+ * of a false positive is one extra symbol in the lazy-lookup batch.
+ */
+const TICKER_STOPLIST: ReadonlySet<string> = new Set([
+  'API', 'RPC', 'USA', 'USB', 'EUR', 'GBP', 'JPY', 'YEN', 'CHF',
+  'EST', 'PST', 'UTC', 'GMT', 'CEST',
+  'ETA', 'FAQ', 'TBD', 'TBA', 'NSFW', 'LOL', 'OMG', 'WTF',
+  'FYI', 'ASAP', 'BRB', 'IMO', 'BTW', 'IDK', 'AKA', 'IIRC',
+  'PDF', 'CSV', 'JSON', 'HTML', 'CSS', 'SQL', 'URL', 'HTTP', 'HTTPS',
+  'TODO', 'DONE', 'WIP', 'CEO', 'CTO', 'CFO',
+]);
 
 /** Produce a TopicSpec for a user-defined token symbol. */
 function customTokenToSpec(symbol: string): TopicSpec {
@@ -2553,11 +2703,11 @@ function ChatTopics({
 }: {
   /** Fire-and-forget submit — used for `behavior: 'submit'` chips. */
   onSubmit: (prompt: string) => void;
-  /** Pre-fill composer + focus — used for `behavior: 'insert'` chips
-   *  (the token chips). The argument is the bare seed text the chip
-   *  declares; the parent composer drops it into the textarea and
-   *  positions the cursor at the end. */
-  onInsert: (seed: string) => void;
+  /** Pre-fill composer + focus — used for `behavior: 'insert'` chips.
+   *  `meta.ticker` is forwarded so the parent can decide between
+   *  rendering a visual token pill (for coins) vs. seeding the
+   *  textarea with plain text (everything else). */
+  onInsert: (seed: string, meta: { ticker?: string }) => void;
 }) {
   // Hydrated lazily on mount so SSR doesn't see localStorage and the
   // first paint matches the default layout. The reorder/add/remove
@@ -2688,7 +2838,7 @@ function ChatTopics({
   const onChipPick = useCallback(
     (topic: TopicSpec) => {
       if (topic.behavior === 'insert') {
-        onInsert(topic.prompt);
+        onInsert(topic.prompt, { ticker: topic.ticker });
       } else {
         onSubmit(topic.prompt);
       }
