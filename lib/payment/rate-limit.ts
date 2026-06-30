@@ -97,6 +97,10 @@ export const ROUTE_LIMITS: Readonly<Record<string, RateLimitConfig>> = {
   // doing more than that is scripting; legitimate users click "Install"
   // a few times in a sitting.
   'directory.write': { capacity: 5, refillPerSecond: 5 / 60 },
+  // 60 req/min — per-message feedback (👍/👎). A user can toggle their
+  // vote a few times per response; the cap exists to blunt calibration-
+  // farming by automated clients.
+  'predict.feedback': { capacity: 60, refillPerSecond: 60 / 60 },
 };
 
 export type RateLimitResult =

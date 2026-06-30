@@ -475,8 +475,25 @@ function runV041DirectoryMigrations(db: DB): void {
     CREATE TABLE IF NOT EXISTS wallet_preferences (
       wallet_address    TEXT PRIMARY KEY,
       active_skill_id   TEXT,
+      pinned_skill_ids  TEXT NOT NULL DEFAULT '[]',
       updated_at        INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000)
     );
+
+    /* v0.4.1 — per-message feedback (👍 / 👎) so the engine can learn
+     * which predictions land. message_id is unique per assistant turn;
+     * the row gets upserted on toggle and DELETEd when the user clears
+     * their vote. wallet_address + created_at index serves the per-
+     * wallet rate-limit lookup. */
+    CREATE TABLE IF NOT EXISTS message_feedback (
+      message_id      TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL,
+      wallet_address  TEXT NOT NULL,
+      value           TEXT NOT NULL CHECK(value IN ('up','down')),
+      created_at      INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000),
+      updated_at      INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000)
+    );
+    CREATE INDEX IF NOT EXISTS idx_message_feedback_wallet
+      ON message_feedback(wallet_address, created_at);
 
     /* v0.4.1 — MCP personal access tokens.
      *
@@ -506,6 +523,19 @@ function runV041DirectoryMigrations(db: DB): void {
     CREATE INDEX IF NOT EXISTS idx_mcp_tokens_wallet
       ON mcp_personal_tokens(wallet_address);
   `);
+
+  // Defensive back-fill for DBs that pre-date v0.4.1 pin storage. Older
+  // wallet_preferences rows don't have the column; ADD it idempotently
+  // and seed any NULL values with an empty JSON array.
+  addColumnIfMissing(
+    db,
+    'wallet_preferences',
+    'pinned_skill_ids',
+    "TEXT NOT NULL DEFAULT '[]'",
+  );
+  db.exec(
+    `UPDATE wallet_preferences SET pinned_skill_ids = '[]' WHERE pinned_skill_ids IS NULL`,
+  );
 }
 
 export function getDb(): DB {
@@ -1427,7 +1457,7 @@ export function pruneExpiredMobileHandoffs(): number {
 }
 
 /* ------------------------------------------------------------------ *\
- * v0.4.1 — directory (connector / skill / plugin) helpers.
+ * v0.4.1 — directory (connector / skill) helpers.
 \* ------------------------------------------------------------------ */
 
 export type ConnectorStatus = 'active' | 'paused' | 'revoked';
@@ -1540,6 +1570,7 @@ export function markConnectionUsed(id: string): void {
 export interface WalletPreferencesRow {
   wallet_address: string;
   active_skill_id: string | null;
+  pinned_skill_ids: string;
   updated_at: number;
 }
 
@@ -1571,6 +1602,105 @@ export function setActiveSkillForWallet(
          updated_at      = excluded.updated_at`,
     )
     .run(wallet, skillId, Date.now());
+}
+
+/**
+ * Pinned catalog items (skills + connectors) populate the composer "+"
+ * picker — the picker shows ONLY pinned items, the full catalog lives
+ * on /app/directory. Stored as a JSON-encoded TEXT array on the
+ * pinned_skill_ids column (name kept for migration compatibility; the
+ * column now holds any catalog entry id, not just skill ids). The
+ * engine never reads this — pure UI affordance.
+ */
+export function setPinnedItemForWallet(
+  wallet: string,
+  itemId: string,
+  pinned: boolean,
+): void {
+  const db = getDb();
+  const row = db
+    .prepare(`SELECT pinned_skill_ids FROM wallet_preferences WHERE wallet_address = ?`)
+    .get(wallet) as { pinned_skill_ids: string | null } | undefined;
+  const current = parsePinned(row?.pinned_skill_ids ?? null);
+  const set = new Set(current);
+  if (pinned) set.add(itemId);
+  else set.delete(itemId);
+  const next = JSON.stringify([...set]);
+  db.prepare(
+    `INSERT INTO wallet_preferences (wallet_address, pinned_skill_ids, updated_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(wallet_address) DO UPDATE SET
+       pinned_skill_ids = excluded.pinned_skill_ids,
+       updated_at       = excluded.updated_at`,
+  ).run(wallet, next, Date.now());
+}
+
+function parsePinned(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((x): x is string => typeof x === 'string');
+  } catch {
+    return [];
+  }
+}
+
+/* ------------------------------------------------------------------ *\
+ * v0.4.1 — per-message feedback (👍 / 👎).
+ *
+ * Captures binary signal on each assistant turn so the engine can
+ * adjust calibration over time. value === null deletes the row so the
+ * UI can render an "unset" thumb cleanly.
+\* ------------------------------------------------------------------ */
+
+export type MessageFeedbackValue = 'up' | 'down';
+
+export interface MessageFeedbackRow {
+  message_id: string;
+  conversation_id: string;
+  wallet_address: string;
+  value: MessageFeedbackValue;
+  created_at: number;
+  updated_at: number;
+}
+
+export function setMessageFeedback(opts: {
+  messageId: string;
+  conversationId: string;
+  wallet: string;
+  value: MessageFeedbackValue | null;
+}): void {
+  const db = getDb();
+  if (opts.value === null) {
+    db.prepare(
+      `DELETE FROM message_feedback
+        WHERE message_id = ? AND wallet_address = ?`,
+    ).run(opts.messageId, opts.wallet);
+    return;
+  }
+  const now = Date.now();
+  db.prepare(
+    `INSERT INTO message_feedback
+       (message_id, conversation_id, wallet_address, value, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(message_id) DO UPDATE SET
+       value      = excluded.value,
+       updated_at = excluded.updated_at`,
+  ).run(opts.messageId, opts.conversationId, opts.wallet, opts.value, now, now);
+}
+
+export function getMessageFeedback(
+  messageId: string,
+  wallet: string,
+): MessageFeedbackRow | null {
+  const row = getDb()
+    .prepare(
+      `SELECT * FROM message_feedback
+        WHERE message_id = ? AND wallet_address = ?`,
+    )
+    .get(messageId, wallet) as MessageFeedbackRow | undefined;
+  return row ?? null;
 }
 
 /* ------------------------------------------------------------------ *\

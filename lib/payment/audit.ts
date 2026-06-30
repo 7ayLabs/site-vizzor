@@ -37,7 +37,11 @@ export type AuditEventType =
   | 'directory.uninstall'
   | 'directory.credentials.rotated'
   | 'directory.skill.activated'
-  | 'directory.connector.circuit_open';
+  | 'directory.skill.pinned'
+  | 'directory.skill.unpinned'
+  | 'directory.connector.circuit_open'
+  | 'predict.feedback.set'
+  | 'predict.feedback.clear';
 
 export type AuditOutcome = 'found' | 'not_found' | 'denied' | 'ok' | 'error';
 

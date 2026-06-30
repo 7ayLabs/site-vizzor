@@ -64,6 +64,28 @@ export function getActiveSkillId(wallet: string): string | null {
   return getWalletPreferences(wallet)?.active_skill_id ?? null;
 }
 
+export function getPinnedItemIds(wallet: string): string[] {
+  const raw = getWalletPreferences(wallet)?.pinned_skill_ids ?? null;
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((x): x is string => typeof x === 'string');
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Hard cap on how many catalog items a wallet can pin to the composer
+ * picker. The picker is a "favorites" surface — beyond ~5 it stops
+ * reading as curated and starts feeling like a second directory. The
+ * cap is enforced server-side at the pin endpoint; the Directory UI
+ * also surfaces it (disables the pin button on unpinned cards once
+ * the wallet hits the limit) so users see why a click is a no-op.
+ */
+export const MAX_PINNED_ITEMS = 5;
+
 /* ------------------------------------------------------------------ *\
  * Site-side mirror of the engine's skill prompt prefixes.
  *
@@ -185,12 +207,14 @@ export function getHydratedCatalog(
     installed: boolean;
     install_id: string | null;
     active_skill: boolean;
+    pinned: boolean;
     locked: boolean;
   }
 > {
   const catalog = loadCatalog();
   const installs = wallet ? getInstalledForWallet(wallet) : [];
   const activeSkill = wallet ? getActiveSkillId(wallet) : null;
+  const pinnedSet = wallet ? new Set(getPinnedItemIds(wallet)) : new Set<string>();
   const byId = new Map(installs.map((i) => [i.entry.id, i] as const));
   return catalog.entries.map((entry) => {
     const inst = byId.get(entry.id);
@@ -199,6 +223,7 @@ export function getHydratedCatalog(
       installed: inst !== undefined,
       install_id: inst?.install_id ?? null,
       active_skill: activeSkill === entry.id,
+      pinned: pinnedSet.has(entry.id),
       locked: tierGateForEntry(entry, effective) !== null,
     };
   });
