@@ -100,6 +100,38 @@ export function useTicker(refreshIntervalMs = 15_000): LiveResult<TickerEntry[]>
   return withFallback(swr, snapshotTicker());
 }
 
+/**
+ * useExtraTickers — ad-hoc price lookup for symbols beyond the
+ * default TOP_20 the standard `useTicker` covers. The chat shell uses
+ * this so the inline ticker chip on a Vizzor response works for any
+ * coin the user asks about (DASH, LINK, AVAX, …) — not just the curated
+ * top-20 set. Pass an EMPTY array (or nothing) to skip the fetch and
+ * keep network traffic to zero on threads that only touch top-20.
+ *
+ * The route returns `[]` for symbols the upstream engine doesn't
+ * recognize, so the chip degrades to "no chip" cleanly instead of
+ * lying about a price.
+ */
+export function useExtraTickers(
+  symbols: ReadonlyArray<string>,
+  refreshIntervalMs = 30_000,
+): TickerEntry[] {
+  // Stable cache key — sorted CSV so two callers asking for the same
+  // set hit the same SWR row regardless of input order.
+  const key =
+    symbols.length === 0
+      ? null
+      : `/api/ticker?symbols=${[...new Set(symbols.map((s) => s.toUpperCase()))]
+          .sort()
+          .join(',')}`;
+  const { data } = useSWR<TickerEntry[]>(
+    key,
+    fetcher,
+    { ...SWR_DEFAULTS, refreshInterval: refreshIntervalMs },
+  );
+  return data ?? [];
+}
+
 export function useTrackerWR(refreshIntervalMs = 60_000): LiveResult<TrackerWR> {
   const swr = useSWR<TrackerWR>(
     `${API_BASE}/v1/site/tracker-wr`,
