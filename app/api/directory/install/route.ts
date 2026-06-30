@@ -1,5 +1,5 @@
 /**
- * POST /api/directory/install — install a connector / plugin for the
+ * POST /api/directory/install — install a connector for the
  * authenticated wallet.
  *
  * Body: { connector_id: string, credentials?: object }

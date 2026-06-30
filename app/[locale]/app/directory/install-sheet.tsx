@@ -1,17 +1,11 @@
 'use client';
 
 /**
- * InstallSheet — side-panel for installing a connector or plugin.
+ * InstallSheet — side-panel for installing a connector.
  *
  * Skills never open this sheet — they're a single PATCH on the catalog
- * shell. Connectors and plugins both arrive here with a `config_schema`
- * declaring the fields to collect.
- *
- * For plugins, the sheet surfaces a `Reserved` notice so the user knows
- * the credential is stored securely but predictions don't yet read it
- * (signal gatherers still use engine defaults — see the runbook). The
- * install still completes end-to-end so the credential is ready when
- * the engine catches up.
+ * shell. Connectors arrive here with a `config_schema` declaring the
+ * fields to collect.
  *
  * Mounted via `fixed inset-0 z-[60]` to escape any sticky parent stacking
  * context (same defense pattern as the predict-shell modals — see
@@ -22,7 +16,7 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { X } from 'lucide-react';
 
-type Category = 'connector' | 'plugin' | 'skill';
+type Category = 'connector' | 'skill';
 
 export interface InstallTarget {
   connectorId: string;
@@ -54,7 +48,6 @@ export function InstallSheet({ target, onClose, onInstalled }: Props) {
 
   if (!target) return null;
   const fields = target.schema?.fields ?? [];
-  const showReservedNotice = target.category === 'plugin';
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -111,15 +104,6 @@ export function InstallSheet({ target, onClose, onInstalled }: Props) {
             <X size={16} strokeWidth={2} />
           </button>
         </header>
-
-        {showReservedNotice && (
-          <div className="rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 text-[12px] leading-snug text-[var(--fg-2)]">
-            <p className="mono tabular text-[9.5px] uppercase tracking-[0.16em] text-[var(--fg-3)] mb-1">
-              {t('badge.reserved')}
-            </p>
-            {t('install.notice.reserved')}
-          </div>
-        )}
 
         <form className="flex flex-col gap-4" onSubmit={onSubmit}>
           {fields.map((f) => (

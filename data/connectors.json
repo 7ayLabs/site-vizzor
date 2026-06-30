@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-06-29T18:59:48.130Z",
+  "generated_at": "2026-06-29T22:00:00.000Z",
   "entries": [
     {
       "id": "telegram",
@@ -373,99 +373,6 @@
       ],
       "required_tier": "pro",
       "config_schema": null
-    },
-    {
-      "id": "helius-rpc",
-      "slug": "helius-rpc",
-      "name": "Helius RPC override",
-      "category": "plugin",
-      "icon": "/connectors/plugin-helius.svg",
-      "summary": "Replace the default Solana RPC with your own Helius key.",
-      "description": "Vizzor's signal pipeline uses Helius for tx history and whale lookups. Plug in your own paid Helius key to lift rate limits and (optionally) target a private RPC.",
-      "popular_rank": 1,
-      "popular_for": [
-        "predict"
-      ],
-      "partner_tier": "partner",
-      "install_kind": "apikey",
-      "scopes": [
-        "plugin.rpc_override"
-      ],
-      "config_schema": {
-        "fields": [
-          {
-            "name": "api_key",
-            "label": "Helius API key",
-            "placeholder": "hx_…",
-            "kind": "secret",
-            "required": true
-          }
-        ]
-      },
-      "external_docs": "https://helius.dev",
-      "required_tier": "pro"
-    },
-    {
-      "id": "dexscreener-flow",
-      "slug": "dexscreener-flow",
-      "name": "Dexscreener flow",
-      "category": "plugin",
-      "icon": "/connectors/plugin-dexscreener.svg",
-      "summary": "Use a Dexscreener pro key for live dex flow data.",
-      "description": "Augment the engine's flow signal with Dexscreener pro-tier feeds. Higher refresh rate, more pairs, fewer rate-limit cliffs.",
-      "popular_rank": 2,
-      "popular_for": [
-        "predict"
-      ],
-      "partner_tier": "partner",
-      "install_kind": "apikey",
-      "scopes": [
-        "plugin.feed_merge"
-      ],
-      "config_schema": {
-        "fields": [
-          {
-            "name": "api_key",
-            "label": "Dexscreener API key",
-            "placeholder": "ds_…",
-            "kind": "secret",
-            "required": true
-          }
-        ]
-      },
-      "external_docs": "https://docs.dexscreener.com",
-      "required_tier": "pro"
-    },
-    {
-      "id": "coingecko-meta",
-      "slug": "coingecko-meta",
-      "name": "Coingecko metadata",
-      "category": "plugin",
-      "icon": "/connectors/plugin-coingecko.svg",
-      "summary": "Bring your Coingecko pro key for richer token metadata.",
-      "description": "Vizzor resolves tokens via Coingecko. A pro key removes rate caps and unlocks additional fields (developer activity, social score).",
-      "popular_rank": 3,
-      "popular_for": [
-        "predict"
-      ],
-      "partner_tier": "partner",
-      "install_kind": "apikey",
-      "scopes": [
-        "plugin.feed_merge"
-      ],
-      "config_schema": {
-        "fields": [
-          {
-            "name": "api_key",
-            "label": "Coingecko pro key",
-            "placeholder": "CG-…",
-            "kind": "secret",
-            "required": true
-          }
-        ]
-      },
-      "external_docs": "https://docs.coingecko.com",
-      "required_tier": "free"
     }
   ]
 }

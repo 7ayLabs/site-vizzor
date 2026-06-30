@@ -21,7 +21,6 @@ describe('catalog', () => {
   it('contains all v1 ship categories', () => {
     expect(getEntriesByCategory('connector').length).toBeGreaterThanOrEqual(6);
     expect(getEntriesByCategory('skill').length).toBeGreaterThanOrEqual(8);
-    expect(getEntriesByCategory('plugin').length).toBeGreaterThanOrEqual(3);
   });
 
   it('connector list is web3-only (no slack, no generic-webhook)', () => {
@@ -94,7 +93,8 @@ describe('validate', () => {
   });
 
   it('rejects missing required field', () => {
-    const entry = getEntry('helius-rpc')!;
+    // Farcaster takes neynar_api_key (required) — empty body should fail.
+    const entry = getEntry('farcaster')!;
     expect(() => validateInstallPayload(entry, {})).toThrow(InstallValidationError);
   });
 

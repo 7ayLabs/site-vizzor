@@ -45,7 +45,6 @@ import {
 } from '@/lib/payment/tier-resolver';
 import { promptByteCap } from '@/lib/feature-flags';
 import {
-  getActivePluginIds,
   getActiveSkillId,
   dispatchPrediction,
   buildSkillPrimingMessages,
@@ -302,19 +301,16 @@ async function forwardToVizzor(
     };
     if (apiKey) upstreamHeaders['x-api-key'] = apiKey;
 
-    // v0.4.1 — Directory wiring. Pull the wallet's active skill +
-    // plugin selections from `wallet_preferences` + `user_connections`
-    // and forward them to the engine. Empty values are omitted so a
-    // wallet without any directory state behaves bit-identically to
-    // pre-v0.4.1 callers (the engine treats missing fields as "use
-    // defaults"). Lookups are cheap SQLite reads on indexed columns;
-    // failures fall back to "no skill, no plugins" rather than
+    // v0.4.1 — Directory wiring. Pull the wallet's active skill from
+    // `wallet_preferences` and forward it to the engine. Empty values
+    // are omitted so a wallet without any directory state behaves
+    // bit-identically to pre-v0.4.1 callers (the engine treats missing
+    // fields as "use defaults"). Lookup is a cheap SQLite read on an
+    // indexed column; failure falls back to "no skill" rather than
     // breaking the predict path.
     let activeSkillId: string | null = null;
-    let activePluginIds: string[] = [];
     try {
       activeSkillId = getActiveSkillId(ctx.wallet);
-      activePluginIds = getActivePluginIds(ctx.wallet);
     } catch {
       /* directory unavailable — degrade to defaults */
     }
@@ -341,7 +337,7 @@ async function forwardToVizzor(
       // eslint-disable-next-line no-console
       console.log(
         `[directory] /api/predict wallet=${ctx.walletHash.slice(0, 8)}… ` +
-          `skill=${activeSkillId} plugins=${activePluginIds.join(',') || '∅'}`,
+          `skill=${activeSkillId}`,
       );
     }
 
@@ -359,7 +355,6 @@ async function forwardToVizzor(
           client: 'site-web',
         },
         ...(activeSkillId ? { skill_id: activeSkillId } : {}),
-        ...(activePluginIds.length > 0 ? { plugin_ids: activePluginIds } : {}),
       }),
       signal: controller.signal,
       cache: 'no-store',

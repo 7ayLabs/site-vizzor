@@ -6,10 +6,10 @@
  *   - active_skill_id, when present + still in the catalog + the
  *     caller's tier allows it, becomes the wallet's new active skill.
  *     Otherwise skipped silently and reported in the response.
- *   - installs (connector + plugin ids) are NOT auto-installed —
- *     credentials live encrypted per-wallet and can't be ported. We
- *     return a `to_install` list so the UI can prompt the user to
- *     re-credential each one with a single click per entry.
+ *   - installs (connector ids) are NOT auto-installed — credentials
+ *     live encrypted per-wallet and can't be ported. We return a
+ *     `to_install` list so the UI can prompt the user to re-credential
+ *     each one with a single click per entry.
  *
  * Idempotent: importing the same export twice is a no-op (the second
  * skill set matches what's already there; the to_install list is the

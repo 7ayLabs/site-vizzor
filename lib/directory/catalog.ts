@@ -3,7 +3,7 @@
  *
  * `data/connectors.json` is the single source of truth for what the
  * UI lists, what the install flow accepts, and what the engine
- * recognizes as a valid skill / plugin id. Loaded once at module
+ * recognizes as a valid skill id. Loaded once at module
  * init and validated with hand-rolled checks (no zod dependency, to
  * match the existing lib/payment/* convention).
  *
@@ -15,7 +15,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-export type ConnectorCategory = 'connector' | 'skill' | 'plugin';
+export type ConnectorCategory = 'connector' | 'skill';
 export type PartnerTier = 'vizzor' | 'partner' | 'community';
 export type InstallKind = 'internal' | 'webhook' | 'apikey' | 'skill' | 'mcp';
 export type RequiredTier = 'free' | 'pro' | 'elite';
@@ -102,7 +102,7 @@ function isStringArray(x: unknown): x is string[] {
   return Array.isArray(x) && x.every(isString);
 }
 
-const VALID_CATEGORIES = new Set<ConnectorCategory>(['connector', 'skill', 'plugin']);
+const VALID_CATEGORIES = new Set<ConnectorCategory>(['connector', 'skill']);
 const VALID_TIERS = new Set<PartnerTier>(['vizzor', 'partner', 'community']);
 const VALID_INSTALL_KINDS = new Set<InstallKind>(['internal', 'webhook', 'apikey', 'skill', 'mcp']);
 const VALID_REQUIRED_TIERS = new Set<RequiredTier>(['free', 'pro', 'elite']);

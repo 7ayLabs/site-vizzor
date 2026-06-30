@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * check-directory-parity.mjs — assert the site's connector catalog
- * lines up with the engine's skill + plugin registries.
+ * lines up with the engine's skill registry.
  *
  * Site repo (this one): loads data/connectors.json. Reads
  * `SITE_CATALOG_URL` (default https://vizzor.ai/api/directory/catalog)
@@ -10,7 +10,7 @@
  * ids + no unknown categories.
  *
  * Engine repo: ships its own copy that compares the SITE_CATALOG_URL
- * response against its in-process skill/plugin registries.
+ * response against its in-process skill registry.
  *
  * Exit 0 = parity holds (or there's nothing to compare against locally).
  * Exit 1 = drift detected. Don't merge until fixed.
@@ -20,7 +20,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const CATALOG_PATH = join(process.cwd(), 'data', 'connectors.json');
-const VALID_CATEGORIES = new Set(['connector', 'skill', 'plugin']);
+const VALID_CATEGORIES = new Set(['connector', 'skill']);
 const VALID_INSTALL_KINDS = new Set([
   'internal',
   'webhook',

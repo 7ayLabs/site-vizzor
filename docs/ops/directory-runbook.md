@@ -44,16 +44,20 @@ Known follow-up workstreams (post v0.4.1):
 
 ## What the directory is
 
-A curated allowlist of Skills, Connectors, and Plugins listed at
+A curated allowlist of Skills and Connectors listed at
 `data/connectors.json`. Each entry tells the UI how to render and the
-API how to validate an install. Three categories form the input →
-engine → output pipeline:
+API how to validate an install. Two categories form the input → engine
+→ output pipeline:
 
 | Tab | Where it sits | Effect |
 |---|---|---|
-| **Plugins** | Upstream of the engine | RPC + feed overrides routed via `plugin_ids` on the predict request |
 | **Skills** | Inside the engine | `active_skill_id` adjusts signal weights + prompt prefix |
 | **Connectors** | Downstream of the engine | Site-side webhook fan-out via `lib/directory/runtime.dispatchPrediction` |
+
+> v0.4.1 — Plugins were removed from this catalog. The engine's signal
+> gatherers never read the registry in production; the scaffolding
+> shipped at v0.4.0 has been retired site-side. A coordinated change on
+> the engine repo drops the `plugin_ids` parameter handling.
 
 ## Catalog edits
 
@@ -66,11 +70,10 @@ The catalog is the single source of truth. To add or remove an entry:
 3. Run `pnpm vitest run tests/lib/directory` — the catalog loader
    throws on malformed entries at module init and the tests cover the
    schema invariants.
-4. If the entry is a **skill** or a **plugin**, mirror it on the
-   engine repo at the matching registry file
-   (`src/core/chronovisor/skills.ts` or `src/data/plugins/registry.ts`).
-   The CI parity check (`scripts/check-directory-parity.mjs`) will
-   fail the merge otherwise.
+4. If the entry is a **skill**, mirror it on the engine repo at the
+   matching registry file (`src/core/chronovisor/skills.ts`). The CI
+   parity check (`scripts/check-directory-parity.mjs`) will fail the
+   merge otherwise.
 
 ## Encryption key rotation
 
@@ -258,25 +261,15 @@ End-to-end sequence (Discord / Slack / generic):
    `directory.connector.circuit_open`. Per-connector failures are
    isolated; the user's chat reply never blocks on dispatch.
 
-### Plugins — scaffolding only, no behavior change yet
+### Plugins — retired in v0.4.1
 
-| Entry | Resolver | Behavior change | Status |
-|---|---|---|---|
-| `helius-rpc` | ✅ `resolvePlugins` (engine) | ❌ `solana-whale-monitor` still reads `HELIUS_API_KEY` env | scaffolding |
-| `dexscreener-flow` | ✅ | ❌ `dex-pair-tracker` still reads `DEXSCREENER_BASE` env | scaffolding |
-| `coingecko-meta` | ✅ | ❌ `token-resolver` still reads `COINGECKO_API_KEY` env | scaffolding |
-
-The boundary contract is in place: a wallet's plugin selection flows
-from `/api/directory/catalog` → `wallet_preferences`/`user_connections`
-→ `/api/predict` body `plugin_ids` → `chat.ts` (the chat route receives
-them; see `void pluginIdsRaw`) → engine `resolvePlugins`. The remaining
-hookup — signal gatherers reading `pluginsForTarget()` and substituting
-the user's API key in their fetch path — requires a server-to-server
-key forwarding channel (the user's encrypted credentials live on the
-site, not the engine). Marked as deferred until that surface ships.
-A user who installs `helius-rpc` today sees `Installed` in the UI and
-the choice is audit-logged, but predictions reason against the engine's
-default RPC.
+The v0.4.0 plugin scaffolding (Helius RPC override, Dexscreener flow,
+Coingecko metadata) has been removed from the site catalog. The signal
+gatherers never read the registry in production, so the surface was
+dead weight that misled users. A coordinated change on the engine repo
+drops the `plugin_ids` parameter handling on `/v1/chat` — until that
+ships, the engine treats missing `plugin_ids` as "no plugins active",
+which is now the only state.
 
 ## Where to look in code
 

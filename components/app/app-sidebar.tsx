@@ -47,7 +47,7 @@ const SURFACES: ReadonlyArray<SurfaceItem> = [
   { key: 'predict', href: '/app/predict', match: /^\/app\/predict(\/|$)/, icon: MessageSquare },
   { key: 'whales', href: '/app/whales', match: /^\/app\/whales(\/|$)/, icon: Waves, tier: 'elite' },
   { key: 'flow', href: '/app/flow', match: /^\/app\/flow(\/|$)/, icon: Activity, tier: 'elite' },
-  // Directory — Skills / Connectors / Plugins. Not tier-gated for v1
+  // Directory — Skills / Connectors. Not tier-gated for v1
   // (everyone can browse and install free Telegram / Discord); the
   // page itself gates write paths behind SIWS.
   { key: 'directory', href: '/app/directory', match: /^\/app\/directory(\/|$)/, icon: Boxes },

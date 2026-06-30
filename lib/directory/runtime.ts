@@ -7,10 +7,6 @@
  *     the connector merged with its catalog metadata. The Directory
  *     UI hydrates from this. Anonymous callers receive an empty list.
  *
- *   getActivePluginIds(wallet)
- *     Subset of installs where category === 'plugin'. Engine query
- *     param `plugin_ids` is built from this list.
- *
  *   getActiveSkillId(wallet)
  *     Reads wallet_preferences.active_skill_id. Engine query param
  *     `skill_id` is built from this.
@@ -62,12 +58,6 @@ export function getInstalledForWallet(wallet: string): HydratedInstall[] {
     });
   }
   return out;
-}
-
-export function getActivePluginIds(wallet: string): string[] {
-  return getInstalledForWallet(wallet)
-    .filter((i) => i.entry.category === 'plugin')
-    .map((i) => i.entry.id);
 }
 
 export function getActiveSkillId(wallet: string): string | null {
