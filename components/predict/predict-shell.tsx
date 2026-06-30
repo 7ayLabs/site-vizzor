@@ -43,6 +43,8 @@ import {
   type ReactNode,
 } from 'react';
 import useSWR from 'swr';
+import { TOP_20, TOP_20_BY_SYMBOL } from '@/lib/coin-meta';
+import type { TickerEntry } from '@/lib/types';
 import { useTicker, useExtraTickers } from '@/lib/api';
 import { ChatBubble } from '@/components/predict/chat-bubble';
 import type { InlineTickerChipEntry } from '@/components/predict/inline-ticker-chip';
@@ -2380,6 +2382,8 @@ type TopicIconKind =
   | 'anchor'
   | 'flag';
 
+type TopicSection = 'tokens' | 'sectors' | 'macro';
+
 interface TopicSpec {
   id: string;
   label: string;
@@ -2399,7 +2403,24 @@ interface TopicSpec {
    *  `'submit'` — fire the prompt immediately. The default for general
    *  catalysts like "Whale flow" where the canned prompt IS the value. */
   behavior?: 'insert' | 'submit';
+  /** Which group a topic belongs to in the Add Topic popover. Drives
+   *  the section headers + ordering. Defaults to `'sectors'` when a
+   *  user-defined custom token doesn't carry an explicit section. */
+  section?: TopicSection;
 }
+
+/** Ordered list of sections in the Add Topic popover. */
+const TOPIC_SECTIONS: ReadonlyArray<TopicSection> = [
+  'tokens',
+  'sectors',
+  'macro',
+];
+
+const TOPIC_SECTION_LABEL: Record<TopicSection, string> = {
+  tokens: 'Tokens',
+  sectors: 'Sectors',
+  macro: 'Macro',
+};
 
 /**
  * Canonical topic catalog — every chip the user can possibly have on
@@ -2413,37 +2434,29 @@ interface TopicSpec {
  * the user can intermix freely.
  */
 const TOPICS_CATALOG: ReadonlyArray<TopicSpec> = [
-  // Vizzor-native head (engine's first-class concepts)
-  { id: 'high-conviction', label: 'High conviction', icon: 'spark', prompt: 'Show me current high-conviction predictions', behavior: 'submit' },
-  { id: 'whale', label: 'Whale flow', icon: 'wave', prompt: 'Recent whale-confirmed signals', behavior: 'submit' },
-  { id: 'resolved', label: 'Just resolved', icon: 'check', prompt: 'Show me just-resolved receipts', behavior: 'submit' },
-  // Majors — pre-fill so the user completes the horizon. The bare
+  // Tokens — pre-fill so the user completes the horizon. The bare
   // ticker + trailing space is what lands in the composer; the user
   // types "4h", "1d con funding", etc.
-  { id: 'btc', label: 'Bitcoin', ticker: 'BTC', prompt: 'BTC ', behavior: 'insert' },
-  { id: 'eth', label: 'Ethereum', ticker: 'ETH', prompt: 'ETH ', behavior: 'insert' },
-  { id: 'sol', label: 'Solana', ticker: 'SOL', prompt: 'SOL ', behavior: 'insert' },
-  { id: 'ton', label: 'Toncoin', ticker: 'TON', prompt: 'TON ', behavior: 'insert' },
-  // Vizzor-internal surfaces — submit-now
-  { id: 'wr', label: 'Tracked WR', icon: 'target', prompt: '/wr', behavior: 'submit' },
-  { id: 'precisions', label: 'Receipts', icon: 'receipt', prompt: '/precisions', behavior: 'submit' },
-  { id: 'calibration', label: 'Calibration', icon: 'gauge', prompt: 'Show me per-horizon calibration trust', behavior: 'submit' },
+  { id: 'btc', label: 'Bitcoin', ticker: 'BTC', prompt: 'BTC ', behavior: 'insert', section: 'tokens' },
+  { id: 'eth', label: 'Ethereum', ticker: 'ETH', prompt: 'ETH ', behavior: 'insert', section: 'tokens' },
+  { id: 'sol', label: 'Solana', ticker: 'SOL', prompt: 'SOL ', behavior: 'insert', section: 'tokens' },
+  { id: 'ton', label: 'Toncoin', ticker: 'TON', prompt: 'TON ', behavior: 'insert', section: 'tokens' },
   // Crypto-native sectors
-  { id: 'defi', label: 'DeFi', icon: 'liquid', prompt: 'DeFi sector update', behavior: 'submit' },
-  { id: 'l2', label: 'L2s', icon: 'stack', prompt: 'Layer 2 ecosystem update', behavior: 'submit' },
-  { id: 'memes', label: 'Memes', icon: 'dice', prompt: 'Top memecoins trending now', behavior: 'submit' },
-  { id: 'ai', label: 'AI agents', icon: 'chip', prompt: 'AI agents in crypto', behavior: 'submit' },
-  { id: 'depin', label: 'DePIN', icon: 'mesh', prompt: 'DePIN trends and tokens', behavior: 'submit' },
-  { id: 'rwa', label: 'RWA', icon: 'building', prompt: 'Real-world asset tokens', behavior: 'submit' },
-  { id: 'restaking', label: 'Restaking', icon: 'cycle', prompt: 'Restaking trends and yields', behavior: 'submit' },
-  { id: 'pre-news', label: 'Pre-news', icon: 'radar', prompt: 'Pre-news signals firing now', behavior: 'submit' },
+  { id: 'defi', label: 'DeFi', icon: 'liquid', prompt: 'DeFi sector update', behavior: 'submit', section: 'sectors' },
+  { id: 'l2', label: 'L2s', icon: 'stack', prompt: 'Layer 2 ecosystem update', behavior: 'submit', section: 'sectors' },
+  { id: 'memes', label: 'Memes', icon: 'dice', prompt: 'Top memecoins trending now', behavior: 'submit', section: 'sectors' },
+  { id: 'ai', label: 'AI agents', icon: 'chip', prompt: 'AI agents in crypto', behavior: 'submit', section: 'sectors' },
+  { id: 'depin', label: 'DePIN', icon: 'mesh', prompt: 'DePIN trends and tokens', behavior: 'submit', section: 'sectors' },
+  { id: 'rwa', label: 'RWA', icon: 'building', prompt: 'Real-world asset tokens', behavior: 'submit', section: 'sectors' },
+  { id: 'restaking', label: 'Restaking', icon: 'cycle', prompt: 'Restaking trends and yields', behavior: 'submit', section: 'sectors' },
+  { id: 'pre-news', label: 'Pre-news', icon: 'radar', prompt: 'Pre-news signals firing now', behavior: 'submit', section: 'sectors' },
   // Catalysts that move crypto
-  { id: 'macro', label: 'Macro', icon: 'globe', prompt: 'Macro outlook — Fed, DXY, rates, and crypto impact', behavior: 'submit' },
-  { id: 'etfs', label: 'ETF flows', icon: 'bars', prompt: 'Latest BTC and ETH spot ETF net flows', behavior: 'submit' },
-  { id: 'regulation', label: 'Regulation', icon: 'shield', prompt: 'Crypto regulation watch — SEC, MiCA, Korea', behavior: 'submit' },
-  { id: 'stables', label: 'Stables', icon: 'anchor', prompt: 'Stablecoin supply changes and depeg risk', behavior: 'submit' },
-  { id: 'geopolitics', label: 'Geopolitics', icon: 'flag', prompt: 'Geopolitics and crypto — sanctions, capital flight', behavior: 'submit' },
-  { id: 'stocks', label: 'Stocks tape', icon: 'bars', prompt: 'Crypto-correlated stocks — MSTR, COIN, NVDA', behavior: 'submit' },
+  { id: 'macro', label: 'Macro', icon: 'globe', prompt: 'Macro outlook — Fed, DXY, rates, and crypto impact', behavior: 'submit', section: 'macro' },
+  { id: 'etfs', label: 'ETF flows', icon: 'bars', prompt: 'Latest BTC and ETH spot ETF net flows', behavior: 'submit', section: 'macro' },
+  { id: 'regulation', label: 'Regulation', icon: 'shield', prompt: 'Crypto regulation watch — SEC, MiCA, Korea', behavior: 'submit', section: 'macro' },
+  { id: 'stables', label: 'Stables', icon: 'anchor', prompt: 'Stablecoin supply changes and depeg risk', behavior: 'submit', section: 'macro' },
+  { id: 'geopolitics', label: 'Geopolitics', icon: 'flag', prompt: 'Geopolitics and crypto — sanctions, capital flight', behavior: 'submit', section: 'macro' },
+  { id: 'stocks', label: 'Stocks tape', icon: 'bars', prompt: 'Crypto-correlated stocks — MSTR, COIN, NVDA', behavior: 'submit', section: 'macro' },
 ];
 
 const TOPICS_BY_ID: Record<string, TopicSpec> = Object.fromEntries(
@@ -2456,15 +2469,10 @@ const TOPICS_BY_ID: Record<string, TopicSpec> = Object.fromEntries(
  * localStorage under `STORAGE_KEY` below.
  */
 const DEFAULT_BAR_IDS: ReadonlyArray<string> = [
-  'high-conviction',
-  'whale',
-  'resolved',
   'btc',
   'eth',
   'sol',
   'ton',
-  'wr',
-  'precisions',
 ];
 
 const STORAGE_KEY = 'vizzor.predict.topic-bar.v1';
@@ -2560,6 +2568,55 @@ function saveCustomTokens(symbols: ReadonlyArray<string>): void {
     window.localStorage.setItem(
       CUSTOM_TOKENS_KEY,
       JSON.stringify({ v: 1, symbols } satisfies StoredCustomTokens),
+    );
+  } catch {
+    // Best-effort.
+  }
+}
+
+/**
+ * Hidden-topic ids — the user explicitly removed these from the Add
+ * Topic popover via the row "×". They still exist in the catalog and
+ * can be restored from the popover's "Hidden" section, but they don't
+ * clutter the main grouped list anymore.
+ *
+ * Versioned key mirrors the other stores so the schema can evolve
+ * without colliding with old client data.
+ */
+const HIDDEN_TOPICS_KEY = 'vizzor.predict.hidden-topics.v1';
+
+interface StoredHiddenTopics {
+  v: 1;
+  ids: ReadonlyArray<string>;
+}
+
+function loadHiddenTopicIds(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(HIDDEN_TOPICS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as StoredHiddenTopics | null;
+    if (!parsed || parsed.v !== 1 || !Array.isArray(parsed.ids)) return [];
+    const valid: string[] = [];
+    const seen = new Set<string>();
+    for (const id of parsed.ids) {
+      if (typeof id !== 'string') continue;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      valid.push(id);
+    }
+    return valid;
+  } catch {
+    return [];
+  }
+}
+
+function saveHiddenTopicIds(ids: ReadonlyArray<string>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      HIDDEN_TOPICS_KEY,
+      JSON.stringify({ v: 1, ids } satisfies StoredHiddenTopics),
     );
   } catch {
     // Best-effort.
@@ -2694,6 +2751,7 @@ function customTokenToSpec(symbol: string): TopicSpec {
     ticker: up,
     prompt: `${up} `,
     behavior: 'insert',
+    section: 'tokens',
   };
 }
 
@@ -2714,10 +2772,12 @@ function ChatTopics({
   // handlers then mutate this state and persist on every change.
   const [barIds, setBarIds] = useState<string[]>(() => [...DEFAULT_BAR_IDS]);
   const [customTokens, setCustomTokens] = useState<string[]>(() => []);
+  const [hiddenTopicIds, setHiddenTopicIds] = useState<string[]>(() => []);
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
     setBarIds(loadBarIds());
     setCustomTokens(loadCustomTokens());
+    setHiddenTopicIds(loadHiddenTopicIds());
     setHydrated(true);
   }, []);
   useEffect(() => {
@@ -2726,6 +2786,16 @@ function ChatTopics({
   useEffect(() => {
     if (hydrated) saveCustomTokens(customTokens);
   }, [customTokens, hydrated]);
+  useEffect(() => {
+    if (hydrated) saveHiddenTopicIds(hiddenTopicIds);
+  }, [hiddenTopicIds, hydrated]);
+
+  const onHideTopic = useCallback((id: string) => {
+    setHiddenTopicIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  }, []);
+  const onRestoreTopic = useCallback((id: string) => {
+    setHiddenTopicIds((prev) => prev.filter((x) => x !== id));
+  }, []);
 
   // Live ticker — used to render price + delta on ticker chips. One
   // subscription at this scope is cheaper than per-chip useSWR; the
@@ -2801,6 +2871,22 @@ function ChatTopics({
   }, []);
 
   const addChip = useCallback((id: string) => {
+    // Custom-token ids (`custom-LTC`, `custom-DOGE`, …) need the
+    // matching symbol registered in `customTokens` so that
+    // `allTopicsById[id]` resolves on the next render — otherwise
+    // the bar's `if (!topic) return null` guard silently drops the
+    // chip and the user sees no feedback after a click. This path
+    // fires when a TOP_20 or live-lookup search result is picked
+    // from the popover (those rows arrive with a `custom-*` id but
+    // never went through `addCustomToken`).
+    if (id.startsWith('custom-')) {
+      const symbol = id.slice('custom-'.length).toUpperCase();
+      if (CUSTOM_TOKEN_SYMBOL_RE.test(symbol)) {
+        setCustomTokens((list) =>
+          list.includes(symbol) ? list : [...list, symbol],
+        );
+      }
+    }
     setBarIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
     setAddOpen(false);
   }, []);
@@ -2882,7 +2968,6 @@ function ChatTopics({
                       topic={topic}
                       onPick={onChipPick}
                       onRemove={removeChip}
-                      highlighted={idx === 0}
                       livePrice={live?.price}
                       liveChangePct={live?.changePct}
                     />
@@ -2958,8 +3043,11 @@ function ChatTopics({
           {addOpen && (
             <TopicAddPanel
               available={available}
+              hiddenIds={hiddenTopicIds}
               onAdd={addChip}
               onAddCustom={addCustomToken}
+              onHide={onHideTopic}
+              onRestore={onRestoreTopic}
               onClose={dismissAdd}
               closing={addClosing}
             />
@@ -2981,14 +3069,12 @@ function SortableTopicChip({
   topic,
   onPick,
   onRemove,
-  highlighted = false,
   livePrice,
   liveChangePct,
 }: {
   topic: TopicSpec;
   onPick: (topic: TopicSpec) => void;
   onRemove: (id: string) => void;
-  highlighted?: boolean;
   /** Live spot price for the chip's ticker, when available. Ignored
    *  for non-ticker chips. */
   livePrice?: number;
@@ -3032,18 +3118,13 @@ function SortableTopicChip({
           'transition-[background-color,color,border-color,box-shadow,transform] duration-200 ease-out',
           'motion-safe:will-change-transform',
           'hover:scale-[1.03] active:scale-95',
-          highlighted
-            ? 'bg-[var(--fg)] text-[var(--bg)]'
-            : 'border border-[var(--border)] text-[var(--fg-2)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)] hover:border-[var(--border-hi)]',
+          'border border-[var(--border)] text-[var(--fg-2)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)] hover:border-[var(--border-hi)]',
           isDragging && 'opacity-80 cursor-grabbing shadow-[0_6px_18px_-8px_color-mix(in_oklab,var(--fg)_45%,transparent)]',
         )}
       >
         <span
           aria-hidden
-          className={cn(
-            'inline-flex items-center justify-center shrink-0',
-            highlighted ? 'text-[var(--bg)]' : 'text-[var(--fg-3)]',
-          )}
+          className="inline-flex items-center justify-center shrink-0 text-[var(--fg-3)]"
         >
           {topic.ticker ? (
             <CoinIcon symbol={topic.ticker} size={14} />
@@ -3056,23 +3137,14 @@ function SortableTopicChip({
         {showLivePrice && typeof livePrice === 'number' ? (
           <>
             <span className="mono tabular">{topic.ticker}</span>
-            <span
-              className={cn(
-                'mono tabular font-medium',
-                highlighted ? 'text-[var(--bg)]/85' : 'text-[var(--fg-3)]',
-              )}
-            >
+            <span className="mono tabular font-medium text-[var(--fg-3)]">
               {formatChipPrice(livePrice)}
             </span>
             {deltaPct !== null && Number.isFinite(deltaPct) && (
               <span
                 className={cn(
                   'mono tabular text-[10.5px] font-semibold',
-                  highlighted
-                    ? 'text-[var(--bg)]/85'
-                    : isUp
-                      ? 'text-[var(--up)]'
-                      : 'text-[var(--down)]',
+                  isUp ? 'text-[var(--up)]' : 'text-[var(--down)]',
                 )}
                 aria-label={`24h change ${deltaPct.toFixed(2)} percent`}
               >
@@ -3129,16 +3201,27 @@ function formatChipPrice(n: number): string {
  */
 function TopicAddPanel({
   available,
+  hiddenIds,
   onAdd,
   onAddCustom,
+  onHide,
+  onRestore,
   onClose,
   closing = false,
 }: {
   available: ReadonlyArray<TopicSpec>;
+  /** Ids the user has explicitly hidden from the popover. Their rows
+   *  move to the bottom "Hidden" section instead of disappearing. */
+  hiddenIds: ReadonlyArray<string>;
   onAdd: (id: string) => void;
   /** Add a user-defined token by symbol. Returns the spec id on
    *  success, null when the symbol failed validation. */
   onAddCustom: (rawSymbol: string) => string | null;
+  /** Move a topic from the main sections into the Hidden bucket. */
+  onHide: (id: string) => void;
+  /** Bring a topic out of the Hidden bucket. The row reappears in
+   *  its original section the next render. */
+  onRestore: (id: string) => void;
   onClose: () => void;
   /** When true, render the slide-out keyframe instead of slide-in. The
    *  parent keeps the panel mounted for ~160ms so the exit animation
@@ -3146,30 +3229,179 @@ function TopicAddPanel({
   closing?: boolean;
 }) {
   const [activeIdx, setActiveIdx] = useState(0);
-  const listRef = useRef<HTMLUListElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
   const [customInput, setCustomInput] = useState('');
   const [customError, setCustomError] = useState(false);
+  const [query, setQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement | null>(null);
 
-  const submitCustom = useCallback(() => {
-    const trimmed = customInput.trim();
-    if (!trimmed) return;
-    const id = onAddCustom(trimmed);
-    if (id) {
-      setCustomInput('');
-      setCustomError(false);
-      onClose();
-    } else {
-      setCustomError(true);
+  // Static-catalog tickers already in `available` — used to dedupe
+  // TOP_20 token suggestions against (don't surface BTC twice when
+  // typing "bit").
+  const staticTickers = useMemo(() => {
+    const s = new Set<string>();
+    for (const t of available) {
+      if (t.ticker) s.add(t.ticker.toUpperCase());
     }
-  }, [customInput, onAddCustom, onClose]);
+    return s;
+  }, [available]);
 
-  // Re-clamp the active index if `available` shrinks (the user added a
-  // topic and the panel re-rendered with one fewer row).
+  // TOP_20 token matches — by symbol OR friendly name. Surfaces
+  // recognizable coins (DOGE, ADA, LINK, …) the static catalog
+  // doesn't carry, each carrying its real icon via CoinIcon.
+  const top20TokenHits = useMemo<TopicSpec[]>(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return TOP_20.filter(
+      (c) =>
+        c.symbol.toLowerCase().includes(q) ||
+        c.name.toLowerCase().includes(q),
+    )
+      .filter((c) => !staticTickers.has(c.symbol))
+      .map<TopicSpec>((c) => ({
+        id: `custom-${c.symbol}`,
+        label: c.name,
+        ticker: c.symbol,
+        prompt: `${c.symbol} `,
+        behavior: 'insert',
+        section: 'tokens',
+      }));
+  }, [query, staticTickers]);
+
+  // Live engine lookup for arbitrary tickers (DASH, PEPE, RNDR, …) —
+  // only fires when the query looks like a ticker AND neither the
+  // static catalog nor TOP_20 covers it. SWR keys are stable per
+  // uppercased query so two consecutive keystrokes with the same
+  // tail share the request.
+  const upperQuery = query.trim().toUpperCase();
+  const needsLiveLookup =
+    /^[A-Z0-9]{3,11}$/.test(upperQuery) &&
+    !TOP_20_BY_SYMBOL[upperQuery] &&
+    !staticTickers.has(upperQuery);
+
+  const { data: liveTicker } = useSWR<TickerEntry[]>(
+    needsLiveLookup ? `/api/ticker?symbols=${upperQuery}` : null,
+    (url: string) => fetch(url).then((r) => r.json()),
+    { dedupingInterval: 15_000, revalidateOnFocus: false },
+  );
+
+  const liveTokenHit = useMemo<TopicSpec | null>(() => {
+    if (!needsLiveLookup) return null;
+    const entry = liveTicker?.find(
+      (e) => e.symbol.toUpperCase() === upperQuery,
+    );
+    if (!entry) return null;
+    return {
+      id: `custom-${upperQuery}`,
+      label: upperQuery,
+      ticker: upperQuery,
+      prompt: `${upperQuery} `,
+      behavior: 'insert',
+      section: 'tokens',
+    };
+  }, [liveTicker, needsLiveLookup, upperQuery]);
+
+  // Filter the catalog by query. The same input is used as both the
+  // section-list filter AND the custom-token field — typing a query
+  // narrows the list live; if Enter doesn't match an existing row, we
+  // try to add it as a custom token. Keeps the popover surface lean.
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const staticHits = q
+      ? available.filter(
+          (t) =>
+            t.label.toLowerCase().includes(q) ||
+            (t.ticker ? t.ticker.toLowerCase().includes(q) : false),
+        )
+      : available;
+    if (!q) return staticHits;
+    // Token search hits land in the Tokens section. Live hit takes
+    // priority (most specific match for what the user typed), then
+    // the TOP_20 catalog hits.
+    return [
+      ...staticHits,
+      ...(liveTokenHit ? [liveTokenHit] : []),
+      ...top20TokenHits,
+    ];
+  }, [available, query, top20TokenHits, liveTokenHit]);
+
+  // Partition filtered rows by hidden state. Hidden rows render in a
+  // dedicated bucket at the bottom of the popover; main sections only
+  // show non-hidden rows.
+  const hiddenSet = useMemo(() => new Set(hiddenIds), [hiddenIds]);
+  const visibleFiltered = useMemo(
+    () => filtered.filter((t) => !hiddenSet.has(t.id)),
+    [filtered, hiddenSet],
+  );
+  const hiddenItems = useMemo(
+    () => filtered.filter((t) => hiddenSet.has(t.id)),
+    [filtered, hiddenSet],
+  );
+
+  // Group filtered rows by section so the popover renders one block
+  // per concept (Vizzor / Tokens / Sectors / Macro). Empty sections
+  // disappear cleanly — no header without rows.
+  const grouped = useMemo(() => {
+    const map = new Map<TopicSection, TopicSpec[]>();
+    for (const t of visibleFiltered) {
+      const sec = t.section ?? 'sectors';
+      const bucket = map.get(sec);
+      if (bucket) bucket.push(t);
+      else map.set(sec, [t]);
+    }
+    return TOPIC_SECTIONS.flatMap((sec) => {
+      const items = map.get(sec);
+      if (!items || items.length === 0) return [];
+      return [{ section: sec, items } as const];
+    });
+  }, [visibleFiltered]);
+
+  // Flat ordering across sections — drives the keyboard nav so ↑/↓
+  // walks the visible rows regardless of which section they're in.
+  // Hidden rows are excluded from the keyboard nav (they're a meta
+  // affordance, not a primary add target).
+  const flatRows = useMemo(
+    () => grouped.flatMap((g) => g.items),
+    [grouped],
+  );
+
+  const submitCustom = useCallback(
+    (rawOverride?: string) => {
+      const trimmed = (rawOverride ?? customInput).trim();
+      if (!trimmed) return;
+      const id = onAddCustom(trimmed);
+      if (id) {
+        setCustomInput('');
+        setQuery('');
+        setCustomError(false);
+        onClose();
+      } else {
+        setCustomError(true);
+      }
+    },
+    [customInput, onAddCustom, onClose],
+  );
+
+  // Keep the active index in bounds as the filter shrinks the list.
   useEffect(() => {
-    if (activeIdx >= available.length) {
-      setActiveIdx(available.length === 0 ? 0 : available.length - 1);
+    if (activeIdx >= flatRows.length) {
+      setActiveIdx(flatRows.length === 0 ? 0 : flatRows.length - 1);
     }
-  }, [activeIdx, available.length]);
+  }, [activeIdx, flatRows.length]);
+
+  // Reset selection to the first row whenever the query changes — the
+  // user just narrowed the result set, focusing on what's still visible.
+  useEffect(() => {
+    setActiveIdx(0);
+  }, [query]);
+
+  // Autofocus the search input on mount so the user can start typing
+  // straight away. requestAnimationFrame so the input has mounted by
+  // the time we ask for focus.
+  useEffect(() => {
+    const h = requestAnimationFrame(() => searchRef.current?.focus());
+    return () => cancelAnimationFrame(h);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -3178,32 +3410,25 @@ function TopicAddPanel({
         onClose();
         return;
       }
-      // Don't hijack keystrokes when the user is typing in the custom
-      // token input — Enter there submits the input, not a menu pick.
       const target = e.target as HTMLElement | null;
-      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') {
-        return;
-      }
-      if (available.length === 0) return;
+      const inSearch = target === searchRef.current;
+      // Search input handles its own Enter (try the active row, else
+      // add as a custom token) — done below in the onKeyDown handler
+      // on the input itself. Don't double-dispatch.
+      if (target?.tagName === 'INPUT' && !inSearch) return;
+      if (target?.tagName === 'TEXTAREA') return;
+      if (flatRows.length === 0) return;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setActiveIdx((i) => Math.min(available.length - 1, i + 1));
+        setActiveIdx((i) => Math.min(flatRows.length - 1, i + 1));
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         setActiveIdx((i) => Math.max(0, i - 1));
-      } else if (e.key === 'Enter') {
-        const picked = available[activeIdx];
-        if (picked) {
-          e.preventDefault();
-          onAdd(picked.id);
-        }
       }
     };
     const onClick = (e: MouseEvent): void => {
       const target = e.target as HTMLElement | null;
       if (target?.closest('[data-topic-add-panel]')) return;
-      // The (+) toggle handles its own dismiss via toggleAdd, so swallow
-      // outside-clicks that land on it to avoid a double-dismiss race.
       if (target?.closest('[aria-haspopup="menu"]')) return;
       onClose();
     };
@@ -3213,15 +3438,17 @@ function TopicAddPanel({
       window.removeEventListener('keydown', onKey, true);
       window.removeEventListener('pointerdown', onClick);
     };
-  }, [activeIdx, available, onAdd, onClose]);
+  }, [flatRows, onClose]);
 
   // Scroll the focused row into view as the user arrow-navigates.
   useEffect(() => {
     const root = listRef.current;
     if (!root) return;
-    const el = root.querySelector<HTMLLIElement>(`[data-idx="${activeIdx}"]`);
+    const el = root.querySelector<HTMLElement>(`[data-idx="${activeIdx}"]`);
     if (el) el.scrollIntoView({ block: 'nearest' });
   }, [activeIdx]);
+
+  const inputLooksLikeToken = /^[A-Za-z0-9]{2,11}$/.test(query.trim());
 
   return (
     <div
@@ -3230,17 +3457,8 @@ function TopicAddPanel({
       aria-label="Add topic to bar"
       className={cn(
         'absolute z-30',
-        // Anchor: above the (+) trigger, right-aligned to its edge so the
-        // panel grows leftward into the bar — the (+) sits at the
-        // rightmost end of the carousel, and a left-anchored panel would
-        // run off the viewport on narrow widths. Opening above also keeps
-        // the panel out of the composer textarea below.
         'right-0 bottom-full mb-2',
-        // v0.4.1 — chrome aligned to DirectoryPicker so both composer
-        // popovers read as one design system: same width, radius,
-        // border, shadow, and motion. Row paddings + font sizes below
-        // also mirror the picker's reference values.
-        'w-[284px]',
+        'w-[300px]',
         'rounded-xl border border-[var(--border)]',
         'bg-[var(--surface)]',
         'shadow-[0_8px_30px_rgba(0,0,0,0.40)]',
@@ -3251,24 +3469,39 @@ function TopicAddPanel({
           : 'motion-safe:slash-palette-slide-in',
       )}
     >
-      {/* Section stamp — same mono eyebrow vocabulary as the picker's
-          tab labels, sized to leave the popover top-edge at the same
-          ~36px chrome rhythm. */}
-      <p className="px-3 pt-2.5 pb-1.5 mono tabular text-[10px] uppercase tracking-[0.16em] font-semibold text-[var(--fg-3)]">
-        Add topic
-      </p>
-      {/* Custom token entry — type any symbol the engine knows (BTC,
-          HYPE, etc.). Form chrome aligns to the picker's row padding
-          rhythm (px-2 outer, py-1.5 inner). */}
-      <div className="px-2 pb-2 border-b border-[var(--border)]">
+      {/* Local keyframes for the content-swap transition. Namespaced
+          (vt-tap-*) so they don't collide with sibling components. */}
+      <style>{`
+        @keyframes vt-tap-in {
+          from { opacity: 0; transform: translateY(3px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+
+      {/* Header — eyebrow + dual-purpose search/token input. Typing
+          filters the section list AND, on Enter, tries to add the
+          query as a custom token when no row matches. One field, two
+          intents, zero extra chrome. */}
+      <div className="px-3 pt-2.5 pb-2 border-b border-[var(--border)]">
+        <p className="mono tabular text-[10px] uppercase tracking-[0.16em] font-semibold text-[var(--fg-3)]">
+          Add topic
+        </p>
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            submitCustom();
+            // First try to land on the active row; if none, fall back
+            // to treating the query as a custom token symbol.
+            const picked = flatRows[activeIdx];
+            if (picked) {
+              onAdd(picked.id);
+              return;
+            }
+            if (inputLooksLikeToken) submitCustom(query);
+            else setCustomError(true);
           }}
           className={cn(
-            'flex items-center gap-1.5 h-8 px-2 rounded-md border',
-            'bg-[var(--surface-2)] transition-colors duration-150',
+            'mt-2 flex items-center gap-1.5 h-8 px-2 rounded-md border',
+            'bg-[var(--bg)] transition-colors duration-150',
             customError
               ? 'border-[var(--danger)]'
               : 'border-[var(--border)] focus-within:border-[var(--border-hi)]',
@@ -3276,92 +3509,260 @@ function TopicAddPanel({
         >
           <span aria-hidden className="mono tabular text-[11px] text-[var(--fg-3)] shrink-0">$</span>
           <input
+            ref={searchRef}
             type="text"
-            value={customInput}
+            value={query.length > 0 ? query : customInput}
             onChange={(e) => {
+              setQuery(e.target.value);
               setCustomInput(e.target.value);
               if (customError) setCustomError(false);
             }}
-            placeholder="Add token — e.g. HYPE"
-            aria-label="Add custom token"
+            placeholder="Search or add token…"
+            aria-label="Search topics or add a custom token"
             spellCheck={false}
             autoCorrect="off"
             autoCapitalize="characters"
             className={cn(
               'flex-1 min-w-0 bg-transparent outline-none',
-              'mono tabular text-[12.5px] uppercase tracking-tight text-[var(--fg)]',
+              'mono tabular text-[12.5px] tracking-tight text-[var(--fg)]',
               'placeholder:text-[var(--fg-3)] placeholder:normal-case placeholder:tracking-normal placeholder:font-normal',
             )}
-            maxLength={11}
+            maxLength={32}
           />
-          <button
-            type="submit"
-            disabled={!customInput.trim()}
-            aria-label="Add token"
-            className={cn(
-              'shrink-0 inline-flex items-center justify-center h-6 w-6 rounded-full',
-              'text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface)]',
-              'transition-colors duration-150',
-              'disabled:opacity-40 disabled:pointer-events-none',
-            )}
-          >
-            <svg width={10} height={10} viewBox="0 0 16 16" fill="none" aria-hidden>
-              <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" />
-            </svg>
-          </button>
+          {/* Submit affordance — only when the query looks like a token
+              symbol AND no rows matched. When rows ARE present the
+              Enter key picks the active row, so the (+) would be
+              misleading. */}
+          {inputLooksLikeToken && flatRows.length === 0 && (
+            <button
+              type="submit"
+              aria-label="Add token"
+              className={cn(
+                'shrink-0 inline-flex items-center justify-center h-6 w-6 rounded-full',
+                'text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)]',
+                'transition-colors duration-150',
+              )}
+            >
+              <svg width={10} height={10} viewBox="0 0 16 16" fill="none" aria-hidden>
+                <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
         </form>
       </div>
-      {/* Scroll viewport — fixed max-height matches the picker's 300px
-          ceiling so neither popover can overshoot the composer area. */}
-      <div className="max-h-[300px] overflow-y-auto py-1.5">
-        {available.length === 0 ? (
-          <p className="px-3 py-2 text-[12.5px] leading-snug text-[var(--fg-3)]">
-            Every topic is already in the bar.
-          </p>
+
+      {/* Scroll viewport — keyed by query so the content-swap animation
+          re-runs on every filter narrow/widen. The wrap is also keyed by
+          query length to defeat React's render reuse and force a fresh
+          fade-in (otherwise React reuses the same DOM and the animation
+          doesn't replay). */}
+      <div
+        ref={listRef}
+        className="max-h-[320px] overflow-y-auto py-1.5"
+      >
+        {flatRows.length === 0 && hiddenItems.length === 0 ? (
+          <div className="px-3 py-3 flex flex-col gap-1.5">
+            <p className="text-[12.5px] leading-snug text-[var(--fg-3)]">
+              {query.trim()
+                ? needsLiveLookup && liveTicker === undefined
+                  ? `Searching for ${upperQuery}…`
+                  : inputLooksLikeToken
+                    ? 'No topic matches. Press Enter to add as a token.'
+                    : 'No matching topic.'
+                : 'Every topic is already in the bar.'}
+            </p>
+          </div>
         ) : (
-          <ul ref={listRef} className="px-1">
-            {available.map((t, idx) => {
-              const active = idx === activeIdx;
+          <div
+            key={`${query.length}-${flatRows.length}-${hiddenItems.length}`}
+            className="motion-safe:animate-[vt-tap-in_160ms_ease-out]"
+          >
+            {grouped.map((g) => {
+              const first = g.items[0];
+              const startIdx = first ? flatRows.indexOf(first) : 0;
               return (
-                <li key={t.id} data-idx={idx}>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onMouseEnter={() => setActiveIdx(idx)}
-                    onClick={() => onAdd(t.id)}
-                    className={cn(
-                      'group relative w-full flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left',
-                      // Row vocabulary mirrors DirectoryPicker exactly:
-                      // 12.5px / 1.35 line-height / 150ms color
-                      // transition. Active row keeps the slash-palette
-                      // left-edge bar for keyboard-focus parity.
-                      'text-[12.5px] leading-[1.35] transition-colors duration-150',
-                      'before:absolute before:left-0 before:top-1.5 before:bottom-1.5',
-                      'before:w-[2px] before:rounded-r-full',
-                      'before:transition-colors',
-                      active
-                        ? 'bg-[color-mix(in_oklab,var(--fg)_4%,transparent)] text-[var(--fg)] before:bg-[var(--fg)]'
-                        : 'text-[var(--fg-2)] before:bg-transparent hover:text-[var(--fg)] hover:bg-[var(--surface-2)]',
-                    )}
-                  >
-                    <span aria-hidden className="inline-flex items-center justify-center shrink-0 w-5 h-5 text-[var(--fg-3)] transition-transform duration-150 group-hover:scale-[1.04]">
-                      {t.ticker ? (
-                        <CoinIcon symbol={t.ticker} size={16} />
-                      ) : t.icon ? (
-                        <TopicIcon kind={t.icon} size={14} />
-                      ) : (
-                        <TopicIcon kind="spark" size={14} />
-                      )}
-                    </span>
-                    <span className="flex-1 truncate">{t.label}</span>
-                  </button>
-                </li>
+                <section key={g.section} className="px-1 pt-1.5 first:pt-0">
+                  <p className="px-2 pt-1 pb-0.5 mono tabular text-[9.5px] uppercase tracking-[0.18em] text-[var(--fg-3)]/80">
+                    {TOPIC_SECTION_LABEL[g.section]}
+                  </p>
+                  <ul role="group">
+                    {g.items.map((t, localIdx) => {
+                      const idx = startIdx + localIdx;
+                      const active = idx === activeIdx;
+                      return (
+                        <li key={t.id}>
+                          <TopicRow
+                            topic={t}
+                            active={active}
+                            dataIdx={idx}
+                            onMouseEnter={() => setActiveIdx(idx)}
+                            onActivate={() => onAdd(t.id)}
+                            onHide={() => onHide(t.id)}
+                          />
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
               );
             })}
-          </ul>
+
+            {/* Hidden bucket — surfaces removed-from-popover topics so
+                the action is reversible. Single-click on a hidden row
+                restores it back into its original section above. */}
+            {hiddenItems.length > 0 && (
+              <section className="px-1 pt-3 mt-2 border-t border-[var(--border)]/70">
+                <p className="px-2 pt-1 pb-0.5 mono tabular text-[9.5px] uppercase tracking-[0.18em] text-[var(--fg-3)]/80">
+                  Hidden · {hiddenItems.length}
+                </p>
+                <ul role="group">
+                  {hiddenItems.map((t) => (
+                    <li key={t.id}>
+                      <HiddenTopicRow
+                        topic={t}
+                        onRestore={() => onRestore(t.id)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Visible topic row — primary click activates (add to bar); a hover-
+ * revealed × on the right hides the row to the Hidden bucket. The two
+ * buttons sit side-by-side instead of nesting so the click targets
+ * don't fight each other.
+ */
+function TopicRow({
+  topic,
+  active,
+  dataIdx,
+  onMouseEnter,
+  onActivate,
+  onHide,
+}: {
+  topic: TopicSpec;
+  active: boolean;
+  dataIdx: number;
+  onMouseEnter: () => void;
+  onActivate: () => void;
+  onHide: () => void;
+}) {
+  return (
+    <div
+      onMouseEnter={onMouseEnter}
+      className={cn(
+        'group relative flex items-center rounded-md',
+        'transition-[background-color,color] duration-150',
+        'before:absolute before:left-0 before:top-1.5 before:bottom-1.5',
+        'before:w-[2px] before:rounded-r-full',
+        'before:transition-colors before:duration-150',
+        active
+          ? 'bg-[color-mix(in_oklab,var(--fg)_4%,transparent)] before:bg-[var(--fg)]'
+          : 'before:bg-transparent hover:bg-[var(--surface-2)]',
+      )}
+    >
+      <button
+        type="button"
+        role="menuitem"
+        data-idx={dataIdx}
+        onClick={onActivate}
+        className={cn(
+          'flex-1 min-w-0 flex items-center gap-2.5 px-2 py-1.5 text-left',
+          'text-[12.5px] leading-[1.35]',
+          active ? 'text-[var(--fg)]' : 'text-[var(--fg-2)] group-hover:text-[var(--fg)]',
+        )}
+      >
+        <span aria-hidden className="inline-flex items-center justify-center shrink-0 w-5 h-5 text-[var(--fg-3)] transition-transform duration-150 group-hover:scale-[1.04]">
+          {topic.ticker ? (
+            <CoinIcon symbol={topic.ticker} size={16} />
+          ) : topic.icon ? (
+            <TopicIcon kind={topic.icon} size={14} />
+          ) : (
+            <TopicIcon kind="spark" size={14} />
+          )}
+        </span>
+        <span className="flex-1 truncate">{topic.label}</span>
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onHide();
+        }}
+        aria-label={`Hide ${topic.label}`}
+        title={`Hide ${topic.label}`}
+        className={cn(
+          'shrink-0 inline-flex items-center justify-center h-6 w-6 mr-1 rounded-md',
+          'text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface)]',
+          'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
+          'transition-opacity duration-150',
+        )}
+      >
+        <svg width={9} height={9} viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" aria-hidden>
+          <path d="M1.5 1.5 L6.5 6.5 M6.5 1.5 L1.5 6.5" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Hidden-bucket row — muted styling and a quiet restore affordance on
+ * the right. Clicking the row body restores the topic back to its
+ * original section (does NOT auto-add to the bar — that would shortcut
+ * the add gesture and the user might just want to clean up). The
+ * restore icon makes the affordance discoverable on touch where hover
+ * doesn't fire.
+ */
+function HiddenTopicRow({
+  topic,
+  onRestore,
+}: {
+  topic: TopicSpec;
+  onRestore: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onRestore}
+      aria-label={`Restore ${topic.label}`}
+      title={`Restore ${topic.label}`}
+      className={cn(
+        'group w-full flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left',
+        'text-[12.5px] leading-[1.35] text-[var(--fg-3)]',
+        'opacity-70 hover:opacity-100',
+        'hover:bg-[var(--surface-2)] hover:text-[var(--fg-2)]',
+        'transition-[background-color,color,opacity] duration-150',
+      )}
+    >
+      <span aria-hidden className="inline-flex items-center justify-center shrink-0 w-5 h-5 text-[var(--fg-3)]">
+        {topic.ticker ? (
+          <CoinIcon symbol={topic.ticker} size={16} />
+        ) : topic.icon ? (
+          <TopicIcon kind={topic.icon} size={14} />
+        ) : (
+          <TopicIcon kind="spark" size={14} />
+        )}
+      </span>
+      <span className="flex-1 truncate">{topic.label}</span>
+      <span
+        aria-hidden
+        className="shrink-0 inline-flex items-center justify-center h-5 w-5 text-[var(--fg-3)] opacity-0 group-hover:opacity-100 transition-opacity"
+      >
+        <svg width={11} height={11} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M2 6a4 4 0 1 0 1.2-2.85" />
+          <path d="M2 1.5v2.5h2.5" />
+        </svg>
+      </span>
+    </button>
   );
 }
 
