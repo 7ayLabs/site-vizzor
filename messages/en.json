@@ -232,22 +232,49 @@
     "directory": {
       "meta": {
         "title": "Directory",
-        "description": "Skills, connectors, and plugins for your Vizzor account."
+        "description": "Skills and connectors for your Vizzor account."
       },
       "eyebrow": "Directory · Account",
-      "title": "Skills, connectors, plugins",
-      "body": "Extend your Vizzor account: activate prediction skills, wire predictions into your tools, and bring your own data sources. Telegram comes pre-installed once you pair your wallet.",
+      "title": "Skills and connectors",
+      "body": "Extend your Vizzor account: activate prediction skills and wire predictions into your tools. Telegram comes pre-installed once you pair your wallet.",
       "tabs": {
         "skill": "Skills",
+        "connector": "Connectors"
+      },
+      "filter": {
+        "top": "Top picks",
+        "skill": "Skills",
         "connector": "Connectors",
-        "plugin": "Plugins"
+        "pinned": "Pinned"
       },
       "search": {
-        "placeholder": "Search connectors…"
+        "placeholder": "Search skills and connectors…"
       },
       "section": {
         "vizzor_partners": "Vizzor & Partners",
-        "popular_for": "Popular for"
+        "popular_for": "Popular for",
+        "featured": {
+          "title": "Featured",
+          "subtitle": "The official Vizzor integrations the team keeps live."
+        },
+        "skills": {
+          "title": "Skills",
+          "subtitle": "Pick how Vizzor reasons. One active at a time."
+        },
+        "connectors": {
+          "title": "Connectors",
+          "subtitle": "Deliver predictions to the tools you already read."
+        }
+      },
+      "partnerTier": {
+        "vizzor": "By Vizzor",
+        "partner": "By partner",
+        "community": "By the community"
+      },
+      "state": {
+        "active": "Active",
+        "installed": "Installed",
+        "paired": "Paired"
       },
       "popular": {
         "predict": "Predict"
@@ -256,7 +283,17 @@
       "empty": {
         "skill": "No skills match that search.",
         "connector": "No connectors match that search.",
-        "plugin": "No plugins match that search."
+        "pinned": "No pinned items yet. Hit the pin on any card to add it.",
+        "top": "Nothing here yet.",
+        "noResults": "No matches."
+      },
+      "pin": {
+        "pin": "Pin to composer picker",
+        "unpin": "Unpin from composer picker",
+        "counter": "{used}/{max} pinned",
+        "counterTitle": "Up to {max} pins fit in the composer picker.",
+        "limitTitle": "Pin limit reached",
+        "limitBody": "Up to {max} items can sit in the composer picker. Unpin one first."
       },
       "card": {
         "popular_rank": "popular",
@@ -282,9 +319,6 @@
           "generic": "Install failed. Try again in a moment.",
           "install_failed": "Install failed. Try again in a moment.",
           "tier_required": "Available on a higher plan. Upgrade on /pricing — your wallet keeps everything else you have installed."
-        },
-        "notice": {
-          "reserved": "Your credential is encrypted at rest. The engine’s signal gatherers don’t read plugin overrides yet, so predictions won’t change until the next release."
         }
       },
       "manage": {
@@ -303,11 +337,7 @@
         },
         "connector": {
           "label": "Connector",
-          "summary": "Connectors deliver predictions where you read them — Discord, Slack, Telegram, or your own webhook."
-        },
-        "plugin": {
-          "label": "Plugin",
-          "summary": "Plugins augment the data Vizzor sees. Reserved for the next release — installs are stored but predictions still use the engine’s default data sources today."
+          "summary": "Connectors deliver predictions where you read them — Discord, Telegram, Nostr, Farcaster, or MCP."
         }
       },
       "action": {
@@ -322,10 +352,14 @@
           "pair": "Pair",
           "paired": "Paired"
         }
-      },
-      "badge": {
-        "reserved": "Reserved"
       }
+    },
+    "mobileNav": {
+      "openMenu": "Open menu",
+      "closeMenu": "Close menu",
+      "navLabel": "App navigation",
+      "home": "Vizzor home",
+      "connectWallet": "Connect"
     }
   },
   "auth": {
@@ -712,15 +746,19 @@
         "triggerDisabled": "Sign in to open the Directory",
         "section": {
           "skill": "Skills",
-          "connector": "Connectors",
-          "plugin": "Plugins"
+          "connector": "Connectors"
         },
         "manage": "Open Directory",
-        "reserved": "Soon",
+        "search": {
+          "placeholder": "Search…"
+        },
+        "pin": "Pin to picker",
+        "unpin": "Unpin from picker",
         "empty": {
-          "skill": "No skills.",
-          "connector": "No connectors.",
-          "plugin": "No plugins."
+          "skill": "No pinned skills yet.",
+          "connector": "No pinned connectors yet.",
+          "noResults": "No matches.",
+          "cta": "Open Directory to pin"
         }
       }
     },

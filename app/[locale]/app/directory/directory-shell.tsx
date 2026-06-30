@@ -3,41 +3,51 @@
 /**
  * DirectoryShell — `/app/directory` client island.
  *
- * Three tabs (Skills / Connectors / Plugins) over a category-aware card
- * grid. Each category has a different install/activate contract, and
- * the UI reflects that instead of forcing every entry through a generic
- * "+" button:
+ * Information architecture borrows from ChatGPT's "Explore" surface:
+ *   1. Header: title + search top-right.
+ *   2. Filter pill bar (Top picks / Skills / Conectores / Pinned) +
+ *      pin-counter chip on the right.
+ *   3. Top picks (default): a Featured 2x2 grid of the official Vizzor
+ *      integrations, then a numbered ranked list of every Skill, then
+ *      a numbered ranked list of every Connector.
+ *   4. Any non-default filter (or a non-empty search) collapses the
+ *      sectioned view into a single grid.
  *
- *   - Skills are single-select. Clicking activates one and deactivates
- *     any other — the catalog's `active_skill` flag drives a teal ring
- *     and the action button toggles between "Set as active" and
- *     "● Active". Activation is a `PATCH /api/directory/skills/active`,
- *     no install flow.
+ * Per-card interactions are unchanged from v0.4.1:
+ *   - Skills are single-select. The active skill gets a teal hairline
+ *     ring + an "Activa" status pill in the footer. Clicking toggles
+ *     activation (PATCH /api/directory/skills/active).
+ *   - Connectors are multi-install. Telegram is the "internal" kind
+ *     and deep-links to /account#integrations. Anything else opens the
+ *     InstallSheet for credential entry.
+ *   - Every card carries a pin button (top-right). Pins surface in the
+ *     composer "+" picker. Hard cap: MAX_PINNED_ITEMS per wallet.
  *
- *   - Connectors are multi-install. `Install` opens the side sheet with
- *     a URL field; once installed, the card swaps to `Installed` +
- *     `Remove`. Telegram is special — it has its own pair flow, so the
- *     card links to `/account#integrations` with copy that says "Pair"
- *     / "Paired", not "Install" / "Installed".
- *
- *   - Plugins are multi-install too, but the engine's signal gatherers
- *     don't read the plugin registry yet (see runbook). To avoid
- *     telling users their predictions are influenced when they're not,
- *     plugin cards carry a `Reserved` badge and the install sheet
- *     surfaces a notice. The install flow still runs end-to-end so
- *     credentials are encrypted and ready when the engine catches up.
- *
- * SWR-fetches `/api/directory/catalog`; the cache is mutated after
- * every state change so the card flips without a page reload.
+ * SWR-fetches /api/directory/catalog; the cache is mutated after every
+ * state change so cards flip without a page reload.
  */
 
-import { useMemo, useState, useTransition } from 'react';
+import {
+  useMemo,
+  useState,
+  useTransition,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { useTranslations } from 'next-intl';
-import { Search } from 'lucide-react';
+import { Pin, Search } from 'lucide-react';
+import { toast } from 'sonner';
 import { InstallSheet, type InstallTarget } from './install-sheet';
 
-type Category = 'skill' | 'connector' | 'plugin';
+// Keep in sync with MAX_PINNED_ITEMS in lib/directory/runtime.ts. The
+// runtime constant is the source of truth (server-side gate); this
+// copy is for the UI affordance only.
+const MAX_PINNED_ITEMS = 5;
+
+type Category = 'skill' | 'connector';
+type Filter = 'top' | 'skill' | 'connector' | 'pinned';
+
+const FILTERS: ReadonlyArray<Filter> = ['top', 'skill', 'connector', 'pinned'];
 
 interface ConfigField {
   name: string;
@@ -58,6 +68,7 @@ interface HydratedEntry {
   category: Category;
   icon: string;
   summary: string;
+  popular_rank: number;
   partner_tier: 'vizzor' | 'partner' | 'community';
   install_kind: 'internal' | 'webhook' | 'apikey' | 'skill';
   status_text?: string;
@@ -66,6 +77,9 @@ interface HydratedEntry {
   installed: boolean;
   install_id: string | null;
   active_skill: boolean;
+  pinned: boolean;
+  locked: boolean;
+  required_tier: 'free' | 'pro' | 'elite';
 }
 
 interface CatalogResponse {
@@ -74,7 +88,6 @@ interface CatalogResponse {
 }
 
 const CATALOG_URL = '/api/directory/catalog';
-const CATEGORIES: ReadonlyArray<Category> = ['skill', 'connector', 'plugin'];
 
 const fetcher = async (url: string): Promise<CatalogResponse> => {
   const res = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
@@ -84,7 +97,7 @@ const fetcher = async (url: string): Promise<CatalogResponse> => {
 
 export function DirectoryShell() {
   const t = useTranslations('app.directory');
-  const [tab, setTab] = useState<Category>('skill');
+  const [filter, setFilter] = useState<Filter>('top');
   const [query, setQuery] = useState('');
   const [installTarget, setInstallTarget] = useState<InstallTarget | null>(null);
   const [, startTransition] = useTransition();
@@ -94,27 +107,61 @@ export function DirectoryShell() {
   });
 
   const entries = data?.entries ?? [];
+  const pinnedCount = useMemo(
+    () => entries.reduce((n, e) => (e.pinned ? n + 1 : n), 0),
+    [entries],
+  );
+  const atPinCap = pinnedCount >= MAX_PINNED_ITEMS;
 
-  // Sort: active skill first, then installed, then alphabetical. Drops
-  // the popular_rank vanity — the user cares which one is doing
-  // something for them right now, not what marketing thinks is hot.
-  const filtered = useMemo(() => {
+  // Substring match on name + summary, case-insensitive. Empty query
+  // is the identity filter — sectioned view stays intact.
+  const matchesQuery = (entry: HydratedEntry): boolean => {
     const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      entry.name.toLowerCase().includes(q) ||
+      entry.summary.toLowerCase().includes(q)
+    );
+  };
+
+  // Sectioned dataset (Top picks). Each section pulls from the same
+  // queried set so a search narrows everything in lockstep.
+  const featured = useMemo<HydratedEntry[]>(() => {
     return entries
-      .filter((e) => e.category === tab)
-      .filter((e) => {
-        if (!q) return true;
-        return (
-          e.name.toLowerCase().includes(q) ||
-          e.summary.toLowerCase().includes(q)
-        );
-      })
-      .sort((a, b) => {
-        if (a.active_skill !== b.active_skill) return a.active_skill ? -1 : 1;
-        if (a.installed !== b.installed) return a.installed ? -1 : 1;
-        return a.name.localeCompare(b.name);
-      });
-  }, [entries, tab, query]);
+      .filter(matchesQuery)
+      .filter((e) => e.partner_tier === 'vizzor')
+      .sort((a, b) => a.popular_rank - b.popular_rank)
+      .slice(0, 4);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries, query]);
+
+  const rankedSkills = useMemo<HydratedEntry[]>(() => {
+    return entries
+      .filter(matchesQuery)
+      .filter((e) => e.category === 'skill')
+      .sort((a, b) => a.popular_rank - b.popular_rank);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries, query]);
+
+  const rankedConnectors = useMemo<HydratedEntry[]>(() => {
+    return entries
+      .filter(matchesQuery)
+      .filter((e) => e.category === 'connector')
+      .sort((a, b) => a.popular_rank - b.popular_rank);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries, query]);
+
+  // Single-grid datasets used when a non-default filter is active OR
+  // when the user is searching (sectioned view feels noisy under a
+  // query — flatten it).
+  const flatVisible = useMemo<HydratedEntry[]>(() => {
+    const base = entries.filter(matchesQuery);
+    if (filter === 'pinned') return base.filter((e) => e.pinned);
+    if (filter === 'skill') return base.filter((e) => e.category === 'skill');
+    if (filter === 'connector') return base.filter((e) => e.category === 'connector');
+    return base;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries, query, filter]);
 
   async function setActiveSkill(skillId: string | null) {
     await fetch('/api/directory/skills/active', {
@@ -134,10 +181,62 @@ export function DirectoryShell() {
     mutate(CATALOG_URL);
   }
 
+  async function togglePin(entry: HydratedEntry) {
+    const next = !entry.pinned;
+    if (next && atPinCap) {
+      toast.error(t('pin.limitTitle'), {
+        description: t('pin.limitBody', { max: MAX_PINNED_ITEMS }),
+      });
+      return;
+    }
+    mutate(
+      CATALOG_URL,
+      (prev: CatalogResponse | undefined) =>
+        prev
+          ? {
+              ...prev,
+              entries: prev.entries.map((e) =>
+                e.id === entry.id ? { ...e, pinned: next } : e,
+              ),
+            }
+          : prev,
+      { revalidate: false },
+    );
+    try {
+      const res = await fetch('/api/directory/pinned', {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ item_id: entry.id, pinned: next }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as
+          | { reason?: string; limit?: number }
+          | null;
+        if (body?.reason === 'pin_limit_reached') {
+          toast.error(t('pin.limitTitle'), {
+            description: t('pin.limitBody', {
+              max: body.limit ?? MAX_PINNED_ITEMS,
+            }),
+          });
+        }
+      }
+    } finally {
+      mutate(CATALOG_URL);
+    }
+  }
+
   function onAction(entry: HydratedEntry) {
+    if (entry.locked) {
+      const locale =
+        typeof window !== 'undefined'
+          ? window.location.pathname.split('/')[1] || 'en'
+          : 'en';
+      window.location.href = `/${locale}/pricing`;
+      return;
+    }
     if (entry.category === 'skill') {
-      // Single-select toggle. Tapping the active skill clears it; the
-      // engine then falls back to default reasoning on the next predict.
+      // Single-select toggle. Tapping the active skill clears it.
       startTransition(() => {
         void setActiveSkill(entry.active_skill ? null : entry.id);
       });
@@ -151,6 +250,12 @@ export function DirectoryShell() {
       window.location.href = `/${locale}/account#integrations`;
       return;
     }
+    if (entry.installed && entry.install_id) {
+      // Already installed → manage = uninstall, exposed inline on the
+      // card's status pill so the card body click stays a no-op for
+      // the safety-rail case (avoid an accidental uninstall on click).
+      return;
+    }
     setInstallTarget({
       connectorId: entry.id,
       name: entry.name,
@@ -159,66 +264,165 @@ export function DirectoryShell() {
     });
   }
 
+  const cardHandlers = {
+    onAction,
+    onTogglePin: togglePin,
+    onUninstall: (entry: HydratedEntry) =>
+      entry.install_id && void uninstall(entry.install_id),
+    pinDisabledFor: (entry: HydratedEntry) => !entry.pinned && atPinCap,
+  };
+
+  const showSectioned = filter === 'top' && query.trim().length === 0;
+
   return (
     <>
-      {/* Tab strip — horizontal, underlined. */}
-      <div className="border-b border-[var(--border)] mb-6">
-        <nav className="flex gap-6" aria-label={t('nav.label')}>
-          {CATEGORIES.map((key) => {
-            const active = tab === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setTab(key)}
-                aria-current={active ? 'page' : undefined}
-                className={`relative px-1 pb-3 text-[13px] transition-colors ${
-                  active
-                    ? 'text-[var(--fg)] font-medium'
-                    : 'text-[var(--fg-3)] hover:text-[var(--fg-2)]'
-                }`}
-              >
-                {t(`tabs.${key}`)}
-                {active && (
-                  <span className="absolute left-0 right-0 -bottom-px h-px bg-[var(--fg)]" />
-                )}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-
-      {/* One-line category description + search. */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
-        <p className="text-[13px] text-[var(--fg-2)] leading-relaxed flex-1">
-          {t(`category.${tab}.summary`)}
-        </p>
-        <label className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 w-full sm:w-[240px] shrink-0 focus-within:border-[var(--fg-3)]">
-          <Search size={13} className="text-[var(--fg-3)] shrink-0" strokeWidth={1.75} />
+      {/* Header — title block left, search top-right. The search field
+          carries weight by sitting alone on the right edge; on mobile
+          it stacks below the title block. */}
+      <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-8">
+        <div className="max-w-[64ch]">
+          <p className="mono tabular text-[10.5px] uppercase tracking-[0.18em] text-[var(--accent)]">
+            {t('eyebrow')}
+          </p>
+          <h1 className="mt-1 display text-[28px] sm:text-[32px] leading-tight tracking-tight font-semibold text-[var(--fg)]">
+            {t('title')}
+          </h1>
+          <p className="mt-3 text-[14px] leading-relaxed text-[var(--fg-2)]">
+            {t('body')}
+          </p>
+        </div>
+        <label className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-4 py-2 w-full md:w-[300px] shrink-0 focus-within:border-[var(--fg-3)] transition-colors">
+          <Search
+            size={14}
+            strokeWidth={1.75}
+            className="text-[var(--fg-3)] shrink-0"
+            aria-hidden
+          />
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t('search.placeholder')}
-            className="flex-1 bg-transparent text-[12px] text-[var(--fg)] outline-none placeholder:text-[var(--fg-3)]"
+            aria-label={t('search.placeholder')}
+            className="flex-1 min-w-0 bg-transparent text-[13px] text-[var(--fg)] outline-none placeholder:text-[var(--fg-3)]"
           />
         </label>
+      </header>
+
+      {/* Filter pills + pin counter. The active pill mirrors the user
+          bubble's solid-fg fill so it reads as "currently focused". */}
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+        <nav
+          className="flex flex-wrap items-center gap-2"
+          aria-label={t('nav.label')}
+        >
+          {FILTERS.map((key) => {
+            const active = filter === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setFilter(key)}
+                aria-pressed={active}
+                className={`inline-flex items-center h-9 px-4 rounded-full text-[12.5px] font-medium transition-colors ${
+                  active
+                    ? 'bg-[var(--fg)] text-[var(--bg)]'
+                    : 'bg-[var(--surface)] text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]'
+                }`}
+              >
+                {t(`filter.${key}`)}
+              </button>
+            );
+          })}
+        </nav>
+        <span
+          className={`inline-flex items-center gap-1.5 mono tabular text-[10.5px] uppercase tracking-[0.14em] shrink-0 ${
+            atPinCap ? 'text-[var(--accent)]' : 'text-[var(--fg-3)]'
+          }`}
+          title={t('pin.counterTitle', { max: MAX_PINNED_ITEMS })}
+        >
+          <Pin
+            size={11}
+            strokeWidth={atPinCap ? 2.25 : 1.75}
+            className={atPinCap ? 'fill-current' : ''}
+            aria-hidden
+          />
+          {t('pin.counter', { used: pinnedCount, max: MAX_PINNED_ITEMS })}
+        </span>
       </div>
 
       {isLoading ? (
         <p className="text-[13px] text-[var(--fg-3)]">{t('loading')}</p>
-      ) : filtered.length === 0 ? (
-        <p className="text-[13px] text-[var(--fg-3)]">{t(`empty.${tab}`)}</p>
+      ) : showSectioned ? (
+        <div className="flex flex-col gap-12">
+          {featured.length > 0 && (
+            <Section
+              title={t('section.featured.title')}
+              subtitle={t('section.featured.subtitle')}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {featured.map((entry) => (
+                  <FeaturedCard
+                    key={entry.id}
+                    entry={entry}
+                    {...cardHandlers}
+                    pinDisabled={cardHandlers.pinDisabledFor(entry)}
+                  />
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {rankedSkills.length > 0 && (
+            <Section
+              title={t('section.skills.title')}
+              subtitle={t('section.skills.subtitle')}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
+                {rankedSkills.map((entry, idx) => (
+                  <RankedRow
+                    key={entry.id}
+                    rank={idx + 1}
+                    entry={entry}
+                    {...cardHandlers}
+                    pinDisabled={cardHandlers.pinDisabledFor(entry)}
+                  />
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {rankedConnectors.length > 0 && (
+            <Section
+              title={t('section.connectors.title')}
+              subtitle={t('section.connectors.subtitle')}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
+                {rankedConnectors.map((entry, idx) => (
+                  <RankedRow
+                    key={entry.id}
+                    rank={idx + 1}
+                    entry={entry}
+                    {...cardHandlers}
+                    pinDisabled={cardHandlers.pinDisabledFor(entry)}
+                  />
+                ))}
+              </div>
+            </Section>
+          )}
+        </div>
+      ) : flatVisible.length === 0 ? (
+        <p className="text-[13px] text-[var(--fg-3)]">
+          {query.trim() ? t('empty.noResults') : t(`empty.${filter}`)}
+        </p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-          {filtered.map((entry) => (
-            <EntryCard
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {flatVisible.map((entry) => (
+            <FeaturedCard
               key={entry.id}
               entry={entry}
-              onAction={() => onAction(entry)}
-              onUninstall={() =>
-                entry.install_id && void uninstall(entry.install_id)
-              }
+              {...cardHandlers}
+              pinDisabled={cardHandlers.pinDisabledFor(entry)}
             />
           ))}
         </div>
@@ -236,127 +440,294 @@ export function DirectoryShell() {
   );
 }
 
-interface CardProps {
-  entry: HydratedEntry;
-  onAction: () => void;
-  onUninstall: () => void;
+/* ──────────────────────── section header ──────────────────────── */
+
+function Section({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-4">
+      <header>
+        <h2 className="display text-[22px] sm:text-[24px] leading-tight tracking-tight font-semibold text-[var(--fg)]">
+          {title}
+        </h2>
+        <p className="mt-1 text-[13px] text-[var(--fg-3)] leading-relaxed">
+          {subtitle}
+        </p>
+      </header>
+      {children}
+    </section>
+  );
 }
 
-function EntryCard({ entry, onAction, onUninstall }: CardProps) {
-  const t = useTranslations('app.directory');
+/* ──────────────────────── card primitives ──────────────────────── */
 
-  // Active skills get the only visible accent — a teal hairline ring.
-  // Everything else stays neutral so the eye lands on whichever skill
-  // is currently shaping reasoning.
+interface CardHandlers {
+  onAction: (entry: HydratedEntry) => void;
+  onTogglePin: (entry: HydratedEntry) => void | Promise<void>;
+  onUninstall: (entry: HydratedEntry) => void;
+}
+
+interface CardCommonProps extends CardHandlers {
+  entry: HydratedEntry;
+  pinDisabled?: boolean;
+}
+
+/**
+ * FeaturedCard — large 2-col card used in the Featured grid and as the
+ * flat fallback when a single filter is active. Icon left, identity +
+ * description + footer stacked.
+ */
+function FeaturedCard({
+  entry,
+  onAction,
+  onTogglePin,
+  onUninstall,
+  pinDisabled = false,
+}: CardCommonProps) {
+  const t = useTranslations('app.directory');
   const ringClass = entry.active_skill
     ? 'border-[var(--accent)] shadow-[inset_0_0_0_1px_var(--accent)]'
     : 'border-[var(--border)]';
 
   return (
     <article
-      className={`flex flex-col gap-3 rounded-xl border bg-[var(--surface)] p-4 transition-colors ${ringClass}`}
+      onClick={() => onAction(entry)}
+      className={`relative flex items-start gap-4 rounded-xl border bg-[var(--surface)] p-4 cursor-pointer transition-colors hover:bg-[color-mix(in_oklab,var(--surface)_80%,var(--surface-2))] ${ringClass}`}
     >
-      <header className="flex items-start gap-3">
-        <EntryIcon icon={entry.icon} name={entry.name} />
-        <div className="flex-1 min-w-0">
-          <h3 className="text-[13.5px] font-semibold text-[var(--fg)] truncate leading-tight">
-            {entry.name}
-          </h3>
-          {entry.category === 'plugin' && (
-            <span className="inline-block mt-1 text-[9.5px] uppercase tracking-[0.14em] text-[var(--fg-3)] border border-[var(--border)] rounded-sm px-1.5 py-0.5">
-              {t('badge.reserved')}
-            </span>
-          )}
-        </div>
-      </header>
-      <p className="text-[12.5px] leading-snug text-[var(--fg-2)] line-clamp-2">
-        {entry.summary}
-      </p>
-      <EntryAction entry={entry} onAction={onAction} onUninstall={onUninstall} />
+      <CircleIcon icon={entry.icon} name={entry.name} size={44} />
+      <div className="flex-1 min-w-0 pr-9">
+        <h3 className="text-[14px] font-semibold text-[var(--fg)] leading-tight truncate">
+          {entry.name}
+        </h3>
+        <p className="mt-1 text-[12.5px] leading-snug text-[var(--fg-2)] line-clamp-2">
+          {entry.summary}
+        </p>
+        <CardFooter entry={entry} onUninstall={() => onUninstall(entry)} />
+      </div>
+      <PinButton
+        entry={entry}
+        disabled={pinDisabled}
+        onToggle={(e) => {
+          e.stopPropagation();
+          void onTogglePin(entry);
+        }}
+        labels={{
+          pin: t('pin.pin'),
+          unpin: t('pin.unpin'),
+          limitTitle: t('pin.limitTitle'),
+        }}
+      />
     </article>
   );
 }
 
-function EntryAction({ entry, onAction, onUninstall }: CardProps) {
+/**
+ * RankedRow — compact numbered list item used in the Skills /
+ * Connectors sections. Rank number left, then icon, then name +
+ * summary + footer. Borderless rows lean on the section header for
+ * grouping so the list reads as a single thing instead of N cards.
+ */
+function RankedRow({
+  rank,
+  entry,
+  onAction,
+  onTogglePin,
+  onUninstall,
+  pinDisabled = false,
+}: CardCommonProps & { rank: number }) {
   const t = useTranslations('app.directory');
-
-  if (entry.category === 'skill') {
-    const active = entry.active_skill;
-    return (
-      <button
-        type="button"
-        onClick={onAction}
-        aria-pressed={active}
-        className={`self-start text-[12px] rounded-md px-3 py-1.5 font-medium active:scale-[0.97] transition-all duration-150 ${
-          active
-            ? 'bg-[var(--accent)] text-black hover:opacity-90'
-            : 'bg-[var(--surface-2)] text-[var(--fg-2)] hover:bg-[var(--surface-3)] hover:text-[var(--fg)]'
-        }`}
+  return (
+    <article
+      onClick={() => onAction(entry)}
+      className={`relative flex items-start gap-3 rounded-lg px-2 py-3 cursor-pointer transition-colors hover:bg-[var(--surface-2)] ${
+        entry.active_skill ? 'bg-[color-mix(in_oklab,var(--accent)_8%,transparent)]' : ''
+      }`}
+    >
+      <span
+        aria-hidden
+        className="mono tabular text-[14px] tracking-tight text-[var(--fg-3)] w-5 text-right shrink-0 pt-2 leading-none"
       >
-        {active ? t('action.skill.active') : t('action.skill.activate')}
-      </button>
-    );
-  }
-
-  if (entry.install_kind === 'internal') {
-    return (
-      <button
-        type="button"
-        onClick={onAction}
-        className="self-start text-[12px] rounded-md px-3 py-1.5 bg-[var(--surface-2)] text-[var(--fg-2)] hover:bg-[var(--surface-3)] hover:text-[var(--fg)] active:scale-[0.97] transition-all duration-150"
-      >
-        {entry.installed
-          ? t('action.internal.paired')
-          : t('action.internal.pair')}
-      </button>
-    );
-  }
-
-  if (entry.installed) {
-    return (
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] uppercase tracking-[0.14em] text-[var(--accent)]">
-          {t('action.installed')}
-        </span>
-        <button
-          type="button"
-          onClick={onUninstall}
-          className="text-[12px] text-[var(--fg-3)] hover:text-[var(--fg)] transition-colors"
-        >
-          {t('action.remove')}
-        </button>
+        {rank}
+      </span>
+      <CircleIcon icon={entry.icon} name={entry.name} size={40} />
+      <div className="flex-1 min-w-0 pr-9">
+        <h3 className="text-[13.5px] font-semibold text-[var(--fg)] leading-tight truncate">
+          {entry.name}
+        </h3>
+        <p className="mt-0.5 text-[12px] leading-snug text-[var(--fg-2)] line-clamp-2">
+          {entry.summary}
+        </p>
+        <CardFooter entry={entry} onUninstall={() => onUninstall(entry)} />
       </div>
+      <PinButton
+        entry={entry}
+        disabled={pinDisabled}
+        onToggle={(e) => {
+          e.stopPropagation();
+          void onTogglePin(entry);
+        }}
+        labels={{
+          pin: t('pin.pin'),
+          unpin: t('pin.unpin'),
+          limitTitle: t('pin.limitTitle'),
+        }}
+      />
+    </article>
+  );
+}
+
+/**
+ * Footer strip — "Por {partner_tier} · {status}". GPT shows "By X"
+ * attribution; we extend that with the per-entry state (Activa,
+ * Instalado, locked-tier badge) so the card carries its own status
+ * without a separate action button.
+ */
+function CardFooter({
+  entry,
+  onUninstall,
+}: {
+  entry: HydratedEntry;
+  onUninstall: () => void;
+}) {
+  const t = useTranslations('app.directory');
+  const attribution = t(`partnerTier.${entry.partner_tier}`);
+
+  let status: React.ReactNode = null;
+  if (entry.locked) {
+    status = (
+      <span className="inline-flex items-center text-[10.5px] uppercase tracking-[0.12em] text-[var(--fg-3)] border border-[var(--border)] rounded-sm px-1 py-px">
+        {entry.required_tier}
+      </span>
     );
+  } else if (entry.active_skill) {
+    status = (
+      <span className="inline-flex items-center gap-1 text-[11px] text-[var(--accent)]">
+        <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
+        {t('state.active')}
+      </span>
+    );
+  } else if (entry.installed && entry.category === 'connector') {
+    if (entry.install_kind === 'internal') {
+      status = (
+        <span className="text-[11px] text-[var(--accent)]">
+          {t('state.paired')}
+        </span>
+      );
+    } else {
+      status = (
+        <span className="flex items-center gap-2 text-[11px]">
+          <span className="text-[var(--accent)]">{t('state.installed')}</span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onUninstall();
+            }}
+            className="text-[var(--fg-3)] hover:text-[var(--fg)] transition-colors underline-offset-2 hover:underline"
+          >
+            {t('action.remove')}
+          </button>
+        </span>
+      );
+    }
   }
 
   return (
+    <div className="mt-2 flex items-center gap-2 text-[11px] text-[var(--fg-3)]">
+      <span>{attribution}</span>
+      {status && (
+        <>
+          <span aria-hidden className="text-[var(--fg-3)]/60">·</span>
+          {status}
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ──────────────────────── shared atoms ──────────────────────── */
+
+function PinButton({
+  entry,
+  disabled,
+  onToggle,
+  labels,
+}: {
+  entry: HydratedEntry;
+  disabled: boolean;
+  onToggle: (e: ReactMouseEvent<HTMLButtonElement>) => void;
+  labels: { pin: string; unpin: string; limitTitle: string };
+}) {
+  if (entry.locked) return null;
+  const aria = disabled ? labels.limitTitle : entry.pinned ? labels.unpin : labels.pin;
+  return (
     <button
       type="button"
-      onClick={onAction}
-      className="self-start text-[12px] rounded-md px-3 py-1.5 bg-[var(--surface-2)] text-[var(--fg-2)] hover:bg-[var(--surface-3)] hover:text-[var(--fg)] active:scale-[0.97] transition-all duration-150"
+      onClick={onToggle}
+      disabled={disabled}
+      aria-pressed={entry.pinned}
+      aria-label={aria}
+      title={aria}
+      className={`absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+        entry.pinned
+          ? 'text-[var(--accent)] hover:bg-[var(--surface-2)]'
+          : disabled
+            ? 'text-[var(--fg-3)]/40 cursor-not-allowed'
+            : 'text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)]'
+      }`}
     >
-      {t('action.install')}
+      <Pin
+        size={13}
+        strokeWidth={entry.pinned ? 2.25 : 1.75}
+        className={entry.pinned ? 'fill-current' : ''}
+        aria-hidden
+      />
     </button>
   );
 }
 
-function EntryIcon({ icon, name }: { icon: string; name: string }) {
+/**
+ * CircleIcon — round mask matches GPT's icon treatment. The image
+ * fills the circle; the first letter of the entry name sits behind as
+ * a fallback so a missing SVG never leaves an empty disc.
+ */
+function CircleIcon({
+  icon,
+  name,
+  size,
+}: {
+  icon: string;
+  name: string;
+  size: number;
+}) {
   return (
     <span
       aria-hidden
-      className="relative inline-flex items-center justify-center w-8 h-8 rounded-lg bg-[var(--surface-2)] text-[var(--fg-2)] text-[11px] font-medium shrink-0 overflow-hidden"
+      style={{ width: size, height: size }}
+      className="relative inline-flex items-center justify-center rounded-full bg-[var(--surface-2)] text-[var(--fg-2)] shrink-0 overflow-hidden"
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={icon}
         alt=""
-        className="w-5 h-5"
+        className="absolute inset-0 m-auto"
+        style={{ width: Math.round(size * 0.6), height: Math.round(size * 0.6) }}
         onError={(e) => {
           (e.currentTarget as HTMLImageElement).style.display = 'none';
         }}
       />
-      <span className="absolute inset-0 -z-10 flex items-center justify-center">
-        {name.charAt(0)}
+      <span
+        className="absolute inset-0 flex items-center justify-center font-medium"
+        style={{ fontSize: Math.round(size * 0.4) }}
+      >
+        {name.charAt(0).toUpperCase()}
       </span>
     </span>
   );
