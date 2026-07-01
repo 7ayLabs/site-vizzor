@@ -825,6 +825,69 @@
     to   { opacity: 1; transform: translateY(0); }
   }
 
+  @keyframes vz-ticker-pulse {
+    0%, 100% { opacity: 0.85; }
+    50%      { opacity: 1; }
+  }
+
+  /* Composer ticker — settled pill once the symbol completes + a
+     whitespace lands. `padding-left` reserves space for the CoinIcon
+     that sits absolute-positioned inside the pill (see .vz-ticker-
+     icon-reveal). The pill visually widens by that padding amount,
+     which slightly offsets the caret's landing point vs. the pill's
+     visual end — that's the accepted trade-off so the ticker text
+     doesn't collide with the icon or the preceding word.
+     Both padding-left AND background fill animate together, so text
+     shifts right while the icon fades in on the newly-freed space. */
+  .vz-ticker-pill {
+    background: color-mix(in oklab, var(--accent) 16%, transparent);
+    color: var(--accent);
+    font-weight: 600;
+    border-radius: 6px;
+    padding-left: 18px;
+    padding-right: 4px;
+    animation: vz-ticker-settle 260ms cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+  }
+  @keyframes vz-ticker-settle {
+    from {
+      background: color-mix(in oklab, var(--accent) 0%, transparent);
+      padding-left: 2px;
+      padding-right: 0;
+      transform: translateY(1px);
+    }
+    to {
+      background: color-mix(in oklab, var(--accent) 16%, transparent);
+      padding-left: 18px;
+      padding-right: 4px;
+      transform: translateY(0);
+    }
+  }
+
+  /* Active ticker also gets the padding-left so the icon has room to
+     ride at the leftmost position while the user is still typing `$X…`
+     before the confirming whitespace. */
+  .vz-ticker-active {
+    color: var(--accent);
+    font-weight: 600;
+    padding-left: 18px;
+    padding-right: 2px;
+    border-radius: 6px;
+    animation: vz-ticker-pulse 1.4s ease-in-out infinite;
+  }
+
+  /* CoinIcon reveal — plays whenever a recognized ticker's icon
+     first mounts in the composer overlay. Small pop + fade from
+     rotated so the icon feels stamped-in rather than snapped-in. */
+  .vz-ticker-icon-reveal {
+    animation: vz-ticker-icon-reveal 320ms cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+    transform-origin: center;
+  }
+  @keyframes vz-ticker-icon-reveal {
+    from { opacity: 0; transform: scale(0.5) rotate(-40deg); }
+    60%  { opacity: 1; transform: scale(1.08) rotate(4deg); }
+    to   { opacity: 1; transform: scale(1) rotate(0deg); }
+  }
+
   /* Sparkle for the wallet-gate icon — slow pulse + tiny rotate. */
   .vz-sparkle {
     animation: vz-sparkle 2.8s ease-in-out infinite;

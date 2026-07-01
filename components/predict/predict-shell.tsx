@@ -47,7 +47,10 @@ import { TOP_20, TOP_20_BY_SYMBOL } from '@/lib/coin-meta';
 import type { TickerEntry } from '@/lib/types';
 import { useTicker, useExtraTickers } from '@/lib/api';
 import { ChatBubble } from '@/components/predict/chat-bubble';
-import type { InlineTickerChipEntry } from '@/components/predict/inline-ticker-chip';
+import {
+  renderTextWithInlineCoinIcons,
+  type InlineTickerChipEntry,
+} from '@/components/predict/inline-ticker-chip';
 import { DirectoryPicker } from '@/components/predict/directory-picker';
 import { CoinIcon } from '@/components/ui/coin-icon';
 import { Link } from '@/i18n/navigation';
@@ -310,6 +313,77 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
     return m;
   }, [ticker.data, extraTickers]);
 
+  // Recognized tickers + name aliases used by the composer's auto-pill
+  // detector below. Includes TOP_20 symbols + friendly names + the
+  // TICKER_NAME_MAP aliases + every live engine-known symbol from the
+  // current ticker set. Built once per ticker-data change so the
+  // detector hot path stays O(1).
+  const knownTickerSet = useMemo(() => {
+    const symbols = new Set<string>();
+    const aliasToSymbol = new Map<string, string>();
+    for (const [name, sym] of Object.entries(TICKER_NAME_MAP)) {
+      aliasToSymbol.set(name.toLowerCase(), sym);
+    }
+    for (const coin of TOP_20) {
+      symbols.add(coin.symbol);
+      aliasToSymbol.set(coin.symbol.toLowerCase(), coin.symbol);
+      aliasToSymbol.set(coin.name.toLowerCase(), coin.symbol);
+    }
+    for (const sym of tickerEntryBySymbol.keys()) {
+      symbols.add(sym);
+    }
+    return { symbols, aliasToSymbol };
+  }, [tickerEntryBySymbol]);
+
+  // Tickers typed into the textarea stay at their position in the
+  // prompt — the Composer overlay renders them as in-place styled
+  // pills. When the user types the space that CONFIRMS a ticker, we
+  // slip in two extra padding spaces so the caret's on-screen
+  // position lands at the pill's visual right edge (the pill visually
+  // widens by ~18px of padding to fit its icon; two extra spaces
+  // (~16px) closes that gap without polluting the outgoing message —
+  // submit collapses runs of whitespace back down to single spaces).
+  const onComposerInputChange = useCallback(
+    (newValue: string) => {
+      const prev = input;
+      const isFreshSpace =
+        newValue.length === prev.length + 1 &&
+        newValue.startsWith(prev) &&
+        newValue.endsWith(' ') &&
+        !prev.endsWith(' ');
+      if (!isFreshSpace) {
+        setInput(newValue);
+        return;
+      }
+      // Walk back to find the word that just got confirmed.
+      const beforeSpace = newValue.slice(0, -1);
+      const wordMatch = /(\S+)$/.exec(beforeSpace);
+      const word = wordMatch?.[1] ?? '';
+      const stripped = word.startsWith('$') ? word.slice(1) : word;
+      if (!/^[A-Za-z0-9]{2,11}$/.test(stripped)) {
+        setInput(newValue);
+        return;
+      }
+      const lower = stripped.toLowerCase();
+      const upper = stripped.toUpperCase();
+      const symbol =
+        knownTickerSet.aliasToSymbol.get(lower) ??
+        (knownTickerSet.symbols.has(upper) ? upper : null);
+      if (!symbol) {
+        setInput(newValue);
+        return;
+      }
+      // Confirmed ticker — inject four extra spaces so the textarea's
+      // caret metrics catch up to the pill's visual right edge. The
+      // pill's padding-left (18px) + padding-right (4px) totals ~22px
+      // of extra visual width; each space in the composer font
+      // measures ~4-5px, so four extra spaces (~20px) closes the gap
+      // without overshooting.
+      setInput(`${newValue}    `);
+    },
+    [input, knownTickerSet],
+  );
+
   // Deep-link hydration — when the page is /app/predict/[conversationId]
   // the server pre-loads the thread and passes it down. We seed useChat
   // exactly once on mount and prime persistedRef so the loaded rows are
@@ -352,6 +426,10 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
     }
   }, [messages]);
 
+  // Streaming-end scroll lives after the `isStreaming` derivation so
+  // we can read the flag. See the prevStreamingRef effect below.
+  const prevStreamingRef = useRef(false);
+
   // ⌘/Ctrl+K — global focus shortcut (Claude / Linear / GitHub
   // convention). Lands the caret in the composer from anywhere on the
   // page and opens the mobile drawer so the input is actually visible
@@ -368,6 +446,25 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
   }, []);
 
   const isStreaming = status === 'streaming' || status === 'submitted';
+
+  // Streaming-end scroll — when the response finishes, the assistant
+  // bubble re-renders to mount the action row (Copy + 👍 + 👎) BELOW
+  // the bubble. The `messages`-only scroll above runs in the same
+  // commit but doesn't always catch the newly-mounted action row in
+  // `scrollHeight`. Watch the streaming flag transition true→false
+  // and schedule a smooth scroll after the next paint so the user
+  // lands with the actions in view — no manual scroll needed to copy
+  // or react.
+  useEffect(() => {
+    if (prevStreamingRef.current && !isStreaming) {
+      requestAnimationFrame(() => {
+        const el = threadRef.current;
+        if (!el) return;
+        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      });
+    }
+    prevStreamingRef.current = isStreaming;
+  }, [isStreaming]);
   const isErrored = status === 'error';
 
   const submitPrompt = useCallback(
@@ -403,9 +500,13 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
     e.preventDefault();
     // Pills ride ahead of the typed text — sent as space-separated
     // tickers so the engine picks them up the same way it does when a
-    // user types "BTC ETH 4h" directly.
+    // user types "BTC ETH 4h" directly. The typed content is
+    // normalized: runs of whitespace collapse back to a single space
+    // (the caret-alignment injector inside the composer may have
+    // added a couple of padding spaces after confirmed tickers).
     const prefix = tokenPills.length > 0 ? `${tokenPills.join(' ')} ` : '';
-    submitPrompt(`${prefix}${input}`.trim());
+    const normalized = input.replace(/[ \t]{2,}/g, ' ');
+    submitPrompt(`${prefix}${normalized}`.trim());
   };
 
   const onNewChat = (): void => {
@@ -933,7 +1034,8 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
                 <Composer
                   inputRef={inputRef}
                   value={input}
-                  onChange={setInput}
+                  onChange={onComposerInputChange}
+                  knownTickerSet={knownTickerSet}
                   onSubmit={onSubmit}
                   onStop={stop}
                   isStreaming={isStreaming}
@@ -2118,6 +2220,7 @@ function Composer({
   signedIn,
   tokenPills,
   onRemovePill,
+  knownTickerSet,
 }: {
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   value: string;
@@ -2136,6 +2239,12 @@ function Composer({
    *  icon + symbol pills before the textarea. Cleared on submit. */
   tokenPills: ReadonlyArray<string>;
   onRemovePill: (symbol: string) => void;
+  /** Recognized tickers + name aliases. Used by the in-place pill
+   *  overlay to detect ticker words anywhere in the prompt. */
+  knownTickerSet: {
+    symbols: ReadonlySet<string>;
+    aliasToSymbol: ReadonlyMap<string, string>;
+  };
 }) {
   // The palette opens whenever the input starts with `/` and a space
   // hasn't been typed yet (i.e. the user is still naming the command).
@@ -2185,6 +2294,95 @@ function Composer({
 
   const hasValue = value.trim().length > 0 || tokenPills.length > 0;
   const canSend = hasValue && !isStreaming;
+
+  // Parse the textarea content into a flat array of styled segments:
+  // plain text, active-ticker (still being typed `$X…`), or settled
+  // pill (recognized token followed by whitespace). The overlay below
+  // renders these spans on top of a transparent-text textarea so the
+  // pill styling lands AT the typed position in the sentence — the
+  // caret + selection still belong to the textarea underneath.
+  const overlaySegments = useMemo(() => {
+    type Segment =
+      | { kind: 'text'; content: string }
+      | { kind: 'active'; content: string; symbol: string }
+      | { kind: 'pill'; content: string; symbol: string };
+    const tokens = value.split(/(\s+)/);
+    const out: Segment[] = [];
+    for (let i = 0; i < tokens.length; i++) {
+      const tok = tokens[i] ?? '';
+      if (tok.length === 0) continue;
+      if (/^\s+$/.test(tok)) {
+        // Collapse a whitespace run that follows a confirmed pill
+        // (the caret-alignment injector adds 4 extra spaces after
+        // ticker + user-typed space). Render only a single visible
+        // space here so the overlay text reads as fluid prose while
+        // the textarea's underlying width still houses the padding.
+        const prev = out[out.length - 1];
+        if (prev && (prev.kind === 'pill' || prev.kind === 'active') && tok.length > 1) {
+          out.push({ kind: 'text', content: ' ' });
+          continue;
+        }
+        out.push({ kind: 'text', content: tok });
+        continue;
+      }
+      const isCashtag = tok.startsWith('$');
+      const stripped = isCashtag ? tok.slice(1) : tok;
+      if (/^[A-Za-z0-9]{2,11}$/.test(stripped)) {
+        const lower = stripped.toLowerCase();
+        const upper = stripped.toUpperCase();
+        const symbol =
+          knownTickerSet.aliasToSymbol.get(lower) ??
+          (knownTickerSet.symbols.has(upper) ? upper : null);
+        if (symbol) {
+          const next = tokens[i + 1] ?? '';
+          const confirmed = /^\s+$/.test(next);
+          if (confirmed) {
+            out.push({ kind: 'pill', content: tok, symbol });
+            continue;
+          }
+          if (isCashtag) {
+            out.push({ kind: 'active', content: tok, symbol });
+            continue;
+          }
+        }
+      }
+      out.push({ kind: 'text', content: tok });
+    }
+    return out;
+  }, [value, knownTickerSet]);
+
+  // Sync the overlay's scroll with the textarea's. When the textarea
+  // overflows its 140px max-height and the user scrolls, the overlay
+  // has to ride along or the styled spans drift off the underlying
+  // text.
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const ta = inputRef.current;
+    const ov = overlayRef.current;
+    if (!ta || !ov) return;
+    const onScroll = () => {
+      ov.scrollTop = ta.scrollTop;
+    };
+    ta.addEventListener('scroll', onScroll);
+    return () => ta.removeEventListener('scroll', onScroll);
+  }, [inputRef]);
+
+  // Unique detected symbols — feeds the "detected tickers" strip
+  // below the composer. Icons live there so the reveal animation can
+  // play without widening the overlay pill (which would drop the
+  // caret mid-word). Order-preserving dedupe so the icons appear in
+  // the order the user typed them.
+  const detectedSymbols = useMemo(() => {
+    const seen = new Set<string>();
+    const list: string[] = [];
+    for (const seg of overlaySegments) {
+      if (seg.kind === 'text') continue;
+      if (seen.has(seg.symbol)) continue;
+      seen.add(seg.symbol);
+      list.push(seg.symbol);
+    }
+    return list;
+  }, [overlaySegments]);
 
   return (
     <form
@@ -2250,57 +2448,111 @@ function Composer({
         </div>
       )}
 
-      <textarea
-        ref={inputRef}
-        value={value}
-        onChange={(e) => onChange(e.target.value.slice(0, MAX_CHARS))}
-        onKeyDown={(e) => {
-          // ⌘/Ctrl + ↵ always submits, regardless of whether the
-          // palette is open — power-user shortcut that matches Claude
-          // / ChatGPT. Plain ↵ submits only when the palette is
-          // closed; with the palette open ↵ inserts the focused row
-          // (handled inside SlashPalette).
-          const cmdEnter = e.key === 'Enter' && (e.metaKey || e.ctrlKey);
-          if (cmdEnter) {
-            e.preventDefault();
-            e.currentTarget.form?.requestSubmit();
-            return;
-          }
-          // Backspace on an empty textarea pops the trailing pill —
-          // mirrors how chat clients let you delete @mentions.
-          if (
-            e.key === 'Backspace' &&
-            value.length === 0 &&
-            tokenPills.length > 0
-          ) {
-            e.preventDefault();
-            onRemovePill(tokenPills[tokenPills.length - 1]!);
-            return;
-          }
-          if (e.key === 'Enter' && !e.shiftKey) {
-            if (showPalette) return;
-            e.preventDefault();
-            e.currentTarget.form?.requestSubmit();
-          }
-        }}
-        placeholder={placeholder}
-        disabled={isStreaming}
-        rows={1}
-        aria-label={placeholder}
-        aria-expanded={showPalette}
-        aria-controls={showPalette ? 'predict-slash-palette' : undefined}
-        className={cn(
-          'flex-1 resize-none bg-transparent outline-none',
-          'text-[14px] text-[var(--fg)] leading-relaxed',
-          'placeholder:text-[var(--fg-3)] placeholder:transition-opacity placeholder:duration-200',
-          'focus:placeholder:opacity-60',
-          // px-1.5 keeps the caret off the focus ring; py-1.5 vertically
-          // centres single-line state with the send button.
-          'px-1.5 py-1.5 min-w-0',
-          'max-h-[140px] overflow-y-auto',
-          'transition-[height] duration-150 ease-out',
-        )}
-      />
+      {/* Editable wrapper — uses CSS Grid so the textarea and the
+          in-place pill overlay share the EXACT same cell. Both stack
+          on top of each other, both wrap the same way, both grow
+          height together. No absolute positioning means no layout
+          drift that previously pushed the send button off the
+          composer chrome. */}
+      <div className="grid flex-1 min-w-0 [grid-template-areas:'stack']">
+        <div
+          ref={overlayRef}
+          aria-hidden
+          className={cn(
+            '[grid-area:stack] pointer-events-none overflow-hidden',
+            'px-1.5 py-1.5 max-h-[140px]',
+            'text-[14px] text-[var(--fg)] leading-relaxed',
+            'whitespace-pre-wrap break-words',
+          )}
+        >
+          {overlaySegments.map((seg, i) => {
+            if (seg.kind === 'text') {
+              return <span key={i}>{seg.content}</span>;
+            }
+            // Icon rides absolutely-positioned OUTSIDE the pill span
+            // (16px to the left, over the preceding whitespace). It
+            // doesn't contribute to the pill's flow width, so the
+            // textarea's caret metrics stay aligned with the styled
+            // span. The `vz-ticker-icon-reveal` keyframe fires on
+            // every fresh mount (per-symbol key on the icon wrapper).
+            if (seg.kind === 'active') {
+              return (
+                <span key={i} className="vz-ticker-active relative">
+                  <span
+                    key={`${seg.symbol}-active-icon`}
+                    className="vz-ticker-icon-reveal absolute left-[3px] top-1/2 -translate-y-1/2 inline-flex items-center"
+                    aria-hidden
+                  >
+                    <CoinIcon symbol={seg.symbol} size={12} />
+                  </span>
+                  {seg.content}
+                </span>
+              );
+            }
+            return (
+              <span
+                key={`${i}-${seg.content}`}
+                className="vz-ticker-pill relative"
+              >
+                <span
+                  key={`${seg.symbol}-pill-icon`}
+                  className="vz-ticker-icon-reveal absolute left-[3px] top-1/2 -translate-y-1/2 inline-flex items-center"
+                  aria-hidden
+                >
+                  <CoinIcon symbol={seg.symbol} size={12} />
+                </span>
+                {seg.content}
+              </span>
+            );
+          })}
+        </div>
+        <textarea
+          ref={inputRef}
+          value={value}
+          onChange={(e) => onChange(e.target.value.slice(0, MAX_CHARS))}
+          onKeyDown={(e) => {
+            const cmdEnter = e.key === 'Enter' && (e.metaKey || e.ctrlKey);
+            if (cmdEnter) {
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+              return;
+            }
+            if (
+              e.key === 'Backspace' &&
+              value.length === 0 &&
+              tokenPills.length > 0
+            ) {
+              e.preventDefault();
+              onRemovePill(tokenPills[tokenPills.length - 1]!);
+              return;
+            }
+            if (e.key === 'Enter' && !e.shiftKey) {
+              if (showPalette) return;
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+            }
+          }}
+          placeholder={placeholder}
+          disabled={isStreaming}
+          rows={1}
+          aria-label={placeholder}
+          aria-expanded={showPalette}
+          aria-controls={showPalette ? 'predict-slash-palette' : undefined}
+          className={cn(
+            '[grid-area:stack] resize-none bg-transparent outline-none',
+            'text-[14px] leading-relaxed',
+            // Hide the textarea's own text so the overlay's styled
+            // version is the only thing the user sees. Caret remains
+            // visible via `caret-color` so the input still feels live.
+            'text-transparent caret-[var(--fg)]',
+            'placeholder:text-[var(--fg-3)] placeholder:transition-opacity placeholder:duration-200',
+            'focus:placeholder:opacity-60',
+            'px-1.5 py-1.5 min-w-0 w-full',
+            'max-h-[140px] overflow-y-auto',
+            'transition-[height] duration-150 ease-out',
+          )}
+        />
+      </div>
 
       {isStreaming ? (
         // Stop button — replaces send while the engine is streaming so
@@ -2368,6 +2620,7 @@ function Composer({
           {hintLabel}
         </span>
       )}
+
     </form>
   );
 }
@@ -4035,13 +4288,14 @@ function ExampleRoll({
       >
         {/* The keyed inner span remounts on every idx change, which
             re-fires the vz-example-roll animation for a smooth
-            text-up transition. The button shell itself never
-            re-mounts, so the click target stays stable across ticks. */}
+            text-up transition. Inline icons inject in front of any
+            coin name in the rolling prompt (Bitcoin, Solana, …) so the
+            suggested question carries its market context inline. */}
         <span
           key={current}
           className="vz-example-roll inline-block text-balance"
         >
-          {current}
+          {renderTextWithInlineCoinIcons(current, { iconSize: 14 })}
         </span>
         {/* Hairline underline that draws in on hover — the only
             visual chrome on the prompt, so it reads as a hyperlink
