@@ -798,16 +798,31 @@
 
   /* Continuous 3-dot bounce for the assistant streaming indicator.
      Three spans share the keyframes and stagger via animation-delay
-     so the pulse reads as a wave instead of a flicker. */
+     so the pulse reads as a wave instead of a flicker. The bounce is
+     more pronounced (5px lift, 0.85→1.1 scale) so the loader reads
+     as decisive activity rather than a faint ellipsis. */
   .vz-dot-bounce {
-    animation: vz-dot-bounce 1.1s ease-in-out infinite both;
+    animation: vz-dot-bounce 1.05s ease-in-out infinite both;
     display: inline-block;
+    transform-origin: center;
   }
-  .vz-dot-bounce-d2 { animation-delay: 140ms; }
-  .vz-dot-bounce-d3 { animation-delay: 280ms; }
+  .vz-dot-bounce-d2 { animation-delay: 160ms; }
+  .vz-dot-bounce-d3 { animation-delay: 320ms; }
   @keyframes vz-dot-bounce {
-    0%, 70%, 100% { transform: translateY(0); opacity: 0.35; }
-    35%           { transform: translateY(-3px); opacity: 1; }
+    0%, 75%, 100% { transform: translateY(0) scale(0.85); opacity: 0.5; }
+    35%           { transform: translateY(-4px) scale(1.1); opacity: 1; }
+  }
+
+  /* Streaming content fade-in — wraps streaming text deltas so each
+     chunk slides in instead of snapping into place. Subtle (180ms
+     ease-out, 2px translate) so the bubble reads as gently growing
+     rather than juddering. */
+  .vz-stream-in {
+    animation: vz-stream-in 180ms ease-out both;
+  }
+  @keyframes vz-stream-in {
+    from { opacity: 0; transform: translateY(2px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
 
   /* Sparkle for the wallet-gate icon — slow pulse + tiny rotate. */

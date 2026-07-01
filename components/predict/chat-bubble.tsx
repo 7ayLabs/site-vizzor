@@ -31,8 +31,10 @@ import type { useChat } from '@ai-sdk/react';
 import { Check, ChevronDown, ChevronUp, Copy, Pencil, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useReducedMotionSafe } from '@/lib/motion';
+import { CoinIcon } from '@/components/ui/coin-icon';
 import {
   InlineTickerChipGroup,
+  renderTextWithInlineCoinIcons,
   type InlineTickerChipEntry,
 } from '@/components/predict/inline-ticker-chip';
 
@@ -200,9 +202,14 @@ export function ChatBubble({
     feedbackSentLabel,
   };
 
-  // Inline tickers only ride along with assistant turns — they identify
-  // what the response is about, not what the prompt asked.
+  // Inline tickers ride alongside the role+timestamp header on
+  // ASSISTANT turns (what the response is about) — and inside the
+  // user bubble itself on USER turns (what was asked), replacing the
+  // leading "BTC ETH" plain-text run with visual chips. The data
+  // source is the same `inlineTickers` prop the parent computes; we
+  // route it differently based on bubble role.
   const headerTickers = !isUser ? inlineTickers ?? [] : [];
+  const bubbleTickers = isUser ? inlineTickers ?? [] : [];
 
   return (
     <div
@@ -223,7 +230,7 @@ export function ChatBubble({
         {headerTickers.length > 0 && (
           <>
             <span aria-hidden className="text-[var(--fg-3)]/60">·</span>
-            <InlineTickerChipGroup entries={headerTickers} />
+            <InlineTickerChipGroup entries={headerTickers} layout="auto" />
           </>
         )}
       </div>
@@ -235,6 +242,7 @@ export function ChatBubble({
           onEdit={onEdit ? () => onEdit(message.id, text) : undefined}
           editLabel={editLabel}
           actionLabels={actionLabels}
+          inlineTickers={bubbleTickers}
         />
       ) : (
         <AssistantBubble
@@ -272,15 +280,58 @@ function UserBubble({
   onEdit,
   editLabel,
   actionLabels,
+  inlineTickers,
 }: {
   text: string;
   messageId: string;
   onEdit?: () => void;
   editLabel: string;
   actionLabels: ActionLabels;
+  inlineTickers: ReadonlyArray<InlineTickerChipEntry>;
 }) {
-  // The row is rendered whenever Edit is wired or the bubble has text
-  // (Copy is universal once there's something to copy).
+  // Parse the LEADING ticker run out of the bubble text so we can
+  // render those tokens as visual chips and the rest of the message
+  // as normal prose. "BTC ETH 4h con funding" → chips=[BTC,ETH], rest=" 4h con funding".
+  // "BTC ETH" alone → chips=[BTC,ETH], rest="".
+  // The detection set comes from the parent's inlineTickers (already
+  // matched against the live ticker universe), so unknown words can't
+  // accidentally chip-ify.
+  const { leadingChips, remainingText } = useMemo(() => {
+    if (inlineTickers.length === 0) {
+      return { leadingChips: [] as InlineTickerChipEntry[], remainingText: text };
+    }
+    const known = new Set(inlineTickers.map((t) => t.symbol.toUpperCase()));
+    const matched: InlineTickerChipEntry[] = [];
+    const seen = new Set<string>();
+    let cursor = 0;
+    // Skip leading whitespace.
+    while (cursor < text.length && /\s/.test(text[cursor]!)) cursor++;
+    while (cursor < text.length) {
+      // Read the next whitespace-separated token.
+      const start = cursor;
+      while (cursor < text.length && !/\s/.test(text[cursor]!)) cursor++;
+      const token = text.slice(start, cursor);
+      const stripped = token.replace(/^\$/, '').toUpperCase();
+      if (!known.has(stripped) || seen.has(stripped)) break;
+      const entry = inlineTickers.find(
+        (t) => t.symbol.toUpperCase() === stripped,
+      );
+      if (!entry) break;
+      matched.push(entry);
+      seen.add(stripped);
+      // Skip trailing whitespace before the next token.
+      while (cursor < text.length && /\s/.test(text[cursor]!)) cursor++;
+    }
+    if (matched.length === 0) {
+      return { leadingChips: [] as InlineTickerChipEntry[], remainingText: text };
+    }
+    return {
+      leadingChips: matched,
+      remainingText: text.slice(cursor),
+    };
+  }, [text, inlineTickers]);
+
+  const hasRemaining = remainingText.trim().length > 0;
   const hasActions = Boolean(onEdit) || text.length > 0;
 
   return (
@@ -290,17 +341,44 @@ function UserBubble({
       <div
         className={cn(
           'max-w-[42rem] px-4 py-2.5',
-          // Asymmetric corner: tr is tighter so the bubble feels anchored
-          // to the right column edge. No border, no shadow — solid fill
-          // is the only visual structure.
+          // Asymmetric corner: tr is tighter so the bubble feels
+          // anchored to the right column edge. Liquid-glass surface —
+          // same vocab as the composer chrome — so the bubble reads as
+          // a refractive material, not a solid stamp. Surface mix +
+          // border + text all flow through theme tokens so the bubble
+          // self-tunes in light and dark mode (`--surface` is a soft
+          // tinted grey in both, `--fg` flips dark↔light, `--border`
+          // tracks accordingly).
           'rounded-2xl rounded-tr-md',
-          'bg-[var(--fg)] text-[var(--bg)]',
+          'border border-[var(--border)]',
+          'bg-[color-mix(in_oklab,var(--surface)_30%,transparent)]',
+          'backdrop-blur-[10px] backdrop-saturate-[140%]',
+          'text-[var(--fg)]',
           'transition-colors duration-150',
         )}
       >
-        <p className="text-[14px] leading-relaxed whitespace-pre-wrap break-words">
-          {text}
-        </p>
+        {leadingChips.length > 0 && (
+          <span className="inline-flex flex-wrap items-center gap-1.5 align-middle mr-1">
+            {leadingChips.map((chip) => (
+              <UserBubbleTokenChip key={chip.symbol} {...chip} />
+            ))}
+          </span>
+        )}
+        {hasRemaining && (
+          <span className="text-[14px] leading-relaxed whitespace-pre-wrap break-words text-[var(--fg)]">
+            {renderTextWithInlineCoinIcons(
+              leadingChips.length > 0
+                ? remainingText.replace(/^\s+/, ' ')
+                : remainingText,
+              {
+                iconSize: 14,
+                skipTickers: new Set(
+                  leadingChips.map((c) => c.symbol.toUpperCase()),
+                ),
+              },
+            )}
+          </span>
+        )}
       </div>
       {hasActions && (
         // Action row — Edit (when wired) + Copy. Hover-revealed via the
@@ -318,6 +396,39 @@ function UserBubble({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Token chip rendered INSIDE the user bubble. Adapted from
+ * InlineTickerChip — uses `--fg-2` text + a soft `--surface-2` pill bg
+ * so it reads cleanly against the liquid-glass bubble surface.
+ *
+ * Minimalist by spec: icon + symbol only. Price + delta deliberately
+ * dropped from the bubble — those live on the Vizzor response header
+ * where they identify the response's market context. Inside the user
+ * bubble they'd repeat that data and clutter the read.
+ */
+function UserBubbleTokenChip({ symbol }: InlineTickerChipEntry) {
+  const upperSymbol = symbol.toUpperCase();
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 align-middle',
+        'h-5 pl-1 pr-1.5 rounded-full',
+        // Theme-token chrome: hairline `--border` + `--surface-2` mix +
+        // `--fg` label all auto-flip with the light/dark theme so the
+        // chip stays legible against either bubble surface.
+        'border border-[var(--border)]',
+        'bg-[color-mix(in_oklab,var(--surface-2)_85%,transparent)]',
+        'text-[var(--fg)]',
+      )}
+    >
+      <CoinIcon symbol={upperSymbol} size={12} />
+      <span className="mono tabular text-[11px] font-semibold leading-none">
+        {upperSymbol}
+      </span>
+    </span>
   );
 }
 
@@ -427,8 +538,16 @@ function AssistantBubble({
                 <ToolLine key={idx} raw={line.content} />
               );
             }
+            // Streaming lines fade in via vz-stream-in — each new line
+            // gets its own subtle 180ms ease-out, so as the response
+            // grows the bubble reads as fluid rather than juddering.
+            // Once streaming completes the animation falls off (`both`
+            // → ends in stable state) and re-renders don't re-trigger.
             return (
-              <span key={idx}>
+              <span
+                key={idx}
+                className={streaming ? 'vz-stream-in' : undefined}
+              >
                 {line.content}
                 {isLast && streaming && <StreamingDots inline />}
                 {!isLast && '\n'}
@@ -1158,7 +1277,7 @@ function StreamingDots({ inline = false }: { inline?: boolean }) {
         aria-label="streaming"
         role="status"
         className={cn(
-          'mono tabular text-[var(--fg-2)] select-none',
+          'mono tabular text-[var(--fg)] select-none',
           inline ? 'ml-1' : '',
         )}
       >
@@ -1167,19 +1286,31 @@ function StreamingDots({ inline = false }: { inline?: boolean }) {
     );
   }
 
+  // Three filled circles instead of text dots — solid `--fg` so the
+  // contrast against the soft assistant bubble fill reads clearly
+  // from anywhere in the room. Larger size + scale animation from
+  // the .vz-dot-bounce keyframe makes the activity unmistakable.
   return (
     <span
       aria-label="streaming"
       role="status"
       className={cn(
-        'mono tabular select-none inline-flex items-baseline gap-[3px]',
-        'text-[var(--fg-2)]',
-        inline ? 'ml-1.5' : '',
+        'select-none inline-flex items-center gap-1.5',
+        inline ? 'ml-2 align-middle' : '',
       )}
     >
-      <span aria-hidden className="vz-dot-bounce">·</span>
-      <span aria-hidden className="vz-dot-bounce vz-dot-bounce-d2">·</span>
-      <span aria-hidden className="vz-dot-bounce vz-dot-bounce-d3">·</span>
+      <span
+        aria-hidden
+        className="vz-dot-bounce inline-block w-1.5 h-1.5 rounded-full bg-[var(--fg)]"
+      />
+      <span
+        aria-hidden
+        className="vz-dot-bounce vz-dot-bounce-d2 inline-block w-1.5 h-1.5 rounded-full bg-[var(--fg)]"
+      />
+      <span
+        aria-hidden
+        className="vz-dot-bounce vz-dot-bounce-d3 inline-block w-1.5 h-1.5 rounded-full bg-[var(--fg)]"
+      />
     </span>
   );
 }

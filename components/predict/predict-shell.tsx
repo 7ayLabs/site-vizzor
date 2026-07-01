@@ -753,36 +753,49 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
                   // tickers only — same allow-list as before to avoid
                   // false positives like "TO" or "AND".
                   const isAssistantTurn = m.role === 'assistant';
+                  const isUserTurn = m.role === 'user';
                   let inlineTickers: InlineTickerChipEntry[] = [];
-                  if (isAssistantTurn) {
-                    let promptText = '';
+                  // Source text for ticker detection:
+                  //   - user turns: the turn's own text (the prompt the
+                  //     user just sent — chips render inline inside the
+                  //     bubble at the top, replacing leading "BTC ETH"
+                  //     plain-text tokens with visual chips).
+                  //   - assistant turns: the PRECEDING user message
+                  //     (chips ride alongside the VIZZOR · HH:MM:SS
+                  //     header as context for the response).
+                  let sourceText = '';
+                  if (isUserTurn) {
+                    sourceText = m.parts
+                      .filter((p) => p.type === 'text')
+                      .map((p) => ('text' in p ? p.text : ''))
+                      .join(' ');
+                  } else if (isAssistantTurn) {
                     for (let i = idx - 1; i >= 0; i--) {
                       const prev = messages[i];
                       if (!prev || prev.role !== 'user') continue;
-                      promptText = prev.parts
+                      sourceText = prev.parts
                         .filter((p) => p.type === 'text')
                         .map((p) => ('text' in p ? p.text : ''))
                         .join(' ');
                       break;
                     }
-                    if (promptText) {
-                      const detected = extractTickersFromText(promptText);
-                      // Render a chip for every detected symbol; if
-                      // the lazy lookup hasn't returned price yet (or
-                      // the engine doesn't know the coin), the chip
-                      // renders symbol-only (no price/% spans). The
-                      // CoinIcon shows the symbol's monogram when the
-                      // logo CDN 404s, so unknown coins still get a
-                      // recognizable circle + ticker label.
-                      inlineTickers = detected.map((sym) => {
-                        const entry = tickerEntryBySymbol.get(sym);
-                        return {
-                          symbol: sym,
-                          price: entry?.price,
-                          changePct: entry?.changePct,
-                        };
-                      });
-                    }
+                  }
+                  if (sourceText) {
+                    const detected = extractTickersFromText(sourceText);
+                    // Render a chip for every detected symbol; if the
+                    // lazy lookup hasn't returned price yet (or the
+                    // engine doesn't know the coin), the chip renders
+                    // symbol-only. The CoinIcon shows the symbol's
+                    // monogram when the logo CDN 404s, so unknown
+                    // coins still get a recognizable circle + label.
+                    inlineTickers = detected.map((sym) => {
+                      const entry = tickerEntryBySymbol.get(sym);
+                      return {
+                        symbol: sym,
+                        price: entry?.price,
+                        changePct: entry?.changePct,
+                      };
+                    });
                   }
                   return (
                     <div key={m.id} className="flex flex-col gap-3">
