@@ -38,7 +38,14 @@ export const TOP_20: CoinMeta[] = [
   { symbol: 'SHIB', name: 'Shiba Inu', geckoId: 'shiba-inu', iconKey: 'shib' },
   { symbol: 'LINK', name: 'Chainlink', geckoId: 'chainlink', iconKey: 'link' },
   { symbol: 'DOT', name: 'Polkadot', geckoId: 'polkadot', iconKey: 'dot' },
-  { symbol: 'TON', name: 'Toncoin', geckoId: 'the-open-network', iconKey: 'ton' },
+  // GRAM is the rebrand of TON (the token, mid-2026). The underlying
+  // The Open Network chain keeps the `ton` identifier in our watcher
+  // + payment infra; only the token surface name changes. CoinGecko id
+  // stays on `the-open-network` until upstream migrates the ID.
+  // `iconKey` deliberately points at `ton` so we reuse the existing
+  // self-hosted `public/coins/ton.jpg` asset (the most recent brand we
+  // hold) until a real GRAM mark is added.
+  { symbol: 'GRAM', name: 'Gram', geckoId: 'the-open-network', iconKey: 'ton' },
   // POL is the rebrand of MATIC (Sept 2024). Different brand mark
   // from the old purple Polygon glyph — served from public/coins/.
   { symbol: 'POL', name: 'Polygon', geckoId: 'polygon-ecosystem-token', iconKey: 'pol' },
@@ -72,7 +79,11 @@ export const TOP_20_BY_SYMBOL: Record<string, CoinMeta> = TOP_20.reduce(
 const LOCAL_ICON_OVERRIDES: Record<string, string> = {
   hype: 'hype.jpg', // Hyperliquid — launched 2024, absent from atomiclabs
   pol: 'pol.png', // Polygon's POL rebrand — Sept 2024
-  ton: 'ton.jpg', // Toncoin refreshed brand — Sept 2024
+  // Most recent TON brand asset. GRAM (the TON→GRAM rebrand) reuses
+  // this file via `iconKey: 'ton'` on the GRAM row in TOP_20 — drop a
+  // dedicated public/coins/gram.png and switch the key when the new
+  // brand artwork lands.
+  ton: 'ton.jpg',
 };
 
 export function coinIconUrl(iconKey: string): string {

@@ -2440,7 +2440,10 @@ const TOPICS_CATALOG: ReadonlyArray<TopicSpec> = [
   { id: 'btc', label: 'Bitcoin', ticker: 'BTC', prompt: 'BTC ', behavior: 'insert', section: 'tokens' },
   { id: 'eth', label: 'Ethereum', ticker: 'ETH', prompt: 'ETH ', behavior: 'insert', section: 'tokens' },
   { id: 'sol', label: 'Solana', ticker: 'SOL', prompt: 'SOL ', behavior: 'insert', section: 'tokens' },
-  { id: 'ton', label: 'Toncoin', ticker: 'TON', prompt: 'TON ', behavior: 'insert', section: 'tokens' },
+  // Mid-2026 rebrand: the carousel chip + composer prompt switch to
+  // GRAM. The catalog `id` stays 'ton' so existing users with 'ton' in
+  // their localStorage `barIds` keep their chip without an orphan.
+  { id: 'ton', label: 'Gram', ticker: 'GRAM', prompt: 'GRAM ', behavior: 'insert', section: 'tokens' },
   // Crypto-native sectors
   { id: 'defi', label: 'DeFi', icon: 'liquid', prompt: 'DeFi sector update', behavior: 'submit', section: 'sectors' },
   { id: 'l2', label: 'L2s', icon: 'stack', prompt: 'Layer 2 ecosystem update', behavior: 'submit', section: 'sectors' },
@@ -2638,8 +2641,12 @@ const TICKER_NAME_MAP: Record<string, string> = {
   eth: 'ETH',
   solana: 'SOL',
   sol: 'SOL',
-  toncoin: 'TON',
-  ton: 'TON',
+  // TON → GRAM rebrand (mid-2026). Legacy mentions still resolve to
+  // the new symbol so detection upstream stays consistent without
+  // forcing a sweep of every i18n string + user-side chip catalog.
+  toncoin: 'GRAM',
+  ton: 'GRAM',
+  gram: 'GRAM',
   hyperliquid: 'HYPE',
   hype: 'HYPE',
   pyth: 'PYTH',
