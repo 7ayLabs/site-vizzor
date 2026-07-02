@@ -161,8 +161,8 @@ VIZZOR_EXTRA_ORIGINS=https://test.vizzor.ai,https://testapp.vizzor.ai
 
 # ── Host rewriting — treat testapp.vizzor.ai as app.vizzor.ai's twin ─
 # Middleware reads this comma-separated list; every host in it gets
-# `/` rewritten to `/app/*` (see components/app/app-shell-rail.tsx +
-# app/[locale]/app/layout.tsx for the paired shell suppression).
+# root rewritten to the app segment (see components/app/app-shell-rail.tsx
+# + app/[locale]/app/layout.tsx for the paired shell suppression).
 APP_HOSTS=testapp.vizzor.ai
 
 # ── Product-URL override — CTAs on marketing staging (test.vizzor.ai) ─
