@@ -48,8 +48,8 @@ import { useTour } from './tour-provider';
 import { stepsFor, type TourStep } from './tour-steps';
 import { markTourCompleted } from '@/lib/onboarding/tour-storage';
 
-const CALLOUT_WIDTH = 320;
-const CALLOUT_HEIGHT_ESTIMATE = 200;
+const CALLOUT_WIDTH = 340;
+const CALLOUT_HEIGHT_ESTIMATE = 210;
 const CALLOUT_MARGIN = 16;
 /**
  * How far the callout stays away from the target rect. Includes
@@ -345,8 +345,6 @@ export function SpotlightTour() {
         height: 0,
       };
 
-  const progressPct = ((clampedIndex + 1) / total) * 100;
-
   return createPortal(
     <div
       role="dialog"
@@ -437,79 +435,75 @@ export function SpotlightTour() {
           'motion-safe:vz-tour-callout-in',
         )}
       >
-        <div ref={contentRef} className="vz-tour-content-in p-4">
-          <div className="flex items-center justify-between gap-3">
-            <span className="mono tabular text-[10px] uppercase tracking-[0.22em] text-[var(--fg-3)]">
-              {t('stepIndicator', {
-                index: clampedIndex + 1,
-                total,
-              })}
-            </span>
+        <div ref={contentRef} className="vz-tour-content-in p-5">
+          {/* Header row — title on the left, close (X) on the right.
+              Matches the reference designs: no mono step-indicator,
+              just the copy and the dismiss affordance. */}
+          <div className="flex items-start justify-between gap-3">
+            <h2
+              id="vz-tour-title"
+              className="text-[16px] font-semibold tracking-tight text-[var(--fg)] leading-tight break-words"
+            >
+              {stepTitle}
+            </h2>
             <button
               type="button"
               onClick={onFinish}
               aria-label={t('skip')}
               className={cn(
-                'inline-flex items-center justify-center h-6 w-6 -mr-1 rounded-md',
+                'shrink-0 inline-flex items-center justify-center h-7 w-7 -mt-1 -mr-1 rounded-full',
                 'text-[var(--fg-3)] hover:text-[var(--fg)]',
                 'hover:bg-[color-mix(in_oklab,var(--fg)_6%,transparent)]',
                 'transition-colors',
               )}
             >
-              <X size={14} strokeWidth={2} aria-hidden />
+              <X size={16} strokeWidth={2} aria-hidden />
             </button>
           </div>
 
-          <h2
-            id="vz-tour-title"
-            className="mt-2.5 text-[15px] font-semibold tracking-tight text-[var(--fg)] leading-snug break-words"
-          >
-            {stepTitle}
-          </h2>
-          <p className="mt-1.5 text-[12.5px] leading-relaxed text-[var(--fg-2)] break-words">
+          {/* Body copy — regular weight, comfortable reading size. */}
+          <p className="mt-2 text-[13.5px] leading-relaxed text-[var(--fg-2)] break-words">
             {stepBody}
           </p>
 
-          {/* Progress: segmented bar. One segment per step, filled up
-              to the current index. Reads as a step counter, not a
-              carousel dot pattern. */}
-          <div className="mt-4 flex items-center gap-1">
-            {Array.from({ length: total }).map((_, i) => (
-              <span
-                key={i}
-                aria-hidden
-                className={cn(
-                  'h-[3px] flex-1 rounded-full',
-                  'transition-colors duration-300',
-                  i <= clampedIndex
-                    ? 'bg-[var(--fg-2)]'
-                    : 'bg-[color-mix(in_oklab,var(--fg)_10%,transparent)]',
-                )}
-              />
-            ))}
-          </div>
-          <div className="mt-1 flex items-center">
-            <span className="mono tabular text-[9px] uppercase tracking-[0.22em] text-[var(--fg-3)]">
-              {progressPct.toFixed(0)}%
-            </span>
-          </div>
-
-          <div className="mt-4 flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={prev}
-              disabled={isFirst}
-              className={cn(
-                'inline-flex items-center justify-center h-7 px-2 rounded-md',
-                'mono tabular text-[10px] uppercase tracking-[0.16em]',
-                'text-[var(--fg-3)] hover:text-[var(--fg)]',
-                'hover:bg-[color-mix(in_oklab,var(--fg)_5%,transparent)]',
-                'disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed',
-                'transition-colors',
+          {/* Footer row — page-indicator dots on the left, primary
+              action on the right. Structure mirrors the reference
+              designs the user shared: small dots (active = solid,
+              rest = faded), one dark-pill CTA on the far right.
+              Back is retained as a tiny secondary link on the far
+              left of the row (not present in the reference for
+              brevity, but users need it to correct a misclick). */}
+          <div className="mt-5 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              {!isFirst && (
+                <button
+                  type="button"
+                  onClick={prev}
+                  aria-label={t('previous')}
+                  className={cn(
+                    'inline-flex items-center justify-center h-6 px-1.5 rounded-md',
+                    'text-[11.5px] text-[var(--fg-3)] hover:text-[var(--fg)]',
+                    'transition-colors',
+                  )}
+                >
+                  ←
+                </button>
               )}
-            >
-              {t('previous')}
-            </button>
+              <div className="flex items-center gap-1.5">
+                {Array.from({ length: total }).map((_, i) => (
+                  <span
+                    key={i}
+                    aria-hidden
+                    className={cn(
+                      'h-1.5 rounded-full transition-all duration-300',
+                      i === clampedIndex
+                        ? 'w-4 bg-[var(--fg)]'
+                        : 'w-1.5 bg-[color-mix(in_oklab,var(--fg)_18%,transparent)]',
+                    )}
+                  />
+                ))}
+              </div>
+            </div>
             {step.requiresClick ? (
               /* Require-click gate: no Next button. The tour only
                  advances when the user actually clicks the target
@@ -518,7 +512,7 @@ export function SpotlightTour() {
               <span
                 className={cn(
                   'inline-flex items-center gap-1',
-                  'mono tabular text-[10px] uppercase tracking-[0.16em]',
+                  'text-[11.5px] font-medium',
                   'text-[var(--fg-3)]',
                   'motion-safe:vz-tap-hint',
                 )}
@@ -532,8 +526,8 @@ export function SpotlightTour() {
                 type="button"
                 onClick={onNextClick}
                 className={cn(
-                  'inline-flex items-center justify-center h-7 px-3 rounded-md',
-                  'mono tabular text-[10px] font-semibold uppercase tracking-[0.16em]',
+                  'inline-flex items-center justify-center h-9 px-5 rounded-full',
+                  'text-[13px] font-semibold',
                   'bg-[var(--fg)] text-[var(--bg)]',
                   'hover:opacity-90 active:scale-[0.98]',
                   'transition-[opacity,transform] duration-150',
