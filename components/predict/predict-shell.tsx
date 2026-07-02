@@ -3696,11 +3696,12 @@ function Composer({
           effect on the next message without leaving the chat. The
           trigger sits to the left of the textarea so the action surface
           reads in left-to-right order: pick context (skill/connector),
-          type, send. `data-tour-id="composer-topics"` is the anchor
-          for the guided-tour step that introduces this affordance. */}
-      <span data-tour-id="composer-topics" className="inline-flex">
-        <DirectoryPicker signedIn={signedIn} disabled={isStreaming} />
-      </span>
+          type, send. The `data-tour-id="composer-topics"` anchor is
+          set on the picker's own outer div now (see directory-picker
+          v0.5.9) — a wrapper span was collapsing to zero dimensions
+          inside the composer's flex row on mobile and the spotlight
+          couldn't find the target. */}
+      <DirectoryPicker signedIn={signedIn} disabled={isStreaming} />
 
       {/* Token pill row — sits between the Directory picker and the
           textarea so a typed prompt visually continues from the last
