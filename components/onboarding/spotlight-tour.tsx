@@ -799,14 +799,14 @@ function WelcomeIconRow() {
             alt=""
             width={32}
             height={32}
-            className="hidden dark:block h-6 w-auto"
+            className="hidden dark:block h-8 w-8 object-contain"
           />
           <Image
             src="/brand/vizzor_darkicon.png"
             alt=""
             width={32}
             height={32}
-            className="block dark:hidden h-6 w-auto"
+            className="block dark:hidden h-8 w-8 object-contain"
           />
         </>
       ),
