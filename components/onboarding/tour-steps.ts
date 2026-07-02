@@ -2,16 +2,23 @@
  * TOUR_STEPS — declarative catalogue of first-time-login tour stops.
  *
  * Each step points at a stable `data-tour-id` attribute (added to
- * the target components in this same PR). Steps without a
- * `targetSelector` render as centered cards (welcome + done).
+ * the target components in the same PR that introduced this
+ * catalogue). Steps without a `targetSelector` render as centered
+ * cards (welcome + done).
+ *
+ * v0.5.5 — platform-aware:
+ *   - Desktop rail entries (nav-alerts, nav-transactions, identity)
+ *     only exist on `lg+`. On mobile those same actions live inside
+ *     the hamburger drawer, so we replace them with a single
+ *     mobile-menu step that spotlights the hamburger trigger.
+ *   - `desktopOnly` / `mobileOnly` flags are read at render time by
+ *     SpotlightTour to filter the visible step list. `stepsFor()`
+ *     returns the filtered list for a given platform.
  *
  * `placement` is a hint for the callout position relative to the
  * spotlight; the SpotlightTour picks the actual side based on
  * available viewport space and falls back gracefully at small
- * widths. Steps that only make sense at `lg+` viewports (sidebar
- * entries) get `mobileFallback: 'centered'` so the mobile flow
- * still narrates them without pointing at an element that isn't
- * on screen.
+ * widths.
  */
 
 export type TourPlacement = 'top' | 'bottom' | 'left' | 'right' | 'centered';
@@ -26,6 +33,12 @@ export interface TourStep {
   /** When the target only exists on desktop breakpoints, render
    *  centered on mobile instead of missing the element. */
   mobileFallback?: 'centered' | 'skip';
+  /** Only surface this step on `lg+` viewports. Used for sidebar
+   *  entries that are hidden behind the drawer on mobile. */
+  desktopOnly?: boolean;
+  /** Only surface this step on `< lg` viewports. Used for the
+   *  hamburger trigger which is hidden on desktop. */
+  mobileOnly?: boolean;
   /** i18n key under `predict.tour.steps.<id>`. Both `.title` and
    *  `.body` are required at that key. */
   i18nKey: string;
@@ -67,22 +80,40 @@ export const TOUR_STEPS: readonly TourStep[] = [
     id: 'nav-alerts',
     targetSelector: '[data-tour-id="nav-alerts"]',
     placement: 'right',
-    mobileFallback: 'centered',
+    desktopOnly: true,
     i18nKey: 'navAlerts',
   },
   {
     id: 'nav-transactions',
     targetSelector: '[data-tour-id="nav-transactions"]',
     placement: 'right',
-    mobileFallback: 'centered',
+    desktopOnly: true,
     i18nKey: 'navTransactions',
   },
   {
     id: 'identity',
     targetSelector: '[data-tour-id="identity-row"]',
     placement: 'right',
-    mobileFallback: 'centered',
+    desktopOnly: true,
     i18nKey: 'identity',
+  },
+  {
+    id: 'mobile-menu',
+    targetSelector: '[data-tour-id="mobile-menu-trigger"]',
+    placement: 'bottom',
+    mobileOnly: true,
+    i18nKey: 'mobileMenu',
+  },
+  {
+    id: 'mobile-actions',
+    /**
+     * Second mobile-only step, unanchored. After the previous step
+     * points at the hamburger, this one narrates what lives inside:
+     * Alerts, Transactions, Identity. Rendered centered so the user
+     * can absorb the summary before opening the drawer themselves.
+     */
+    mobileOnly: true,
+    i18nKey: 'mobileActions',
   },
   {
     id: 'done',
@@ -90,11 +121,11 @@ export const TOUR_STEPS: readonly TourStep[] = [
   },
 ];
 
-export function stepAt(index: number): TourStep | null {
-  if (index < 0 || index >= TOUR_STEPS.length) return null;
-  return TOUR_STEPS[index] ?? null;
-}
-
-export function totalSteps(): number {
-  return TOUR_STEPS.length;
+/** Return the ordered step list for a given viewport. */
+export function stepsFor(isMobile: boolean): readonly TourStep[] {
+  return TOUR_STEPS.filter((s) => {
+    if (isMobile && s.desktopOnly) return false;
+    if (!isMobile && s.mobileOnly) return false;
+    return true;
+  });
 }

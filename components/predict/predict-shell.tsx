@@ -1703,6 +1703,7 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
+              data-tour-id="mobile-menu-trigger"
               aria-label={t('shell.openSidebar')}
               className={cn(
                 'inline-flex h-10 w-10 -ml-1 items-center justify-center rounded-lg',

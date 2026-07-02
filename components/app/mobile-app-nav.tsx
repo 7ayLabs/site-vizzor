@@ -132,6 +132,7 @@ export function MobileAppNav() {
         <button
           type="button"
           onClick={() => setOpen(true)}
+          data-tour-id="mobile-menu-trigger"
           aria-label={tMobile('openMenu')}
           aria-expanded={open}
           aria-controls="mobile-app-drawer"
