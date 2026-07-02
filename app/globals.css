@@ -1099,6 +1099,32 @@
     0%, 100% { opacity: 0.5; }
     50%      { opacity: 1;   }
   }
+
+  /* v0.5.15 — new chip lands at the front of the topic carousel when
+     the user picks it from the (+) popover. Slides in from the left
+     with a soft fade + tiny scale bump so the motion reads as "your
+     pick moved here" rather than a static pop-in. Applied via the
+     `.vz-topic-chip-in` class on SortableTopicChip — using a class
+     over an arbitrary Tailwind animate keeps the cubic-bezier commas
+     out of the class-name parser. */
+  .vz-topic-chip-in {
+    animation: vz-topic-chip-in 360ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+    transform-origin: left center;
+  }
+  @keyframes vz-topic-chip-in {
+    from {
+      opacity: 0;
+      transform: translateX(-18px) scale(0.9);
+    }
+    60% {
+      opacity: 1;
+      transform: translateX(2px) scale(1.02);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+    }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

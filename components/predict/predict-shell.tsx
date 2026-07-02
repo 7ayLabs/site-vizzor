@@ -114,6 +114,7 @@ import {
   DndContext,
   PointerSensor,
   KeyboardSensor,
+  MeasuringStrategy,
   closestCenter,
   useSensor,
   useSensors,
@@ -4235,6 +4236,55 @@ function saveHiddenTopicIds(ids: ReadonlyArray<string>): void {
   }
 }
 
+/**
+ * Permanently-removed topic ids — the user has explicitly deleted these
+ * from the popover via the row Trash button. Unlike the Hidden bucket
+ * (which is reversible from within the popover), removed topics do
+ * NOT reappear in a "removed" section — the intent is data hygiene, so
+ * they're just gone from the picker. For `custom-*` ids we also drop
+ * the underlying symbol from `customTokens`; for built-ins the id just
+ * lives in this list until the user resets the picker from settings.
+ */
+const REMOVED_TOPICS_KEY = 'vizzor.predict.removed-topics.v1';
+
+interface StoredRemovedTopics {
+  v: 1;
+  ids: ReadonlyArray<string>;
+}
+
+function loadRemovedTopicIds(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(REMOVED_TOPICS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as StoredRemovedTopics | null;
+    if (!parsed || parsed.v !== 1 || !Array.isArray(parsed.ids)) return [];
+    const valid: string[] = [];
+    const seen = new Set<string>();
+    for (const id of parsed.ids) {
+      if (typeof id !== 'string') continue;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      valid.push(id);
+    }
+    return valid;
+  } catch {
+    return [];
+  }
+}
+
+function saveRemovedTopicIds(ids: ReadonlyArray<string>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      REMOVED_TOPICS_KEY,
+      JSON.stringify({ v: 1, ids } satisfies StoredRemovedTopics),
+    );
+  } catch {
+    // Best-effort.
+  }
+}
+
 /* ─────────────────────── ticker extraction ─────────────────────── */
 
 /**
@@ -4389,11 +4439,21 @@ function ChatTopics({
   const [barIds, setBarIds] = useState<string[]>(() => [...DEFAULT_BAR_IDS]);
   const [customTokens, setCustomTokens] = useState<string[]>(() => []);
   const [hiddenTopicIds, setHiddenTopicIds] = useState<string[]>(() => []);
+  const [removedTopicIds, setRemovedTopicIds] = useState<string[]>(() => []);
   const [hydrated, setHydrated] = useState(false);
+  /**
+   * Tracks the id of the chip that was just added via the picker so
+   * the SortableTopicChip can play a one-shot "slide in from the left"
+   * animation instead of popping into existence. Cleared after the
+   * keyframe duration so subsequent mounts (e.g., rehydration) don't
+   * replay it. The animation itself lives in globals.css.
+   */
+  const [justAddedId, setJustAddedId] = useState<string | null>(null);
   useEffect(() => {
     setBarIds(loadBarIds());
     setCustomTokens(loadCustomTokens());
     setHiddenTopicIds(loadHiddenTopicIds());
+    setRemovedTopicIds(loadRemovedTopicIds());
     setHydrated(true);
   }, []);
   useEffect(() => {
@@ -4405,12 +4465,31 @@ function ChatTopics({
   useEffect(() => {
     if (hydrated) saveHiddenTopicIds(hiddenTopicIds);
   }, [hiddenTopicIds, hydrated]);
+  useEffect(() => {
+    if (hydrated) saveRemovedTopicIds(removedTopicIds);
+  }, [removedTopicIds, hydrated]);
 
   const onHideTopic = useCallback((id: string) => {
     setHiddenTopicIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
   }, []);
   const onRestoreTopic = useCallback((id: string) => {
     setHiddenTopicIds((prev) => prev.filter((x) => x !== id));
+  }, []);
+  /**
+   * Permanent removal. For custom (`custom-SYMBOL`) tokens we drop the
+   * underlying symbol from `customTokens` so it's fully gone — no
+   * ghost row in Hidden, no reappearance on next mount. For built-ins
+   * we track the id so the picker filters it out. Both branches also
+   * clear the id from the hidden list so we don't leak dangling state.
+   */
+  const onRemoveTopic = useCallback((id: string) => {
+    if (id.startsWith('custom-')) {
+      const symbol = id.slice('custom-'.length).toUpperCase();
+      setCustomTokens((list) => list.filter((s) => s !== symbol));
+    }
+    setRemovedTopicIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setHiddenTopicIds((prev) => prev.filter((x) => x !== id));
+    setBarIds((ids) => ids.filter((x) => x !== id));
   }, []);
 
   // Live ticker — used to render price + delta on ticker chips. One
@@ -4503,7 +4582,17 @@ function ChatTopics({
         );
       }
     }
-    setBarIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
+    // Prepend so the just-added chip lands at the front of the
+    // carousel — matches the "your latest pick lives closest to the
+    // composer" mental model and pairs with the slide-in keyframe on
+    // SortableTopicChip. Re-adds move the existing id to the front too.
+    setBarIds((ids) => [id, ...ids.filter((x) => x !== id)]);
+    setJustAddedId(id);
+    // Clear the flag after the keyframe so future remounts don't replay.
+    // 500ms is the keyframe duration + a small tail for the ease-out.
+    window.setTimeout(() => {
+      setJustAddedId((current) => (current === id ? null : current));
+    }, 500);
     setAddOpen(false);
   }, []);
 
@@ -4522,11 +4611,19 @@ function ChatTopics({
         (t) => t.ticker?.toUpperCase() === up,
       );
       if (builtin) {
-        setBarIds((ids) => (ids.includes(builtin.id) ? ids : [...ids, builtin.id]));
+        setBarIds((ids) => [builtin.id, ...ids.filter((x) => x !== builtin.id)]);
+        setJustAddedId(builtin.id);
+        window.setTimeout(() => {
+          setJustAddedId((current) => (current === builtin.id ? null : current));
+        }, 500);
         return builtin.id;
       }
       setCustomTokens((list) => (list.includes(up) ? list : [...list, up]));
-      setBarIds((ids) => (ids.includes(spec.id) ? ids : [...ids, spec.id]));
+      setBarIds((ids) => [spec.id, ...ids.filter((x) => x !== spec.id)]);
+      setJustAddedId(spec.id);
+      window.setTimeout(() => {
+        setJustAddedId((current) => (current === spec.id ? null : current));
+      }, 500);
       return spec.id;
     },
     [],
@@ -4534,8 +4631,9 @@ function ChatTopics({
 
   const available = useMemo(() => {
     const merged = [...TOPICS_CATALOG, ...customSpecs];
-    return merged.filter((t) => !barIds.includes(t.id));
-  }, [barIds, customSpecs]);
+    const removedSet = new Set(removedTopicIds);
+    return merged.filter((t) => !barIds.includes(t.id) && !removedSet.has(t.id));
+  }, [barIds, customSpecs, removedTopicIds]);
 
   const onChipPick = useCallback(
     (topic: TopicSpec) => {
@@ -4563,7 +4661,20 @@ function ChatTopics({
           below content width and scroll) and pins the (+) to the right. */}
       <div className="flex items-center gap-1.5">
         <div className="relative flex-1 min-w-0">
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={onDragEnd}
+            /* MeasuringStrategy.Always re-measures droppable rects on
+               every render, which is what lets dnd-kit's useSortable
+               animate the "existing chips slide right" transform when
+               we programmatically prepend a new id via addChip. Without
+               this, layout is only measured at drag start, so a
+               programmatic reorder would relayout instantly (jarring
+               against the new-chip slide-in). Slight extra work per
+               render but the chip count is small (~4-8 items). */
+            measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+          >
             <SortableContext items={barIds} strategy={horizontalListSortingStrategy}>
               <ul
                 className={cn(
@@ -4587,6 +4698,8 @@ function ChatTopics({
                       onRemove={removeChip}
                       livePrice={live?.price}
                       liveChangePct={live?.changePct}
+                      justAdded={justAddedId === id}
+                      position={idx}
                     />
                   );
                 })}
@@ -4665,6 +4778,7 @@ function ChatTopics({
               onAddCustom={addCustomToken}
               onHide={onHideTopic}
               onRestore={onRestoreTopic}
+              onRemove={onRemoveTopic}
               onClose={dismissAdd}
               closing={addClosing}
             />
@@ -4688,6 +4802,8 @@ function SortableTopicChip({
   onRemove,
   livePrice,
   liveChangePct,
+  justAdded = false,
+  position,
 }: {
   topic: TopicSpec;
   onPick: (topic: TopicSpec) => void;
@@ -4697,6 +4813,15 @@ function SortableTopicChip({
   livePrice?: number;
   /** Fractional 24h change (e.g. -0.021 = -2.1%). */
   liveChangePct?: number;
+  /** When true, play the one-shot slide-in-from-picker keyframe on
+   *  mount. Set by the parent for exactly one chip at a time — the id
+   *  that was just added via the (+) popover. */
+  justAdded?: boolean;
+  /** Current index in `barIds`. Only used as a signal — position 0
+   *  means "the chip just landed at the front", so the parent only
+   *  flags justAdded=true when position is 0. Kept as a prop so the
+   *  memoization key follows the layout, not just the id. */
+  position: number;
 }) {
   const {
     attributes,
@@ -4707,6 +4832,11 @@ function SortableTopicChip({
     isDragging,
   } = useSortable({ id: topic.id });
 
+  // Merge dnd-kit's drag transform with a subtle mount-position offset
+  // so the new-at-front chip flies in from the left. The offset applies
+  // ONLY when justAdded is true; after the CSS keyframe finishes the
+  // parent clears the flag, so subsequent renders use the plain
+  // dnd-kit transform without the mount kick.
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -4722,7 +4852,23 @@ function SortableTopicChip({
   const isUp = (deltaPct ?? 0) >= 0;
 
   return (
-    <li ref={setNodeRef} style={style} className={cn('shrink-0 relative group/chip', isDragging && 'z-10')}>
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'shrink-0 relative group/chip',
+        isDragging && 'z-10',
+        // One-shot slide-in when the chip was just added via the (+)
+        // popover. The keyframe (`.vz-topic-chip-in` in globals.css)
+        // sweeps the chip in from the left with a soft fade + tiny
+        // scale bump so the user sees "your pick just landed at the
+        // front" as one motion instead of a static pop-in. The
+        // global @media (prefers-reduced-motion: reduce) block in
+        // globals.css collapses the keyframe to ~0ms for users who
+        // opt out, so no `motion-safe:` prefix is needed here.
+        justAdded && position === 0 && 'vz-topic-chip-in',
+      )}
+    >
       <button
         type="button"
         onClick={() => onPick(topic)}
@@ -4823,6 +4969,7 @@ function TopicAddPanel({
   onAddCustom,
   onHide,
   onRestore,
+  onRemove,
   onClose,
   closing = false,
 }: {
@@ -4839,6 +4986,10 @@ function TopicAddPanel({
   /** Bring a topic out of the Hidden bucket. The row reappears in
    *  its original section the next render. */
   onRestore: (id: string) => void;
+  /** Permanent removal. For custom tokens this drops the underlying
+   *  symbol entirely; for built-ins the row is filtered out of every
+   *  bucket. Not reversible from within the popover. */
+  onRemove: (id: string) => void;
   onClose: () => void;
   /** When true, render the slide-out keyframe instead of slide-in. The
    *  parent keeps the panel mounted for ~160ms so the exit animation
@@ -5215,6 +5366,7 @@ function TopicAddPanel({
                             onMouseEnter={() => setActiveIdx(idx)}
                             onActivate={() => onAdd(t.id)}
                             onHide={() => onHide(t.id)}
+                            onRemove={() => onRemove(t.id)}
                           />
                         </li>
                       );
@@ -5252,10 +5404,17 @@ function TopicAddPanel({
 }
 
 /**
- * Visible topic row — primary click activates (add to bar); a hover-
- * revealed × on the right hides the row to the Hidden bucket. The two
- * buttons sit side-by-side instead of nesting so the click targets
- * don't fight each other.
+ * Visible topic row — primary click activates (adds to bar and animates
+ * the new chip to the front of the carousel). The right-side toolbar
+ * carries two data-hygiene affordances the user can reach without
+ * hovering (touch-friendly):
+ *
+ *   1. Hide     — moves the row to the reversible Hidden bucket.
+ *   2. Remove   — permanent delete; custom tokens drop from local
+ *                 storage, built-ins are filtered out of every bucket.
+ *
+ * The toolbar sits side-by-side with the primary click target so the
+ * hit areas don't fight each other. Icons brighten on row hover.
  */
 function TopicRow({
   topic,
@@ -5264,6 +5423,7 @@ function TopicRow({
   onMouseEnter,
   onActivate,
   onHide,
+  onRemove,
 }: {
   topic: TopicSpec;
   active: boolean;
@@ -5271,6 +5431,7 @@ function TopicRow({
   onMouseEnter: () => void;
   onActivate: () => void;
   onHide: () => void;
+  onRemove: () => void;
 }) {
   return (
     <div
@@ -5308,26 +5469,109 @@ function TopicRow({
         </span>
         <span className="flex-1 truncate">{topic.label}</span>
       </button>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onHide();
-        }}
-        aria-label={`Hide ${topic.label}`}
-        title={`Hide ${topic.label}`}
-        className={cn(
-          'shrink-0 inline-flex items-center justify-center h-6 w-6 mr-1 rounded-md',
-          'text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface)]',
-          'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
-          'transition-opacity duration-150',
-        )}
-      >
-        <svg width={9} height={9} viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" aria-hidden>
-          <path d="M1.5 1.5 L6.5 6.5 M6.5 1.5 L1.5 6.5" />
-        </svg>
-      </button>
+      <div className="shrink-0 flex items-center gap-0.5 pr-1">
+        <TopicRowIconButton
+          onClick={onHide}
+          label={`Hide ${topic.label}`}
+          tone="muted"
+        >
+          {/* Eye-off — hide from picker (reversible from Hidden bucket). */}
+          <svg
+            width={12}
+            height={12}
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.4}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <path d="M2 8s2.2-4 6-4c1.2 0 2.3.4 3.2 1M14 8s-2.2 4-6 4c-1.2 0-2.3-.4-3.2-1" />
+            <path d="M10.5 6.6a2.5 2.5 0 0 0-3.9 3.1" />
+            <path d="M2 2l12 12" />
+          </svg>
+        </TopicRowIconButton>
+        <TopicRowIconButton
+          onClick={onRemove}
+          label={`Remove ${topic.label}`}
+          tone="danger"
+        >
+          {/* Trash — permanent delete; different tone so it reads as
+              the "no coming back" affordance. */}
+          <svg
+            width={11}
+            height={11}
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <path d="M3 4h10" />
+            <path d="M6 4V2.5h4V4" />
+            <path d="M4.5 4l.5 9a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1l.5-9" />
+            <path d="M7 6.5v5M9 6.5v5" />
+          </svg>
+        </TopicRowIconButton>
+      </div>
     </div>
+  );
+}
+
+/**
+ * Small icon-only button used inside each `TopicRow` for the pin/hide/
+ * remove toolbar. Kept tiny (18×18) so the three of them line up
+ * comfortably in the row's right gutter without pushing the label
+ * off-screen on 300px popover widths.
+ */
+function TopicRowIconButton({
+  onClick,
+  label,
+  children,
+  active = false,
+  tone = 'muted',
+}: {
+  onClick: () => void;
+  label: string;
+  children: React.ReactNode;
+  /** Pressed state — used by the pin toggle so the star reads as
+   *  "currently on". Adds a stronger tint at rest. */
+  active?: boolean;
+  /** Colour ramp for the icon. `danger` uses --danger on hover so the
+   *  Remove affordance reads as the destructive one. */
+  tone?: 'muted' | 'accent' | 'danger';
+}) {
+  const toneClass =
+    tone === 'accent'
+      ? active
+        ? 'text-[var(--accent)]'
+        : 'text-[var(--fg-3)] hover:text-[var(--accent)]'
+      : tone === 'danger'
+        ? 'text-[var(--fg-3)] hover:text-[var(--danger)]'
+        : 'text-[var(--fg-3)] hover:text-[var(--fg)]';
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      aria-label={label}
+      aria-pressed={active || undefined}
+      title={label}
+      className={cn(
+        'inline-flex items-center justify-center h-[22px] w-[22px] rounded-md',
+        'transition-[color,background-color,opacity] duration-150',
+        'opacity-70 group-hover:opacity-100 focus-visible:opacity-100',
+        'hover:bg-[var(--surface)]',
+        toneClass,
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
