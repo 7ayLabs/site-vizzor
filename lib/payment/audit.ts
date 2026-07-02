@@ -41,7 +41,16 @@ export type AuditEventType =
   | 'directory.skill.unpinned'
   | 'directory.connector.circuit_open'
   | 'predict.feedback.set'
-  | 'predict.feedback.clear';
+  | 'predict.feedback.clear'
+  // v0.5.0 — agent-payment capability events. `subject` is the
+  // CapId (transfer/workflow/payment/autonomous) or 'all' for the
+  // kill switch. Signed / executed intents log the intent_id.
+  | 'capability.enabled'
+  | 'capability.disabled'
+  | 'capability.kill_switch'
+  | 'capability.intent.signed'
+  | 'capability.intent.executed'
+  | 'capability.intent.failed';
 
 export type AuditOutcome = 'found' | 'not_found' | 'denied' | 'ok' | 'error';
 

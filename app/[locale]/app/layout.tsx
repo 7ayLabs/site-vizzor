@@ -5,8 +5,10 @@ import { AppShellProvider } from '@/components/app/app-shell-provider';
 import { AppShellRail } from '@/components/app/app-shell-rail';
 import { CommandPaletteProvider } from '@/components/app/command-palette-context';
 import { CommandPalette } from '@/components/app/command-palette';
-import { OnboardingStepper } from '@/components/app/onboarding-stepper';
-import { OnboardingControlsProvider } from '@/components/app/onboarding-context';
+import { MobileAppNav } from '@/components/app/mobile-app-nav';
+import { TourProvider } from '@/components/onboarding/tour-provider';
+import { TourAutoStarter } from '@/components/onboarding/tour-auto-starter';
+import { SpotlightTour } from '@/components/onboarding/spotlight-tour';
 
 /**
  * Hosts that mount the product as the entire site (no marketing chrome).
@@ -16,7 +18,13 @@ import { OnboardingControlsProvider } from '@/components/app/onboarding-context'
  * double-rail layout the user flagged on `app.vizzor.ai`. Keep this list
  * aligned with `APP_HOSTS` in `middleware.ts`.
  */
-const APP_ONLY_HOSTS = new Set<string>(['app.vizzor.ai']);
+const APP_ONLY_HOSTS = new Set<string>([
+  'app.vizzor.ai',
+  // Staging twin — same product-only chrome behavior as prod so QA
+  // demos read identically. Aligned with `DEFAULT_APP_HOSTS` in
+  // `middleware.ts` (host-rewrite must match the shell suppression).
+  'testapp.vizzor.ai',
+]);
 
 /**
  * App shell layout — wraps every `/app/*` surface (Chat, Whales, Flow,
@@ -30,13 +38,19 @@ const APP_ONLY_HOSTS = new Set<string>(['app.vizzor.ai']);
  *
  * Toaster is mounted once at this layer for cross-surface notifications
  * (wallet disconnect, subscription confirmed, engine offline). Command
- * palette + onboarding stepper sit beside it so they share the same
- * portal root and z-stack.
+ * palette + guided tour sit beside it so they share the same portal
+ * root and z-stack.
+ *
+ * v0.5.16 — the 4-step OnboardingStepper (connect → siws → trial-intro
+ * → done) was retired here. The SpotlightTour that fires post-SIWS
+ * already teaches the surface, and doubling up modals on top of the
+ * wallet-adapter flow was noise. The stepper's old mount + its
+ * controls-provider are gone from the tree.
  *
  * Context order (outermost → innermost):
- *   AppShellProvider             — wallet adapter + cross-surface SWR
- *   └─ OnboardingControlsProvider — exposes onboarding.open() to peers
- *      └─ CommandPaletteProvider  — global Cmd+K toggle
+ *   AppShellProvider           — wallet adapter + cross-surface SWR
+ *   └─ TourProvider            — v0.5.4 first-time-login tour state
+ *      └─ CommandPaletteProvider — global Cmd+K toggle
  */
 export default async function AppLayout({ children }: { children: ReactNode }) {
   // Read the Host header server-side so the suppression decision happens
@@ -50,14 +64,28 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <AppShellProvider>
-      <OnboardingControlsProvider>
+      <TourProvider>
         <CommandPaletteProvider>
-          <div className="flex min-h-dvh bg-[var(--bg)]">
-            <AppShellRail isAppOnlyHost={isAppOnlyHost} />
-            <main className="flex-1 min-w-0">{children}</main>
+          <div className="flex flex-col min-h-dvh bg-[var(--bg)]">
+            {/* Mobile hamburger + slide-in drawer for surfaces below
+                the `lg` breakpoint. Must sit BEFORE the flex row so
+                its `sticky top-0` actually anchors to the viewport
+                top (otherwise it renders after a min-h-dvh sibling
+                and appears at the bottom of the viewport). Self-
+                suppresses on /app/predict. */}
+            <MobileAppNav />
+            <div className="flex flex-1 min-h-0">
+              <AppShellRail isAppOnlyHost={isAppOnlyHost} />
+              <main className="flex-1 min-w-0">{children}</main>
+            </div>
           </div>
           <CommandPalette />
-          <OnboardingStepper />
+          {/* v0.5.4 — first-time-login guided tour. Auto-starter
+              is a null-rendering effect that watches the SIWS
+              session transition; SpotlightTour is the overlay
+              (portal to document.body, only rendered when open). */}
+          <TourAutoStarter />
+          <SpotlightTour />
           <Toaster
             position="bottom-right"
             richColors
@@ -65,7 +93,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             toastOptions={{ className: 'sonner-toast' }}
           />
         </CommandPaletteProvider>
-      </OnboardingControlsProvider>
+      </TourProvider>
     </AppShellProvider>
   );
 }

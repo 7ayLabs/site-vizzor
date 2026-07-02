@@ -668,7 +668,8 @@
         "alerts": "Alertes",
         "library": "Reçus",
         "libraryHint": "/precisions",
-        "receipts": "Reçus",
+        "workflows": "Flux",
+        "transactions": "Transactions",
         "tools": "Outils",
         "toolsHint": "/help",
         "directory": "Annuaire"
@@ -760,6 +761,168 @@
           "noResults": "Aucun résultat.",
           "cta": "Ouvrir l’annuaire pour épingler"
         }
+      }
+    },
+    "capability": {
+      "notify": {
+        "executed": "✅ Ton transfert de {amount} {symbol} est on-chain — réglé.",
+        "executedWithTx": "✅ Ton transfert de {amount} {symbol} est on-chain — réglé. Tx `{tx}`.",
+        "scheduled": "📅 Ton paiement de {amount} {symbol} est programmé pour {when}. Je te pingue ici quand c'est prêt à diffuser.",
+        "paymentDue": "⏰ Ton paiement programmé de {amount} {symbol} est prêt. Réponds ou ouvre Flux pour le diffuser.",
+        "failed": "❌ Ton transfert de {amount} {symbol} n'a pas été réglé. {reason}",
+        "rejected": "Tu as rejeté le transfert de {amount} {symbol}. Rien n'a été envoyé.",
+        "expired": "⌛ Le transfert de {amount} {symbol} a expiré avant signature. Recommence pour réessayer."
+      }
+    },
+    "tour": {
+      "open": "Voir le tour",
+      "skip": "Passer",
+      "next": "Suivant",
+      "previous": "Retour",
+      "finish": "C'est bon",
+      "tapToContinue": "Touche pour continuer",
+      "stepIndicator": "Étape {index} sur {total}",
+      "steps": {
+        "welcome": {
+          "title": "Bienvenue sur Vizzor 🚀",
+          "body": "Je te montre comment ton wallet déclenche des actions on-chain ici. Direct au but."
+        },
+        "composer": {
+          "title": "Demande n'importe quoi 💬",
+          "body": "Pose n'importe quelle question crypto — prédis un move, mentionne un ticker, ou demande sur l'état du marché."
+        },
+        "topics": {
+          "title": "Skills & Connecteurs 🧠",
+          "body": "Active un mode de raisonnement ou connecte une source externe pour améliorer mes réponses."
+        },
+        "carousel": {
+          "title": "Cible un token 🎯",
+          "body": "Touche un chip pour te concentrer sur un token ou un sujet. Chacun porte du contexte live — prix, delta, momentum."
+        },
+        "navAlerts": {
+          "title": "Panneau d'alertes 🔔",
+          "body": "Toutes les alertes que tu as armées vivent ici — prix, volume, événements on-chain."
+        },
+        "navTransactions": {
+          "title": "Toutes tes transactions 📊",
+          "body": "Chaque transfert ou paiement programmé rédigé par ton wallet vit ici. Touche une ligne pour voir le détail complet."
+        },
+        "identity": {
+          "title": "Ton wallet, ton contrôle 🔐",
+          "body": "Vizzor ne touche jamais aux fonds sans signature. Déconnecte-toi quand tu veux — ton historique reste avec ton wallet."
+        },
+        "mobileMenu": {
+          "title": "Ouvre le menu 📱",
+          "body": "Touche l'icône ☰ en haut à gauche pour continuer."
+        },
+        "done": {
+          "title": "C'est parti ✨",
+          "body": "Demande n'importe quoi, arme une alerte, ou prépare un paiement. Ouvre Cmd+K → \"Voir le tour\" pour relancer ceci quand tu veux 🚀"
+        }
+      }
+    },
+    "tradePlan": {
+      "label": "Plan de trade",
+      "title": "Échelle",
+      "long": "Long",
+      "short": "Short",
+      "confidence": "Confiance",
+      "close": "clôturer",
+      "levels": {
+        "entry": "Entrée",
+        "tp1": "TP1",
+        "tp2": "TP2",
+        "sl": "Stop"
+      },
+      "setAlert": "Armer",
+      "arming": "Armement…",
+      "armed": "Armé",
+      "retry": "Réessayer",
+      "openJupiter": "Jupiter",
+      "armAll": "Armer tous",
+      "proceedsTo": "Gains vers",
+      "footerHint": "Armer les alertes déclenche des notifications quand le prix croise chaque niveau.",
+      "sendWinningsTitle": "Envoyer les gains — signez pour confirmer",
+      "sendWinningsAmount": "Montant",
+      "signAndSend": "Signer et envoyer",
+      "preparing": "Préparation…"
+    },
+    "workflows": {
+      "meta": {
+        "title": "Flux · Vizzor",
+        "description": "Chaque intent de capacité que ton wallet a rédigé, groupé par conversation."
+      },
+      "eyebrow": "Flux",
+      "title": "Tes flux",
+      "body": "Chaque intent de capacité que ton wallet a rédigé, groupé par la conversation qui l'a créé. Supprimer un chat n'annule pas les flux signés — ils s'exécutent quand même ici.",
+      "empty": "Aucun flux pour l'instant. Écris un prompt avec `send` ou `pay` pour en rédiger un.",
+      "unlinked": "Intents non liés",
+      "unauthenticated": "Connecte ton wallet pour voir les flux que tu as rédigés.",
+      "activeBadge": "{count, plural, one {# actif} other {# actifs}}",
+      "status": {
+        "pending": "En attente",
+        "signed": "Signé",
+        "executed": "Exécuté",
+        "failed": "Échoué",
+        "expired": "Expiré"
+      },
+      "deleteGuard": {
+        "title": "Le chat a des flux actifs",
+        "body": "Ce chat a {count, plural, one {# flux actif} other {# flux actifs}}. Le supprimer efface l'historique ; les flux signés s'exécuteront quand même on-chain.",
+        "confirm": "Supprimer quand même",
+        "cancel": "Garder le chat"
+      }
+    },
+    "transactions": {
+      "meta": {
+        "title": "Transactions · Vizzor",
+        "description": "Chaque transaction on-chain que ton wallet a rédigée via Vizzor — en attente, signée, exécutée ou expirée."
+      },
+      "eyebrow": "Transactions",
+      "title": "Tes transactions",
+      "body": "Chaque intent que ton wallet a rédigé. Celles qui demandent une action restent en haut, les reçus terminaux en bas. Touche une ligne pour voir le détail.",
+      "empty": "Aucune transaction pour l'instant. Écris un prompt avec `send` ou `pay` pour en rédiger une.",
+      "noMatches": "Aucune transaction ne correspond à ces filtres.",
+      "unauthenticated": "Connecte ton wallet pour voir tes transactions.",
+      "search": {
+        "placeholder": "Chercher par id, hash, destinataire, symbole…"
+      },
+      "filters": {
+        "status": "Statut",
+        "kind": "Type",
+        "all": "Toutes",
+        "action": "Action requise"
+      },
+      "kinds": {
+        "transfer": "Transfert",
+        "payment": "Paiement programmé"
+      },
+      "status": {
+        "pending": "En attente",
+        "signed": "Signée",
+        "executed": "Exécutée",
+        "failed": "Échouée",
+        "expired": "Expirée"
+      },
+      "row": {
+        "aria": "{amount} {symbol} vers {to}, statut {status}"
+      },
+      "sheet": {
+        "close": "Fermer",
+        "from": "De",
+        "to": "Vers",
+        "network": "Réseau",
+        "amountUsd": "Montant (USD)",
+        "scheduledFor": "Programmée pour",
+        "txHash": "Hash de transaction",
+        "timeline": "Chronologie",
+        "timelineEvents": {
+          "issued": "Émise",
+          "signed": "Signée",
+          "executed": "Exécutée",
+          "expired": "Expirée"
+        },
+        "openConversation": "Ouvrir le chat qui l'a créée"
       }
     },
     "settings": {

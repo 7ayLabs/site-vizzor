@@ -668,7 +668,8 @@
         "alerts": "Alerts",
         "library": "Receipts",
         "libraryHint": "/precisions",
-        "receipts": "Receipts",
+        "workflows": "Workflows",
+        "transactions": "Transactions",
         "tools": "Tools",
         "toolsHint": "/help",
         "directory": "Directory"
@@ -760,6 +761,279 @@
           "noResults": "No matches.",
           "cta": "Open Directory to pin"
         }
+      }
+    },
+    "capability": {
+      "tray": {
+        "label": "Agent-payment capabilities",
+        "transfer": {
+          "label": "Transfer assets",
+          "tooltip": "Arm to move this token between wallets. Vizzor will draft the transfer and ask you to sign before anything moves."
+        },
+        "payment": {
+          "label": "Coordinate payment",
+          "tooltip": "Arm to schedule or condition a payment on this token. Nothing settles without a signed authorization."
+        },
+        "lockedSettings": "Enable in Settings → Capabilities",
+        "lockedTier": "Upgrade to Pro to use agent-payments"
+      },
+      "notify": {
+        "executed": "✅ Your transfer of {amount} {symbol} is on-chain — settled.",
+        "executedWithTx": "✅ Your transfer of {amount} {symbol} is on-chain — settled. Tx `{tx}`.",
+        "scheduled": "📅 Your payment of {amount} {symbol} is scheduled for {when}. I'll ping you here when it's ready to broadcast.",
+        "paymentDue": "⏰ Your scheduled payment of {amount} {symbol} is ready. Reply or open Workflows to broadcast.",
+        "failed": "❌ Your transfer of {amount} {symbol} didn't settle. {reason}",
+        "rejected": "You rejected the transfer of {amount} {symbol}. Nothing was sent.",
+        "expired": "⌛ The transfer of {amount} {symbol} expired before it was signed. Start over to try again."
+      },
+      "intent": {
+        "kinds": {
+          "transfer": "Transfer assets",
+          "payment": "Coordinate payment"
+        },
+        "from": "From",
+        "to": "To",
+        "amount": "Amount",
+        "fee": "Fee",
+        "nonce": "Nonce",
+        "ttlExpiresIn": "Expires in {s}s",
+        "risk": "Vizzor will trigger the on-chain action only after you sign. Review every field — nothing here can be reversed once settled.",
+        "sign": "Sign & execute",
+        "signAndSchedule": "Sign & schedule",
+        "scheduling": "Waiting for wallet…",
+        "schedule": "Schedule",
+        "scheduledFor": "Scheduled for {when}",
+        "broadcastNow": "Broadcast now",
+        "continue": "Continue",
+        "creating": "Creating…",
+        "signing": "Waiting for wallet…",
+        "settling": "Settling…",
+        "reject": "Reject",
+        "close": "Close",
+        "retry": "Retry",
+        "success": "Executed",
+        "expired": "Intent expired — start over to try again.",
+        "errorRejected": "Signature rejected. Nothing was sent on-chain.",
+        "errorNoSignPrimitive": "Your wallet does not support message signing.",
+        "errorWalletDisconnected": "Wallet disconnected. Reconnect and try again.",
+        "errorGeneric": "Something went wrong. Try again in a moment.",
+        "reasons": {
+          "intent_not_found": "This intent no longer exists.",
+          "intent_expired": "This intent expired before it could settle.",
+          "intent_signed": "This intent was already signed.",
+          "intent_executed": "This intent already settled.",
+          "intent_failed": "The last attempt failed on-chain. Start over.",
+          "forbidden": "This intent belongs to a different wallet.",
+          "signature_invalid": "Signature did not verify. Try again.",
+          "spend_cap_reached": "Daily spend cap reached for this capability.",
+          "capability_capped_zero": "Raise the daily cap in Settings before running this capability.",
+          "wallet_mismatch": "The signing wallet did not match this session.",
+          "unsupported_network": "This network is not yet supported for settlement.",
+          "upstream_timeout": "The engine timed out while settling. Retry safely — no double-spend.",
+          "upstream_unreachable": "The engine is unreachable. Retry when it's back.",
+          "upstream_error": "The engine refused this settlement. See the details below.",
+          "engine_settlement_pending": "Signature captured. On-chain settlement is queued for the engine deploy that ships with this feature — nothing has moved on-chain yet.",
+          "wallet_unexpected": "Your wallet returned an unexpected error. Unlock it, close any pending prompts, and try again.",
+          "capability_tos_required": "Accept the current terms to enable this capability.",
+          "tier_required": "Upgrade to Pro or Elite to enable capabilities.",
+          "invalid_body": "The request body is malformed.",
+          "invalid_capability": "That capability isn't recognized.",
+          "invalid_enabled": "Enable flag is invalid.",
+          "invalid_spend_cap": "Spend cap must be a positive number up to $10 000.",
+          "invalid_tos_accepted_at": "TOS acceptance timestamp is invalid — reload and try again.",
+          "invalid_content_type": "Request must be JSON.",
+          "unauthenticated": "Sign in with your wallet to continue.",
+          "internal_error": "Server hit an unexpected error.",
+          "rate_limited": "Too many requests. Wait a moment and retry.",
+          "capability_not_enabled": "Enable this capability first, then draft the intent.",
+          "self_transfer": "Recipient can't be your own wallet.",
+          "intent_insert_failed": "Couldn't record the intent. Retry.",
+          "intent_transition_failed": "Intent state changed mid-flight. Reload and try again.",
+          "upstream_malformed": "The engine returned a shape we couldn't parse.",
+          "insufficient_balance": "Your wallet doesn't hold enough SOL for this transfer plus the network fee. On devnet, top up at https://faucet.solana.com.",
+          "rpc_unavailable": "The Solana RPC is unreachable right now. Try again in a moment.",
+          "wallet_preflight_failed": "Your wallet's own simulation rejected the transfer. Reload the extension and retry.",
+          "capability_not_in_prod": "This capability isn't shipping in this build yet. Ask us about early access.",
+          "invalid_conversation_id": "Invalid conversation reference. Reload the chat and try again.",
+          "invalid_execute_at": "The schedule time isn't valid. It must be at least a minute from now and at most a year out.",
+          "invalid_recurrence": "That recurrence isn't supported yet — pick 'once' for now.",
+          "wallet_no_sign_message": "Your wallet doesn't support message signing yet. Try Phantom or Solflare."
+        }
+      },
+      "settings": {
+        "title": "Agent-payment capabilities",
+        "subtitle": "Vizzor can move tokens and coordinate scheduled payments. Every capability is opt-in and every action requires a wallet signature.",
+        "toggleLabel": "Enable",
+        "spendCapLabel": "Daily USD cap",
+        "spendUsedLabel": "Used today",
+        "killSwitch": "Disable all capabilities",
+        "killSwitchConfirm": "This clears every enabled capability and cancels any pending intents. You can re-enable them later.",
+        "tosTitle": "Authorization",
+        "tosBody": "Vizzor drafts the transaction. You sign every one on-chain.",
+        "tosAccept": "Enable",
+        "tosCancel": "Cancel",
+        "history": {
+          "title": "Recent intents",
+          "empty": "No intents yet. Arm a capability from the composer to start.",
+          "columns": {
+            "kind": "Kind",
+            "symbol": "Symbol",
+            "amount": "Amount",
+            "status": "Status",
+            "time": "When"
+          }
+        }
+      }
+    },
+    "tour": {
+      "open": "Show tour",
+      "skip": "Skip",
+      "next": "Next",
+      "previous": "Back",
+      "finish": "Got it",
+      "tapToContinue": "Tap to continue",
+      "stepIndicator": "Step {index} of {total}",
+      "steps": {
+        "welcome": {
+          "title": "Welcome to Vizzor 🚀",
+          "body": "I'll show you how your wallet fires on-chain actions here. Straight to the point."
+        },
+        "composer": {
+          "title": "Ask anything 💬",
+          "body": "Drop any crypto question — predict a move, mention a ticker, or query market state."
+        },
+        "topics": {
+          "title": "Skills & Connectors 🧠",
+          "body": "Turn on a reasoning mode or connect an external source to improve my replies."
+        },
+        "carousel": {
+          "title": "Focus on a token 🎯",
+          "body": "Tap a chip to focus on a token or topic. Each one carries live context — price, delta, momentum."
+        },
+        "navAlerts": {
+          "title": "Alerts panel 🔔",
+          "body": "Every alert you've armed lives here — price, volume, on-chain events."
+        },
+        "navTransactions": {
+          "title": "Every transaction 📊",
+          "body": "Every transfer or scheduled payment your wallet drafts lives here. Tap a row for the full receipt."
+        },
+        "identity": {
+          "title": "Your wallet, your control 🔐",
+          "body": "Vizzor never touches funds without a signature. Sign out whenever — your history stays with your wallet."
+        },
+        "mobileMenu": {
+          "title": "Open the menu 📱",
+          "body": "Tap the ☰ icon at the top-left to keep going."
+        },
+        "done": {
+          "title": "You're set ✨",
+          "body": "Ask anything, arm an alert, or draft a payment. Cmd+K → \"Show tour\" to replay this whenever 🚀"
+        }
+      }
+    },
+    "tradePlan": {
+      "label": "Trade plan",
+      "title": "Ladder",
+      "long": "Long",
+      "short": "Short",
+      "confidence": "Confidence",
+      "close": "close",
+      "levels": {
+        "entry": "Entry",
+        "tp1": "TP1",
+        "tp2": "TP2",
+        "sl": "Stop"
+      },
+      "setAlert": "Set alert",
+      "arming": "Arming…",
+      "armed": "Armed",
+      "retry": "Retry",
+      "openJupiter": "Jupiter",
+      "armAll": "Arm all levels",
+      "proceedsTo": "Winnings to",
+      "footerHint": "Arming alerts fires notifications when price crosses each level.",
+      "sendWinningsTitle": "Send winnings — sign to confirm",
+      "sendWinningsAmount": "Amount",
+      "signAndSend": "Sign & send",
+      "preparing": "Preparing…"
+    },
+    "workflows": {
+      "meta": {
+        "title": "Workflows · Vizzor",
+        "description": "Every capability intent your wallet has drafted, grouped by conversation."
+      },
+      "eyebrow": "Workflows",
+      "title": "Your workflows",
+      "body": "Every capability intent your wallet has drafted, grouped by the conversation that authored it. Deleting a chat doesn't cancel its signed workflows — they still settle here.",
+      "empty": "No workflows yet. Compose a prompt with `send` or `pay` to draft one.",
+      "unlinked": "Unlinked intents",
+      "unauthenticated": "Sign in with your wallet to see the workflows you drafted.",
+      "activeBadge": "{count, plural, one {# active} other {# active}}",
+      "status": {
+        "pending": "Pending",
+        "signed": "Signed",
+        "executed": "Executed",
+        "failed": "Failed",
+        "expired": "Expired"
+      },
+      "deleteGuard": {
+        "title": "Chat has active workflows",
+        "body": "This chat has {count, plural, one {# active workflow} other {# active workflows}}. Deleting removes the chat history; signed workflows still execute on-chain.",
+        "confirm": "Delete anyway",
+        "cancel": "Keep chat"
+      }
+    },
+    "transactions": {
+      "meta": {
+        "title": "Transactions · Vizzor",
+        "description": "Every on-chain transaction your wallet drafted through Vizzor — pending, signed, executed, or expired."
+      },
+      "eyebrow": "Transactions",
+      "title": "Your transactions",
+      "body": "Every capability intent your wallet has drafted. Actionable rows sit at the top, terminal receipts follow. Tap a row to see the full details.",
+      "empty": "No transactions yet. Compose a prompt with `send` or `pay` to draft one.",
+      "noMatches": "No transactions match those filters.",
+      "unauthenticated": "Sign in with your wallet to see your transactions.",
+      "search": {
+        "placeholder": "Search by id, tx hash, recipient, symbol…"
+      },
+      "filters": {
+        "status": "Status",
+        "kind": "Kind",
+        "all": "All",
+        "action": "Needs action"
+      },
+      "kinds": {
+        "transfer": "Transfer",
+        "payment": "Scheduled payment"
+      },
+      "status": {
+        "pending": "Pending",
+        "signed": "Signed",
+        "executed": "Executed",
+        "failed": "Failed",
+        "expired": "Expired"
+      },
+      "row": {
+        "aria": "{amount} {symbol} to {to}, status {status}"
+      },
+      "sheet": {
+        "close": "Close",
+        "from": "From",
+        "to": "To",
+        "network": "Network",
+        "amountUsd": "Amount (USD)",
+        "scheduledFor": "Scheduled for",
+        "txHash": "Transaction hash",
+        "timeline": "Timeline",
+        "timelineEvents": {
+          "issued": "Issued",
+          "signed": "Signed",
+          "executed": "Executed",
+          "expired": "Expired"
+        },
+        "openConversation": "Open the conversation that authored this"
       }
     },
     "settings": {

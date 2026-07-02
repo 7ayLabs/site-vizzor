@@ -33,6 +33,13 @@
 import Database, { type Database as DB } from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import {
+  ALL_CAP_IDS,
+  DEFAULT_SPEND_CAPS_USD,
+  isCapId,
+  type CapId,
+  type IntentNetwork,
+} from '../capabilities/intent';
 
 const DB_PATH =
   process.env.VIZZOR_SITE_DB ?? join(process.cwd(), '.vizzor', 'site.db');
@@ -123,6 +130,7 @@ function init(): DB {
   runV020Migrations(db);
   runV04TreasuryMigrations(db);
   runV041DirectoryMigrations(db);
+  runV050CapabilityMigrations(db);
   return db;
 }
 
@@ -536,6 +544,185 @@ function runV041DirectoryMigrations(db: DB): void {
   db.exec(
     `UPDATE wallet_preferences SET pinned_skill_ids = '[]' WHERE pinned_skill_ids IS NULL`,
   );
+}
+
+/* ------------------------------------------------------------------ *\
+ * v0.5.0 agent-payment capabilities.
+ *
+ * The /predict composer exposes wallet-scoped capabilities that can
+ * trigger on-chain effects. v0.5.1 ships two: `transfer` (send) and
+ * `payment` (schedule). Every capability produces a pending "intent"
+ * first — the engine never writes on-chain directly. The site's
+ * intent modal shows every field, the user signs a canonical string,
+ * and only then does the settlement route hit the chain.
+ *
+ * State:
+ *   - wallet_preferences gains four columns:
+ *       enabled_capabilities        JSON array of CapId
+ *       capability_spend_caps       JSON { [CapId]: usdPerDay }
+ *       capability_tos_version      last accepted TOS version
+ *       capability_tos_accepted_at  timestamp of that acceptance
+ *   - capability_audit is the intent ledger. Every pending / signed /
+ *     executed intent lives here so we can (a) enforce idempotency on
+ *     re-submit, (b) drive the "recent intents" settings view, (c)
+ *     compute daily spend caps, (d) expire stale unsigned intents.
+ *
+ * TTL semantics: an intent enters 'pending' at issue time with a
+ * ttl_at 60s in the future. If the user doesn't sign in that window
+ * we mark it 'expired' (a nightly sweep + on-demand call from the
+ * enabled route). Signed but not-yet-executed rows keep 'signed' for
+ * the retry window; failed on-chain settlement moves them to 'failed'.
+\* ------------------------------------------------------------------ */
+/**
+ * v0.5.0 migration lazy-run flag.
+ *
+ * `init()` runs this once at DB creation, but Next.js dev mode retains
+ * the SQLite singleton on `globalThis` across HMR — a dev process
+ * started before v0.5.0 shipped will hold a connection whose schema
+ * predates these columns. `ensureCapabilityMigrations()` (below)
+ * bootstraps the schema on first capability read/write per process so
+ * the surface heals itself without a manual restart. The migration
+ * body is idempotent (guarded by `CREATE TABLE IF NOT EXISTS` +
+ * `addColumnIfMissing`), so re-invocation is safe.
+ */
+let capabilityMigrationsEnsured = false;
+
+export function ensureCapabilityMigrations(): void {
+  if (capabilityMigrationsEnsured) return;
+  try {
+    runV050CapabilityMigrations(getDb());
+    capabilityMigrationsEnsured = true;
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[capabilities] lazy migration failed',
+      e instanceof Error ? e.message : e,
+    );
+  }
+}
+
+function runV050CapabilityMigrations(db: DB): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS capability_audit (
+      intent_id      TEXT PRIMARY KEY,
+      wallet_address TEXT NOT NULL,
+      kind           TEXT NOT NULL CHECK(kind IN ('transfer','payment')),
+      network        TEXT NOT NULL CHECK(network IN ('sol','ton')),
+      symbol         TEXT,
+      amount         TEXT,
+      amount_usd     REAL,
+      from_addr      TEXT,
+      to_addr        TEXT,
+      canonical      TEXT NOT NULL,
+      nonce          TEXT NOT NULL,
+      issued_at      INTEGER NOT NULL,
+      ttl_at         INTEGER NOT NULL,
+      status         TEXT NOT NULL CHECK(status IN ('pending','signed','executed','failed','expired')),
+      tx_hash        TEXT,
+      signed_at      INTEGER,
+      executed_at    INTEGER,
+      created_at     INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000),
+      updated_at     INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000)
+    );
+    CREATE INDEX IF NOT EXISTS idx_capability_audit_wallet_created
+      ON capability_audit(wallet_address, created_at);
+    CREATE INDEX IF NOT EXISTS idx_capability_audit_status_ttl
+      ON capability_audit(status, ttl_at);
+    CREATE INDEX IF NOT EXISTS idx_capability_audit_wallet_kind_executed
+      ON capability_audit(wallet_address, kind, executed_at);
+  `);
+
+  addColumnIfMissing(
+    db,
+    'wallet_preferences',
+    'enabled_capabilities',
+    "TEXT NOT NULL DEFAULT '[]'",
+  );
+  addColumnIfMissing(
+    db,
+    'wallet_preferences',
+    'capability_spend_caps',
+    "TEXT NOT NULL DEFAULT '{}'",
+  );
+  addColumnIfMissing(
+    db,
+    'wallet_preferences',
+    'capability_tos_version',
+    'INTEGER',
+  );
+  addColumnIfMissing(
+    db,
+    'wallet_preferences',
+    'capability_tos_accepted_at',
+    'INTEGER',
+  );
+
+  // v0.5.1 — link intents to the conversation they were minted from
+  // so the workflows page can group them and the chat-delete guard
+  // can look up active intents for a given conversation. Nullable —
+  // legacy rows (pre-v0.5.1) render in an "Unlinked" group on the
+  // workflows page.
+  addColumnIfMissing(db, 'capability_audit', 'conversation_id', 'TEXT');
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_capability_audit_wallet_conv
+      ON capability_audit(wallet_address, conversation_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_capability_audit_conv_status
+      ON capability_audit(conversation_id, status);
+  `);
+
+  // v0.5.2 — notifications ledger. One row per user-visible actionable
+  // event: an intent settled/failed, an alert triggered, an autotrade
+  // level hit. Read by the sidebar badge + a future "Notifications"
+  // drawer. `kind` is deliberately loose (TEXT + app-level enum) so
+  // adding a new event class is a code change, not a migration.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id             TEXT PRIMARY KEY,
+      wallet_address TEXT NOT NULL,
+      kind           TEXT NOT NULL,
+      ref_id         TEXT,
+      level          TEXT NOT NULL DEFAULT 'info'
+                       CHECK(level IN ('info','success','warn','error')),
+      body           TEXT NOT NULL,
+      meta           TEXT,
+      read_at        INTEGER,
+      created_at     INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000)
+    );
+    CREATE INDEX IF NOT EXISTS idx_notifications_wallet_created
+      ON notifications(wallet_address, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_notifications_wallet_kind_created
+      ON notifications(wallet_address, kind, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_notifications_wallet_unread
+      ON notifications(wallet_address, read_at)
+      WHERE read_at IS NULL;
+  `);
+
+  // v0.5.2 — coordinate-payment (scheduled) fields on capability_audit.
+  // The transfer path executes immediately; the payment path signs a
+  // canonical authorization NOW and expects the site to fire a
+  // notification at `execute_at` so the user can broadcast. No custody:
+  // the wallet always has to click Sign again to actually move funds.
+  //
+  //   execute_at         — unix ms when the payment should fire.
+  //                        NULL for legacy transfer rows.
+  //   recurrence         — 'once' | 'weekly' | 'monthly'. v0.5.2 ships
+  //                        'once' only; the column is here so the DSL
+  //                        can add recurrence without another migration.
+  //   signature          — base58 sign_message signature over `canonical`.
+  //                        Persisted so the engine (or a future auto-
+  //                        execute path) can prove the user pre-authorized.
+  //   payment_notified_at — the moment we fired the payment_due
+  //                        notification. NULL until it fires; prevents
+  //                        double-firing when the notifications poll
+  //                        runs every 30s past the due window.
+  addColumnIfMissing(db, 'capability_audit', 'execute_at', 'INTEGER');
+  addColumnIfMissing(db, 'capability_audit', 'recurrence', 'TEXT');
+  addColumnIfMissing(db, 'capability_audit', 'signature', 'TEXT');
+  addColumnIfMissing(db, 'capability_audit', 'payment_notified_at', 'INTEGER');
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_capability_audit_payment_due
+      ON capability_audit(wallet_address, kind, status, execute_at, payment_notified_at);
+  `);
 }
 
 export function getDb(): DB {
@@ -1760,4 +1947,907 @@ export function revokeMcpToken(tokenHash: string, wallet: string): boolean {
     )
     .run(Date.now(), tokenHash, wallet);
   return r.changes > 0;
+}
+
+/* ------------------------------------------------------------------ *\
+ * v0.5.0 — capability helpers.
+ *
+ * Two surfaces:
+ *
+ *   1. Preferences — per-wallet enabled set + spend caps + TOS state.
+ *      Read by /api/predict (to strip capabilities the wallet hasn't
+ *      enabled) and by the settings page.
+ *
+ *   2. Audit — pending / signed / executed intent ledger. Every
+ *      capability tool call from the engine lands here first as
+ *      'pending'; the settlement route flips it to 'executed' with a
+ *      tx_hash. Idempotency on re-submit is implemented at this layer.
+\* ------------------------------------------------------------------ */
+
+/** Current capability TOS version. Bumping this forces re-acceptance. */
+export const CAPABILITY_TOS_VERSION = 1;
+
+export interface CapabilityPreferences {
+  enabled: CapId[];
+  spend_caps: Record<CapId, number>;
+  tos_version: number | null;
+  tos_accepted_at: number | null;
+}
+
+interface RawCapPrefsRow {
+  enabled_capabilities: string | null;
+  capability_spend_caps: string | null;
+  capability_tos_version: number | null;
+  capability_tos_accepted_at: number | null;
+}
+
+/**
+ * Read a wallet's capability preferences. Missing row / missing
+ * columns yield the safe default: nothing enabled, default spend caps,
+ * TOS unaccepted. The caller (settings + /api/predict) treats an empty
+ * enabled list as "no capabilities allowed" — the safe closed state.
+ */
+export function getCapabilityPreferences(wallet: string): CapabilityPreferences {
+  ensureCapabilityMigrations();
+  const row = getDb()
+    .prepare(
+      `SELECT enabled_capabilities, capability_spend_caps,
+              capability_tos_version, capability_tos_accepted_at
+         FROM wallet_preferences
+         WHERE wallet_address = ?`,
+    )
+    .get(wallet) as RawCapPrefsRow | undefined;
+  return {
+    enabled: parseEnabledCaps(row?.enabled_capabilities ?? null),
+    spend_caps: parseSpendCaps(row?.capability_spend_caps ?? null),
+    tos_version: row?.capability_tos_version ?? null,
+    tos_accepted_at: row?.capability_tos_accepted_at ?? null,
+  };
+}
+
+/**
+ * Convenience wrapper — the /api/predict allow-list intersection uses
+ * only the enabled list, not the full preferences bundle.
+ */
+export function getEnabledCapabilities(wallet: string): CapId[] {
+  return getCapabilityPreferences(wallet).enabled;
+}
+
+/**
+ * Toggle a single capability enable + optionally update its spend cap.
+ * Enforces the TOS-accept gate: enabling any capability requires the
+ * current TOS version to have been accepted (missing or stale ⇒
+ * throws `capability_tos_required`).
+ *
+ * Autonomous mode is additionally gated: the spend cap defaults to $0
+ * and enabling it does NOT bypass that — the user must call
+ * setCapabilitySpendCap explicitly to raise it, which is done from the
+ * "Autonomous Mode" acknowledgment modal in settings.
+ */
+export function setEnabledCapability(opts: {
+  wallet: string;
+  capability: CapId;
+  enabled: boolean;
+  tosAcceptedAt: number;
+  tosVersion: number;
+  spendCapUsd?: number;
+}): void {
+  ensureCapabilityMigrations();
+  if (opts.enabled) {
+    if (opts.tosVersion !== CAPABILITY_TOS_VERSION) {
+      throw new Error('capability_tos_required');
+    }
+    if (!Number.isFinite(opts.tosAcceptedAt) || opts.tosAcceptedAt <= 0) {
+      throw new Error('capability_tos_required');
+    }
+  }
+  const db = getDb();
+  const now = Date.now();
+  const prefs = getCapabilityPreferences(opts.wallet);
+  const nextEnabled = new Set(prefs.enabled);
+  if (opts.enabled) nextEnabled.add(opts.capability);
+  else nextEnabled.delete(opts.capability);
+  const nextCaps: Record<string, number> = { ...prefs.spend_caps };
+  if (opts.spendCapUsd !== undefined) {
+    if (!Number.isFinite(opts.spendCapUsd) || opts.spendCapUsd < 0) {
+      throw new Error('spend_cap_invalid');
+    }
+    nextCaps[opts.capability] = opts.spendCapUsd;
+  }
+  db.prepare(
+    `INSERT INTO wallet_preferences (
+        wallet_address, enabled_capabilities, capability_spend_caps,
+        capability_tos_version, capability_tos_accepted_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(wallet_address) DO UPDATE SET
+        enabled_capabilities        = excluded.enabled_capabilities,
+        capability_spend_caps       = excluded.capability_spend_caps,
+        capability_tos_version      = excluded.capability_tos_version,
+        capability_tos_accepted_at  = excluded.capability_tos_accepted_at,
+        updated_at                  = excluded.updated_at`,
+  ).run(
+    opts.wallet,
+    JSON.stringify([...nextEnabled]),
+    JSON.stringify(nextCaps),
+    opts.enabled ? opts.tosVersion : (prefs.tos_version ?? null),
+    opts.enabled ? opts.tosAcceptedAt : (prefs.tos_accepted_at ?? null),
+    now,
+  );
+}
+
+/**
+ * Atomically clear the enabled set. Used by the "Disable all" kill
+ * switch in settings. Spend caps + TOS record are preserved so a
+ * subsequent re-enable doesn't re-prompt for TOS immediately.
+ */
+export function disableAllCapabilities(wallet: string): void {
+  ensureCapabilityMigrations();
+  const db = getDb();
+  db.prepare(
+    `INSERT INTO wallet_preferences (
+        wallet_address, enabled_capabilities, updated_at)
+      VALUES (?, '[]', ?)
+      ON CONFLICT(wallet_address) DO UPDATE SET
+        enabled_capabilities = '[]',
+        updated_at           = excluded.updated_at`,
+  ).run(wallet, Date.now());
+  // Cancel any pending intents so they can't be signed after kill.
+  db.prepare(
+    `UPDATE capability_audit
+       SET status = 'expired', updated_at = ?
+       WHERE wallet_address = ? AND status = 'pending'`,
+  ).run(Date.now(), wallet);
+}
+
+function parseEnabledCaps(raw: string | null): CapId[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isCapId);
+  } catch {
+    return [];
+  }
+}
+
+function parseSpendCaps(raw: string | null): Record<CapId, number> {
+  const out: Record<CapId, number> = { ...DEFAULT_SPEND_CAPS_USD };
+  if (!raw) return out;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') return out;
+    for (const cap of ALL_CAP_IDS) {
+      const v = (parsed as Record<string, unknown>)[cap];
+      if (typeof v === 'number' && Number.isFinite(v) && v >= 0) {
+        out[cap] = v;
+      }
+    }
+    return out;
+  } catch {
+    return out;
+  }
+}
+
+/* --------------------------- audit ledger -------------------------- */
+
+export type CapabilityIntentStatus =
+  | 'pending'
+  | 'signed'
+  | 'executed'
+  | 'failed'
+  | 'expired';
+
+export interface CapabilityAuditRow {
+  intent_id: string;
+  wallet_address: string;
+  kind: CapId;
+  network: IntentNetwork;
+  symbol: string | null;
+  amount: string | null;
+  amount_usd: number | null;
+  from_addr: string | null;
+  to_addr: string | null;
+  canonical: string;
+  nonce: string;
+  issued_at: number;
+  ttl_at: number;
+  status: CapabilityIntentStatus;
+  tx_hash: string | null;
+  signed_at: number | null;
+  executed_at: number | null;
+  created_at: number;
+  updated_at: number;
+  /** v0.5.1 — nullable pointer to the conversation this intent was
+   *  minted from. Legacy rows are NULL. */
+  conversation_id: string | null;
+  /** v0.5.2 — coordinate-payment fields. NULL for transfer rows. */
+  execute_at: number | null;
+  recurrence: 'once' | 'weekly' | 'monthly' | null;
+  /** Base58 signMessage signature over `canonical`. Persisted for
+   *  the scheduled payment path so the engine can prove pre-auth. */
+  signature: string | null;
+  /** Set the first time the scheduler-tick fires payment_due for this
+   *  row. Prevents re-firing on subsequent polls. */
+  payment_notified_at: number | null;
+}
+
+/**
+ * Persist a fresh pending intent. Called by the /api/predict route
+ * when the engine emits an `intent_required` SSE event. The row is
+ * the authority the settlement route checks against.
+ */
+export function insertPendingIntent(row: {
+  intentId: string;
+  wallet: string;
+  kind: CapId;
+  network: IntentNetwork;
+  symbol: string | null;
+  amount: string | null;
+  amountUsd: number | null;
+  fromAddr: string | null;
+  toAddr: string | null;
+  canonical: string;
+  nonce: string;
+  issuedAt: number;
+  ttlAt: number;
+  /** v0.5.1 — the conversation this intent was minted from.
+   *  Optional for the engine-tool-call path (which may not know the
+   *  conversation id yet). Site's manual mint path passes it so the
+   *  workflows page can group and the chat-delete guard can look it up. */
+  conversationId?: string | null;
+  /** v0.5.2 — scheduled-payment fields. Both are NULL for transfer
+   *  intents (which execute immediately). For payment intents:
+   *  `executeAt` is the unix-ms when the payment_due notification
+   *  should fire; `recurrence` is 'once' in v0.5.2 (weekly/monthly
+   *  land later without a migration since the column already exists). */
+  executeAt?: number | null;
+  recurrence?: 'once' | 'weekly' | 'monthly' | null;
+}): void {
+  ensureCapabilityMigrations();
+  const now = Date.now();
+  getDb()
+    .prepare(
+      `INSERT INTO capability_audit (
+          intent_id, wallet_address, kind, network, symbol, amount,
+          amount_usd, from_addr, to_addr, canonical, nonce, issued_at,
+          ttl_at, conversation_id, execute_at, recurrence, status,
+          created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+        ON CONFLICT(intent_id) DO NOTHING`,
+    )
+    .run(
+      row.intentId,
+      row.wallet,
+      row.kind,
+      row.network,
+      row.symbol,
+      row.amount,
+      row.amountUsd,
+      row.fromAddr,
+      row.toAddr,
+      row.canonical,
+      row.nonce,
+      row.issuedAt,
+      row.ttlAt,
+      row.conversationId ?? null,
+      row.executeAt ?? null,
+      row.recurrence ?? null,
+      now,
+      now,
+    );
+}
+
+/**
+ * v0.5.2 — persist the base58 signature the wallet produced when a
+ * scheduled payment was authorized. Kept separate from
+ * `updateIntentStatus` because the transfer path never captures a
+ * canonical signature (the on-chain tx signature IS the proof there).
+ * Called by /api/execute-intent on the payment branch right after
+ * verifying the signature against `canonical`.
+ */
+export function recordIntentSignature(opts: {
+  intentId: string;
+  signature: string;
+}): void {
+  ensureCapabilityMigrations();
+  getDb()
+    .prepare(
+      `UPDATE capability_audit SET signature = ?, updated_at = ?
+        WHERE intent_id = ? AND signature IS NULL`,
+    )
+    .run(opts.signature, Date.now(), opts.intentId);
+}
+
+export function getPendingIntent(intentId: string): CapabilityAuditRow | null {
+  ensureCapabilityMigrations();
+  const row = getDb()
+    .prepare(`SELECT * FROM capability_audit WHERE intent_id = ?`)
+    .get(intentId) as CapabilityAuditRow | undefined;
+  return row ?? null;
+}
+
+/**
+ * Guarded status transition. Legal transitions:
+ *   pending → signed  (client submitted valid sig)
+ *   pending → expired (TTL elapsed OR kill switch)
+ *   signed  → executed (upstream returned tx_hash)
+ *   signed  → failed   (upstream error)
+ * Any other requested transition throws — this catches bugs that
+ * would silently skip states and lose audit provenance.
+ */
+export function updateIntentStatus(opts: {
+  intentId: string;
+  status: CapabilityIntentStatus;
+  txHash?: string | null;
+}): void {
+  const now = Date.now();
+  const row = getPendingIntent(opts.intentId);
+  if (!row) throw new Error('intent_not_found');
+  const from = row.status;
+  const to = opts.status;
+  const legal = LEGAL_TRANSITIONS[from];
+  if (!legal || !legal.has(to)) {
+    throw new Error(`intent_transition_illegal:${from}->${to}`);
+  }
+  const signedAt = to === 'signed' ? now : row.signed_at;
+  const executedAt = to === 'executed' ? now : row.executed_at;
+  getDb()
+    .prepare(
+      `UPDATE capability_audit
+         SET status      = ?,
+             tx_hash     = COALESCE(?, tx_hash),
+             signed_at   = ?,
+             executed_at = ?,
+             updated_at  = ?
+         WHERE intent_id = ?`,
+    )
+    .run(
+      to,
+      opts.txHash ?? null,
+      signedAt,
+      executedAt,
+      now,
+      opts.intentId,
+    );
+}
+
+const LEGAL_TRANSITIONS: Record<
+  CapabilityIntentStatus,
+  Set<CapabilityIntentStatus>
+> = {
+  pending: new Set<CapabilityIntentStatus>(['signed', 'expired']),
+  signed: new Set<CapabilityIntentStatus>(['executed', 'failed']),
+  executed: new Set<CapabilityIntentStatus>(),
+  failed: new Set<CapabilityIntentStatus>(),
+  expired: new Set<CapabilityIntentStatus>(),
+};
+
+/**
+ * Mark stale pending intents as expired. Called opportunistically from
+ * the /api/capabilities/enabled GET and from /api/execute-intent — no
+ * dedicated cron. Returns the number of rows flipped so callers can
+ * log a metric if desired.
+ */
+export function expireStaleIntents(nowMs = Date.now()): number {
+  ensureCapabilityMigrations();
+  const r = getDb()
+    .prepare(
+      `UPDATE capability_audit
+         SET status = 'expired', updated_at = ?
+         WHERE status = 'pending' AND ttl_at < ?`,
+    )
+    .run(nowMs, nowMs);
+  return r.changes;
+}
+
+/**
+ * Sum of USD spend for the wallet's executed intents of one kind in
+ * the current UTC day. Drives the per-capability daily cap check
+ * at /api/execute-intent time. Rows without amount_usd contribute 0.
+ */
+export function getCapabilitySpendUsedToday(
+  wallet: string,
+  kind: CapId,
+): number {
+  ensureCapabilityMigrations();
+  const startOfDayUtc = new Date();
+  startOfDayUtc.setUTCHours(0, 0, 0, 0);
+  const startMs = startOfDayUtc.getTime();
+  const row = getDb()
+    .prepare(
+      `SELECT COALESCE(SUM(amount_usd), 0) AS total
+         FROM capability_audit
+         WHERE wallet_address = ?
+           AND kind = ?
+           AND status = 'executed'
+           AND executed_at >= ?`,
+    )
+    .get(wallet, kind, startMs) as { total: number };
+  return row.total ?? 0;
+}
+
+/**
+ * Most-recent intents for the settings history view. Bounded query
+ * (index-backed on wallet_address, created_at) so a wallet with
+ * hundreds of intents still renders instantly.
+ */
+export function listRecentIntents(
+  wallet: string,
+  limit = 20,
+): CapabilityAuditRow[] {
+  ensureCapabilityMigrations();
+  return getDb()
+    .prepare(
+      `SELECT * FROM capability_audit
+         WHERE wallet_address = ?
+         ORDER BY created_at DESC
+         LIMIT ?`,
+    )
+    .all(wallet, Math.min(Math.max(1, limit), 100)) as CapabilityAuditRow[];
+}
+
+/**
+ * v0.5.1 — intents grouped by conversation for the /app/workflows
+ * page. Legacy rows without a conversation_id fall into an "Unlinked"
+ * group keyed by an empty string. Cheaper to group in-process than
+ * to run N per-conversation queries because the audit table is
+ * indexed on (wallet, conversation, created_at) so this one scan is
+ * both range-bound and pre-sorted.
+ */
+export interface IntentGroup {
+  conversation_id: string | null;
+  conversation_title: string | null;
+  intents: CapabilityAuditRow[];
+}
+export function listIntentsGroupedByConversation(
+  wallet: string,
+  limit = 200,
+): IntentGroup[] {
+  ensureCapabilityMigrations();
+  const rows = getDb()
+    .prepare(
+      `SELECT a.*, c.title AS __conversation_title
+         FROM capability_audit a
+         LEFT JOIN conversations c ON c.id = a.conversation_id
+         WHERE a.wallet_address = ?
+         ORDER BY a.conversation_id IS NULL, a.conversation_id,
+                  a.created_at DESC
+         LIMIT ?`,
+    )
+    .all(wallet, Math.min(Math.max(1, limit), 500)) as Array<
+    CapabilityAuditRow & { __conversation_title: string | null }
+  >;
+  const byConv = new Map<string, IntentGroup>();
+  for (const r of rows) {
+    const key = r.conversation_id ?? '';
+    let g = byConv.get(key);
+    if (!g) {
+      g = {
+        conversation_id: r.conversation_id,
+        conversation_title: r.__conversation_title,
+        intents: [],
+      };
+      byConv.set(key, g);
+    }
+    // Strip the join-only column before returning.
+    const { __conversation_title: _unused, ...clean } = r;
+    void _unused;
+    g.intents.push(clean as CapabilityAuditRow);
+  }
+  return Array.from(byConv.values());
+}
+
+/**
+ * v0.5.1 — count active intents (`pending` or `signed`) for a
+ * specific (wallet, conversation) pair. Used by the chat-delete
+ * guard to decide whether to prompt the user before removing a
+ * conversation with unfinished workflows on it.
+ */
+export function countActiveIntentsForConversation(
+  wallet: string,
+  conversationId: string,
+): { count: number; kinds: CapId[] } {
+  ensureCapabilityMigrations();
+  const rows = getDb()
+    .prepare(
+      `SELECT kind FROM capability_audit
+         WHERE wallet_address = ?
+           AND conversation_id = ?
+           AND status IN ('pending', 'signed')`,
+    )
+    .all(wallet, conversationId) as Array<{ kind: CapId }>;
+  return {
+    count: rows.length,
+    kinds: Array.from(new Set(rows.map((r) => r.kind))),
+  };
+}
+
+/* ------------------------------------------------------------------ *\
+ * v0.5.2 — notifications ledger.
+ *
+ * Every user-visible actionable event (intent settled, intent failed,
+ * alert triggered, autotrade level hit) is persisted here so the
+ * sidebar badge + a future notifications drawer can render both
+ * "unread count" and history without hitting the engine. Emission
+ * is best-effort: the caller never blocks on a write failure.
+\* ------------------------------------------------------------------ */
+
+/**
+ * The set of notification kinds the app recognizes today. Deliberately
+ * a string-union, not an enum — the DB stores TEXT so a new kind is
+ * a code-only change. Adding one here + a UI label is enough.
+ */
+export type NotificationKind =
+  | 'workflow_executed'
+  | 'workflow_failed'
+  | 'alert_triggered'
+  | 'alert_resolved'
+  | 'payment_due';
+
+/**
+ * Buckets a notification kind into "flows" (workflow_*) or "alerts"
+ * (alert_*). The sidebar reads these buckets separately so the
+ * Workflows and Alerts entries each carry their own unread pill.
+ */
+export type NotificationBucket = 'workflows' | 'alerts';
+
+export function bucketForNotificationKind(
+  kind: NotificationKind,
+): NotificationBucket {
+  // Alert kinds land in the Alerts bucket; every other kind
+  // (workflow_*, payment_*) lands in the Workflows bucket so the
+  // Flujos badge reflects "actions awaiting your attention".
+  return kind === 'alert_triggered' || kind === 'alert_resolved'
+    ? 'alerts'
+    : 'workflows';
+}
+
+export type NotificationLevel = 'info' | 'success' | 'warn' | 'error';
+
+export interface NotificationRow {
+  id: string;
+  wallet_address: string;
+  kind: NotificationKind;
+  ref_id: string | null;
+  level: NotificationLevel;
+  body: string;
+  /** Free-form JSON blob for kind-specific fields (tx_hash,
+   *  explorer_url, symbol, amount, alert direction, etc.). Never
+   *  interpreted by SQL — clients parse it. */
+  meta: Record<string, unknown> | null;
+  read_at: number | null;
+  created_at: number;
+}
+
+interface NotificationRowRaw {
+  id: string;
+  wallet_address: string;
+  kind: string;
+  ref_id: string | null;
+  level: string;
+  body: string;
+  meta: string | null;
+  read_at: number | null;
+  created_at: number;
+}
+
+const KNOWN_NOTIFICATION_KINDS: ReadonlySet<NotificationKind> = new Set([
+  'workflow_executed',
+  'workflow_failed',
+  'alert_triggered',
+  'alert_resolved',
+  'payment_due',
+]);
+
+function isKnownNotificationKind(x: string): x is NotificationKind {
+  return KNOWN_NOTIFICATION_KINDS.has(x as NotificationKind);
+}
+
+function hydrateNotification(raw: NotificationRowRaw): NotificationRow {
+  const kind = isKnownNotificationKind(raw.kind)
+    ? raw.kind
+    : ('workflow_executed' as NotificationKind);
+  const level: NotificationLevel = ['info', 'success', 'warn', 'error'].includes(
+    raw.level,
+  )
+    ? (raw.level as NotificationLevel)
+    : 'info';
+  let meta: Record<string, unknown> | null = null;
+  if (raw.meta) {
+    try {
+      const parsed = JSON.parse(raw.meta);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        meta = parsed as Record<string, unknown>;
+      }
+    } catch {
+      /* corrupt row — drop meta but keep the row visible */
+    }
+  }
+  return {
+    id: raw.id,
+    wallet_address: raw.wallet_address,
+    kind,
+    ref_id: raw.ref_id,
+    level,
+    body: raw.body,
+    meta,
+    read_at: raw.read_at,
+    created_at: raw.created_at,
+  };
+}
+
+/**
+ * Persist a notification. Idempotent-ish: if a row with the same
+ * (wallet, kind, ref_id) exists in the last 60s it is NOT written
+ * again (protects against double-firing when a client + a server-
+ * side hook both emit for the same event). Passing `ref_id: null`
+ * skips the dedupe and always writes.
+ */
+export function insertNotification(opts: {
+  wallet: string;
+  kind: NotificationKind;
+  refId: string | null;
+  level: NotificationLevel;
+  body: string;
+  meta?: Record<string, unknown>;
+}): NotificationRow | null {
+  ensureCapabilityMigrations();
+  const now = Date.now();
+  const db = getDb();
+
+  if (opts.refId) {
+    const dedupe = db
+      .prepare(
+        `SELECT id FROM notifications
+           WHERE wallet_address = ? AND kind = ? AND ref_id = ?
+             AND created_at > ?`,
+      )
+      .get(opts.wallet, opts.kind, opts.refId, now - 60_000) as
+      | { id: string }
+      | undefined;
+    if (dedupe) return null;
+  }
+
+  const id = `ntf_${now}_${Math.random().toString(36).slice(2, 10)}`;
+  const metaJson = opts.meta ? JSON.stringify(opts.meta) : null;
+  db.prepare(
+    `INSERT INTO notifications (id, wallet_address, kind, ref_id, level, body, meta, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    id,
+    opts.wallet,
+    opts.kind,
+    opts.refId,
+    opts.level,
+    opts.body,
+    metaJson,
+    now,
+  );
+  return {
+    id,
+    wallet_address: opts.wallet,
+    kind: opts.kind,
+    ref_id: opts.refId,
+    level: opts.level,
+    body: opts.body,
+    meta: opts.meta ?? null,
+    read_at: null,
+    created_at: now,
+  };
+}
+
+export function listNotificationsForWallet(
+  wallet: string,
+  limit = 50,
+): NotificationRow[] {
+  ensureCapabilityMigrations();
+  const rows = getDb()
+    .prepare(
+      `SELECT id, wallet_address, kind, ref_id, level, body, meta, read_at, created_at
+         FROM notifications
+        WHERE wallet_address = ?
+     ORDER BY created_at DESC
+        LIMIT ?`,
+    )
+    .all(wallet, Math.max(1, Math.min(200, limit))) as NotificationRowRaw[];
+  return rows.map(hydrateNotification);
+}
+
+/**
+ * Aggregate unread counts per bucket + total. Powers the sidebar
+ * badges without loading rows. Deliberately a single SQL pass so a
+ * wallet with a large history doesn't scan the table twice.
+ */
+export function getUnreadNotificationCounts(wallet: string): {
+  workflows: number;
+  alerts: number;
+  total: number;
+} {
+  ensureCapabilityMigrations();
+  const rows = getDb()
+    .prepare(
+      `SELECT kind, COUNT(*) as n
+         FROM notifications
+        WHERE wallet_address = ? AND read_at IS NULL
+     GROUP BY kind`,
+    )
+    .all(wallet) as Array<{ kind: string; n: number }>;
+  let workflows = 0;
+  let alerts = 0;
+  for (const r of rows) {
+    if (!isKnownNotificationKind(r.kind)) continue;
+    if (bucketForNotificationKind(r.kind) === 'workflows') workflows += r.n;
+    else alerts += r.n;
+  }
+  return { workflows, alerts, total: workflows + alerts };
+}
+
+/**
+ * Mark a set of ids as read for this wallet. Silently skips rows
+ * that belong to a different wallet (defense-in-depth against a
+ * hostile client passing another user's id). Returns the number of
+ * rows actually updated.
+ */
+export function markNotificationsRead(
+  wallet: string,
+  ids: readonly string[],
+): number {
+  if (ids.length === 0) return 0;
+  ensureCapabilityMigrations();
+  const now = Date.now();
+  const placeholders = ids.map(() => '?').join(',');
+  const stmt = getDb().prepare(
+    `UPDATE notifications
+        SET read_at = ?
+      WHERE wallet_address = ?
+        AND read_at IS NULL
+        AND id IN (${placeholders})`,
+  );
+  const result = stmt.run(now, wallet, ...ids);
+  return typeof result.changes === 'number' ? result.changes : 0;
+}
+
+/**
+ * Mark every unread notification for this wallet as read. Used by
+ * the "mark all read" gesture in the notifications drawer.
+ */
+export function markAllNotificationsRead(
+  wallet: string,
+  bucket?: NotificationBucket,
+): number {
+  ensureCapabilityMigrations();
+  const now = Date.now();
+  const db = getDb();
+  if (!bucket) {
+    const result = db
+      .prepare(
+        `UPDATE notifications SET read_at = ?
+          WHERE wallet_address = ? AND read_at IS NULL`,
+      )
+      .run(now, wallet);
+    return typeof result.changes === 'number' ? result.changes : 0;
+  }
+  const kinds =
+    bucket === 'alerts'
+      ? (['alert_triggered', 'alert_resolved'] as NotificationKind[])
+      : ([
+          'workflow_executed',
+          'workflow_failed',
+          'payment_due',
+        ] as NotificationKind[]);
+  const placeholders = kinds.map(() => '?').join(',');
+  const result = db
+    .prepare(
+      `UPDATE notifications SET read_at = ?
+        WHERE wallet_address = ? AND read_at IS NULL
+          AND kind IN (${placeholders})`,
+    )
+    .run(now, wallet, ...kinds);
+  return typeof result.changes === 'number' ? result.changes : 0;
+}
+
+/* ------------------------------------------------------------------ *\
+ * v0.5.2 — scheduled-payment scheduler tick.
+ *
+ * Called by GET /api/notifications right before it reads the ledger.
+ * Scans this wallet's signed payment intents whose `execute_at`
+ * window has arrived and fires exactly one `payment_due` notification
+ * per intent. The row's `payment_notified_at` acts as the dedupe
+ * marker so a 30-second-cadence poll doesn't spam the ledger while
+ * the user has the tab open past the due window.
+ *
+ * Why this lives on the read path instead of a background worker:
+ * site-vizzor has no long-running process — Next.js routes are
+ * request-scoped. Piggybacking on the notifications poll gives us a
+ * "cron on visit" that fires within 30s of the user being active on
+ * any /app/* surface. Precise sub-minute timing isn't required —
+ * "payment scheduled for tonight 21:00" is fine at 21:00:30.
+\* ------------------------------------------------------------------ */
+
+interface DuePaymentRow {
+  intent_id: string;
+  symbol: string | null;
+  amount: string | null;
+  to_addr: string | null;
+  execute_at: number | null;
+}
+
+export function firePendingPaymentNotifications(wallet: string): number {
+  ensureCapabilityMigrations();
+  const now = Date.now();
+  const db = getDb();
+
+  const due = db
+    .prepare(
+      `SELECT intent_id, symbol, amount, to_addr, execute_at
+         FROM capability_audit
+        WHERE wallet_address = ?
+          AND kind = 'payment'
+          AND status = 'signed'
+          AND execute_at IS NOT NULL
+          AND execute_at <= ?
+          AND payment_notified_at IS NULL`,
+    )
+    .all(wallet, now) as DuePaymentRow[];
+
+  if (due.length === 0) return 0;
+
+  let fired = 0;
+  for (const row of due) {
+    const symbol = row.symbol ?? '';
+    const amount = row.amount ?? '';
+    const toAddr = row.to_addr ?? '';
+    const shortTo =
+      toAddr.length > 12
+        ? `${toAddr.slice(0, 4)}…${toAddr.slice(-4)}`
+        : toAddr;
+    const body = `Scheduled payment ready: ${amount} ${symbol} → ${shortTo}`;
+    const inserted = insertNotification({
+      wallet,
+      kind: 'payment_due',
+      refId: row.intent_id,
+      level: 'info',
+      body,
+      meta: {
+        symbol,
+        amount,
+        to_addr: toAddr,
+        execute_at: row.execute_at ?? undefined,
+      },
+    });
+    // insertNotification's dedupe returns null when a row for the
+    // same (wallet, kind, ref_id) already exists inside the 60s
+    // window — we still mark payment_notified_at so a slow-write
+    // race doesn't cause a re-fire on the next poll.
+    if (inserted) fired += 1;
+    db.prepare(
+      `UPDATE capability_audit SET payment_notified_at = ?, updated_at = ?
+        WHERE intent_id = ? AND payment_notified_at IS NULL`,
+    ).run(now, now, row.intent_id);
+  }
+  return fired;
+}
+
+/**
+ * Look up a signed-and-due payment by intent id for the "broadcast
+ * now" click on the payment_due notification card. Returns null if
+ * the intent doesn't belong to this wallet OR isn't ready yet.
+ * Used by the client to hydrate the IntentChatCard back into an
+ * actionable state when the user returns to the conversation.
+ */
+export function getSignedPaymentForBroadcast(
+  wallet: string,
+  intentId: string,
+): CapabilityAuditRow | null {
+  ensureCapabilityMigrations();
+  const row = getDb()
+    .prepare(
+      `SELECT * FROM capability_audit
+        WHERE intent_id = ?
+          AND wallet_address = ?
+          AND kind = 'payment'
+          AND status = 'signed'`,
+    )
+    .get(intentId, wallet) as CapabilityAuditRow | undefined;
+  return row ?? null;
 }

@@ -93,6 +93,16 @@
   --up: #15803d;
   --down: #b91c1c;
 
+  /* v0.5.1 — agent-payment capability accents. Two shipping caps,
+     each owning a distinct hue so an armed icon reads at a glance
+     which action is about to fire:
+       - transfer → green (money in motion)
+       - payment  → amber (time / scheduled)
+     Values match the light-theme baseline; dark theme picks are
+     bumped one step lighter in the .dark scope below. */
+  --cap-transfer: var(--up);
+  --cap-payment:  #d97706;
+
   /* Scanline overlay tint — achromatic, derived from fg. */
   --scan: rgba(10, 11, 15, 0.04);
 
@@ -121,6 +131,11 @@
   /* Direction tokens — lifted for dark-mode contrast. */
   --up: #4ade80;
   --down: #f87171;
+
+  /* Capability accents — brightened for dark-mode contrast so the
+     armed icon reads clearly against the composer chrome. */
+  --cap-transfer: var(--up);
+  --cap-payment:  #fbbf24;
 
   --scan: rgba(255, 255, 255, 0.04);
 
@@ -895,6 +910,220 @@
   @keyframes vz-sparkle {
     0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.85; }
     50%      { transform: scale(1.06) rotate(6deg); opacity: 1; }
+  }
+
+  /* v0.5.0 — Capability tray entrance.
+     Each icon in the tray gets vz-tray-in with a staggered
+     animation-delay set inline (0ms, 40ms, 80ms, 120ms). Motion:
+     small drop-in + fade so the row reads as "new tools just
+     appeared" without pulling the eye away from the composer.
+     Reduced-motion is handled by the global media block below. */
+  .vz-tray-in {
+    animation: vz-tray-in 220ms cubic-bezier(0.2, 0.9, 0.3, 1.05) both;
+    transform-origin: center;
+  }
+  @keyframes vz-tray-in {
+    from { opacity: 0; transform: translateY(4px) scale(0.9); }
+    to   { opacity: 1; transform: translateY(0)   scale(1);   }
+  }
+
+  /* Armed capability — a soft breathing ring so the user's eye
+     stays aware of what's about to fire on submit. Slower than the
+     ticker-active pulse so multiple armed icons don't feel busy. */
+  .vz-cap-armed-pulse {
+    animation: vz-cap-armed-pulse 2s ease-in-out infinite;
+  }
+  @keyframes vz-cap-armed-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 35%, transparent); }
+    50%      { box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 0%,  transparent); }
+  }
+
+  /* Intent modal entrance. Scale + translate a hair so the modal
+     lands with weight rather than pop-in. Paired backdrop fade
+     lives on the overlay div in the component. */
+  .vz-intent-pop {
+    animation: vz-intent-pop 260ms cubic-bezier(0.2, 0.9, 0.3, 1.05) both;
+    transform-origin: center;
+  }
+  @keyframes vz-intent-pop {
+    from { opacity: 0; transform: translateY(8px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0)   scale(1);    }
+  }
+
+  /* v0.5.2 — in-thread intent card entrance + exit. Enter is a soft
+     rise (matches vz-stream-in cadence so the card looks like part
+     of the assistant stream). Exit unfurls the opposite direction
+     when the shell unmounts the pending intent — usually only on
+     explicit reject, since successful intents now stay mounted. */
+  .vz-intent-card-in {
+    animation: vz-intent-card-in 280ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+    transform-origin: top left;
+  }
+  @keyframes vz-intent-card-in {
+    from { opacity: 0; transform: translateY(6px) scale(0.985); }
+    to   { opacity: 1; transform: translateY(0)   scale(1);     }
+  }
+  .vz-intent-card-out {
+    animation: vz-intent-card-out 200ms cubic-bezier(0.4, 0.0, 1, 1) both;
+    transform-origin: top left;
+  }
+  @keyframes vz-intent-card-out {
+    from { opacity: 1; transform: translateY(0)   scale(1);     }
+    to   { opacity: 0; transform: translateY(-4px) scale(0.985); }
+  }
+
+  /* v0.5.2 — sidebar unread badge. Faint scale bump when the count
+     increments so a new notification catches the eye without the
+     nav shifting. Applies only when the value changes; the class is
+     added briefly by the badge component on transition. */
+  .vz-badge-pop {
+    animation: vz-badge-pop 380ms cubic-bezier(0.2, 1.2, 0.3, 1) both;
+    transform-origin: center;
+  }
+  @keyframes vz-badge-pop {
+    0%   { transform: scale(1);    }
+    40%  { transform: scale(1.24); }
+    100% { transform: scale(1);    }
+  }
+
+  /* v0.5.3 — /app/transactions row entrance. Staggered rise so a
+     long list settles in without popping. Delay is set inline on
+     each row (Math.min(idx * 30, 240)ms) so short lists animate
+     tight, long lists cap at 240ms total to avoid a slow reveal. */
+  .vz-tx-row-in {
+    animation: vz-tx-row-in 240ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+    transform-origin: top left;
+  }
+  @keyframes vz-tx-row-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0);    }
+  }
+
+  /* v0.5.3 — details sheet + backdrop entrance. Right-side sheet
+     slides in from the edge; backdrop fades to build the depth
+     without a heavy dim. */
+  .vz-tx-sheet-in {
+    animation: vz-tx-sheet-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  }
+  @keyframes vz-tx-sheet-in {
+    from { opacity: 0; transform: translateX(24px); }
+    to   { opacity: 1; transform: translateX(0);    }
+  }
+  .vz-fade-in {
+    animation: vz-fade-in 220ms ease-out both;
+  }
+  @keyframes vz-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  /* v0.5.4 — first-time-login guided tour. Two paired keyframes:
+     the SVG mask fades in to build the spotlight without a jarring
+     flash; the callout card rises up as it appears so the eye
+     tracks it in. Both timings match the existing 220-260ms /
+     ease-out rhythm used across the app's motion vocabulary. */
+  .vz-spotlight-mask-in {
+    animation: vz-spotlight-mask-in 260ms ease-out both;
+  }
+  @keyframes vz-spotlight-mask-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  .vz-tour-callout-in {
+    animation: vz-tour-callout-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+    transform-origin: center;
+  }
+  @keyframes vz-tour-callout-in {
+    from { opacity: 0; transform: translateY(6px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0)   scale(1);    }
+  }
+
+  /* v0.5.11 — spotlight is now a div with box-shadow instead of
+     an SVG mask. Transition the CSS position properties so the
+     aperture smoothly slides between targets. Same curve as the
+     callout position transition so both move as a pair. */
+  .vz-tour-spotlight-rect {
+    transition:
+      top 320ms cubic-bezier(0.4, 0.2, 0.2, 1),
+      left 320ms cubic-bezier(0.4, 0.2, 0.2, 1),
+      width 320ms cubic-bezier(0.4, 0.2, 0.2, 1),
+      height 320ms cubic-bezier(0.4, 0.2, 0.2, 1);
+  }
+  .vz-spotlight-full-dim {
+    background: rgba(0, 0, 0, 0.68);
+  }
+
+  /* v0.5.5 — the callout re-slides between step positions rather
+     than teleporting. Applied to the fixed positioner; the entrance
+     keyframe still fires the first time the callout mounts.
+     v0.5.6 — glow removed; the border alone carries the boundary
+     against the spotlight backdrop. */
+  .vz-tour-callout {
+    transition:
+      top 320ms cubic-bezier(0.4, 0.2, 0.2, 1),
+      left 320ms cubic-bezier(0.4, 0.2, 0.2, 1),
+      width 220ms ease-out;
+  }
+
+  /* v0.5.5 — content cross-fade. Applied inside SpotlightTour via a
+     ref that toggles the class on every stepIndex change so the
+     title / body / progress smoothly cross-fade rather than snapping
+     to the new copy. */
+  .vz-tour-content-in {
+    animation: vz-tour-content-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  }
+  @keyframes vz-tour-content-in {
+    from { opacity: 0; transform: translateY(3px); }
+    to   { opacity: 1; transform: translateY(0);    }
+  }
+
+  /* v0.5.9 — the pulsing "shiny" ring was removed per user
+     feedback; the spotlight cutout + a hairline static outline
+     (drawn inline on the <rect>) is enough to bound the target.
+     Kept these anchor comments so the git history is easy to
+     follow if the ring ever needs to come back. */
+
+  /* v0.5.10 — swipe hint CSS removed. The carousel step now
+     animates the real scrollable child via
+     `scrollTo({ behavior: 'smooth' })` in SpotlightTour, which
+     reads clearer than an abstract circle sliding across the
+     spotlight overlay. */
+
+  /* v0.5.8 — "Tap to continue" hint pulsing text on requires-click
+     steps. Quieter than the spotlight ring — the eye should go to
+     the target first, not the hint. */
+  .vz-tap-hint {
+    animation: vz-tap-hint 1.8s ease-in-out infinite;
+  }
+  @keyframes vz-tap-hint {
+    0%, 100% { opacity: 0.5; }
+    50%      { opacity: 1;   }
+  }
+
+  /* v0.5.15 — new chip lands at the front of the topic carousel when
+     the user picks it from the (+) popover. Slides in from the left
+     with a soft fade + tiny scale bump so the motion reads as "your
+     pick moved here" rather than a static pop-in. Applied via the
+     `.vz-topic-chip-in` class on SortableTopicChip — using a class
+     over an arbitrary Tailwind animate keeps the cubic-bezier commas
+     out of the class-name parser. */
+  .vz-topic-chip-in {
+    animation: vz-topic-chip-in 360ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+    transform-origin: left center;
+  }
+  @keyframes vz-topic-chip-in {
+    from {
+      opacity: 0;
+      transform: translateX(-18px) scale(0.9);
+    }
+    60% {
+      opacity: 1;
+      transform: translateX(2px) scale(1.02);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+    }
   }
 }
 

@@ -50,6 +50,21 @@ interface GetResponse {
   reason?: string;
 }
 
+/**
+ * v0.5.1 — thrown when a conversation still has active workflows.
+ * Callers show a confirm modal and re-invoke with `{ force: true }`.
+ */
+export class WorkflowsBlockingDeleteError extends Error {
+  readonly count: number;
+  readonly kinds: string[];
+  constructor(opts: { count: number; kinds: string[] }) {
+    super(`active_workflows:${opts.count}`);
+    this.name = 'WorkflowsBlockingDeleteError';
+    this.count = opts.count;
+    this.kinds = opts.kinds;
+  }
+}
+
 const jsonFetcher = async <T,>(url: string): Promise<T> => {
   const res = await fetch(url, { credentials: 'same-origin' });
   return (await res.json()) as T;
@@ -98,12 +113,41 @@ export function useConversations(opts: { enabled: boolean }) {
     [],
   );
 
+  /**
+   * v0.5.1 — thrown when a conversation carries active (pending or
+   * signed) capability intents and the caller didn't pass
+   * `force: true`. The shell catches this to show a confirm modal;
+   * the user can then re-call `deleteConversation(id, { force: true })`.
+   */
   const deleteConversation = useCallback(
-    async (id: string): Promise<boolean> => {
-      const res = await fetch(`/api/conversations/${id}`, {
+    async (
+      id: string,
+      opts?: { force?: boolean },
+    ): Promise<boolean> => {
+      const qs = opts?.force ? '?force=1' : '';
+      const res = await fetch(`/api/conversations/${id}${qs}`, {
         method: 'DELETE',
         credentials: 'same-origin',
       });
+      if (res.status === 409) {
+        // Surface the guard through a typed error the shell can
+        // pattern-match without parsing a plain string.
+        type GuardBody = {
+          reason?: string;
+          count?: number;
+          kinds?: string[];
+        };
+        let payload: GuardBody | null = null;
+        try {
+          payload = (await res.json()) as GuardBody;
+        } catch {
+          /* body might be empty — fall through */
+        }
+        throw new WorkflowsBlockingDeleteError({
+          count: payload?.count ?? 0,
+          kinds: payload?.kinds ?? [],
+        });
+      }
       if (res.ok) void mutate();
       return res.ok;
     },

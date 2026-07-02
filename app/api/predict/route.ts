@@ -49,6 +49,15 @@ import {
   dispatchPrediction,
   buildSkillPrimingMessages,
 } from '@/lib/directory/runtime';
+import { getEnabledCapabilities, insertPendingIntent } from '@/lib/payment/db';
+import {
+  buildCanonicalIntent,
+  buildIntentPrimingMessages,
+  isCapId,
+  parsePendingIntent,
+  type CapId,
+} from '@/lib/capabilities/intent';
+import { parseTradePlan } from '@/lib/trade/trade-plan';
 import {
   PREDICT_ROUTE_REQUIREMENTS,
   assertRequiredEnv,
@@ -66,6 +75,118 @@ const UPSTREAM_TIMEOUT_MS = 30_000;
 
 interface PredictRequest {
   messages: UIMessage[];
+  /**
+   * v0.5.0 — agent-payment capabilities the user has armed in the
+   * composer tray. The engine may emit `intent_required` SSE events
+   * corresponding to any capability listed here; anything outside
+   * this array is treated as "predict-only" (the pre-v0.5.0 behavior).
+   *
+   * Server-side we intersect this array with the wallet's enabled
+   * set from `wallet_preferences.enabled_capabilities` — the UI hint
+   * is advisory, the DB is authoritative. That way a compromised
+   * session or a hand-crafted request can't unlock a capability the
+   * user hasn't explicitly opted into from settings.
+   */
+  capabilities?: unknown;
+  /**
+   * v0.5.1 — intents the site already minted this turn from the
+   * inline command syntax (`send / pay / flow / auto`). Forwarded to
+   * the engine so its LLM can READ the workflow structure and
+   * reference the queued action in its prediction commentary. Shape
+   * per intent: { intent_id, kind, symbol, amount, to_addr }.
+   *
+   * The engine is expected to inject a synthetic system message
+   * ("The user has queued N workflows this turn: …") before the
+   * user turn so the LLM narrates them naturally. See
+   * docs/spec/vizzor-engine-v0.5.1.md for the exact injection shape.
+   */
+  queued_intents?: unknown;
+  /**
+   * v0.5.1 — snapshot of the connected wallet's SOL + top-N SPL
+   * balances at prompt-submit time. Forwarded so the engine's LLM
+   * can write a trade plan grounded in what the user actually holds
+   * ("you have 0.4 SOL — this plan uses 0.15") instead of guessing.
+   * Optional; unset when the balance route was unreachable.
+   */
+  wallet_context?: unknown;
+}
+
+type QueuedIntentMeta = {
+  intent_id: string;
+  kind: CapId;
+  symbol: string;
+  amount: string;
+  to_addr: string;
+};
+
+type WalletContext = {
+  wallet: string;
+  network: string;
+  as_of: number;
+  sol: number | null;
+  spl: Array<{ mint: string; symbol: string | null; balance: number; decimals: number }>;
+};
+
+function normalizeWalletContext(raw: unknown): WalletContext | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  if (
+    typeof o.wallet !== 'string' ||
+    typeof o.network !== 'string' ||
+    typeof o.as_of !== 'number'
+  ) {
+    return null;
+  }
+  const sol =
+    typeof o.sol === 'number' && Number.isFinite(o.sol) ? o.sol : null;
+  const spl = Array.isArray(o.spl)
+    ? o.spl
+        .filter((x): x is Record<string, unknown> =>
+          Boolean(x && typeof x === 'object'),
+        )
+        .filter(
+          (x) =>
+            typeof x.mint === 'string' &&
+            typeof x.balance === 'number' &&
+            Number.isFinite(x.balance) &&
+            typeof x.decimals === 'number',
+        )
+        .slice(0, 20)
+        .map((x) => ({
+          mint: x.mint as string,
+          symbol: typeof x.symbol === 'string' ? x.symbol : null,
+          balance: x.balance as number,
+          decimals: x.decimals as number,
+        }))
+    : [];
+  return { wallet: o.wallet, network: o.network, as_of: o.as_of, sol, spl };
+}
+
+function normalizeQueuedIntents(raw: unknown): QueuedIntentMeta[] {
+  if (!Array.isArray(raw)) return [];
+  const out: QueuedIntentMeta[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const o = item as Record<string, unknown>;
+    if (
+      typeof o.intent_id !== 'string' ||
+      typeof o.symbol !== 'string' ||
+      typeof o.amount !== 'string' ||
+      typeof o.to_addr !== 'string' ||
+      !isCapId(o.kind)
+    ) {
+      continue;
+    }
+    out.push({
+      intent_id: o.intent_id,
+      kind: o.kind,
+      symbol: o.symbol,
+      amount: o.amount,
+      to_addr: o.to_addr,
+    });
+    if (out.length >= 8) break; // hard cap — matches composer parse loop
+  }
+  return out;
 }
 
 export async function POST(req: Request) {
@@ -201,17 +322,58 @@ export async function POST(req: Request) {
     return burstResponse;
   }
 
+  /* --------------------- capability allow-list ------------------- */
+  // The UI sends the list of capabilities the user armed in the tray.
+  // We intersect it with the wallet's enabled set in
+  // `wallet_preferences.enabled_capabilities` — the DB is authoritative.
+  // Free-tier requests can never reach this point (Layer 2 gate above
+  // returned 402), so a valid `effective` here implies a paying wallet
+  // that MAY have enabled capabilities.
+  const requestedCaps = Array.isArray(body.capabilities)
+    ? body.capabilities.filter(isCapId)
+    : [];
+  let allowedCaps: CapId[] = [];
+  if (requestedCaps.length > 0) {
+    try {
+      const enabled = new Set(getEnabledCapabilities(session.wallet));
+      allowedCaps = requestedCaps.filter((c) => enabled.has(c));
+    } catch {
+      /* db unavailable — degrade to zero capabilities, safe closed */
+      allowedCaps = [];
+    }
+  }
+
   /* --------------------- forward to vizzor engine ---------------- */
   // Counter increment happens AFTER the upstream call confirms success
   // — see `forwardToVizzor`. `effective` carries the tier override (a
   // trial wallet is sent to the engine as `pro` so it gets the rich
   // response) and the subscription row (used for downstream metadata).
+  // v0.5.1 — queued intents metadata. The site mints these before
+  // firing /predict when the user's prompt contains inline command
+  // syntax. We forward as-is so the engine's LLM can narrate the
+  // workflow; there's no server-side authorization to do here (the
+  // intents themselves were minted through /api/capabilities/create-intent
+  // which already ran the tier + enabled + rate-limit checks).
+  const queuedIntents = normalizeQueuedIntents(body.queued_intents);
+  // v0.5.1 — wallet-balance snapshot. Client fetches this before
+  // firing /predict; we verify the wallet field matches the session
+  // (defense against a hostile client injecting someone else's
+  // balances into the LLM context) and forward. Optional — a null
+  // context is treated by the engine as "no balance info", not an
+  // error.
+  const rawContext = normalizeWalletContext(body.wallet_context);
+  const walletContext =
+    rawContext && rawContext.wallet === session.wallet ? rawContext : null;
+
   return forwardToVizzor(body.messages, {
     wallet: session.wallet,
     walletHash,
     effective,
     promptBytes,
     headers: req.headers,
+    capabilities: allowedCaps,
+    queuedIntents,
+    walletContext,
   });
 }
 
@@ -228,6 +390,14 @@ async function forwardToVizzor(
     effective: EffectiveTier;
     promptBytes: number;
     headers: Headers;
+    /** Allow-listed capabilities the engine may trigger this turn. */
+    capabilities: CapId[];
+    /** v0.5.1 — intents the site minted this turn, forwarded so the
+     *  engine's LLM can narrate them. */
+    queuedIntents: QueuedIntentMeta[];
+    /** v0.5.1 — wallet balance snapshot forwarded so the LLM can
+     *  ground its trade plans in what the user actually holds. */
+    walletContext: WalletContext | null;
   },
 ): Promise<Response> {
   const base =
@@ -328,10 +498,19 @@ async function forwardToVizzor(
     // Once every engine is on v0.4.1, the priming becomes redundant
     // and this block can collapse into just the body.skill_id pass-
     // through.
-    const primingMessages = buildSkillPrimingMessages(activeSkillId);
-    const primedMessages = primingMessages.length
-      ? [...primingMessages, ...vizzorMessages]
-      : vizzorMessages;
+    const skillPriming = buildSkillPrimingMessages(activeSkillId);
+    // v0.5.1 — when queued_intents ride this turn, prepend a
+    // priming pair that pins the trust model: user-wallet-signed via
+    // SIWS on the site, NOT agent-executed. Otherwise the engine's
+    // base prompt drifts into "no wallet provisioned / paper
+    // trading" refusals (2026-07 regression). See
+    // lib/capabilities/intent.ts:buildIntentPrimingMessages.
+    const intentPriming = buildIntentPrimingMessages(ctx.queuedIntents);
+    const primedMessages = [
+      ...skillPriming,
+      ...intentPriming,
+      ...vizzorMessages,
+    ];
 
     if (activeSkillId) {
       // eslint-disable-next-line no-console
@@ -355,6 +534,23 @@ async function forwardToVizzor(
           client: 'site-web',
         },
         ...(activeSkillId ? { skill_id: activeSkillId } : {}),
+        // v0.5.0 — agent-payment capabilities. Only the allow-listed
+        // subset (intersection of UI-armed + DB-enabled) is forwarded.
+        // Empty array is elided so a pre-v0.5.0 engine receives the
+        // same body shape as before.
+        ...(ctx.capabilities.length > 0
+          ? { capabilities: ctx.capabilities }
+          : {}),
+        // v0.5.1 — intents the site minted this turn from inline
+        // command syntax. Forwarded so the engine's LLM narrates the
+        // workflow. Pre-v0.5.1 engines ignore the field.
+        ...(ctx.queuedIntents.length > 0
+          ? { queued_intents: ctx.queuedIntents }
+          : {}),
+        // v0.5.1 — wallet-balance snapshot at prompt-submit time.
+        // Engine's LLM uses it to write trade plans grounded in the
+        // user's actual holdings. Pre-v0.5.1 engines ignore.
+        ...(ctx.walletContext ? { wallet_context: ctx.walletContext } : {}),
       }),
       signal: controller.signal,
       cache: 'no-store',
@@ -387,7 +583,13 @@ async function forwardToVizzor(
     // `useChat` hook renders it natively. The transform also surfaces
     // engine errors and tool-use events as readable text so visitors
     // can see when the engine hit a billing limit or invoked a tool.
-    const transformed = transformVizzorStream(upstreamRes.body);
+    // v0.5.0 — the transform also inspects `intent_required` events,
+    // persists the pending intent to `capability_audit`, and re-emits
+    // it as a `data-intent-required` chunk so the client modal opens.
+    const transformed = transformVizzorStream(upstreamRes.body, {
+      wallet: ctx.wallet,
+      allowedCapabilities: new Set(ctx.capabilities),
+    });
 
     // v0.4.1 — Directory connector fan-out. When the upstream stream
     // closes cleanly, fire-and-forget dispatch a minimal payload to
@@ -437,8 +639,14 @@ async function forwardToVizzor(
 
 type SseEvent = { event?: string; data: unknown };
 
+interface StreamContext {
+  wallet: string;
+  allowedCapabilities: ReadonlySet<CapId>;
+}
+
 function transformVizzorStream(
   upstream: ReadableStream<Uint8Array>,
+  ctx: StreamContext,
 ): ReadableStream<Uint8Array> {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
@@ -469,6 +677,66 @@ function transformVizzorStream(
             buffer = buffer.slice(nl + 2);
             const parsed = parseSseEvent(rawEvent);
             if (!parsed) continue;
+            // v0.5.0 — intent_required lands as a side-channel data
+            // part after we've persisted the pending row. The engine
+            // can only emit intents matching a capability the wallet
+            // has enabled (server-side allow-list from earlier); a
+            // stray intent for a non-allowed capability is dropped
+            // here as a defense-in-depth guardrail.
+            if (parsed.event === 'intent_required') {
+              const intent = parsePendingIntent(parsed.data);
+              if (!intent) continue;
+              if (!ctx.allowedCapabilities.has(intent.kind)) {
+                continue;
+              }
+              try {
+                insertPendingIntent({
+                  intentId: intent.intent_id,
+                  wallet: ctx.wallet,
+                  kind: intent.kind,
+                  network: intent.network,
+                  symbol: intent.symbol,
+                  amount: intent.amount,
+                  amountUsd: null,
+                  fromAddr: intent.from_addr,
+                  toAddr: intent.to_addr,
+                  canonical: buildCanonicalIntent(intent),
+                  nonce: intent.nonce,
+                  issuedAt: intent.issued_at,
+                  ttlAt: intent.ttl_at,
+                });
+              } catch {
+                /* dup intent_id → row exists — client picks up the
+                   already-persisted state via the settlement route.
+                   Continuing here lets the client still open the
+                   modal so the user can complete the flow. */
+              }
+              send({
+                type: 'data-intent-required',
+                id: intent.intent_id,
+                data: intent,
+                transient: false,
+              });
+              continue;
+            }
+            // v0.5.2 Phase 1 — trade_plan side-channel. Engine emits
+            // a structured plan alongside its prose response; site
+            // renders it as an in-thread TradePlanCard. No server-
+            // side persistence yet (alerts get persisted by the
+            // downstream POST /api/alerts calls the card issues);
+            // this is a pass-through re-emit into the AI SDK data
+            // stream so useChat's onData handler picks it up.
+            if (parsed.event === 'trade_plan') {
+              const plan = parseTradePlan(parsed.data);
+              if (!plan) continue;
+              send({
+                type: 'data-trade-plan',
+                id: plan.plan_id,
+                data: plan,
+                transient: false,
+              });
+              continue;
+            }
             const delta = renderVizzorEvent(parsed);
             if (delta) send({ type: 'text-delta', id, delta });
           }

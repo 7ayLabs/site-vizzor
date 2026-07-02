@@ -76,6 +76,19 @@ ENV NEXT_PUBLIC_ALLOW_DEV_AUTH=$NEXT_PUBLIC_ALLOW_DEV_AUTH
 ARG NEXT_PUBLIC_ACCEPT_SOLANA_PAYMENTS=
 ENV NEXT_PUBLIC_ACCEPT_SOLANA_PAYMENTS=$NEXT_PUBLIC_ACCEPT_SOLANA_PAYMENTS
 
+# `NEXT_PUBLIC_APP_URL` drives `getAppLinkTarget()` in `lib/app-url.ts`
+# — the resolver every marketing "Open app" CTA uses to point users at
+# the right product host. Must be baked at build time; the client bundle
+# reads the inlined value, so setting it only in the container's runtime
+# env would leave prod (`https://app.vizzor.ai`) hardcoded in JS.
+#
+#   Prod build      → unset (falls through to hardcoded `https://app.vizzor.ai`).
+#   Staging build   → `https://testapp.vizzor.ai` so `test.vizzor.ai`
+#                     CTAs point at the staging app, keeping the test
+#                     env fully sealed off from prod state.
+ARG NEXT_PUBLIC_APP_URL=
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 

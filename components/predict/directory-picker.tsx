@@ -195,6 +195,7 @@ export function DirectoryPicker({ signedIn, disabled = false }: Props) {
       <button
         type="button"
         disabled
+        data-tour-id="composer-topics"
         aria-label={t('triggerDisabled')}
         className="shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--fg-3)] cursor-not-allowed self-end mb-px"
       >
@@ -204,11 +205,15 @@ export function DirectoryPicker({ signedIn, disabled = false }: Props) {
   }
 
   return (
-    <div ref={wrapRef} className="relative shrink-0 self-end mb-px">
+    <div
+      ref={wrapRef}
+      className="relative shrink-0 self-end mb-px"
+    >
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         disabled={disabled}
+        data-tour-id="composer-topics"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={t('trigger')}

@@ -27,6 +27,7 @@
  */
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -37,15 +38,13 @@ import Image from 'next/image';
 import useSWR from 'swr';
 import { useTranslations } from 'next-intl';
 import { Link, usePathname } from '@/i18n/navigation';
-import { Menu, X } from 'lucide-react';
-import { Boxes } from 'lucide-react';
+import { ArrowLeftRight, Boxes, Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useConversations } from '@/components/predict/use-conversations';
 import {
   IconBell,
   IconChat,
   IconPlus,
-  IconReceipts,
 } from '@/components/predict/predict-icons';
 
 interface SessionState {
@@ -54,7 +53,11 @@ interface SessionState {
   wallet?: string;
 }
 
-const SUPPRESS_RE = /^\/(?:[a-z]{2}\/)?app\/predict(\/|$)/;
+// v0.5.23 — bare `/app` renders `<PredictShell />` too (see
+// app/[locale]/app/page.tsx), which mounts its own mobile chrome.
+// Suppress this topbar on both paths so we don't stack two hamburger
+// buttons + two drawers on top of each other.
+const SUPPRESS_RE = /^\/(?:[a-z]{2}\/)?app(?:\/predict(?:\/|$)|\/?$)/;
 
 const fetcher = (url: string): Promise<SessionState> =>
   fetch(url, { credentials: 'same-origin' }).then((r) => r.json());
@@ -64,7 +67,38 @@ export function MobileAppNav() {
   const tMobile = useTranslations('app.mobileNav');
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  /**
+   * v0.5.22 — closing-phase flag. When the user taps the X (or the
+   * backdrop / Esc / a nav link), we flip `closing=true`, which
+   * swaps the drawer's slide-in keyframe for slide-out and fades
+   * the backdrop. After 180ms (matching the keyframe duration) the
+   * drawer + backdrop unmount cleanly. Without this the drawer
+   * used to snap out with no transition.
+   */
+  const [closing, setClosing] = useState(false);
   const drawerRef = useRef<HTMLDivElement | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
+
+  const requestClose = useCallback(() => {
+    if (!open || closing) return;
+    setClosing(true);
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+    }
+    closeTimerRef.current = window.setTimeout(() => {
+      setOpen(false);
+      setClosing(false);
+      closeTimerRef.current = null;
+    }, 180);
+  }, [open, closing]);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current);
+      }
+    };
+  }, []);
 
   // Identity + recent chats — pulled the same way ProductSidebar does
   // so the mobile drawer is data-identical to the desktop rail.
@@ -84,7 +118,7 @@ export function MobileAppNav() {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') requestClose();
     };
     document.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
@@ -93,13 +127,32 @@ export function MobileAppNav() {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [open]);
+  }, [open, requestClose]);
 
   // Close the drawer on route change — no navigation event API in App
-  // Router, so we watch the pathname and snap shut when it changes.
+  // Router, so we watch the pathname and animate shut when it changes.
+  // requestClose plays the slide-out; the destination page fills the
+  // majority of the viewport underneath while the 180ms exit runs.
   useEffect(() => {
-    setOpen(false);
+    requestClose();
+    // requestClose is intentionally omitted from deps — we want this
+    // to fire only on pathname change, not every time the callback
+    // reference updates (which would cause a spurious close on mount).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
+
+  // v0.5.21 — the guided tour opens the drawer as part of its mobile
+  // flow (see `mobile-menu` step in tour-steps.ts) so it can spotlight
+  // the Alertas / Transacciones / Identity items inside. On finish
+  // (or skip), the SpotlightTour dispatches `vizzor-tour-finished`;
+  // we listen here and snap the drawer shut so the user isn't left
+  // staring at an open drawer after the walkthrough completes. Uses
+  // requestClose so the exit still animates smoothly.
+  useEffect(() => {
+    const onFinished = () => requestClose();
+    window.addEventListener('vizzor-tour-finished', onFinished);
+    return () => window.removeEventListener('vizzor-tour-finished', onFinished);
+  }, [requestClose]);
 
   // Predict owns its own mobile nav. Bailing here keeps the layout free
   // of a duplicate topbar on /app/predict.
@@ -108,7 +161,10 @@ export function MobileAppNav() {
   const onPredictActive = /^\/(?:[a-z]{2}\/)?app\/predict(\/|$)/.test(pathname);
   const onDirectoryActive = /^\/(?:[a-z]{2}\/)?app\/directory(\/|$)/.test(pathname);
   const onAlertsActive = /^\/(?:[a-z]{2}\/)?app\/alerts(\/|$)/.test(pathname);
-  const onAccountActive = /^\/(?:[a-z]{2}\/)?app\/account(\/|$)/.test(pathname);
+  // v0.5.3 — transactions surface (formerly /app/workflows). Legacy
+  // path still matches during the 308 redirect frame.
+  const onTransactionsActive =
+    /^\/(?:[a-z]{2}\/)?app\/(?:transactions|workflows)(\/|$)/.test(pathname);
 
   const short =
     signedIn && wallet
@@ -131,6 +187,7 @@ export function MobileAppNav() {
         <button
           type="button"
           onClick={() => setOpen(true)}
+          data-tour-id="mobile-menu-trigger"
           aria-label={tMobile('openMenu')}
           aria-expanded={open}
           aria-controls="mobile-app-drawer"
@@ -163,23 +220,30 @@ export function MobileAppNav() {
           <span>vizzor</span>
         </Link>
 
-        <span
-          className="mono tabular text-[10.5px] uppercase tracking-[0.14em] text-[var(--fg-3)] truncate max-w-[6rem]"
-          title={wallet}
-        >
-          {short}
-        </span>
+        {/* Right-side placeholder keeps the vizzor logo optically
+            centered via space-between. The wallet identity lives
+            inside the drawer's Identity pill — no need to also
+            surface it on the topbar. */}
+        <span aria-hidden className="h-9 w-9" />
       </header>
 
       {/* Drawer + backdrop. Mounted at document root via z-50 so the
-          fixed overlay sits above any sticky chrome on the page. */}
+          fixed overlay sits above any sticky chrome on the page. The
+          `closing` phase keeps everything mounted for 180ms so the
+          slide-out + backdrop-fade keyframes play cleanly instead of
+          the drawer snapping out. */}
       {open && (
         <div className="lg:hidden fixed inset-0 z-50">
           <button
             type="button"
             aria-label={tMobile('closeMenu')}
-            onClick={() => setOpen(false)}
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={requestClose}
+            className={cn(
+              'absolute inset-0 bg-black/50 backdrop-blur-sm',
+              closing
+                ? 'motion-safe:animate-[mn-fade-out_180ms_ease-in_forwards]'
+                : 'motion-safe:animate-[mn-fade-in_180ms_ease-out]',
+            )}
           />
           <div
             id="mobile-app-drawer"
@@ -188,11 +252,18 @@ export function MobileAppNav() {
             aria-modal="true"
             aria-label={tMobile('navLabel')}
             className={cn(
-              'absolute left-0 top-0 h-dvh w-[min(320px,84vw)]',
+              'absolute left-0 top-0 h-dvh w-[min(320px,86vw)]',
               'flex flex-col',
               'border-r border-[var(--border)]',
-              'bg-[var(--surface)]',
-              'motion-safe:animate-[mn-slide-in_180ms_ease-out]',
+              // Match the desktop LeftRail's black page background
+              // (--bg). Predict-shell's mobile drawer used to be
+              // --surface (a lifted card) which read as lighter than
+              // the desktop rail; the standard now is: same --bg on
+              // mobile as on desktop.
+              'bg-[var(--bg)]',
+              closing
+                ? 'motion-safe:animate-[mn-slide-out_180ms_ease-in_forwards]'
+                : 'motion-safe:animate-[mn-slide-in_180ms_ease-out]',
             )}
           >
             <style>{`
@@ -200,15 +271,30 @@ export function MobileAppNav() {
                 from { transform: translateX(-100%); }
                 to   { transform: translateX(0); }
               }
+              @keyframes mn-slide-out {
+                from { transform: translateX(0); }
+                to   { transform: translateX(-100%); }
+              }
+              @keyframes mn-fade-in {
+                from { opacity: 0; }
+                to   { opacity: 1; }
+              }
+              @keyframes mn-fade-out {
+                from { opacity: 1; }
+                to   { opacity: 0; }
+              }
             `}</style>
 
-            {/* Drawer header — close button + brand */}
-            <div className="flex items-center justify-between gap-2 px-4 h-12 border-b border-[var(--border)]">
+            {/* Drawer header — 1:1 with predict-shell's MobileDrawer
+                header: px-4 py-3 padding, h-6 logo images, 16px
+                title text, gap-2.5 between icon and wordmark. Same
+                close button chrome (h-9 w-9). */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
               <Link
                 href="/app/predict"
-                onClick={() => setOpen(false)}
+                onClick={requestClose}
                 aria-label={tMobile('home')}
-                className="inline-flex items-center gap-2 text-[15px] font-semibold tracking-tight text-[var(--fg)]"
+                className="inline-flex items-center gap-2.5 text-[16px] font-semibold tracking-tight text-[var(--fg)] leading-none hover:opacity-80 transition-opacity"
               >
                 <Image
                   src="/brand/vizzor_darkicon.png"
@@ -216,7 +302,7 @@ export function MobileAppNav() {
                   width={364}
                   height={535}
                   priority
-                  className="block dark:hidden h-5 w-auto"
+                  className="block dark:hidden h-6 w-auto"
                 />
                 <Image
                   src="/brand/vizzor_icon.png"
@@ -224,23 +310,29 @@ export function MobileAppNav() {
                   width={364}
                   height={535}
                   priority
-                  className="hidden dark:block h-5 w-auto"
+                  className="hidden dark:block h-6 w-auto"
                 />
                 <span>vizzor</span>
               </Link>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={requestClose}
                 aria-label={tMobile('closeMenu')}
-                className="inline-flex items-center justify-center h-9 w-9 -mr-2 rounded-md text-[var(--fg-2)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)] transition-colors"
+                className="inline-flex h-9 w-9 items-center justify-center text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)] rounded-lg transition-colors"
               >
                 <X size={18} strokeWidth={1.75} aria-hidden />
               </button>
             </div>
 
-            {/* Primary nav — mirrors ProductSidebar's vocabulary */}
+            {/* Primary nav — mirrors ProductSidebar + predict-shell's
+                LeftRail vocabulary exactly. `p-4` on the outer wrapper
+                matches LeftRail's own p-4; NavItem below matches the
+                NavButton geometry (h-9 px-3 rounded-lg text-[13px]
+                font-medium) so mobile users see the same nav rhythm
+                the predict view uses. */}
+            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col p-4 gap-0.5">
             <nav
-              className="px-2 py-3 flex flex-col gap-0.5"
+              className="flex flex-col gap-0.5"
               aria-label={tMobile('navLabel')}
             >
               <DrawerLink
@@ -260,6 +352,7 @@ export function MobileAppNav() {
                 icon={<IconBell size={17} />}
                 label={t('shell.nav.alerts')}
                 active={onAlertsActive}
+                tourId="nav-alerts"
               />
               <DrawerLink
                 href="/app/directory"
@@ -268,40 +361,73 @@ export function MobileAppNav() {
                 active={onDirectoryActive}
               />
               <DrawerLink
-                href="/app/account#payments"
-                icon={<IconReceipts size={17} />}
-                label={t('shell.nav.receipts')}
-                active={onAccountActive}
+                href="/app/transactions"
+                icon={<ArrowLeftRight size={17} strokeWidth={1.7} />}
+                label={t('shell.nav.transactions')}
+                active={onTransactionsActive}
+                tourId="nav-transactions"
               />
             </nav>
 
-            {/* Recent chats — mirrors the desktop rail. Hidden cleanly
-                when the user is not signed in. */}
-            {signedIn && recent.length > 0 && (
-              <div className="px-2 pt-2 flex-1 min-h-0 overflow-y-auto flex flex-col gap-1 border-t border-[var(--border)]">
-                <p className="px-3 pt-2 text-[10.5px] uppercase tracking-[0.16em] text-[var(--fg-3)] font-semibold">
+            {/* Recent chats — 1:1 with ProductSidebar + predict-shell's
+                LeftRail so all three surfaces read identically:
+                section eyebrow always visible, dashed empty-state
+                card when the list is empty (signed-in or not), or a
+                bulleted list of the latest 8 conversations. */}
+            <div className="mt-5 flex-1 min-h-0 flex flex-col gap-1">
+              <div className="flex items-center justify-between px-3">
+                <span className="text-[10.5px] uppercase tracking-[0.16em] text-[var(--fg-3)] font-semibold">
                   {t('shell.recents.label')}
-                </p>
+                </span>
+              </div>
+              {recent.length === 0 ? (
+                <div className="mx-3 mt-1 flex flex-col gap-1.5 px-3 py-3 rounded-md border border-dashed border-[var(--border)]">
+                  <span className="mono tabular text-[9.5px] uppercase tracking-[0.18em] font-semibold text-[var(--fg-3)]">
+                    {t('shell.recents.emptyEyebrow')}
+                  </span>
+                  <p className="text-[11.5px] text-[var(--fg-3)] leading-snug">
+                    {signedIn
+                      ? t('shell.recents.empty')
+                      : t('shell.recents.signInPrompt')}
+                  </p>
+                </div>
+              ) : (
                 <ul className="flex flex-col gap-0.5">
                   {recent.map((c) => (
                     <li key={c.id}>
                       <Link
                         href={`/app/predict?conversation=${encodeURIComponent(c.id)}` as never}
-                        className="block px-3 py-1.5 rounded-md text-[12.5px] text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)] truncate transition-colors"
+                        className="group w-full flex items-center gap-2 text-left pl-3 pr-3 py-1.5 rounded-md text-[12px] truncate text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)] transition-colors"
                         title={c.title}
                       >
-                        {c.title}
+                        <span aria-hidden className="text-[var(--fg-3)]">
+                          <svg
+                            width="8"
+                            height="8"
+                            viewBox="0 0 8 8"
+                            fill="currentColor"
+                          >
+                            <circle cx="4" cy="4" r="1.5" />
+                          </svg>
+                        </span>
+                        <span className="truncate">{c.title}</span>
                       </Link>
                     </li>
                   ))}
                 </ul>
-              </div>
-            )}
+              )}
+            </div>
+            </div>
 
             {/* Identity row — kept minimal on mobile (just the wallet
                 short address). Full account actions live behind a tap
-                on the row, which routes to /app/account. */}
-            <div className="mt-auto px-2 py-3 border-t border-[var(--border)]">
+                on the row, which routes to /app/account. Uses -mx-4
+                to bleed the border-top to the drawer edges the same
+                way predict-shell's LeftRail does. */}
+            <div
+              data-tour-id="identity-row"
+              className="mt-auto px-4 py-3 border-t border-[var(--border)]"
+            >
               <Link
                 href="/app/account"
                 className="flex items-center gap-2.5 rounded-md px-2 py-2 hover:bg-[var(--surface-2)] transition-colors"
@@ -329,25 +455,40 @@ export function MobileAppNav() {
   );
 }
 
+/**
+ * 1:1 with predict-shell's `NavButton` (h-9 px-3 rounded-lg
+ * text-[13px] font-medium leading-none gap-2.5, bg-only active
+ * treatment). Because the predict view uses the same NavButton
+ * inside its LeftRail — including inside the mobile drawer — this
+ * component matches the reference exactly. Any restyle to
+ * NavButton should also land here.
+ */
 function DrawerLink({
   href,
   icon,
   label,
   active,
+  tourId,
 }: {
   href: string;
   icon: ReactNode;
   label: string;
   active: boolean;
+  /** v0.5.8 — guided tour spotlight anchor. */
+  tourId?: string;
 }) {
   return (
     <Link
       href={href as never}
+      data-tour-id={tourId}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'group flex items-center gap-2.5 rounded-md px-3 py-2.5 text-[13.5px] transition-colors',
+        'group w-full flex items-center gap-2.5 text-left',
+        'h-9 px-3 rounded-lg',
+        'text-[13px] font-medium leading-none',
+        'transition-colors',
         active
-          ? 'bg-[var(--surface-2)] text-[var(--fg)] font-medium'
+          ? 'bg-[var(--surface-2)] text-[var(--fg)]'
           : 'text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]',
       )}
     >

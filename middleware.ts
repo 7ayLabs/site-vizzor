@@ -90,7 +90,11 @@ const PROD = process.env.NODE_ENV === 'production';
  * use a different subdomain (e.g. `app.staging.vizzor.ai`) without
  * a code change.
  */
-const DEFAULT_APP_HOSTS = ['app.vizzor.ai'];
+// `testapp.vizzor.ai` is the staging twin of `app.vizzor.ai` — same
+// host-rewrite behavior (mounts /app/* as /), but points at the test
+// container so QA and demo flows stay sealed off from prod. Mirror
+// this list with `APP_ONLY_HOSTS` in `app/[locale]/app/layout.tsx`.
+const DEFAULT_APP_HOSTS = ['app.vizzor.ai', 'testapp.vizzor.ai'];
 const APP_HOSTS = new Set(
   (process.env.APP_HOSTS ?? DEFAULT_APP_HOSTS.join(','))
     .split(',')

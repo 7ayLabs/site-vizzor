@@ -464,7 +464,20 @@ export function WalletConnectFlow({
           return msg.includes('unexpected error');
         };
 
-        if (signIn) {
+        // Solflare's wallet-standard `signIn` returns a `signedMessage`
+        // whose bytes don't match what its wallet actually signed on
+        // certain domain/uri combos (its internal SIWS-message
+        // rebuilder normalizes differently than the echoed bytes).
+        // The server's ed25519 verify then returns `signature_invalid`
+        // → 401 → "Firma rechazada · signature_invalid". Same
+        // workaround Jupiter and Magic Eden use in prod: skip
+        // `signIn` for Solflare and go straight to `signMessage`,
+        // which signs the canonical bytes verbatim and hits the
+        // server's Path B (reconstruct canonical + verify). Phantom
+        // stays on the `signIn` fast path — no behavior change there.
+        const skipSignIn = wallet?.adapter.name === 'Solflare';
+
+        if (signIn && !skipSignIn) {
           try {
             const origin =
               typeof window !== 'undefined' ? window.location.origin : '';

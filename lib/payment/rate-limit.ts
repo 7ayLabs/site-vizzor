@@ -101,6 +101,28 @@ export const ROUTE_LIMITS: Readonly<Record<string, RateLimitConfig>> = {
   // vote a few times per response; the cap exists to blunt calibration-
   // farming by automated clients.
   'predict.feedback': { capacity: 60, refillPerSecond: 60 / 60 },
+  // 5 signed intents / minute — /api/execute-intent. Tight cap because
+  // each accepted call is about to move money on-chain, so brute-force
+  // enumeration or accidental double-submit must be painful. Keyed on
+  // the SIWS wallet, not the IP, so a compromised session can't
+  // amplify by IP rotation.
+  'execute-intent': { capacity: 5, refillPerSecond: 5 / 60 },
+  // 10 req/min — capability enable/disable toggles in settings. Users
+  // don't legitimately churn settings more than that, and this blunts
+  // spam against the TOS-accept path.
+  'capability.enable': { capacity: 10, refillPerSecond: 10 / 60 },
+  // v0.5.2 — notifications read. Sidebar polls once every 30s and the
+  // notifications drawer paginates. 60/min matches the alerts.read
+  // shape; the endpoint returns an unread-count summary that changes
+  // infrequently, so scrapers get no signal from spamming it.
+  'notifications.read': { capacity: 60, refillPerSecond: 60 / 60 },
+  // 20 req/min — emit path fires once per intent-terminal-status and
+  // once per alert-trigger detected. Real usage is a handful per user
+  // per hour; capping high enough to absorb a burst without letting
+  // the ledger get spammed by a malfunctioning client.
+  'notifications.emit': { capacity: 20, refillPerSecond: 20 / 60 },
+  // 10 req/min — mark-read is user-driven (click badge → clear).
+  'notifications.write': { capacity: 10, refillPerSecond: 10 / 60 },
 };
 
 export type RateLimitResult =

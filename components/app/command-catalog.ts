@@ -19,11 +19,10 @@ export type CommandGroup = 'navigate' | 'action' | 'external';
 export interface CommandContext {
   /** Navigation primitive — wired by the palette to next-intl's router. */
   navigate: (href: Route | string) => void;
-  /** Optional onboarding controls — populated when the palette is
-   *  rendered under <OnboardingControlsProvider>. Commands that need
-   *  it should guard with `?.open?.()` so the catalog stays testable
-   *  in isolation. */
-  onboarding?: {
+  /** v0.5.4 — first-time-login guided tour controls. Populated when
+   *  the palette is under <TourProvider>. Guards with `?.open?.()` so
+   *  the catalog stays runnable in unit tests without the provider. */
+  tour?: {
     open: () => void;
   };
 }
@@ -120,11 +119,11 @@ export function buildCommandCatalog(): readonly Command[] {
       run: (ctx) => ctx.navigate('/blog'),
     },
     {
-      id: 'action:show-onboarding',
-      label: 'Show onboarding',
-      hint: 'Re-run the first-run walkthrough',
+      id: 'action:show-tour',
+      label: 'Show tour',
+      hint: 'Replay the guided /app/predict walkthrough',
       group: 'action',
-      run: (ctx) => ctx.onboarding?.open?.(),
+      run: (ctx) => ctx.tour?.open?.(),
     },
     {
       id: 'ext:telegram',

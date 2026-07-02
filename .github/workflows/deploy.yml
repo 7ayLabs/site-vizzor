@@ -53,6 +53,7 @@ jobs:
       payment_network:        ${{ steps.r.outputs.payment_network }}
       allow_dev_auth:         ${{ steps.r.outputs.allow_dev_auth }}
       accept_solana_payments: ${{ steps.r.outputs.accept_solana_payments }}
+      app_url:                ${{ steps.r.outputs.app_url }}
       checkout_ref:           ${{ steps.r.outputs.checkout_ref }}
     steps:
       - id: r
@@ -85,6 +86,9 @@ jobs:
               # renders the live checkout instead of the "infrastructure
               # pending" panel.
               echo "accept_solana_payments=true"                        >> "$GITHUB_OUTPUT"
+              # Prod build leaves NEXT_PUBLIC_APP_URL unset so `getAppLinkTarget()`
+              # falls through to the compiled-in `https://app.vizzor.ai` default.
+              echo "app_url="                                           >> "$GITHUB_OUTPUT"
               echo "checkout_ref=main"                                  >> "$GITHUB_OUTPUT"
               ;;
             testing|refs/heads/testing)
@@ -119,6 +123,12 @@ jobs:
               # (see the `main` branch above) until mainnet wiring
               # is signed off.
               echo "accept_solana_payments=true"                        >> "$GITHUB_OUTPUT"
+              # Staging bakes NEXT_PUBLIC_APP_URL=https://testapp.vizzor.ai so
+              # the marketing staging (test.vizzor.ai) "Open app" CTAs land on
+              # the staging product host — keeping the test env fully sealed
+              # off from prod state. testapp.vizzor.ai is host-rewritten to
+              # /app/* by middleware (see APP_HOSTS in scripts/configure-env.sh).
+              echo "app_url=https://testapp.vizzor.ai"                  >> "$GITHUB_OUTPUT"
               echo "checkout_ref=testing"                               >> "$GITHUB_OUTPUT"
               ;;
             *)
@@ -188,6 +198,7 @@ jobs:
             NEXT_PUBLIC_PAYMENT_NETWORK=${{ needs.resolve.outputs.payment_network }}
             NEXT_PUBLIC_ALLOW_DEV_AUTH=${{ needs.resolve.outputs.allow_dev_auth }}
             NEXT_PUBLIC_ACCEPT_SOLANA_PAYMENTS=${{ needs.resolve.outputs.accept_solana_payments }}
+            NEXT_PUBLIC_APP_URL=${{ needs.resolve.outputs.app_url }}
 
   # ────────────────────────────────────────────────────────────────────
   # deploy-vps — SSH into the (single) VPS, pull the just-pushed image
