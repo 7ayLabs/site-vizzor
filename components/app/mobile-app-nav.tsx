@@ -53,7 +53,11 @@ interface SessionState {
   wallet?: string;
 }
 
-const SUPPRESS_RE = /^\/(?:[a-z]{2}\/)?app\/predict(\/|$)/;
+// v0.5.23 — bare `/app` renders `<PredictShell />` too (see
+// app/[locale]/app/page.tsx), which mounts its own mobile chrome.
+// Suppress this topbar on both paths so we don't stack two hamburger
+// buttons + two drawers on top of each other.
+const SUPPRESS_RE = /^\/(?:[a-z]{2}\/)?app(?:\/predict(?:\/|$)|\/?$)/;
 
 const fetcher = (url: string): Promise<SessionState> =>
   fetch(url, { credentials: 'same-origin' }).then((r) => r.json());

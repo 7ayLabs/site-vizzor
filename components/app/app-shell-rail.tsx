@@ -46,7 +46,10 @@ interface AppShellRailProps {
   isAppOnlyHost: boolean;
 }
 
-const PREDICT_RE = /^\/(?:[a-z]{2}\/)?app\/predict(\/|$)/;
+// v0.5.23 — bare `/app` also renders `<PredictShell />`, so it needs
+// the same rail-suppression treatment as `/app/predict`. Match either
+// path: `/app`, `/app/`, `/app/predict`, or `/app/predict/*`.
+const PREDICT_RE = /^\/(?:[a-z]{2}\/)?app(?:\/predict(?:\/|$)|\/?$)/;
 const PRODUCT_RAIL_RE = /^\/(?:[a-z]{2}\/)?app\/(?:account|directory|workflows|transactions)(\/|$)/;
 
 export function AppShellRail({ isAppOnlyHost }: AppShellRailProps) {

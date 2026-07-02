@@ -37,7 +37,10 @@ import { hasCompletedTour } from '@/lib/onboarding/tour-storage';
 // the wallet-adapter modal's fade-out to start so the tour doesn't
 // visually collide with it.
 const START_DELAY_MS = 120;
-const PREDICT_RE = /^\/(?:[a-z]{2}\/)?app\/predict(?:\/|$)/;
+// v0.5.23 — bare `/app` renders `<PredictShell />` too (same content
+// as `/app/predict`), so the tour anchors exist on that path as well.
+// Skip the route-hop when the user is already on either path.
+const PREDICT_RE = /^\/(?:[a-z]{2}\/)?app(?:\/predict(?:\/|$)|\/?$)/;
 const IS_DEV = process.env.NODE_ENV !== 'production';
 
 function hasTourOverride(): boolean {
