@@ -4550,6 +4550,7 @@ function ChatTopics({
   return (
     <nav
       aria-label="Prompt suggestions"
+      data-tour-id="topic-carousel"
       className={cn(
         'relative shrink-0',
         'mx-auto max-w-[860px] w-full px-3 sm:px-6 pt-2',

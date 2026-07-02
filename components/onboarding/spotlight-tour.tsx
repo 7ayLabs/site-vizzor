@@ -49,8 +49,14 @@ import { stepsFor, type TourStep } from './tour-steps';
 import { markTourCompleted } from '@/lib/onboarding/tour-storage';
 
 const CALLOUT_WIDTH = 320;
-const CALLOUT_HEIGHT_ESTIMATE = 176;
-const CALLOUT_MARGIN = 14;
+const CALLOUT_HEIGHT_ESTIMATE = 200;
+const CALLOUT_MARGIN = 16;
+/**
+ * How far the callout stays away from the target rect. Includes
+ * SPOTLIGHT_PADDING (the halo we already draw around the target) plus
+ * a visual gap so the callout never appears to touch the target.
+ */
+const CALLOUT_TARGET_GAP = 20;
 const SPOTLIGHT_PADDING = 8;
 const MOBILE_BREAKPOINT = 1024; // Match Tailwind's `lg` — sidebar
 // entries only exist above this width in every /app/* surface.
@@ -74,6 +80,18 @@ export function SpotlightTour() {
   const calloutRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const lastStepIdxRef = useRef<number>(0);
+  /**
+   * Real callout dimensions after render. We start with the estimate
+   * so the first paint has a valid position, then swap to measured
+   * values on the next frame via ResizeObserver. This is the fix for
+   * long-copy steps (Skills/connectors, mobile-actions) where the
+   * actual height was 2-3x the 176px estimate and the callout ended
+   * up overlapping its target.
+   */
+  const [calloutSize, setCalloutSize] = useState<{ w: number; h: number }>({
+    w: CALLOUT_WIDTH,
+    h: CALLOUT_HEIGHT_ESTIMATE,
+  });
 
   useEffect(() => {
     setMounted(true);
@@ -101,6 +119,28 @@ export function SpotlightTour() {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, [isOpen]);
+
+  // Real callout size tracker. Observes the callout element and
+  // pushes measured w/h into state so the position math uses
+  // reality, not an estimate. Re-observes on step change since a
+  // new step may have shorter/longer copy.
+  useEffect(() => {
+    if (!isOpen) return;
+    const el = calloutRef.current;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      const w = Math.round(r.width);
+      const h = Math.round(r.height);
+      setCalloutSize((prev) =>
+        prev.w === w && prev.h === h ? prev : { w, h },
+      );
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isOpen, clampedIndex]);
 
   // Target rect tracker. Re-selects the target on step change +
   // recomputes on scroll / resize / mutation of a stale target.
@@ -204,7 +244,12 @@ export function SpotlightTour() {
     targetRect,
     viewport,
     preferred: step.placement,
+    calloutSize,
   });
+  const actualCalloutWidth = Math.min(
+    CALLOUT_WIDTH,
+    Math.max(260, viewport.w - CALLOUT_MARGIN * 2),
+  );
 
   // When centered (welcome / done / mobile fallbacks), collapse the
   // cutout to a zero-sized rect off-screen so the transition still
@@ -284,8 +329,10 @@ export function SpotlightTour() {
           position: 'fixed',
           top: calloutPos.top,
           left: calloutPos.left,
-          width: `min(${CALLOUT_WIDTH}px, calc(100vw - ${CALLOUT_MARGIN * 2}px))`,
-          maxWidth: `calc(100vw - ${CALLOUT_MARGIN * 2}px)`,
+          width: actualCalloutWidth,
+          maxWidth: viewport.w - CALLOUT_MARGIN * 2,
+          maxHeight: viewport.h - CALLOUT_MARGIN * 2,
+          overflowY: 'auto',
         }}
         className={cn(
           'vz-tour-callout',
@@ -394,55 +441,71 @@ export function SpotlightTour() {
 }
 
 /**
- * Pick a callout position that avoids clipping.
+ * Pick a callout position that avoids clipping AND never overlaps
+ * the target rect.
  *
- * v0.5.6 hardening: the callout is CSS-constrained to
- * `min(CALLOUT_WIDTH, viewport - 2*margin)`, so at narrow viewports
- * the card physically shrinks. This function returns coordinates that
- * always keep the card fully inside the viewport regardless of the
- * target's position — every branch clamps both top AND left to the
- * safe range before returning.
+ * v0.5.7 fixes:
+ *   - Uses `calloutSize` (measured after render, not an estimate) so
+ *     long-copy steps position themselves correctly. Steps like
+ *     "Skills, connectors, integrations" have ~150 chars of body
+ *     and render at ~280px tall; the old 176px estimate led to
+ *     mis-placement that let the card overlap its target.
+ *   - Anchored steps NEVER use `centered` as a fallback anymore.
+ *     If every side is tight, we pick the side with the most space
+ *     and clamp — so the callout still points at the target instead
+ *     of drifting off into the middle of the viewport where the
+ *     user has to guess what's being highlighted.
+ *   - Every branch clamps both top AND left to the safe range so
+ *     the card is guaranteed fully inside the viewport.
+ *   - After clamping, we run an overlap check against the target's
+ *     bounds; if the two rects intersect, we push the callout to
+ *     the free axis. That's the belt-and-braces guarantee against
+ *     the "modal blocks the actionable" bug from the screenshots.
  */
 function computeCalloutPos({
   isCentered,
   targetRect,
   viewport,
   preferred,
+  calloutSize,
 }: {
   isCentered: boolean;
   targetRect: Rect | null;
   viewport: { w: number; h: number };
   preferred: TourStep['placement'];
+  calloutSize: { w: number; h: number };
 }): { top: number; left: number } {
-  // Actual card width after the CSS min() constraint kicks in.
+  // Actual dimensions — measured post-render for anchored steps, or
+  // the estimate on first paint before the observer fires.
   const cardWidth = Math.min(
-    CALLOUT_WIDTH,
-    Math.max(240, viewport.w - CALLOUT_MARGIN * 2),
+    calloutSize.w || CALLOUT_WIDTH,
+    Math.max(260, viewport.w - CALLOUT_MARGIN * 2),
   );
-  // Safe range for top/left: card must fit between the two margins.
-  const maxTop = Math.max(
-    CALLOUT_MARGIN,
-    viewport.h - CALLOUT_HEIGHT_ESTIMATE - CALLOUT_MARGIN,
-  );
-  const maxLeft = Math.max(
-    CALLOUT_MARGIN,
-    viewport.w - cardWidth - CALLOUT_MARGIN,
+  const cardHeight = Math.max(
+    120,
+    Math.min(
+      calloutSize.h || CALLOUT_HEIGHT_ESTIMATE,
+      viewport.h - CALLOUT_MARGIN * 2,
+    ),
   );
 
-  const centeredTop = Math.max(
+  // Safe range for top/left.
+  const maxTop = Math.max(CALLOUT_MARGIN, viewport.h - cardHeight - CALLOUT_MARGIN);
+  const maxLeft = Math.max(CALLOUT_MARGIN, viewport.w - cardWidth - CALLOUT_MARGIN);
+
+  const centeredTop = clamp(
+    viewport.h / 2 - cardHeight / 2,
     CALLOUT_MARGIN,
-    viewport.h / 2 - CALLOUT_HEIGHT_ESTIMATE / 2,
+    maxTop,
   );
-  const centeredLeft = Math.max(
-    CALLOUT_MARGIN,
+  const centeredLeft = clamp(
     viewport.w / 2 - cardWidth / 2,
+    CALLOUT_MARGIN,
+    maxLeft,
   );
 
   if (isCentered || !targetRect) {
-    return {
-      top: clamp(centeredTop, CALLOUT_MARGIN, maxTop),
-      left: clamp(centeredLeft, CALLOUT_MARGIN, maxLeft),
-    };
+    return { top: centeredTop, left: centeredLeft };
   }
 
   const spaceAbove = targetRect.top;
@@ -450,71 +513,121 @@ function computeCalloutPos({
   const spaceRight = viewport.w - (targetRect.left + targetRect.width);
   const spaceLeft = targetRect.left;
 
-  const canRight = spaceRight >= cardWidth + CALLOUT_MARGIN;
-  const canLeft = spaceLeft >= cardWidth + CALLOUT_MARGIN;
-  const canBottom = spaceBelow >= CALLOUT_HEIGHT_ESTIMATE + CALLOUT_MARGIN;
-  const canAbove = spaceAbove >= CALLOUT_HEIGHT_ESTIMATE + CALLOUT_MARGIN;
+  // Each "can" checks: (a) enough room for the card, (b) plus the
+  // gap that keeps it visually detached from the target's halo.
+  const canRight =
+    spaceRight >= cardWidth + CALLOUT_TARGET_GAP + CALLOUT_MARGIN;
+  const canLeft =
+    spaceLeft >= cardWidth + CALLOUT_TARGET_GAP + CALLOUT_MARGIN;
+  const canBottom =
+    spaceBelow >= cardHeight + CALLOUT_TARGET_GAP + CALLOUT_MARGIN;
+  const canAbove =
+    spaceAbove >= cardHeight + CALLOUT_TARGET_GAP + CALLOUT_MARGIN;
 
-  let placement: TourStep['placement'] = preferred ?? 'bottom';
-  if (placement === 'right' && !canRight) {
-    placement = canBottom ? 'bottom' : canAbove ? 'top' : 'centered';
-  } else if (placement === 'left' && !canLeft) {
-    placement = canBottom ? 'bottom' : canAbove ? 'top' : 'centered';
-  } else if (placement === 'top' && !canAbove) {
-    placement = canBottom ? 'bottom' : canRight ? 'right' : 'centered';
-  } else if (placement === 'bottom' && !canBottom) {
-    placement = canAbove ? 'top' : canRight ? 'right' : 'centered';
-  }
-
-  if (placement === 'centered') {
-    return {
-      top: clamp(centeredTop, CALLOUT_MARGIN, maxTop),
-      left: clamp(centeredLeft, CALLOUT_MARGIN, maxLeft),
-    };
+  // Anchored steps never fall back to `centered` — that lets the
+  // callout drift off the target and became the overlap bug in the
+  // screenshots. Instead: pick the side with the most space if the
+  // preferred one is too tight, and always clamp.
+  let placement: 'top' | 'bottom' | 'left' | 'right' = 'bottom';
+  const pref = preferred ?? 'bottom';
+  if (pref === 'right' && canRight) placement = 'right';
+  else if (pref === 'left' && canLeft) placement = 'left';
+  else if (pref === 'top' && canAbove) placement = 'top';
+  else if (pref === 'bottom' && canBottom) placement = 'bottom';
+  else {
+    // Fallback: pick whichever side has the most space.
+    type Placement = 'top' | 'bottom' | 'left' | 'right';
+    const spaces: Array<[Placement, number]> = [
+      ['top', spaceAbove],
+      ['bottom', spaceBelow],
+      ['right', spaceRight],
+      ['left', spaceLeft],
+    ];
+    spaces.sort((a, b) => b[1] - a[1]);
+    const best = spaces[0];
+    if (best) placement = best[0];
   }
 
   const centerX = targetRect.left + targetRect.width / 2;
   const centerY = targetRect.top + targetRect.height / 2;
+  const targetRight = targetRect.left + targetRect.width;
+  const targetBottom = targetRect.top + targetRect.height;
 
+  let top: number;
+  let left: number;
   if (placement === 'right') {
-    return {
-      top: clamp(centerY - CALLOUT_HEIGHT_ESTIMATE / 2, CALLOUT_MARGIN, maxTop),
-      left: clamp(
-        targetRect.left + targetRect.width + CALLOUT_MARGIN,
-        CALLOUT_MARGIN,
-        maxLeft,
-      ),
-    };
-  }
-  if (placement === 'left') {
-    return {
-      top: clamp(centerY - CALLOUT_HEIGHT_ESTIMATE / 2, CALLOUT_MARGIN, maxTop),
-      left: clamp(
-        targetRect.left - cardWidth - CALLOUT_MARGIN,
-        CALLOUT_MARGIN,
-        maxLeft,
-      ),
-    };
-  }
-  if (placement === 'top') {
-    return {
-      top: clamp(
-        targetRect.top - CALLOUT_HEIGHT_ESTIMATE - CALLOUT_MARGIN,
-        CALLOUT_MARGIN,
-        maxTop,
-      ),
-      left: clamp(centerX - cardWidth / 2, CALLOUT_MARGIN, maxLeft),
-    };
-  }
-  // bottom
-  return {
-    top: clamp(
-      targetRect.top + targetRect.height + CALLOUT_MARGIN,
+    top = clamp(centerY - cardHeight / 2, CALLOUT_MARGIN, maxTop);
+    left = clamp(targetRight + CALLOUT_TARGET_GAP, CALLOUT_MARGIN, maxLeft);
+  } else if (placement === 'left') {
+    top = clamp(centerY - cardHeight / 2, CALLOUT_MARGIN, maxTop);
+    left = clamp(
+      targetRect.left - cardWidth - CALLOUT_TARGET_GAP,
+      CALLOUT_MARGIN,
+      maxLeft,
+    );
+  } else if (placement === 'top') {
+    top = clamp(
+      targetRect.top - cardHeight - CALLOUT_TARGET_GAP,
       CALLOUT_MARGIN,
       maxTop,
-    ),
-    left: clamp(centerX - cardWidth / 2, CALLOUT_MARGIN, maxLeft),
-  };
+    );
+    left = clamp(centerX - cardWidth / 2, CALLOUT_MARGIN, maxLeft);
+  } else {
+    // bottom
+    top = clamp(targetBottom + CALLOUT_TARGET_GAP, CALLOUT_MARGIN, maxTop);
+    left = clamp(centerX - cardWidth / 2, CALLOUT_MARGIN, maxLeft);
+  }
+
+  // Belt-and-braces: if the clamped position overlaps the target
+  // (can happen at very tight viewports where the clamp forced the
+  // card back into the target's row), push it to the axis with the
+  // most free space.
+  if (rectsOverlap({ top, left, width: cardWidth, height: cardHeight }, targetRect)) {
+    // Try each side in order of most-space-first.
+    const options: Array<{ top: number; left: number; space: number }> = [
+      {
+        top: clamp(targetRect.top - cardHeight - CALLOUT_TARGET_GAP, CALLOUT_MARGIN, maxTop),
+        left: clamp(centerX - cardWidth / 2, CALLOUT_MARGIN, maxLeft),
+        space: spaceAbove,
+      },
+      {
+        top: clamp(targetBottom + CALLOUT_TARGET_GAP, CALLOUT_MARGIN, maxTop),
+        left: clamp(centerX - cardWidth / 2, CALLOUT_MARGIN, maxLeft),
+        space: spaceBelow,
+      },
+      {
+        top: clamp(centerY - cardHeight / 2, CALLOUT_MARGIN, maxTop),
+        left: clamp(targetRight + CALLOUT_TARGET_GAP, CALLOUT_MARGIN, maxLeft),
+        space: spaceRight,
+      },
+      {
+        top: clamp(centerY - cardHeight / 2, CALLOUT_MARGIN, maxTop),
+        left: clamp(targetRect.left - cardWidth - CALLOUT_TARGET_GAP, CALLOUT_MARGIN, maxLeft),
+        space: spaceLeft,
+      },
+    ];
+    options.sort((a, b) => b.space - a.space);
+    for (const opt of options) {
+      if (!rectsOverlap({ top: opt.top, left: opt.left, width: cardWidth, height: cardHeight }, targetRect)) {
+        return { top: opt.top, left: opt.left };
+      }
+    }
+    // Everything overlapped (extremely tight viewport). Fall through
+    // to the last-resort centered placement — the SVG spotlight is
+    // still visible so the user sees the target through the cutout.
+    return { top: centeredTop, left: centeredLeft };
+  }
+
+  return { top, left };
+}
+
+function rectsOverlap(a: Rect, b: Rect): boolean {
+  return (
+    a.left < b.left + b.width &&
+    a.left + a.width > b.left &&
+    a.top < b.top + b.height &&
+    a.top + a.height > b.top
+  );
 }
 
 function clamp(v: number, lo: number, hi: number): number {

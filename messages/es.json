@@ -905,6 +905,10 @@
           "title": "Skills, connectors, integraciones",
           "body": "Abrí esto para activar una Skill (un modo de razonamiento como Solana-native o Prediction-markets), enchufar un Connector (Discord, Telegram, Nostr, Farcaster…), o cablear una integración de un partner que le dé forma a mis respuestas."
         },
+        "carousel": {
+          "title": "Elegí un token",
+          "body": "Tocá cualquier chip para activar un token — BTC, SOL, o un tema como ETF flows. Eso es lo que desbloquea los íconos de send / pay del próximo paso."
+        },
         "tray": {
           "title": "Armá acciones on-chain",
           "body": "Con un token activo, estos íconos te dejan armar una transferencia o programar un pago. Nada se firma sin que tu wallet lo apruebe explícitamente."

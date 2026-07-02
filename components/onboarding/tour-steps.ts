@@ -63,6 +63,18 @@ export const TOUR_STEPS: readonly TourStep[] = [
     i18nKey: 'topics',
   },
   {
+    id: 'carousel',
+    /**
+     * Ticker + sector chip row above the composer. Tapping a chip
+     * activates a token, which is what unlocks the capability tray
+     * for the next step. Placing this before `tray` reads as a
+     * logical progression: pick a token → unlock the actions.
+     */
+    targetSelector: '[data-tour-id="topic-carousel"]',
+    placement: 'top',
+    i18nKey: 'carousel',
+  },
+  {
     id: 'tray',
     /**
      * CapabilityTray only mounts when the wallet has an active ticker
