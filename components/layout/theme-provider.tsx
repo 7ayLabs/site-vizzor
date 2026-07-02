@@ -24,10 +24,15 @@ const STORAGE_KEY = 'vizzor-theme';
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function readStored(): Theme | 'system' {
-  if (typeof window === 'undefined') return 'dark';
+  if (typeof window === 'undefined') return 'system';
   const v = window.localStorage.getItem(STORAGE_KEY);
   if (v === 'light' || v === 'dark' || v === 'system') return v;
-  return 'dark';
+  // No stored preference — follow the OS on first visit. Previously
+  // defaulted to 'dark' as a brand choice, but that ignored users
+  // whose system was set to Light and made the app feel out-of-sync
+  // with their environment on first init. The system listener in the
+  // provider will keep the resolved theme in sync going forward.
+  return 'system';
 }
 
 function systemPref(): Resolved {
@@ -124,12 +129,13 @@ export const themeBootScript = `
     var key='${STORAGE_KEY}';
     var stored=localStorage.getItem(key);
     var sys=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
-    // No stored preference => dark by default (terminal aesthetic is the
-    // brand). Explicit 'system' stop in localStorage opts back into OS.
+    // No stored preference => follow the OS on first visit. The
+    // explicit 'system' stop still resolves via prefers-color-scheme,
+    // and any explicit 'light' / 'dark' choice wins over the OS.
     var t = stored === 'light' ? 'light'
           : stored === 'dark'  ? 'dark'
           : stored === 'system' ? sys
-          : 'dark';
+          : sys;
     var d=document.documentElement;
     d.setAttribute('data-theme',t);
     if(t==='dark'){d.classList.add('dark');}else{d.classList.remove('dark');}
