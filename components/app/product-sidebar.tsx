@@ -40,6 +40,9 @@ import { cn } from '@/lib/utils';
 import { paymentNetwork } from '@/lib/payment/network';
 import { buildSolscanAccountUrl } from '@/lib/explorer/solana';
 import { useConversations } from '@/components/predict/use-conversations';
+import { usePendingSignatures } from '@/lib/capabilities/use-pending-signatures';
+import { useNotifications } from '@/lib/notifications/use-notifications';
+import { useAlertTriggerWatch } from '@/lib/notifications/use-alert-trigger-watch';
 import { AlertsModal } from '@/components/predict/alerts-modal';
 import { SettingsSheet } from '@/components/predict/settings-sheet';
 import {
@@ -82,6 +85,38 @@ export function ProductSidebar() {
   const wallet = session?.wallet;
 
   const { conversations } = useConversations({ enabled: signedIn });
+  // v0.5.1 — pending signature count feeds the Flujos badge below so
+  // a user on any /app/* surface sees they have unfinished workflows
+  // needing a signature. SWR refetches on focus so returning from
+  // signing on another tab/device updates the count.
+  const { count: pendingSigCount } = usePendingSignatures({ enabled: signedIn });
+  // v0.5.2 — unread notification counts. The Workflows badge shows
+  // the SUM of pending signatures (things needing wallet action) +
+  // unread workflow notifications (executed/failed since last read)
+  // so a user with a settled transfer sees the number decrement only
+  // when they actually visit /app/workflows. Alerts uses its own
+  // bucket count — triggered alerts are surfaced there and nowhere
+  // else.
+  const {
+    counts: notifCounts,
+    markAllRead: markAllNotifRead,
+    refresh: refreshNotifications,
+  } = useNotifications({ enabled: signedIn });
+  const workflowBadgeCount = pendingSigCount + notifCounts.workflows;
+  const alertsBadgeCount = notifCounts.alerts;
+  // v0.5.2 — detect engine-side alert triggers on this surface. Diffs
+  // /api/alerts, mints an `alert_triggered` notification per new row,
+  // and refreshes the sidebar count so the badge reacts within a
+  // single polling cycle. Runs on every /app/* surface (this sidebar
+  // is mounted app-wide) so a triggered alert lights up the badge
+  // regardless of which page the user is on.
+  useAlertTriggerWatch({
+    enabled: signedIn,
+    wallet,
+    onNewTrigger: () => {
+      void refreshNotifications();
+    },
+  });
   const recent = useMemo(() => conversations.slice(0, 12), [conversations]);
 
   const onPredict = /^\/app\/predict(\/|$)/.test(pathname);
@@ -99,12 +134,16 @@ export function ProductSidebar() {
   // behavior from this sidebar and from the chat surface's LeftRail.
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const onOpenAlerts = () => setAlertsOpen(true);
-  const onOpenSettings = () => setSettingsOpen(true);
-  const onOpenReceipts = () => {
-    // typedRoutes doesn't yet know about hashes — cast through never.
-    router.push('/app/account#payments' as never);
+  const onOpenAlerts = () => {
+    setAlertsOpen(true);
+    // Opening the drawer clears the alerts badge — the user has now
+    // "seen" the triggered alerts. Runs in the background so the
+    // drawer opens without waiting for the write.
+    if (signedIn && alertsBadgeCount > 0) {
+      void markAllNotifRead('alerts');
+    }
   };
+  const onOpenSettings = () => setSettingsOpen(true);
 
   // Collapse state — shares the same localStorage key as the predict
   // shell so toggling the rail on /predict carries over to /account
@@ -228,6 +267,7 @@ export function ProductSidebar() {
           label={t('shell.nav.alerts')}
           onClick={onOpenAlerts}
           collapsed={collapsed}
+          badgeCount={alertsBadgeCount}
         />
         <NavLink
           href="/app/directory"
@@ -236,11 +276,13 @@ export function ProductSidebar() {
           active={/^\/app\/directory(\/|$)/.test(pathname)}
           collapsed={collapsed}
         />
-        <NavButton
+        <NavLink
+          href="/app/workflows"
           icon={<IconReceipts size={collapsed ? 20 : 17} />}
-          label={t('shell.nav.receipts')}
-          onClick={onOpenReceipts}
+          label={t('shell.nav.workflows')}
+          active={/^\/app\/workflows(\/|$)/.test(pathname)}
           collapsed={collapsed}
+          badgeCount={workflowBadgeCount}
         />
       </nav>
 
@@ -353,26 +395,30 @@ function NavButton({
   onClick,
   active = false,
   collapsed = false,
+  badgeCount,
 }: {
   icon: ReactNode;
   label: string;
   onClick: () => void;
   active?: boolean;
   collapsed?: boolean;
+  /** v0.5.2 — mirrors NavLink's badgeCount for the Alerts entry. */
+  badgeCount?: number;
 }) {
   const tonal = active
     ? 'bg-[var(--surface-2)] text-[var(--fg)] font-medium'
     : 'text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]';
+  const hasBadge = typeof badgeCount === 'number' && badgeCount > 0;
   if (collapsed) {
     return (
       <button
         type="button"
         onClick={onClick}
         aria-current={active ? 'page' : undefined}
-        aria-label={label}
+        aria-label={hasBadge ? `${label} (${badgeCount})` : label}
         title={label}
         className={cn(
-          'group inline-flex items-center justify-center',
+          'group relative inline-flex items-center justify-center',
           'h-11 w-11 rounded-lg transition-colors',
           tonal,
         )}
@@ -388,6 +434,16 @@ function NavButton({
         >
           {icon}
         </span>
+        {hasBadge && (
+          <span
+            aria-hidden
+            className={cn(
+              'absolute top-1.5 right-1.5',
+              'h-2 w-2 rounded-full',
+              'bg-[var(--accent)]',
+            )}
+          />
+        )}
       </button>
     );
   }
@@ -396,6 +452,7 @@ function NavButton({
       type="button"
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
+      aria-label={hasBadge ? `${label} (${badgeCount})` : undefined}
       className={cn(
         'group w-full flex items-center gap-2.5 text-left',
         'px-3 py-2 rounded-md text-[13px] transition-colors',
@@ -414,6 +471,19 @@ function NavButton({
         {icon}
       </span>
       <span className="flex-1 truncate">{label}</span>
+      {hasBadge && (
+        <span
+          className={cn(
+            'shrink-0 mono tabular text-[9.5px] font-semibold',
+            'inline-flex items-center justify-center',
+            'h-[16px] min-w-[16px] px-1 rounded-full',
+            'bg-[var(--accent)] text-[var(--bg)]',
+          )}
+          aria-hidden
+        >
+          {badgeCount! > 99 ? '99+' : badgeCount}
+        </span>
+      )}
     </button>
   );
 }
@@ -424,25 +494,34 @@ function NavLink({
   label,
   active,
   collapsed = false,
+  badgeCount,
 }: {
   href: string;
   icon: ReactNode;
   label: string;
   active: boolean;
   collapsed?: boolean;
+  /**
+   * v0.5.1 — optional unread count. When > 0, renders a compact pill
+   * on the right side (expanded) or as a dot on the top-right corner
+   * (collapsed). Used by the Flujos entry to surface pending
+   * signature count.
+   */
+  badgeCount?: number;
 }) {
   const tonal = active
     ? 'bg-[var(--surface-2)] text-[var(--fg)] font-medium'
     : 'text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]';
+  const hasBadge = typeof badgeCount === 'number' && badgeCount > 0;
   if (collapsed) {
     return (
       <Link
         href={href as never}
         aria-current={active ? 'page' : undefined}
-        aria-label={label}
+        aria-label={hasBadge ? `${label} (${badgeCount})` : label}
         title={label}
         className={cn(
-          'group inline-flex items-center justify-center',
+          'group relative inline-flex items-center justify-center',
           'h-11 w-11 rounded-lg transition-colors',
           tonal,
         )}
@@ -458,6 +537,16 @@ function NavLink({
         >
           {icon}
         </span>
+        {hasBadge && (
+          <span
+            aria-hidden
+            className={cn(
+              'absolute top-1.5 right-1.5',
+              'h-2 w-2 rounded-full',
+              'bg-[var(--accent)]',
+            )}
+          />
+        )}
       </Link>
     );
   }
@@ -465,6 +554,7 @@ function NavLink({
     <Link
       href={href as never}
       aria-current={active ? 'page' : undefined}
+      aria-label={hasBadge ? `${label} (${badgeCount})` : undefined}
       className={cn(
         'group w-full flex items-center gap-2.5 text-left',
         'px-3 py-2 rounded-md text-[13px] transition-colors',
@@ -483,6 +573,19 @@ function NavLink({
         {icon}
       </span>
       <span className="flex-1 truncate">{label}</span>
+      {hasBadge && (
+        <span
+          className={cn(
+            'shrink-0 mono tabular text-[9.5px] font-semibold',
+            'inline-flex items-center justify-center',
+            'h-[16px] min-w-[16px] px-1 rounded-full',
+            'bg-[var(--accent)] text-[var(--bg)]',
+          )}
+          aria-hidden
+        >
+          {badgeCount! > 99 ? '99+' : badgeCount}
+        </span>
+      )}
     </Link>
   );
 }
