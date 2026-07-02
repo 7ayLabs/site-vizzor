@@ -669,6 +669,7 @@
         "library": "Recibos",
         "libraryHint": "/precisions",
         "workflows": "Flujos",
+        "transactions": "Transacciones",
         "tools": "Herramientas",
         "toolsHint": "/help",
         "directory": "Directorio"
@@ -934,6 +935,58 @@
         "body": "Este chat tiene {count, plural, one {# flujo activo} other {# flujos activos}}. Borrar borra el historial; los flujos firmados igual se ejecutan on-chain.",
         "confirm": "Borrar igual",
         "cancel": "Mantener chat"
+      }
+    },
+    "transactions": {
+      "meta": {
+        "title": "Transacciones · Vizzor",
+        "description": "Cada transacción on-chain que armó tu wallet vía Vizzor — pendientes, firmadas, ejecutadas o expiradas."
+      },
+      "eyebrow": "Transacciones",
+      "title": "Tus transacciones",
+      "body": "Cada intent que armó tu wallet. Las que necesitan acción quedan arriba, los recibos terminales debajo. Tocá una fila para ver el detalle.",
+      "empty": "Todavía no hay transacciones. Escribí un prompt con `send` o `pay` para armar una.",
+      "noMatches": "Ninguna transacción coincide con estos filtros.",
+      "unauthenticated": "Iniciá sesión con tu wallet para ver tus transacciones.",
+      "search": {
+        "placeholder": "Buscar por id, tx hash, destino, símbolo…"
+      },
+      "filters": {
+        "status": "Estado",
+        "kind": "Tipo",
+        "all": "Todas",
+        "action": "Necesita acción"
+      },
+      "kinds": {
+        "transfer": "Transferencia",
+        "payment": "Pago programado"
+      },
+      "status": {
+        "pending": "Pendiente",
+        "signed": "Firmada",
+        "executed": "Ejecutada",
+        "failed": "Falló",
+        "expired": "Expirada"
+      },
+      "row": {
+        "aria": "{amount} {symbol} a {to}, estado {status}"
+      },
+      "sheet": {
+        "close": "Cerrar",
+        "from": "Desde",
+        "to": "Hacia",
+        "network": "Red",
+        "amountUsd": "Monto (USD)",
+        "scheduledFor": "Programada para",
+        "txHash": "Hash de transacción",
+        "timeline": "Línea de tiempo",
+        "timelineEvents": {
+          "issued": "Emitida",
+          "signed": "Firmada",
+          "executed": "Ejecutada",
+          "expired": "Expirada"
+        },
+        "openConversation": "Abrir el chat que la creó"
       }
     },
     "settings": {

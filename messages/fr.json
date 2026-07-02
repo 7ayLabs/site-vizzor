@@ -669,6 +669,7 @@
         "library": "Reçus",
         "libraryHint": "/precisions",
         "workflows": "Flux",
+        "transactions": "Transactions",
         "tools": "Outils",
         "toolsHint": "/help",
         "directory": "Annuaire"
@@ -823,6 +824,58 @@
         "body": "Ce chat a {count, plural, one {# flux actif} other {# flux actifs}}. Le supprimer efface l'historique ; les flux signés s'exécuteront quand même on-chain.",
         "confirm": "Supprimer quand même",
         "cancel": "Garder le chat"
+      }
+    },
+    "transactions": {
+      "meta": {
+        "title": "Transactions · Vizzor",
+        "description": "Chaque transaction on-chain que ton wallet a rédigée via Vizzor — en attente, signée, exécutée ou expirée."
+      },
+      "eyebrow": "Transactions",
+      "title": "Tes transactions",
+      "body": "Chaque intent que ton wallet a rédigé. Celles qui demandent une action restent en haut, les reçus terminaux en bas. Touche une ligne pour voir le détail.",
+      "empty": "Aucune transaction pour l'instant. Écris un prompt avec `send` ou `pay` pour en rédiger une.",
+      "noMatches": "Aucune transaction ne correspond à ces filtres.",
+      "unauthenticated": "Connecte ton wallet pour voir tes transactions.",
+      "search": {
+        "placeholder": "Chercher par id, hash, destinataire, symbole…"
+      },
+      "filters": {
+        "status": "Statut",
+        "kind": "Type",
+        "all": "Toutes",
+        "action": "Action requise"
+      },
+      "kinds": {
+        "transfer": "Transfert",
+        "payment": "Paiement programmé"
+      },
+      "status": {
+        "pending": "En attente",
+        "signed": "Signée",
+        "executed": "Exécutée",
+        "failed": "Échouée",
+        "expired": "Expirée"
+      },
+      "row": {
+        "aria": "{amount} {symbol} vers {to}, statut {status}"
+      },
+      "sheet": {
+        "close": "Fermer",
+        "from": "De",
+        "to": "Vers",
+        "network": "Réseau",
+        "amountUsd": "Montant (USD)",
+        "scheduledFor": "Programmée pour",
+        "txHash": "Hash de transaction",
+        "timeline": "Chronologie",
+        "timelineEvents": {
+          "issued": "Émise",
+          "signed": "Signée",
+          "executed": "Exécutée",
+          "expired": "Expirée"
+        },
+        "openConversation": "Ouvrir le chat qui l'a créée"
       }
     },
     "settings": {

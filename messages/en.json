@@ -669,6 +669,7 @@
         "library": "Receipts",
         "libraryHint": "/precisions",
         "workflows": "Workflows",
+        "transactions": "Transactions",
         "tools": "Tools",
         "toolsHint": "/help",
         "directory": "Directory"
@@ -934,6 +935,58 @@
         "body": "This chat has {count, plural, one {# active workflow} other {# active workflows}}. Deleting removes the chat history; signed workflows still execute on-chain.",
         "confirm": "Delete anyway",
         "cancel": "Keep chat"
+      }
+    },
+    "transactions": {
+      "meta": {
+        "title": "Transactions · Vizzor",
+        "description": "Every on-chain transaction your wallet drafted through Vizzor — pending, signed, executed, or expired."
+      },
+      "eyebrow": "Transactions",
+      "title": "Your transactions",
+      "body": "Every capability intent your wallet has drafted. Actionable rows sit at the top, terminal receipts follow. Tap a row to see the full details.",
+      "empty": "No transactions yet. Compose a prompt with `send` or `pay` to draft one.",
+      "noMatches": "No transactions match those filters.",
+      "unauthenticated": "Sign in with your wallet to see your transactions.",
+      "search": {
+        "placeholder": "Search by id, tx hash, recipient, symbol…"
+      },
+      "filters": {
+        "status": "Status",
+        "kind": "Kind",
+        "all": "All",
+        "action": "Needs action"
+      },
+      "kinds": {
+        "transfer": "Transfer",
+        "payment": "Scheduled payment"
+      },
+      "status": {
+        "pending": "Pending",
+        "signed": "Signed",
+        "executed": "Executed",
+        "failed": "Failed",
+        "expired": "Expired"
+      },
+      "row": {
+        "aria": "{amount} {symbol} to {to}, status {status}"
+      },
+      "sheet": {
+        "close": "Close",
+        "from": "From",
+        "to": "To",
+        "network": "Network",
+        "amountUsd": "Amount (USD)",
+        "scheduledFor": "Scheduled for",
+        "txHash": "Transaction hash",
+        "timeline": "Timeline",
+        "timelineEvents": {
+          "issued": "Issued",
+          "signed": "Signed",
+          "executed": "Executed",
+          "expired": "Expired"
+        },
+        "openConversation": "Open the conversation that authored this"
       }
     },
     "settings": {
