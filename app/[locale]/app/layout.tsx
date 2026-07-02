@@ -5,6 +5,7 @@ import { AppShellProvider } from '@/components/app/app-shell-provider';
 import { AppShellRail } from '@/components/app/app-shell-rail';
 import { CommandPaletteProvider } from '@/components/app/command-palette-context';
 import { CommandPalette } from '@/components/app/command-palette';
+import { MobileAppNav } from '@/components/app/mobile-app-nav';
 import { OnboardingStepper } from '@/components/app/onboarding-stepper';
 import { OnboardingControlsProvider } from '@/components/app/onboarding-context';
 
@@ -52,9 +53,18 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     <AppShellProvider>
       <OnboardingControlsProvider>
         <CommandPaletteProvider>
-          <div className="flex min-h-dvh bg-[var(--bg)]">
-            <AppShellRail isAppOnlyHost={isAppOnlyHost} />
-            <main className="flex-1 min-w-0">{children}</main>
+          <div className="flex flex-col min-h-dvh bg-[var(--bg)]">
+            {/* Mobile hamburger + slide-in drawer for surfaces below
+                the `lg` breakpoint. Must sit BEFORE the flex row so
+                its `sticky top-0` actually anchors to the viewport
+                top (otherwise it renders after a min-h-dvh sibling
+                and appears at the bottom of the viewport). Self-
+                suppresses on /app/predict. */}
+            <MobileAppNav />
+            <div className="flex flex-1 min-h-0">
+              <AppShellRail isAppOnlyHost={isAppOnlyHost} />
+              <main className="flex-1 min-w-0">{children}</main>
+            </div>
           </div>
           <CommandPalette />
           <OnboardingStepper />

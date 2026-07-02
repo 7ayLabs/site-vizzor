@@ -163,12 +163,11 @@ export function MobileAppNav() {
           <span>vizzor</span>
         </Link>
 
-        <span
-          className="mono tabular text-[10.5px] uppercase tracking-[0.14em] text-[var(--fg-3)] truncate max-w-[6rem]"
-          title={wallet}
-        >
-          {short}
-        </span>
+        {/* Right-side placeholder keeps the vizzor logo optically
+            centered via space-between. The wallet identity lives
+            inside the drawer's Identity pill — no need to also
+            surface it on the topbar. */}
+        <span aria-hidden className="h-9 w-9" />
       </header>
 
       {/* Drawer + backdrop. Mounted at document root via z-50 so the
@@ -188,10 +187,15 @@ export function MobileAppNav() {
             aria-modal="true"
             aria-label={tMobile('navLabel')}
             className={cn(
-              'absolute left-0 top-0 h-dvh w-[min(320px,84vw)]',
+              'absolute left-0 top-0 h-dvh w-[min(320px,86vw)]',
               'flex flex-col',
               'border-r border-[var(--border)]',
-              'bg-[var(--surface)]',
+              // Match the desktop LeftRail's black page background
+              // (--bg). Predict-shell's mobile drawer used to be
+              // --surface (a lifted card) which read as lighter than
+              // the desktop rail; the standard now is: same --bg on
+              // mobile as on desktop.
+              'bg-[var(--bg)]',
               'motion-safe:animate-[mn-slide-in_180ms_ease-out]',
             )}
           >
@@ -202,13 +206,16 @@ export function MobileAppNav() {
               }
             `}</style>
 
-            {/* Drawer header — close button + brand */}
-            <div className="flex items-center justify-between gap-2 px-4 h-12 border-b border-[var(--border)]">
+            {/* Drawer header — 1:1 with predict-shell's MobileDrawer
+                header: px-4 py-3 padding, h-6 logo images, 16px
+                title text, gap-2.5 between icon and wordmark. Same
+                close button chrome (h-9 w-9). */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
               <Link
                 href="/app/predict"
                 onClick={() => setOpen(false)}
                 aria-label={tMobile('home')}
-                className="inline-flex items-center gap-2 text-[15px] font-semibold tracking-tight text-[var(--fg)]"
+                className="inline-flex items-center gap-2.5 text-[16px] font-semibold tracking-tight text-[var(--fg)] leading-none hover:opacity-80 transition-opacity"
               >
                 <Image
                   src="/brand/vizzor_darkicon.png"
@@ -216,7 +223,7 @@ export function MobileAppNav() {
                   width={364}
                   height={535}
                   priority
-                  className="block dark:hidden h-5 w-auto"
+                  className="block dark:hidden h-6 w-auto"
                 />
                 <Image
                   src="/brand/vizzor_icon.png"
@@ -224,7 +231,7 @@ export function MobileAppNav() {
                   width={364}
                   height={535}
                   priority
-                  className="hidden dark:block h-5 w-auto"
+                  className="hidden dark:block h-6 w-auto"
                 />
                 <span>vizzor</span>
               </Link>
@@ -232,15 +239,21 @@ export function MobileAppNav() {
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label={tMobile('closeMenu')}
-                className="inline-flex items-center justify-center h-9 w-9 -mr-2 rounded-md text-[var(--fg-2)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)] transition-colors"
+                className="inline-flex h-9 w-9 items-center justify-center text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)] rounded-lg transition-colors"
               >
                 <X size={18} strokeWidth={1.75} aria-hidden />
               </button>
             </div>
 
-            {/* Primary nav — mirrors ProductSidebar's vocabulary */}
+            {/* Primary nav — mirrors ProductSidebar + predict-shell's
+                LeftRail vocabulary exactly. `p-4` on the outer wrapper
+                matches LeftRail's own p-4; NavItem below matches the
+                NavButton geometry (h-9 px-3 rounded-lg text-[13px]
+                font-medium) so mobile users see the same nav rhythm
+                the predict view uses. */}
+            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col p-4 gap-0.5">
             <nav
-              className="px-2 py-3 flex flex-col gap-0.5"
+              className="flex flex-col gap-0.5"
               aria-label={tMobile('navLabel')}
             >
               <DrawerLink
@@ -268,40 +281,69 @@ export function MobileAppNav() {
                 active={onDirectoryActive}
               />
               <DrawerLink
-                href="/app/account#payments"
+                href="/app/workflows"
                 icon={<IconReceipts size={17} />}
-                label={t('shell.nav.receipts')}
+                label={t('shell.nav.workflows')}
                 active={onAccountActive}
               />
             </nav>
 
-            {/* Recent chats — mirrors the desktop rail. Hidden cleanly
-                when the user is not signed in. */}
-            {signedIn && recent.length > 0 && (
-              <div className="px-2 pt-2 flex-1 min-h-0 overflow-y-auto flex flex-col gap-1 border-t border-[var(--border)]">
-                <p className="px-3 pt-2 text-[10.5px] uppercase tracking-[0.16em] text-[var(--fg-3)] font-semibold">
+            {/* Recent chats — 1:1 with ProductSidebar + predict-shell's
+                LeftRail so all three surfaces read identically:
+                section eyebrow always visible, dashed empty-state
+                card when the list is empty (signed-in or not), or a
+                bulleted list of the latest 8 conversations. */}
+            <div className="mt-5 flex-1 min-h-0 flex flex-col gap-1">
+              <div className="flex items-center justify-between px-3">
+                <span className="text-[10.5px] uppercase tracking-[0.16em] text-[var(--fg-3)] font-semibold">
                   {t('shell.recents.label')}
-                </p>
+                </span>
+              </div>
+              {recent.length === 0 ? (
+                <div className="mx-3 mt-1 flex flex-col gap-1.5 px-3 py-3 rounded-md border border-dashed border-[var(--border)]">
+                  <span className="mono tabular text-[9.5px] uppercase tracking-[0.18em] font-semibold text-[var(--fg-3)]">
+                    {t('shell.recents.emptyEyebrow')}
+                  </span>
+                  <p className="text-[11.5px] text-[var(--fg-3)] leading-snug">
+                    {signedIn
+                      ? t('shell.recents.empty')
+                      : t('shell.recents.signInPrompt')}
+                  </p>
+                </div>
+              ) : (
                 <ul className="flex flex-col gap-0.5">
                   {recent.map((c) => (
                     <li key={c.id}>
                       <Link
                         href={`/app/predict?conversation=${encodeURIComponent(c.id)}` as never}
-                        className="block px-3 py-1.5 rounded-md text-[12.5px] text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)] truncate transition-colors"
+                        className="group w-full flex items-center gap-2 text-left pl-3 pr-3 py-1.5 rounded-md text-[12px] truncate text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)] transition-colors"
                         title={c.title}
                       >
-                        {c.title}
+                        <span aria-hidden className="text-[var(--fg-3)]">
+                          <svg
+                            width="8"
+                            height="8"
+                            viewBox="0 0 8 8"
+                            fill="currentColor"
+                          >
+                            <circle cx="4" cy="4" r="1.5" />
+                          </svg>
+                        </span>
+                        <span className="truncate">{c.title}</span>
                       </Link>
                     </li>
                   ))}
                 </ul>
-              </div>
-            )}
+              )}
+            </div>
+            </div>
 
             {/* Identity row — kept minimal on mobile (just the wallet
                 short address). Full account actions live behind a tap
-                on the row, which routes to /app/account. */}
-            <div className="mt-auto px-2 py-3 border-t border-[var(--border)]">
+                on the row, which routes to /app/account. Uses -mx-4
+                to bleed the border-top to the drawer edges the same
+                way predict-shell's LeftRail does. */}
+            <div className="mt-auto px-4 py-3 border-t border-[var(--border)]">
               <Link
                 href="/app/account"
                 className="flex items-center gap-2.5 rounded-md px-2 py-2 hover:bg-[var(--surface-2)] transition-colors"
@@ -329,6 +371,14 @@ export function MobileAppNav() {
   );
 }
 
+/**
+ * 1:1 with predict-shell's `NavButton` (h-9 px-3 rounded-lg
+ * text-[13px] font-medium leading-none gap-2.5, bg-only active
+ * treatment). Because the predict view uses the same NavButton
+ * inside its LeftRail — including inside the mobile drawer — this
+ * component matches the reference exactly. Any restyle to
+ * NavButton should also land here.
+ */
 function DrawerLink({
   href,
   icon,
@@ -345,9 +395,12 @@ function DrawerLink({
       href={href as never}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'group flex items-center gap-2.5 rounded-md px-3 py-2.5 text-[13.5px] transition-colors',
+        'group w-full flex items-center gap-2.5 text-left',
+        'h-9 px-3 rounded-lg',
+        'text-[13px] font-medium leading-none',
+        'transition-colors',
         active
-          ? 'bg-[var(--surface-2)] text-[var(--fg)] font-medium'
+          ? 'bg-[var(--surface-2)] text-[var(--fg)]'
           : 'text-[var(--fg-2)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]',
       )}
     >

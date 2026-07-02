@@ -17,7 +17,12 @@
  *      account surface. The Directory is a product extension surface
  *      ("here's what your account can do"), so it shares the predict-
  *      style rail rather than the umbrella switcher.
- *   4. Everything else (`/app/whales`, `/app/flow`, `/app/billing`,
+ *   4. `/app/workflows(/...)` — same predict-style chrome. Workflows
+ *      is where the user tracks capability intents they minted from
+ *      the predict composer, so the sidebar reads as an extension of
+ *      predict (same Nueva predicción / Predecir / Alertas / Directorio
+ *      / Flujos affordances) instead of jumping into the umbrella.
+ *   5. Everything else (`/app/whales`, `/app/flow`, `/app/billing`,
  *      `/app/settings`, `/app/alerts`) — the umbrella `AppSidebar`
  *      with the Chat/Whales/Flow surface switcher, gated on
  *      `isAppOnlyHost` so the app subdomain doesn't double up on
@@ -37,7 +42,7 @@ interface AppShellRailProps {
 }
 
 const PREDICT_RE = /^\/(?:[a-z]{2}\/)?app\/predict(\/|$)/;
-const PRODUCT_RAIL_RE = /^\/(?:[a-z]{2}\/)?app\/(?:account|directory)(\/|$)/;
+const PRODUCT_RAIL_RE = /^\/(?:[a-z]{2}\/)?app\/(?:account|directory|workflows)(\/|$)/;
 
 export function AppShellRail({ isAppOnlyHost }: AppShellRailProps) {
   const pathname = usePathname();
