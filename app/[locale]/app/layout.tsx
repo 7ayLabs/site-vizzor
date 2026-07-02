@@ -8,6 +8,9 @@ import { CommandPalette } from '@/components/app/command-palette';
 import { MobileAppNav } from '@/components/app/mobile-app-nav';
 import { OnboardingStepper } from '@/components/app/onboarding-stepper';
 import { OnboardingControlsProvider } from '@/components/app/onboarding-context';
+import { TourProvider } from '@/components/onboarding/tour-provider';
+import { TourAutoStarter } from '@/components/onboarding/tour-auto-starter';
+import { SpotlightTour } from '@/components/onboarding/spotlight-tour';
 
 /**
  * Hosts that mount the product as the entire site (no marketing chrome).
@@ -37,7 +40,8 @@ const APP_ONLY_HOSTS = new Set<string>(['app.vizzor.ai']);
  * Context order (outermost → innermost):
  *   AppShellProvider             — wallet adapter + cross-surface SWR
  *   └─ OnboardingControlsProvider — exposes onboarding.open() to peers
- *      └─ CommandPaletteProvider  — global Cmd+K toggle
+ *      └─ TourProvider            — v0.5.4 first-time-login tour state
+ *         └─ CommandPaletteProvider — global Cmd+K toggle
  */
 export default async function AppLayout({ children }: { children: ReactNode }) {
   // Read the Host header server-side so the suppression decision happens
@@ -52,29 +56,37 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   return (
     <AppShellProvider>
       <OnboardingControlsProvider>
-        <CommandPaletteProvider>
-          <div className="flex flex-col min-h-dvh bg-[var(--bg)]">
-            {/* Mobile hamburger + slide-in drawer for surfaces below
-                the `lg` breakpoint. Must sit BEFORE the flex row so
-                its `sticky top-0` actually anchors to the viewport
-                top (otherwise it renders after a min-h-dvh sibling
-                and appears at the bottom of the viewport). Self-
-                suppresses on /app/predict. */}
-            <MobileAppNav />
-            <div className="flex flex-1 min-h-0">
-              <AppShellRail isAppOnlyHost={isAppOnlyHost} />
-              <main className="flex-1 min-w-0">{children}</main>
+        <TourProvider>
+          <CommandPaletteProvider>
+            <div className="flex flex-col min-h-dvh bg-[var(--bg)]">
+              {/* Mobile hamburger + slide-in drawer for surfaces below
+                  the `lg` breakpoint. Must sit BEFORE the flex row so
+                  its `sticky top-0` actually anchors to the viewport
+                  top (otherwise it renders after a min-h-dvh sibling
+                  and appears at the bottom of the viewport). Self-
+                  suppresses on /app/predict. */}
+              <MobileAppNav />
+              <div className="flex flex-1 min-h-0">
+                <AppShellRail isAppOnlyHost={isAppOnlyHost} />
+                <main className="flex-1 min-w-0">{children}</main>
+              </div>
             </div>
-          </div>
-          <CommandPalette />
-          <OnboardingStepper />
-          <Toaster
-            position="bottom-right"
-            richColors
-            closeButton
-            toastOptions={{ className: 'sonner-toast' }}
-          />
-        </CommandPaletteProvider>
+            <CommandPalette />
+            <OnboardingStepper />
+            {/* v0.5.4 — first-time-login guided tour. Auto-starter
+                is a null-rendering effect that watches the SIWS
+                session transition; SpotlightTour is the overlay
+                (portal to document.body, only rendered when open). */}
+            <TourAutoStarter />
+            <SpotlightTour />
+            <Toaster
+              position="bottom-right"
+              richColors
+              closeButton
+              toastOptions={{ className: 'sonner-toast' }}
+            />
+          </CommandPaletteProvider>
+        </TourProvider>
       </OnboardingControlsProvider>
     </AppShellProvider>
   );

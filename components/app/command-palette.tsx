@@ -29,6 +29,7 @@ import {
 } from './command-catalog';
 import { useCommandPalette } from './command-palette-context';
 import { useOnboardingControls } from './onboarding-context';
+import { useTour } from '@/components/onboarding/tour-provider';
 
 export function CommandPalette() {
   const t = useTranslations('app.commandPalette');
@@ -89,6 +90,7 @@ export function CommandPalette() {
   }, [activeIdx, filtered.length]);
 
   const onboarding = useOnboardingControls();
+  const tour = useTour();
   const navigateCtx: CommandContext = useMemo(
     () => ({
       navigate: (href) => {
@@ -97,8 +99,9 @@ export function CommandPalette() {
         router.push(href as never);
       },
       onboarding: { open: onboarding.open },
+      tour: { open: tour.open },
     }),
-    [router, onboarding],
+    [router, onboarding, tour],
   );
 
   function runCommand(cmd: Command, idx: number): void {

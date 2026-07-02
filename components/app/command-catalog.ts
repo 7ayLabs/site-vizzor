@@ -26,6 +26,12 @@ export interface CommandContext {
   onboarding?: {
     open: () => void;
   };
+  /** v0.5.4 — first-time-login guided tour controls. Populated when
+   *  the palette is under <TourProvider>. Same guard pattern as
+   *  onboarding so the catalog stays runnable in unit tests. */
+  tour?: {
+    open: () => void;
+  };
 }
 
 export interface Command {
@@ -125,6 +131,13 @@ export function buildCommandCatalog(): readonly Command[] {
       hint: 'Re-run the first-run walkthrough',
       group: 'action',
       run: (ctx) => ctx.onboarding?.open?.(),
+    },
+    {
+      id: 'action:show-tour',
+      label: 'Show tour',
+      hint: 'Replay the guided /app/predict walkthrough',
+      group: 'action',
+      run: (ctx) => ctx.tour?.open?.(),
     },
     {
       id: 'ext:telegram',
