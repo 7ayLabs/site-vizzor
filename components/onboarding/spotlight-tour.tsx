@@ -469,10 +469,11 @@ export function SpotlightTour() {
         </>
       )}
       {/* Highlight ring around the target. Purely decorative —
-          `pointer-events: none` so it never intercepts. Uses --accent
-          so it reads well on both light and dark themes. Rendered
-          above the dim layer so the ring sits on top of the dim
-          around it. */}
+          `pointer-events: none` so it never intercepts. v0.5.19 —
+          the accent-colored double-halo + soft glow read as
+          "vibecoded shiny" against the dim backdrop; replaced with
+          a single hairline stroke so the focus reads as a minimal
+          system spotlight, not a promo highlight. */}
       {targetRect && !isCentered && (
         <div
           aria-hidden
@@ -484,9 +485,9 @@ export function SpotlightTour() {
             width: spotlight.width,
             height: spotlight.height,
             borderRadius: 8,
-            boxShadow:
-              '0 0 0 2px color-mix(in oklab, var(--accent) 85%, transparent), 0 0 0 6px color-mix(in oklab, var(--accent) 22%, transparent), 0 10px 32px -8px color-mix(in oklab, var(--accent) 45%, transparent)',
-            outline: 'none',
+            boxShadow: 'none',
+            outline: '1px solid rgba(255, 255, 255, 0.22)',
+            outlineOffset: 0,
             pointerEvents: 'none',
           }}
         />
