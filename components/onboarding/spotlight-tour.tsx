@@ -48,8 +48,8 @@ import { useTour } from './tour-provider';
 import { stepsFor, type TourStep } from './tour-steps';
 import { markTourCompleted } from '@/lib/onboarding/tour-storage';
 
-const CALLOUT_WIDTH = 340;
-const CALLOUT_HEIGHT_ESTIMATE = 208;
+const CALLOUT_WIDTH = 320;
+const CALLOUT_HEIGHT_ESTIMATE = 176;
 const CALLOUT_MARGIN = 14;
 const SPOTLIGHT_PADDING = 8;
 const MOBILE_BREAKPOINT = 1024; // Match Tailwind's `lg` — sidebar
@@ -275,7 +275,8 @@ export function SpotlightTour() {
         />
       </svg>
 
-      {/* Callout card */}
+      {/* Callout card — flat, no glow, no accent stripe. Restraint
+          matches the IntentChatCard vocabulary already in the app. */}
       <div
         ref={calloutRef}
         tabIndex={-1}
@@ -283,30 +284,21 @@ export function SpotlightTour() {
           position: 'fixed',
           top: calloutPos.top,
           left: calloutPos.left,
-          width: CALLOUT_WIDTH,
+          width: `min(${CALLOUT_WIDTH}px, calc(100vw - ${CALLOUT_MARGIN * 2}px))`,
+          maxWidth: `calc(100vw - ${CALLOUT_MARGIN * 2}px)`,
         }}
         className={cn(
           'vz-tour-callout',
-          'overflow-hidden rounded-2xl',
+          'rounded-xl',
           'bg-[var(--surface)]',
-          'border border-[color-mix(in_oklab,var(--fg)_10%,var(--border))]',
+          'border border-[var(--border)]',
           'focus:outline-none',
           'motion-safe:vz-tour-callout-in',
         )}
       >
-        {/* Top accent bar — thin gradient stripe. Reads as a system
-            dialog "handle" without competing with the content. */}
-        <div
-          aria-hidden
-          className={cn(
-            'h-[3px] w-full',
-            'bg-gradient-to-r from-[var(--accent)] via-[color-mix(in_oklab,var(--accent)_60%,var(--fg))] to-[var(--fg)]',
-          )}
-        />
-
-        <div ref={contentRef} className="vz-tour-content-in p-5">
-          <div className="flex items-start justify-between gap-3">
-            <span className="mono tabular text-[10px] uppercase tracking-[0.24em] text-[var(--fg-3)]">
+        <div ref={contentRef} className="vz-tour-content-in p-4">
+          <div className="flex items-center justify-between gap-3">
+            <span className="mono tabular text-[10px] uppercase tracking-[0.22em] text-[var(--fg-3)]">
               {t('stepIndicator', {
                 index: clampedIndex + 1,
                 total,
@@ -317,7 +309,7 @@ export function SpotlightTour() {
               onClick={onFinish}
               aria-label={t('skip')}
               className={cn(
-                'inline-flex items-center justify-center h-6 w-6 -mr-1 -mt-1 rounded-md',
+                'inline-flex items-center justify-center h-6 w-6 -mr-1 rounded-md',
                 'text-[var(--fg-3)] hover:text-[var(--fg)]',
                 'hover:bg-[color-mix(in_oklab,var(--fg)_6%,transparent)]',
                 'transition-colors',
@@ -329,33 +321,34 @@ export function SpotlightTour() {
 
           <h2
             id="vz-tour-title"
-            className="mt-3 display text-[17px] sm:text-[18px] font-semibold tracking-tight text-[var(--fg)] leading-tight"
+            className="mt-2.5 text-[15px] font-semibold tracking-tight text-[var(--fg)] leading-snug break-words"
           >
             {stepTitle}
           </h2>
-          <p className="mt-2 text-[13px] leading-relaxed text-[var(--fg-2)]">
+          <p className="mt-1.5 text-[12.5px] leading-relaxed text-[var(--fg-2)] break-words">
             {stepBody}
           </p>
 
-          {/* Progress: dots + a thin underline that fills as steps
-              advance. Reads more "map" than "carousel". */}
-          <div className="mt-5 flex items-center gap-2">
+          {/* Progress: segmented bar. One segment per step, filled up
+              to the current index. Reads as a step counter, not a
+              carousel dot pattern. */}
+          <div className="mt-4 flex items-center gap-1">
             {Array.from({ length: total }).map((_, i) => (
               <span
                 key={i}
                 aria-hidden
                 className={cn(
-                  'h-1 flex-1 rounded-full',
+                  'h-[3px] flex-1 rounded-full',
                   'transition-colors duration-300',
                   i <= clampedIndex
-                    ? 'bg-[var(--fg)]'
-                    : 'bg-[color-mix(in_oklab,var(--fg)_14%,transparent)]',
+                    ? 'bg-[var(--fg-2)]'
+                    : 'bg-[color-mix(in_oklab,var(--fg)_10%,transparent)]',
                 )}
               />
             ))}
           </div>
-          <div className="mt-1.5 flex items-center justify-between">
-            <span className="mono tabular text-[9.5px] uppercase tracking-[0.24em] text-[var(--fg-3)]">
+          <div className="mt-1 flex items-center justify-between">
+            <span className="mono tabular text-[9px] uppercase tracking-[0.22em] text-[var(--fg-3)]">
               {progressPct.toFixed(0)}%
             </span>
             <span className="mono tabular text-[9.5px] uppercase tracking-[0.24em] text-[var(--fg-3)]">
@@ -363,14 +356,14 @@ export function SpotlightTour() {
             </span>
           </div>
 
-          <div className="mt-5 flex items-center justify-between gap-2">
+          <div className="mt-4 flex items-center justify-between gap-2">
             <button
               type="button"
               onClick={prev}
               disabled={isFirst}
               className={cn(
-                'inline-flex items-center justify-center h-8 px-2 rounded-md',
-                'mono tabular text-[10.5px] uppercase tracking-[0.18em]',
+                'inline-flex items-center justify-center h-7 px-2 rounded-md',
+                'mono tabular text-[10px] uppercase tracking-[0.16em]',
                 'text-[var(--fg-3)] hover:text-[var(--fg)]',
                 'hover:bg-[color-mix(in_oklab,var(--fg)_5%,transparent)]',
                 'disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed',
@@ -383,8 +376,8 @@ export function SpotlightTour() {
               type="button"
               onClick={onNextClick}
               className={cn(
-                'inline-flex items-center justify-center h-8 px-4 rounded-md',
-                'mono tabular text-[10.5px] font-semibold uppercase tracking-[0.18em]',
+                'inline-flex items-center justify-center h-7 px-3 rounded-md',
+                'mono tabular text-[10px] font-semibold uppercase tracking-[0.16em]',
                 'bg-[var(--fg)] text-[var(--bg)]',
                 'hover:opacity-90 active:scale-[0.98]',
                 'transition-[opacity,transform] duration-150',
@@ -401,10 +394,14 @@ export function SpotlightTour() {
 }
 
 /**
- * Pick a callout position that avoids clipping. Centered layout is
- * used for welcome/done + mobile fallbacks. For anchored layouts,
- * we start from the step's preferred placement and re-choose if the
- * callout would spill off-screen.
+ * Pick a callout position that avoids clipping.
+ *
+ * v0.5.6 hardening: the callout is CSS-constrained to
+ * `min(CALLOUT_WIDTH, viewport - 2*margin)`, so at narrow viewports
+ * the card physically shrinks. This function returns coordinates that
+ * always keep the card fully inside the viewport regardless of the
+ * target's position — every branch clamps both top AND left to the
+ * safe range before returning.
  */
 function computeCalloutPos({
   isCentered,
@@ -417,19 +414,44 @@ function computeCalloutPos({
   viewport: { w: number; h: number };
   preferred: TourStep['placement'];
 }): { top: number; left: number } {
+  // Actual card width after the CSS min() constraint kicks in.
+  const cardWidth = Math.min(
+    CALLOUT_WIDTH,
+    Math.max(240, viewport.w - CALLOUT_MARGIN * 2),
+  );
+  // Safe range for top/left: card must fit between the two margins.
+  const maxTop = Math.max(
+    CALLOUT_MARGIN,
+    viewport.h - CALLOUT_HEIGHT_ESTIMATE - CALLOUT_MARGIN,
+  );
+  const maxLeft = Math.max(
+    CALLOUT_MARGIN,
+    viewport.w - cardWidth - CALLOUT_MARGIN,
+  );
+
+  const centeredTop = Math.max(
+    CALLOUT_MARGIN,
+    viewport.h / 2 - CALLOUT_HEIGHT_ESTIMATE / 2,
+  );
+  const centeredLeft = Math.max(
+    CALLOUT_MARGIN,
+    viewport.w / 2 - cardWidth / 2,
+  );
+
   if (isCentered || !targetRect) {
     return {
-      top: Math.max(24, viewport.h / 2 - CALLOUT_HEIGHT_ESTIMATE / 2),
-      left: Math.max(16, viewport.w / 2 - CALLOUT_WIDTH / 2),
+      top: clamp(centeredTop, CALLOUT_MARGIN, maxTop),
+      left: clamp(centeredLeft, CALLOUT_MARGIN, maxLeft),
     };
   }
+
   const spaceAbove = targetRect.top;
   const spaceBelow = viewport.h - (targetRect.top + targetRect.height);
   const spaceRight = viewport.w - (targetRect.left + targetRect.width);
   const spaceLeft = targetRect.left;
 
-  const canRight = spaceRight >= CALLOUT_WIDTH + CALLOUT_MARGIN;
-  const canLeft = spaceLeft >= CALLOUT_WIDTH + CALLOUT_MARGIN;
+  const canRight = spaceRight >= cardWidth + CALLOUT_MARGIN;
+  const canLeft = spaceLeft >= cardWidth + CALLOUT_MARGIN;
   const canBottom = spaceBelow >= CALLOUT_HEIGHT_ESTIMATE + CALLOUT_MARGIN;
   const canAbove = spaceAbove >= CALLOUT_HEIGHT_ESTIMATE + CALLOUT_MARGIN;
 
@@ -446,8 +468,8 @@ function computeCalloutPos({
 
   if (placement === 'centered') {
     return {
-      top: Math.max(24, viewport.h / 2 - CALLOUT_HEIGHT_ESTIMATE / 2),
-      left: Math.max(16, viewport.w / 2 - CALLOUT_WIDTH / 2),
+      top: clamp(centeredTop, CALLOUT_MARGIN, maxTop),
+      left: clamp(centeredLeft, CALLOUT_MARGIN, maxLeft),
     };
   }
 
@@ -456,45 +478,42 @@ function computeCalloutPos({
 
   if (placement === 'right') {
     return {
-      top: clamp(
-        centerY - CALLOUT_HEIGHT_ESTIMATE / 2,
+      top: clamp(centerY - CALLOUT_HEIGHT_ESTIMATE / 2, CALLOUT_MARGIN, maxTop),
+      left: clamp(
+        targetRect.left + targetRect.width + CALLOUT_MARGIN,
         CALLOUT_MARGIN,
-        viewport.h - CALLOUT_HEIGHT_ESTIMATE - CALLOUT_MARGIN,
+        maxLeft,
       ),
-      left: targetRect.left + targetRect.width + CALLOUT_MARGIN,
     };
   }
   if (placement === 'left') {
     return {
-      top: clamp(
-        centerY - CALLOUT_HEIGHT_ESTIMATE / 2,
+      top: clamp(centerY - CALLOUT_HEIGHT_ESTIMATE / 2, CALLOUT_MARGIN, maxTop),
+      left: clamp(
+        targetRect.left - cardWidth - CALLOUT_MARGIN,
         CALLOUT_MARGIN,
-        viewport.h - CALLOUT_HEIGHT_ESTIMATE - CALLOUT_MARGIN,
+        maxLeft,
       ),
-      left: targetRect.left - CALLOUT_WIDTH - CALLOUT_MARGIN,
     };
   }
   if (placement === 'top') {
     return {
-      top: Math.max(
-        CALLOUT_MARGIN,
+      top: clamp(
         targetRect.top - CALLOUT_HEIGHT_ESTIMATE - CALLOUT_MARGIN,
-      ),
-      left: clamp(
-        centerX - CALLOUT_WIDTH / 2,
         CALLOUT_MARGIN,
-        viewport.w - CALLOUT_WIDTH - CALLOUT_MARGIN,
+        maxTop,
       ),
+      left: clamp(centerX - cardWidth / 2, CALLOUT_MARGIN, maxLeft),
     };
   }
   // bottom
   return {
-    top: targetRect.top + targetRect.height + CALLOUT_MARGIN,
-    left: clamp(
-      centerX - CALLOUT_WIDTH / 2,
+    top: clamp(
+      targetRect.top + targetRect.height + CALLOUT_MARGIN,
       CALLOUT_MARGIN,
-      viewport.w - CALLOUT_WIDTH - CALLOUT_MARGIN,
+      maxTop,
     ),
+    left: clamp(centerX - cardWidth / 2, CALLOUT_MARGIN, maxLeft),
   };
 }
 

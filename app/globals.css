@@ -1053,15 +1053,14 @@
 
   /* v0.5.5 — the callout re-slides between step positions rather
      than teleporting. Applied to the fixed positioner; the entrance
-     keyframe still fires the first time the callout mounts. */
+     keyframe still fires the first time the callout mounts.
+     v0.5.6 — glow removed; the border alone carries the boundary
+     against the spotlight backdrop. */
   .vz-tour-callout {
     transition:
       top 320ms cubic-bezier(0.4, 0.2, 0.2, 1),
       left 320ms cubic-bezier(0.4, 0.2, 0.2, 1),
       width 220ms ease-out;
-    box-shadow:
-      0 20px 60px -20px color-mix(in oklab, var(--fg) 32%, transparent),
-      0 0 0 1px color-mix(in oklab, var(--fg) 4%, transparent);
   }
 
   /* v0.5.5 — content cross-fade. Applied inside SpotlightTour via a
