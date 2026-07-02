@@ -774,6 +774,52 @@
         "expired": "⌛ Le transfert de {amount} {symbol} a expiré avant signature. Recommence pour réessayer."
       }
     },
+    "tour": {
+      "open": "Voir le tour",
+      "skip": "Passer",
+      "next": "Suivant",
+      "previous": "Retour",
+      "finish": "C'est bon",
+      "stepIndicator": "Étape {index} sur {total}",
+      "steps": {
+        "welcome": {
+          "title": "Bienvenue sur Vizzor",
+          "body": "Tour d'une minute. Je te montre ce que ton wallet peut faire ici, pour que tu saches où vit chaque action."
+        },
+        "composer": {
+          "title": "Demande n'importe quoi",
+          "body": "Tape n'importe quelle question crypto — prédictions, état on-chain, contexte marché. Je réponds et je cite mes sources."
+        },
+        "topics": {
+          "title": "Cible la réponse",
+          "body": "Ajoute un token ou une skill depuis ici pour cadrer ma réponse. Idéal pour préciser une question large."
+        },
+        "carousel": {
+          "title": "Choisis un token",
+          "body": "Touche un chip pour activer un ticker. Les actions en chat comme send et pay se débloquent dès qu'un token est armé."
+        },
+        "tray": {
+          "title": "Prépare des actions on-chain",
+          "body": "Quand un token est actif, utilise ces icônes pour préparer un transfert ou programmer un paiement. Rien ne se signe sans ton approbation dans le wallet."
+        },
+        "navAlerts": {
+          "title": "Alertes de prix",
+          "body": "Définis des objectifs ici. Tu verras un badge dès qu'une se déclenche — depuis n'importe quelle page."
+        },
+        "navTransactions": {
+          "title": "Toutes tes transactions",
+          "body": "Chaque transfert ou paiement programmé rédigé par ton wallet vit ici. Touche une ligne pour voir le détail complet."
+        },
+        "identity": {
+          "title": "Ton wallet, ton contrôle",
+          "body": "Vizzor ne touche jamais aux fonds sans signature. Tu peux te déconnecter quand tu veux — ton historique reste avec ton wallet."
+        },
+        "done": {
+          "title": "Prêt",
+          "body": "Demande n'importe quoi, arme une alerte, ou prépare un paiement. Ouvre Cmd+K pour relancer ce tour quand tu veux."
+        }
+      }
+    },
     "tradePlan": {
       "label": "Plan de trade",
       "title": "Échelle",

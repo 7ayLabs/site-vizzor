@@ -885,6 +885,52 @@
         }
       }
     },
+    "tour": {
+      "open": "Ver tour",
+      "skip": "Saltar",
+      "next": "Siguiente",
+      "previous": "Atrás",
+      "finish": "Listo",
+      "stepIndicator": "Paso {index} de {total}",
+      "steps": {
+        "welcome": {
+          "title": "Bienvenido a Vizzor",
+          "body": "Tour de un minuto. Te muestro qué puede hacer tu wallet acá para que sepas dónde vive cada acción."
+        },
+        "composer": {
+          "title": "Preguntá lo que sea",
+          "body": "Escribí cualquier pregunta cripto — predicciones, estado on-chain, color de mercado. Respondo y cito mis fuentes."
+        },
+        "topics": {
+          "title": "Enfocá la respuesta",
+          "body": "Sumá un token o una skill desde acá para acotar mi respuesta. Ideal para bajar una pregunta amplia."
+        },
+        "carousel": {
+          "title": "Elegí un token",
+          "body": "Tocá un chip para activar un ticker. Las acciones en el chat como send y pay se desbloquean apenas hay uno armado."
+        },
+        "tray": {
+          "title": "Armá acciones on-chain",
+          "body": "Cuando hay un token activo, usá estos íconos para armar una transferencia o programar un pago. Nada se firma sin tu aprobación en la wallet."
+        },
+        "navAlerts": {
+          "title": "Alertas de precio",
+          "body": "Configurá objetivos acá. Vas a ver un badge apenas se dispare uno — desde cualquier página."
+        },
+        "navTransactions": {
+          "title": "Todas tus transacciones",
+          "body": "Cada transferencia o pago programado que armó tu wallet vive acá. Tocá una fila para ver el detalle completo."
+        },
+        "identity": {
+          "title": "Tu wallet, tu control",
+          "body": "Vizzor nunca toca fondos sin firma. Podés cerrar sesión cuando quieras — tu historial se queda con tu wallet."
+        },
+        "done": {
+          "title": "Listo",
+          "body": "Preguntá lo que sea, armá una alerta o armá un pago. Abrí Cmd+K para volver a correr este tour cuando quieras."
+        }
+      }
+    },
     "tradePlan": {
       "label": "Trade plan",
       "title": "Escalera",

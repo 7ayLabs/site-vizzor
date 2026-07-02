@@ -885,6 +885,52 @@
         }
       }
     },
+    "tour": {
+      "open": "Show tour",
+      "skip": "Skip",
+      "next": "Next",
+      "previous": "Back",
+      "finish": "Got it",
+      "stepIndicator": "Step {index} of {total}",
+      "steps": {
+        "welcome": {
+          "title": "Welcome to Vizzor",
+          "body": "One-minute tour. I'll point out what your wallet can do here so you know where every action lives."
+        },
+        "composer": {
+          "title": "Ask anything",
+          "body": "Type any crypto question here — predictions, on-chain state, market color. I answer and cite my sources."
+        },
+        "topics": {
+          "title": "Focus the answer",
+          "body": "Add a token or a skill from here to scope my reply. Great for narrowing a broad question."
+        },
+        "carousel": {
+          "title": "Pick a token",
+          "body": "Click a chip to activate a ticker. In-chat actions like send and pay unlock the moment a token is armed."
+        },
+        "tray": {
+          "title": "Draft on-chain actions",
+          "body": "When a token is active, use these to draft a transfer or schedule a payment. Nothing signs without your wallet's approval."
+        },
+        "navAlerts": {
+          "title": "Price alerts",
+          "body": "Set targets here. You'll get a badge the moment one triggers — on any page you're on."
+        },
+        "navTransactions": {
+          "title": "Every transaction",
+          "body": "Every transfer or scheduled payment your wallet drafts lives here. Tap a row to see the full details."
+        },
+        "identity": {
+          "title": "Your wallet, your control",
+          "body": "Vizzor never touches funds without a signature. Sign out any time — your history stays with your wallet."
+        },
+        "done": {
+          "title": "You're ready",
+          "body": "Ask anything, arm an alert, or draft a payment. Open Cmd+K to re-run this tour any time."
+        }
+      }
+    },
     "tradePlan": {
       "label": "Trade plan",
       "title": "Ladder",
