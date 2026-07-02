@@ -372,65 +372,44 @@ export function SpotlightTour() {
           user sees what to click; the extra ring rect below adds
           a visible pulsing border so the target reads as "focused"
           rather than dim (user feedback on the Skills step). */}
-      <svg
-        aria-hidden
-        width={viewport.w}
-        height={viewport.h}
-        className="fixed inset-0"
-        style={{ pointerEvents: 'none' }}
-      >
-        <defs>
-          <mask id="vz-tour-mask">
-            <rect
-              x={0}
-              y={0}
-              width={viewport.w}
-              height={viewport.h}
-              fill="white"
-            />
-            <rect
-              className="vz-tour-spotlight-rect"
-              x={spotlight.x}
-              y={spotlight.y}
-              width={spotlight.width}
-              height={spotlight.height}
-              rx={12}
-              fill="black"
-            />
-          </mask>
-        </defs>
-        <rect
-          x={0}
-          y={0}
-          width={viewport.w}
-          height={viewport.h}
-          fill="rgba(0, 0, 0, 0.68)"
-          mask="url(#vz-tour-mask)"
+      {/* v0.5.11 — dim backdrop layer. Full-screen fixed div at the
+          same z-index as the spotlight hole, but rendered UNDER it
+          (earlier in the source order). Pointer-transparent so
+          clicks pass through to the page beneath. */}
+      {(!targetRect || isCentered) && (
+        <div
+          aria-hidden
+          className="fixed inset-0 vz-spotlight-full-dim"
+          style={{ pointerEvents: 'none' }}
         />
-        {/* Outline around the cutout. Uses a viewport-relative white
-            (not `var(--fg)`) so it stays visible against the dark
-            backdrop in BOTH light and dark themes — the earlier
-            `var(--fg) 22%` was dark-on-dark in light mode and the
-            outline effectively disappeared. Still subtle: 30% white
-            at 1.5px reads as "here's the boundary" without shine. */}
-        {targetRect && !isCentered && (
-          <rect
-            className="vz-tour-spotlight-rect"
-            x={spotlight.x}
-            y={spotlight.y}
-            width={spotlight.width}
-            height={spotlight.height}
-            rx={12}
-            fill="none"
-            stroke="rgba(255, 255, 255, 0.3)"
-            strokeWidth={1.5}
-          />
-        )}
-        {/* v0.5.10 — SVG swipe pointer removed. The `showSwipeHint`
-            flag now drives a real horizontal scroll on the carousel
-            itself (see useEffect below), which is more explicit than
-            an abstract circle sliding across the spotlight. */}
-      </svg>
+      )}
+      {/* Spotlight cutout using the box-shadow trick — a transparent
+          rounded rect at the target's position with a massive
+          rgba-black shadow. The shadow spreads across the entire
+          viewport, dimming everything except the rect itself. This
+          replaces the SVG <mask> approach because certain
+          browser/theme combos silently dropped the mask's cutout
+          rect, leaving the whole page uniformly dim (Skills step
+          screenshot). box-shadow is universally supported and
+          animates smoothly via CSS transitions. */}
+      {targetRect && !isCentered && (
+        <div
+          aria-hidden
+          className="vz-tour-spotlight vz-tour-spotlight-rect"
+          style={{
+            position: 'fixed',
+            top: spotlight.y,
+            left: spotlight.x,
+            width: spotlight.width,
+            height: spotlight.height,
+            borderRadius: 12,
+            boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.68)',
+            outline: '1.5px solid rgba(255, 255, 255, 0.32)',
+            outlineOffset: 0,
+            pointerEvents: 'none',
+          }}
+        />
+      )}
 
       {/* Callout card — flat, no glow, no accent stripe. Restraint
           matches the IntentChatCard vocabulary already in the app. */}

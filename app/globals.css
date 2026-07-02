@@ -1038,17 +1038,19 @@
     to   { opacity: 1; transform: translateY(0)   scale(1);    }
   }
 
-  /* v0.5.5 — spotlight aperture morph. Modern browsers accept CSS
-     transitions on the SVG geometry attributes; each stop's rect
-     smoothly resizes/moves to the next target instead of blinking.
-     Matched curve + duration to the callout position transition
-     below so the aperture and the card move as a coordinated pair. */
+  /* v0.5.11 — spotlight is now a div with box-shadow instead of
+     an SVG mask. Transition the CSS position properties so the
+     aperture smoothly slides between targets. Same curve as the
+     callout position transition so both move as a pair. */
   .vz-tour-spotlight-rect {
     transition:
-      x 320ms cubic-bezier(0.4, 0.2, 0.2, 1),
-      y 320ms cubic-bezier(0.4, 0.2, 0.2, 1),
+      top 320ms cubic-bezier(0.4, 0.2, 0.2, 1),
+      left 320ms cubic-bezier(0.4, 0.2, 0.2, 1),
       width 320ms cubic-bezier(0.4, 0.2, 0.2, 1),
       height 320ms cubic-bezier(0.4, 0.2, 0.2, 1);
+  }
+  .vz-spotlight-full-dim {
+    background: rgba(0, 0, 0, 0.68);
   }
 
   /* v0.5.5 — the callout re-slides between step positions rather
