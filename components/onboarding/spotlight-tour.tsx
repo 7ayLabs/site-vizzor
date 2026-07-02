@@ -544,22 +544,11 @@ export function SpotlightTour() {
               </div>
             </div>
             {step.requiresClick ? (
-              /* Require-click gate: no Next button. The tour only
-                 advances when the user actually clicks the target
-                 (see useEffect wiring above). A pulsing hint keeps
-                 the affordance readable. */
-              <span
-                className={cn(
-                  'inline-flex items-center gap-1',
-                  'text-[11.5px] font-medium',
-                  'text-[var(--fg-3)]',
-                  'motion-safe:vz-tap-hint',
-                )}
-              >
-                {t.has('tapToContinue' as never)
-                  ? (t as unknown as (k: string) => string)('tapToContinue')
-                  : 'Tap to continue'}
-              </span>
+              /* Require-click gate: no Next button, no hint text.
+                 The tour advances only when the user clicks the
+                 target (see useEffect wiring above). Copy alone
+                 carries the instruction — Zipmex-reference style. */
+              <span aria-hidden />
             ) : (
               <button
                 type="button"
