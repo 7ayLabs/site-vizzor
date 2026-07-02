@@ -156,7 +156,7 @@ export function SpotlightTour() {
       return;
     }
     const compute = () => {
-      const el = document.querySelector<HTMLElement>(step.targetSelector!);
+      const el = findVisibleTarget(step.targetSelector!);
       if (!el) {
         setTargetRect(null);
         return;
@@ -241,7 +241,7 @@ export function SpotlightTour() {
   // the ETH / GRAM / SOL chips actually move in the strip.
   useEffect(() => {
     if (!isOpen || !step?.showSwipeHint || !step.targetSelector) return;
-    const el = document.querySelector<HTMLElement>(step.targetSelector);
+    const el = findVisibleTarget(step.targetSelector);
     if (!el) return;
     // The scrollable child. Falls back to the target itself when the
     // target IS the scroll container.
@@ -286,7 +286,7 @@ export function SpotlightTour() {
   // the drawer) alongside our listener (which advances the tour).
   useEffect(() => {
     if (!isOpen || !step?.requiresClick || !step.targetSelector) return;
-    const el = document.querySelector<HTMLElement>(step.targetSelector);
+    const el = findVisibleTarget(step.targetSelector);
     if (!el) return;
     // A tick to make sure a synthetic click that fired to open the
     // tour doesn't accidentally auto-advance the requires-click step.
@@ -777,6 +777,39 @@ function clamp(v: number, lo: number, hi: number): number {
   if (v < lo) return lo;
   if (v > hi) return hi;
   return v;
+}
+
+/**
+ * Find the first element matching `selector` that is actually laid
+ * out on screen — non-zero client rect + non-null offsetParent.
+ *
+ * Rationale (v0.5.13): the mobile drawer flow exposes the same
+ * `data-tour-id="nav-alerts"` anchor on multiple rails at once —
+ * ProductSidebar is `hidden lg:flex` (still in DOM at `display: none`
+ * on mobile), predict-shell's LeftRail is remounted inside the drawer,
+ * and mobile-app-nav has its own `DrawerLink`. Naive `querySelector`
+ * returns the first DOM match — which often is the hidden desktop
+ * copy — and `getBoundingClientRect()` returns 0x0. The tour would
+ * then render no cutout even though the visible drawer entry sits
+ * right there. This helper iterates all matches and picks the first
+ * one that's actually rendered so the spotlight tracks the copy the
+ * user sees.
+ */
+function findVisibleTarget(selector: string): HTMLElement | null {
+  if (typeof document === 'undefined') return null;
+  const candidates = document.querySelectorAll<HTMLElement>(selector);
+  for (const candidate of Array.from(candidates)) {
+    // `offsetParent === null` covers the `display: none` chain in
+    // Tailwind's `hidden` utility. `<body>` itself has a null
+    // offsetParent by spec — allow it as a fallback so we don't
+    // reject a legitimate body-level target.
+    if (candidate.offsetParent === null && candidate.tagName !== 'BODY') {
+      continue;
+    }
+    const r = candidate.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) return candidate;
+  }
+  return null;
 }
 
 /**
