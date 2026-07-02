@@ -51,10 +51,9 @@ import {
   IconClose,
   IconHelp,
   IconPlus,
-  IconReceipts,
   IconSettings,
 } from '@/components/predict/predict-icons';
-import { Boxes } from 'lucide-react';
+import { ArrowLeftRight, Boxes } from 'lucide-react';
 
 interface SessionState {
   ok?: boolean;
@@ -277,10 +276,15 @@ export function ProductSidebar() {
           collapsed={collapsed}
         />
         <NavLink
-          href="/app/workflows"
-          icon={<IconReceipts size={collapsed ? 20 : 17} />}
-          label={t('shell.nav.workflows')}
-          active={/^\/app\/workflows(\/|$)/.test(pathname)}
+          href="/app/transactions"
+          icon={
+            <ArrowLeftRight
+              size={collapsed ? 20 : 17}
+              strokeWidth={1.7}
+            />
+          }
+          label={t('shell.nav.transactions')}
+          active={/^\/app\/(?:transactions|workflows)(\/|$)/.test(pathname)}
           collapsed={collapsed}
           badgeCount={workflowBadgeCount}
         />

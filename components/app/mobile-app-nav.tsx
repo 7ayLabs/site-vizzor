@@ -37,15 +37,13 @@ import Image from 'next/image';
 import useSWR from 'swr';
 import { useTranslations } from 'next-intl';
 import { Link, usePathname } from '@/i18n/navigation';
-import { Menu, X } from 'lucide-react';
-import { Boxes } from 'lucide-react';
+import { ArrowLeftRight, Boxes, Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useConversations } from '@/components/predict/use-conversations';
 import {
   IconBell,
   IconChat,
   IconPlus,
-  IconReceipts,
 } from '@/components/predict/predict-icons';
 
 interface SessionState {
@@ -108,7 +106,10 @@ export function MobileAppNav() {
   const onPredictActive = /^\/(?:[a-z]{2}\/)?app\/predict(\/|$)/.test(pathname);
   const onDirectoryActive = /^\/(?:[a-z]{2}\/)?app\/directory(\/|$)/.test(pathname);
   const onAlertsActive = /^\/(?:[a-z]{2}\/)?app\/alerts(\/|$)/.test(pathname);
-  const onAccountActive = /^\/(?:[a-z]{2}\/)?app\/account(\/|$)/.test(pathname);
+  // v0.5.3 — transactions surface (formerly /app/workflows). Legacy
+  // path still matches during the 308 redirect frame.
+  const onTransactionsActive =
+    /^\/(?:[a-z]{2}\/)?app\/(?:transactions|workflows)(\/|$)/.test(pathname);
 
   const short =
     signedIn && wallet
@@ -281,10 +282,10 @@ export function MobileAppNav() {
                 active={onDirectoryActive}
               />
               <DrawerLink
-                href="/app/workflows"
-                icon={<IconReceipts size={17} />}
-                label={t('shell.nav.workflows')}
-                active={onAccountActive}
+                href="/app/transactions"
+                icon={<ArrowLeftRight size={17} strokeWidth={1.7} />}
+                label={t('shell.nav.transactions')}
+                active={onTransactionsActive}
               />
             </nav>
 

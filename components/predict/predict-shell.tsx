@@ -86,7 +86,13 @@ import {
   WorkflowsBlockingDeleteError,
   type ConversationSummary,
 } from './use-conversations';
-import { Check, Wallet, ArrowUpRight, Boxes } from 'lucide-react';
+import {
+  ArrowLeftRight,
+  ArrowUpRight,
+  Boxes,
+  Check,
+  Wallet,
+} from 'lucide-react';
 import { paymentNetwork } from '@/lib/payment/network';
 import { buildSolscanAccountUrl } from '@/lib/explorer/solana';
 import {
@@ -97,7 +103,6 @@ import {
   IconMenu,
   IconPaperclip,
   IconPlus,
-  IconReceipts,
   IconSend,
   IconSettings,
 } from './predict-icons';
@@ -1323,7 +1328,10 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
 
   const onOpenWorkflows = useCallback(() => {
     // typedRoutes doesn't yet know about hashes — cast through never.
-    router.push('/app/workflows' as never);
+    // v0.5.3 — surface renamed from workflows → transactions. The
+    // callback name stays workflows-based for now so we don't churn
+    // every consumer, but the navigation target is the new route.
+    router.push('/app/transactions' as never);
     setDrawerOpen(false);
   }, [router]);
 
@@ -2376,8 +2384,13 @@ function LeftRail({
             collapsed={collapsed}
           />
           <NavButton
-            icon={<IconReceipts size={collapsed ? 20 : 17} />}
-            label={t('shell.nav.workflows')}
+            icon={
+              <ArrowLeftRight
+                size={collapsed ? 20 : 17}
+                strokeWidth={1.7}
+              />
+            }
+            label={t('shell.nav.transactions')}
             onClick={onOpenWorkflows}
             collapsed={collapsed}
             badgeCount={workflowsBadge}
