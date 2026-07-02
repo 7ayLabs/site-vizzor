@@ -766,6 +766,8 @@
       "notify": {
         "executed": "✅ Ton transfert de {amount} {symbol} est on-chain — réglé.",
         "executedWithTx": "✅ Ton transfert de {amount} {symbol} est on-chain — réglé. Tx `{tx}`.",
+        "scheduled": "📅 Ton paiement de {amount} {symbol} est programmé pour {when}. Je te pingue ici quand c'est prêt à diffuser.",
+        "paymentDue": "⏰ Ton paiement programmé de {amount} {symbol} est prêt. Réponds ou ouvre Flux pour le diffuser.",
         "failed": "❌ Ton transfert de {amount} {symbol} n'a pas été réglé. {reason}",
         "rejected": "Tu as rejeté le transfert de {amount} {symbol}. Rien n'a été envoyé.",
         "expired": "⌛ Le transfert de {amount} {symbol} a expiré avant signature. Recommence pour réessayer."

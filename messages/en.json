@@ -779,6 +779,8 @@
       "notify": {
         "executed": "✅ Your transfer of {amount} {symbol} is on-chain — settled.",
         "executedWithTx": "✅ Your transfer of {amount} {symbol} is on-chain — settled. Tx `{tx}`.",
+        "scheduled": "📅 Your payment of {amount} {symbol} is scheduled for {when}. I'll ping you here when it's ready to broadcast.",
+        "paymentDue": "⏰ Your scheduled payment of {amount} {symbol} is ready. Reply or open Workflows to broadcast.",
         "failed": "❌ Your transfer of {amount} {symbol} didn't settle. {reason}",
         "rejected": "You rejected the transfer of {amount} {symbol}. Nothing was sent.",
         "expired": "⌛ The transfer of {amount} {symbol} expired before it was signed. Start over to try again."
@@ -796,6 +798,11 @@
         "ttlExpiresIn": "Expires in {s}s",
         "risk": "Vizzor will trigger the on-chain action only after you sign. Review every field — nothing here can be reversed once settled.",
         "sign": "Sign & execute",
+        "signAndSchedule": "Sign & schedule",
+        "scheduling": "Waiting for wallet…",
+        "schedule": "Schedule",
+        "scheduledFor": "Scheduled for {when}",
+        "broadcastNow": "Broadcast now",
         "continue": "Continue",
         "creating": "Creating…",
         "signing": "Waiting for wallet…",
@@ -846,7 +853,10 @@
           "rpc_unavailable": "The Solana RPC is unreachable right now. Try again in a moment.",
           "wallet_preflight_failed": "Your wallet's own simulation rejected the transfer. Reload the extension and retry.",
           "capability_not_in_prod": "This capability isn't shipping in this build yet. Ask us about early access.",
-          "invalid_conversation_id": "Invalid conversation reference. Reload the chat and try again."
+          "invalid_conversation_id": "Invalid conversation reference. Reload the chat and try again.",
+          "invalid_execute_at": "The schedule time isn't valid. It must be at least a minute from now and at most a year out.",
+          "invalid_recurrence": "That recurrence isn't supported yet — pick 'once' for now.",
+          "wallet_no_sign_message": "Your wallet doesn't support message signing yet. Try Phantom or Solflare."
         }
       },
       "settings": {

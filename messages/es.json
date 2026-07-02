@@ -779,6 +779,8 @@
       "notify": {
         "executed": "✅ Tu transferencia de {amount} {symbol} ya está on-chain — liquidada.",
         "executedWithTx": "✅ Tu transferencia de {amount} {symbol} ya está on-chain — liquidada. Tx `{tx}`.",
+        "scheduled": "📅 Tu pago de {amount} {symbol} está programado para {when}. Te aviso acá cuando esté listo para transmitir.",
+        "paymentDue": "⏰ Tu pago programado de {amount} {symbol} ya está listo. Respondé o abrí Flujos para transmitirlo.",
         "failed": "❌ Tu transferencia de {amount} {symbol} no se liquidó. {reason}",
         "rejected": "Rechazaste la transferencia de {amount} {symbol}. Nada se envió.",
         "expired": "⌛ La transferencia de {amount} {symbol} expiró antes de firmar. Volvé a arrancar para reintentar."
@@ -796,6 +798,11 @@
         "ttlExpiresIn": "Expira en {s}s",
         "risk": "Vizzor sólo dispara la acción on-chain después de que firmes. Revisá cada campo — nada acá es reversible una vez liquidado.",
         "sign": "Firmar y ejecutar",
+        "signAndSchedule": "Firmar y programar",
+        "scheduling": "Esperando la wallet…",
+        "schedule": "Programar",
+        "scheduledFor": "Programado para {when}",
+        "broadcastNow": "Transmitir ahora",
         "continue": "Continuar",
         "creating": "Creando…",
         "signing": "Esperando la wallet…",
@@ -846,7 +853,10 @@
           "rpc_unavailable": "El RPC de Solana está caído por ahora. Reintentá en un momento.",
           "wallet_preflight_failed": "La simulación interna de tu wallet rechazó la transferencia. Recargá la extensión y reintentá.",
           "capability_not_in_prod": "Esta capacidad todavía no está en este build. Escribinos para acceso anticipado.",
-          "invalid_conversation_id": "Referencia de conversación inválida. Recargá el chat y probá de nuevo."
+          "invalid_conversation_id": "Referencia de conversación inválida. Recargá el chat y probá de nuevo.",
+          "invalid_execute_at": "El horario elegido no es válido. Tiene que ser mínimo un minuto en el futuro y máximo un año.",
+          "invalid_recurrence": "Esa recurrencia no está soportada aún — elegí 'once' por ahora.",
+          "wallet_no_sign_message": "Tu wallet aún no soporta firmar mensajes. Probá Phantom o Solflare."
         }
       },
       "settings": {
