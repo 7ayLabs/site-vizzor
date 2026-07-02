@@ -985,6 +985,16 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
               }
             }
 
+            // v0.5.2 — coordinate-payment mints default to firing 24h
+            // out. The user can edit the schedule inside the intent
+            // card before signing; changing the datetime triggers a
+            // re-mint since the canonical bytes bake execute_at in.
+            // Transfers ignore this field entirely (server refuses it
+            // for kind='transfer', which would otherwise poison the
+            // canonical).
+            const DEFAULT_PAYMENT_LEAD_MS = 24 * 60 * 60_000;
+            const now = Date.now();
+
             // Mint every parsed intent in parallel.
             const mintResponses = await Promise.all(
               parsedCommands.map((p) =>
@@ -999,6 +1009,12 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
                     symbol: p.symbol,
                     amount: p.amount,
                     conversation_id: convId ?? null,
+                    ...(p.capability === 'payment'
+                      ? {
+                          execute_at: now + DEFAULT_PAYMENT_LEAD_MS,
+                          recurrence: 'once',
+                        }
+                      : {}),
                   }),
                 }).then(async (res) => ({
                   res,
@@ -1403,10 +1419,11 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
       kind: CapId;
       symbol: string;
       amount: string;
-      status: 'executed' | 'failed' | 'rejected' | 'expired';
+      status: 'executed' | 'failed' | 'rejected' | 'expired' | 'scheduled';
       tx_hash?: string;
       explorer_url?: string;
       error?: string;
+      execute_at?: number;
     }) => {
       // 1. Emit an assistant message narrating the outcome.
       const shortId = event.intent_id.length > 12
@@ -1430,6 +1447,24 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
               amount: event.amount,
               symbol: event.symbol,
             });
+      } else if (event.status === 'scheduled') {
+        const when = event.execute_at
+          ? new Date(event.execute_at).toLocaleString(undefined, {
+              hour12: false,
+            })
+          : '';
+        text = tNotify.has('scheduled' as never)
+          ? (
+              tNotify as unknown as (
+                k: string,
+                v: Record<string, string>,
+              ) => string
+            )('scheduled', {
+              amount: event.amount,
+              symbol: event.symbol,
+              when,
+            })
+          : `Your payment of ${event.amount} ${event.symbol} is scheduled for ${when}.`;
       } else if (event.status === 'failed') {
         text = tNotify('failed', {
           amount: event.amount,
@@ -1459,36 +1494,41 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
         },
       ]);
 
-      // 2. Fire-and-forget notification emit. The backend fills in
-      //    the wallet from the SIWS session; the client only supplies
-      //    the outcome payload. Failure is silent by design.
-      const level =
-        event.status === 'executed'
-          ? 'success'
-          : event.status === 'expired'
-            ? 'warn'
-            : 'error';
-      void fetch('/api/notifications/emit', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          kind:
-            event.status === 'executed'
-              ? 'workflow_executed'
-              : 'workflow_failed',
-          ref_id: event.intent_id,
-          level,
-          symbol: event.symbol,
-          amount: event.amount,
-          tx_hash: event.tx_hash ?? null,
-          explorer_url: event.explorer_url ?? null,
-          error: event.error ?? null,
-          short_id: shortId,
-        }),
-      }).catch(() => {
-        /* silent — notifications are best-effort */
-      });
+      // 2. Fire-and-forget notification emit. Skipped for the
+      //    'scheduled' status — that's not something the sidebar
+      //    badge should surface (the user just performed the
+      //    schedule action intentionally). The real notification
+      //    fires later via the server-side scheduler-tick when
+      //    execute_at arrives (kind = 'payment_due').
+      if (event.status !== 'scheduled') {
+        const level =
+          event.status === 'executed'
+            ? 'success'
+            : event.status === 'expired'
+              ? 'warn'
+              : 'error';
+        void fetch('/api/notifications/emit', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            kind:
+              event.status === 'executed'
+                ? 'workflow_executed'
+                : 'workflow_failed',
+            ref_id: event.intent_id,
+            level,
+            symbol: event.symbol,
+            amount: event.amount,
+            tx_hash: event.tx_hash ?? null,
+            explorer_url: event.explorer_url ?? null,
+            error: event.error ?? null,
+            short_id: shortId,
+          }),
+        }).catch(() => {
+          /* silent — notifications are best-effort */
+        });
+      }
     },
     [setMessages, tNotify],
   );

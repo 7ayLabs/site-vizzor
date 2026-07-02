@@ -45,7 +45,9 @@ import {
 } from '@solana/web3.js';
 import { CoinIcon } from '@/components/ui/coin-icon';
 import { cn } from '@/lib/utils';
+import bs58 from 'bs58';
 import {
+  buildCanonicalIntent,
   shortAddress,
   type IntentNetwork,
   type PendingIntent,
@@ -73,10 +75,14 @@ interface Props {
     kind: IntentKindLite;
     symbol: string;
     amount: string;
-    status: 'executed' | 'failed' | 'rejected' | 'expired';
+    status: 'executed' | 'failed' | 'rejected' | 'expired' | 'scheduled';
     tx_hash?: string;
     explorer_url?: string;
     error?: string;
+    /** v0.5.2 — set when `status === 'scheduled'`. Unix ms the
+     *  payment will fire; used by the shell to narrate the receipt
+     *  ("scheduled for {date}"). */
+    execute_at?: number;
   }) => void;
 }
 
@@ -93,6 +99,14 @@ type CardState =
       network: IntentNetwork;
       explorerUrl: string;
     }
+  /**
+   * v0.5.2 — scheduled-payment persistent state. The wallet signed
+   * the v2 canonical bytes; site persisted the signature with
+   * status='signed' + execute_at. No on-chain tx has fired yet — the
+   * card sits here until `payment_due` notification arrives at
+   * execute_at and the user returns to broadcast.
+   */
+  | { kind: 'scheduled'; executeAt: number; network: IntentNetwork }
   | { kind: 'error'; message: string; canRetry: boolean }
   | { kind: 'rejected' };
 
@@ -212,6 +226,16 @@ export function IntentChatCard({
         tx_hash: state.txHash,
         explorer_url: state.explorerUrl,
       });
+    } else if (state.kind === 'scheduled') {
+      finalStatusFired.current = intent.intent_id;
+      onFinalStatus({
+        intent_id: intent.intent_id,
+        kind: intent.kind,
+        symbol: intent.symbol,
+        amount: intent.amount,
+        status: 'scheduled',
+        execute_at: state.executeAt,
+      });
     } else if (state.kind === 'error') {
       // Expired vs generic failure: expired-error has a specific
       // localized copy that came in via t('expired'). Comparing the
@@ -283,11 +307,9 @@ export function IntentChatCard({
       return;
     }
 
-    // Only SOL transfer is wired to actually settle client-side for
-    // now. Other capabilities (workflow / payment / autonomous) still
-    // depend on the engine follow-up; refuse them explicitly rather
-    // than leave the user staring at a spinner.
-    if (intent.kind !== 'transfer' || intent.network !== 'sol') {
+    // Network gate — SOL only for now. TON transfer builders land in
+    // the engine follow-up PR.
+    if (intent.network !== 'sol') {
       setState({
         kind: 'error',
         message: t.has('reasons.engine_settlement_pending' as never)
@@ -295,6 +317,102 @@ export function IntentChatCard({
           : 'Settlement for this capability is queued for the engine deploy.',
         canRetry: false,
       });
+      return;
+    }
+
+    // v0.5.2 — coordinate-payment SCHEDULE flow. When the intent is a
+    // payment with a future execute_at, sign the canonical bytes via
+    // `wallet.signMessage` (off-chain — no on-chain tx yet), POST the
+    // signature to /api/execute-intent, and flip the card to a
+    // persistent "Scheduled" receipt. The site fires a payment_due
+    // notification at execute_at; the user re-signs and broadcasts at
+    // that point via the transfer path.
+    if (intent.kind === 'payment') {
+      setState({ kind: 'signing' });
+      try {
+        const signMessage = (wallet as { signMessage?: (msg: Uint8Array) => Promise<Uint8Array> }).signMessage;
+        if (typeof signMessage !== 'function') {
+          setState({
+            kind: 'error',
+            message: t.has('reasons.wallet_no_sign_message' as never)
+              ? t('reasons.wallet_no_sign_message' as never)
+              : 'Your wallet does not support message signing. Try Phantom or Solflare.',
+            canRetry: false,
+          });
+          return;
+        }
+        // Rebuild the canonical bytes client-side from the same
+        // PendingIntent shape. `buildCanonicalIntent` is the single
+        // source of truth for the format; server and client running
+        // it against the same input MUST produce byte-identical
+        // output — that's the whole point of the domain separator.
+        const canonical = buildCanonicalIntent(intent);
+        const canonicalBytes = new TextEncoder().encode(canonical);
+        let sigBytes: Uint8Array;
+        try {
+          sigBytes = await signMessage(canonicalBytes);
+        } catch (signErr) {
+          const errMsg =
+            signErr instanceof Error ? signErr.message : String(signErr);
+          const rejected = /reject|denied|declined/i.test(errMsg);
+          setState({
+            kind: 'error',
+            message: rejected ? t('errorRejected') : t('errorGeneric'),
+            canRetry: !rejected,
+          });
+          return;
+        }
+        // Encode the signature as base58 so the server (which decodes
+        // via bs58) can verify against the wallet's pubkey.
+        const signatureBase58 = bs58.encode(sigBytes);
+        const res = await fetch('/api/execute-intent', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            intent_id: intent.intent_id,
+            signature: signatureBase58,
+            signed_by: publicKey.toBase58(),
+          }),
+        });
+        const data = (await res.json()) as
+          | {
+              ok: true;
+              scheduled: true;
+              intent_id: string;
+              execute_at: number;
+              network: IntentNetwork;
+            }
+          | { ok: false; reason: string; upstream_body?: string };
+        if (!res.ok || data.ok === false) {
+          const reason = data.ok === false ? data.reason : `http_${res.status}`;
+          const label = t.has(`reasons.${reason}` as never)
+            ? t(`reasons.${reason}` as never)
+            : reason;
+          setState({
+            kind: 'error',
+            message: label,
+            canRetry:
+              reason === 'upstream_timeout' ||
+              reason === 'upstream_unreachable',
+          });
+          return;
+        }
+        setState({
+          kind: 'scheduled',
+          executeAt: data.execute_at,
+          network: data.network,
+        });
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        // eslint-disable-next-line no-console
+        console.warn('[intent.schedule] failed', errMsg);
+        setState({
+          kind: 'error',
+          message: t('errorGeneric'),
+          canRetry: true,
+        });
+      }
       return;
     }
 
@@ -608,6 +726,7 @@ export function IntentChatCard({
     }
   }, [
     intent,
+    wallet,
     sendTransaction,
     publicKey,
     connected,
@@ -656,11 +775,13 @@ export function IntentChatCard({
           status={
             state.kind === 'success'
               ? 'executed'
-              : state.kind === 'rejected'
-                ? 'expired'
-                : state.kind === 'error'
-                  ? 'failed'
-                  : 'pending'
+              : state.kind === 'scheduled'
+                ? 'signed'
+                : state.kind === 'rejected'
+                  ? 'expired'
+                  : state.kind === 'error'
+                    ? 'failed'
+                    : 'pending'
           }
         />
       </div>
@@ -705,6 +826,21 @@ export function IntentChatCard({
               <FieldValue muted>~{intent.network_fee}</FieldValue>
             </>
           )}
+          {/* v0.5.2 — payment schedule row. Only rendered for the
+              payment kind; shows the local-time formatted execute_at
+              the user is about to authorize. Read-only in this cut —
+              editing the schedule requires re-minting the intent to
+              rebuild canonical bytes, follow-up. */}
+          {intent.kind === 'payment' && typeof intent.execute_at === 'number' && (
+            <>
+              <FieldLabel>{t('schedule')}</FieldLabel>
+              <FieldValue mono>
+                {new Date(intent.execute_at).toLocaleString(undefined, {
+                  hour12: false,
+                })}
+              </FieldValue>
+            </>
+          )}
           <FieldLabel>{t('nonce')}</FieldLabel>
           <FieldValue mono muted>
             {shortAddress(intent.nonce, 6, 4)}
@@ -723,6 +859,21 @@ export function IntentChatCard({
               >
                 {shortAddress(state.txHash, 6, 6)}
               </a>
+            ) : state.kind === 'scheduled' ? (
+              <span className="text-[var(--up)]">
+                {t.has('scheduledFor' as never)
+                  ? (
+                      t as unknown as (
+                        k: string,
+                        v: Record<string, string>,
+                      ) => string
+                    )('scheduledFor', {
+                      when: new Date(state.executeAt).toLocaleString(undefined, {
+                        hour12: false,
+                      }),
+                    })
+                  : `Scheduled for ${new Date(state.executeAt).toLocaleString()}`}
+              </span>
             ) : state.kind === 'rejected' ? (
               <span>{t('errorRejected')}</span>
             ) : state.kind === 'error' ? (
@@ -733,6 +884,14 @@ export function IntentChatCard({
           </div>
           <div className="shrink-0 flex items-center gap-1.5">
             {state.kind === 'success' ? (
+              <button
+                type="button"
+                onClick={onDismiss}
+                className={buttonTextCls}
+              >
+                {t('close')}
+              </button>
+            ) : state.kind === 'scheduled' ? (
               <button
                 type="button"
                 onClick={onDismiss}
@@ -784,12 +943,20 @@ export function IntentChatCard({
                   className={buttonPrimaryCls}
                 >
                   {state.kind === 'signing'
-                    ? t('signing')
+                    ? intent.kind === 'payment'
+                      ? t.has('scheduling' as never)
+                        ? t('scheduling' as never)
+                        : t('signing')
+                      : t('signing')
                     : state.kind === 'settling'
                       ? t('settling')
                       : state.kind === 'reconnecting'
                         ? '…'
-                        : t('sign')}
+                        : intent.kind === 'payment'
+                          ? t.has('signAndSchedule' as never)
+                            ? t('signAndSchedule' as never)
+                            : t('sign')
+                          : t('sign')}
                 </button>
               </>
             )}
