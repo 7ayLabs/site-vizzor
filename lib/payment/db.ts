@@ -696,6 +696,33 @@ function runV050CapabilityMigrations(db: DB): void {
       ON notifications(wallet_address, read_at)
       WHERE read_at IS NULL;
   `);
+
+  // v0.5.2 — coordinate-payment (scheduled) fields on capability_audit.
+  // The transfer path executes immediately; the payment path signs a
+  // canonical authorization NOW and expects the site to fire a
+  // notification at `execute_at` so the user can broadcast. No custody:
+  // the wallet always has to click Sign again to actually move funds.
+  //
+  //   execute_at         — unix ms when the payment should fire.
+  //                        NULL for legacy transfer rows.
+  //   recurrence         — 'once' | 'weekly' | 'monthly'. v0.5.2 ships
+  //                        'once' only; the column is here so the DSL
+  //                        can add recurrence without another migration.
+  //   signature          — base58 sign_message signature over `canonical`.
+  //                        Persisted so the engine (or a future auto-
+  //                        execute path) can prove the user pre-authorized.
+  //   payment_notified_at — the moment we fired the payment_due
+  //                        notification. NULL until it fires; prevents
+  //                        double-firing when the notifications poll
+  //                        runs every 30s past the due window.
+  addColumnIfMissing(db, 'capability_audit', 'execute_at', 'INTEGER');
+  addColumnIfMissing(db, 'capability_audit', 'recurrence', 'TEXT');
+  addColumnIfMissing(db, 'capability_audit', 'signature', 'TEXT');
+  addColumnIfMissing(db, 'capability_audit', 'payment_notified_at', 'INTEGER');
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_capability_audit_payment_due
+      ON capability_audit(wallet_address, kind, status, execute_at, payment_notified_at);
+  `);
 }
 
 export function getDb(): DB {
@@ -2133,6 +2160,15 @@ export interface CapabilityAuditRow {
   /** v0.5.1 — nullable pointer to the conversation this intent was
    *  minted from. Legacy rows are NULL. */
   conversation_id: string | null;
+  /** v0.5.2 — coordinate-payment fields. NULL for transfer rows. */
+  execute_at: number | null;
+  recurrence: 'once' | 'weekly' | 'monthly' | null;
+  /** Base58 signMessage signature over `canonical`. Persisted for
+   *  the scheduled payment path so the engine can prove pre-auth. */
+  signature: string | null;
+  /** Set the first time the scheduler-tick fires payment_due for this
+   *  row. Prevents re-firing on subsequent polls. */
+  payment_notified_at: number | null;
 }
 
 /**
@@ -2159,6 +2195,13 @@ export function insertPendingIntent(row: {
    *  conversation id yet). Site's manual mint path passes it so the
    *  workflows page can group and the chat-delete guard can look it up. */
   conversationId?: string | null;
+  /** v0.5.2 — scheduled-payment fields. Both are NULL for transfer
+   *  intents (which execute immediately). For payment intents:
+   *  `executeAt` is the unix-ms when the payment_due notification
+   *  should fire; `recurrence` is 'once' in v0.5.2 (weekly/monthly
+   *  land later without a migration since the column already exists). */
+  executeAt?: number | null;
+  recurrence?: 'once' | 'weekly' | 'monthly' | null;
 }): void {
   ensureCapabilityMigrations();
   const now = Date.now();
@@ -2167,8 +2210,9 @@ export function insertPendingIntent(row: {
       `INSERT INTO capability_audit (
           intent_id, wallet_address, kind, network, symbol, amount,
           amount_usd, from_addr, to_addr, canonical, nonce, issued_at,
-          ttl_at, conversation_id, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+          ttl_at, conversation_id, execute_at, recurrence, status,
+          created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
         ON CONFLICT(intent_id) DO NOTHING`,
     )
     .run(
@@ -2186,9 +2230,32 @@ export function insertPendingIntent(row: {
       row.issuedAt,
       row.ttlAt,
       row.conversationId ?? null,
+      row.executeAt ?? null,
+      row.recurrence ?? null,
       now,
       now,
     );
+}
+
+/**
+ * v0.5.2 — persist the base58 signature the wallet produced when a
+ * scheduled payment was authorized. Kept separate from
+ * `updateIntentStatus` because the transfer path never captures a
+ * canonical signature (the on-chain tx signature IS the proof there).
+ * Called by /api/execute-intent on the payment branch right after
+ * verifying the signature against `canonical`.
+ */
+export function recordIntentSignature(opts: {
+  intentId: string;
+  signature: string;
+}): void {
+  ensureCapabilityMigrations();
+  getDb()
+    .prepare(
+      `UPDATE capability_audit SET signature = ?, updated_at = ?
+        WHERE intent_id = ? AND signature IS NULL`,
+    )
+    .run(opts.signature, Date.now(), opts.intentId);
 }
 
 export function getPendingIntent(intentId: string): CapabilityAuditRow | null {
@@ -2414,7 +2481,8 @@ export type NotificationKind =
   | 'workflow_executed'
   | 'workflow_failed'
   | 'alert_triggered'
-  | 'alert_resolved';
+  | 'alert_resolved'
+  | 'payment_due';
 
 /**
  * Buckets a notification kind into "flows" (workflow_*) or "alerts"
@@ -2426,6 +2494,9 @@ export type NotificationBucket = 'workflows' | 'alerts';
 export function bucketForNotificationKind(
   kind: NotificationKind,
 ): NotificationBucket {
+  // Alert kinds land in the Alerts bucket; every other kind
+  // (workflow_*, payment_*) lands in the Workflows bucket so the
+  // Flujos badge reflects "actions awaiting your attention".
   return kind === 'alert_triggered' || kind === 'alert_resolved'
     ? 'alerts'
     : 'workflows';
@@ -2465,6 +2536,7 @@ const KNOWN_NOTIFICATION_KINDS: ReadonlySet<NotificationKind> = new Set([
   'workflow_failed',
   'alert_triggered',
   'alert_resolved',
+  'payment_due',
 ]);
 
 function isKnownNotificationKind(x: string): x is NotificationKind {
@@ -2658,7 +2730,11 @@ export function markAllNotificationsRead(
   const kinds =
     bucket === 'alerts'
       ? (['alert_triggered', 'alert_resolved'] as NotificationKind[])
-      : (['workflow_executed', 'workflow_failed'] as NotificationKind[]);
+      : ([
+          'workflow_executed',
+          'workflow_failed',
+          'payment_due',
+        ] as NotificationKind[]);
   const placeholders = kinds.map(() => '?').join(',');
   const result = db
     .prepare(
@@ -2668,4 +2744,110 @@ export function markAllNotificationsRead(
     )
     .run(now, wallet, ...kinds);
   return typeof result.changes === 'number' ? result.changes : 0;
+}
+
+/* ------------------------------------------------------------------ *\
+ * v0.5.2 — scheduled-payment scheduler tick.
+ *
+ * Called by GET /api/notifications right before it reads the ledger.
+ * Scans this wallet's signed payment intents whose `execute_at`
+ * window has arrived and fires exactly one `payment_due` notification
+ * per intent. The row's `payment_notified_at` acts as the dedupe
+ * marker so a 30-second-cadence poll doesn't spam the ledger while
+ * the user has the tab open past the due window.
+ *
+ * Why this lives on the read path instead of a background worker:
+ * site-vizzor has no long-running process — Next.js routes are
+ * request-scoped. Piggybacking on the notifications poll gives us a
+ * "cron on visit" that fires within 30s of the user being active on
+ * any /app/* surface. Precise sub-minute timing isn't required —
+ * "payment scheduled for tonight 21:00" is fine at 21:00:30.
+\* ------------------------------------------------------------------ */
+
+interface DuePaymentRow {
+  intent_id: string;
+  symbol: string | null;
+  amount: string | null;
+  to_addr: string | null;
+  execute_at: number | null;
+}
+
+export function firePendingPaymentNotifications(wallet: string): number {
+  ensureCapabilityMigrations();
+  const now = Date.now();
+  const db = getDb();
+
+  const due = db
+    .prepare(
+      `SELECT intent_id, symbol, amount, to_addr, execute_at
+         FROM capability_audit
+        WHERE wallet_address = ?
+          AND kind = 'payment'
+          AND status = 'signed'
+          AND execute_at IS NOT NULL
+          AND execute_at <= ?
+          AND payment_notified_at IS NULL`,
+    )
+    .all(wallet, now) as DuePaymentRow[];
+
+  if (due.length === 0) return 0;
+
+  let fired = 0;
+  for (const row of due) {
+    const symbol = row.symbol ?? '';
+    const amount = row.amount ?? '';
+    const toAddr = row.to_addr ?? '';
+    const shortTo =
+      toAddr.length > 12
+        ? `${toAddr.slice(0, 4)}…${toAddr.slice(-4)}`
+        : toAddr;
+    const body = `Scheduled payment ready: ${amount} ${symbol} → ${shortTo}`;
+    const inserted = insertNotification({
+      wallet,
+      kind: 'payment_due',
+      refId: row.intent_id,
+      level: 'info',
+      body,
+      meta: {
+        symbol,
+        amount,
+        to_addr: toAddr,
+        execute_at: row.execute_at ?? undefined,
+      },
+    });
+    // insertNotification's dedupe returns null when a row for the
+    // same (wallet, kind, ref_id) already exists inside the 60s
+    // window — we still mark payment_notified_at so a slow-write
+    // race doesn't cause a re-fire on the next poll.
+    if (inserted) fired += 1;
+    db.prepare(
+      `UPDATE capability_audit SET payment_notified_at = ?, updated_at = ?
+        WHERE intent_id = ? AND payment_notified_at IS NULL`,
+    ).run(now, now, row.intent_id);
+  }
+  return fired;
+}
+
+/**
+ * Look up a signed-and-due payment by intent id for the "broadcast
+ * now" click on the payment_due notification card. Returns null if
+ * the intent doesn't belong to this wallet OR isn't ready yet.
+ * Used by the client to hydrate the IntentChatCard back into an
+ * actionable state when the user returns to the conversation.
+ */
+export function getSignedPaymentForBroadcast(
+  wallet: string,
+  intentId: string,
+): CapabilityAuditRow | null {
+  ensureCapabilityMigrations();
+  const row = getDb()
+    .prepare(
+      `SELECT * FROM capability_audit
+        WHERE intent_id = ?
+          AND wallet_address = ?
+          AND kind = 'payment'
+          AND status = 'signed'`,
+    )
+    .get(intentId, wallet) as CapabilityAuditRow | undefined;
+  return row ?? null;
 }
