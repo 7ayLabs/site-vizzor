@@ -366,6 +366,81 @@ CREATE INDEX IF NOT EXISTS idx_intents_status_ttl    ON intents(status, ttl_at);
 
 Note the engine does NOT need `conversation_id` — that's site-only for the workflows page grouping.
 
+### 5a. `POST /v1/schedule-payment` (v0.5.2 — added 2026-07-02)
+
+The site now ships a coordinate-payment (`pay 0.05 SOL → <addr>`) flow that is a strict superset of the transfer flow: the wallet signs canonical bytes NOW to authorize a future broadcast at `execute_at`, but no on-chain tx fires until the user returns at that moment and re-signs a transfer. That's the "no custody, honest trust model" cut — the engine PR wires the OPTIONAL "auto-execute at execute_at" path when the custody model is decided.
+
+**v0.5.2 canonical version.** Payment intents are signed with the `vizzor.intent.v2` domain-separator prefix (not `v1`). The canonical fields add `execute_at` and `recurrence`:
+
+```jsonc
+{
+  "amount":      "0.05",
+  "execute_at":  1751389200000,
+  "from_addr":   "5oQ2…",
+  "intent_id":   "itn_a1b2…",
+  "issued_at":   1751380000000,
+  "kind":        "payment",
+  "network":     "sol",
+  "nonce":       "n_…",
+  "recurrence":  "once",
+  "symbol":      "SOL",
+  "to_addr":     "5oQ2…",
+  "ttl_at":      1751380060000
+}
+```
+
+Serialized as `vizzor.intent.v2\n<sorted-json>`. See `site-vizzor/lib/capabilities/intent.ts:buildCanonicalIntent` for the exact reference; server and client MUST produce byte-identical output.
+
+**New endpoint (OPTIONAL for v0.5.2):**
+
+```http
+POST /v1/schedule-payment
+Content-Type: application/json
+X-API-Key: <site key>
+
+{
+  "intent_id":      "itn_…",
+  "wallet_address": "5oQ2…",
+  "signature":      "<base58 signMessage over canonical>",
+  "canonical":      "vizzor.intent.v2\n{…}",
+  "execute_at":     1751389200000,
+  "recurrence":     "once",
+  "symbol":         "SOL",
+  "amount":         "0.05",
+  "to_addr":        "5oQ2…"
+}
+```
+
+- Verify signature via `nacl.sign.detached.verify(canonicalBytes, sigBytes, walletPubkey)`. Reject 400 `signature_invalid` on failure.
+- Persist to engine `payments` table (mirror of site's `capability_audit` payment rows) with status `signed_and_scheduled`.
+- Return `{ ok: true, intent_id, execute_at, network }`.
+
+Site posts to this endpoint from `/api/execute-intent`'s payment-schedule branch (currently the site persists locally + returns to the client; forwarding to the engine is added when this endpoint ships). The site is safe today WITHOUT this endpoint — it doesn't rely on the engine for scheduling, only for the eventual auto-execute path.
+
+**Auto-execute path (out of scope for v0.5.2 — spec only):** at `execute_at`, the engine cron reads the `payments` table, picks up all `signed_and_scheduled` rows whose window has arrived, and needs one of the following custody options to actually broadcast:
+
+- (a) **User re-signs at execute_at** — current site behavior, no engine involvement needed. Notification arrives, user returns to chat, re-signs a real transfer. Honest, no custody, ships today.
+- (b) **Delegated SPL authority** — user pre-authorized a delegate on the token account. Engine builds + signs + broadcasts within delegation limits.
+- (c) **MPC / Turnkey signer** — engine holds a threshold signer that requires the user's SIWS session token as one factor. High effort, high safety.
+- (d) **Session vault Anchor program** — user deposits into a program-owned vault at schedule time; engine calls the program at execute_at with a signed instruction. Best UX, needs Anchor program deployment.
+
+The engine PR should ship (a) as the default (no custody, matches site) and put (b/c/d) behind a `payments.auto_execute_mode` env flag defaulting to `off`. Do not enable (b)/(c)/(d) in prod until legal signs off — same posture as the transfer treasury address discussion.
+
+**SSE event for state changes.** When (b/c/d) ship, the engine emits `event: payment_status` on the /v1/chat stream and (optionally) via `GET /v1/notifications`:
+
+```
+event: payment_status
+data: {
+  "intent_id": "itn_…",
+  "status":    "executed" | "failed",
+  "tx_hash":   "<solana signature>",
+  "network":   "sol",
+  "explorer_url": "https://solscan.io/tx/…"
+}
+```
+
+Site handoff: `/api/predict/route.ts` re-emits as `data-payment-status`; predict-shell fires the same onFinalStatus path the transfer executed flow uses, and the notification kind flips from `payment_due` to `workflow_executed`. No new client shape.
+
 ### 5b. Notifications parity (v0.5.2 — added 2026-07-02)
 
 The site now runs a notifications ledger (`notifications` table, `/api/notifications`) that powers a sidebar unread badge and an auto-narrated Vizzor turn in-chat. Every intent that reaches a terminal state (executed / failed / rejected / expired) already fires a client-side POST to `/api/notifications/emit`, so the badge updates without engine changes. Two OPTIONAL engine additions harden this so the site works even when the user's tab is closed:
