@@ -59,7 +59,7 @@ const CALLOUT_MARGIN = 16;
  * a visual gap so the callout never appears to touch the target.
  */
 const CALLOUT_TARGET_GAP = 20;
-const SPOTLIGHT_PADDING = 10;
+const SPOTLIGHT_PADDING = 6;
 const MOBILE_BREAKPOINT = 1024; // Match Tailwind's `lg` — sidebar
 // entries only exist above this width in every /app/* surface.
 
@@ -402,9 +402,18 @@ export function SpotlightTour() {
             left: spotlight.x,
             width: spotlight.width,
             height: spotlight.height,
-            borderRadius: 12,
+            /**
+             * v0.5.12 — tighter + calmer per user feedback.
+             * borderRadius 12 → 8 (less rounded, reads as a system
+             * spotlight rather than a soft chip). Outline 1.5px →
+             * 1px @ 0.22 opacity (was 0.32) so the boundary is
+             * present but not shouting. Padding was already dropped
+             * from 10 → 6 above so the cutout hugs the target
+             * without empty gutters around it.
+             */
+            borderRadius: 8,
             boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.68)',
-            outline: '1.5px solid rgba(255, 255, 255, 0.32)',
+            outline: '1px solid rgba(255, 255, 255, 0.22)',
             outlineOffset: 0,
             pointerEvents: 'none',
           }}
