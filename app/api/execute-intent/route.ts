@@ -47,6 +47,7 @@ import {
   getCapabilityPreferences,
   getCapabilitySpendUsedToday,
   getPendingIntent,
+  recordIntentSignature,
   updateIntentStatus,
 } from '@/lib/payment/db';
 import {
@@ -209,13 +210,25 @@ export async function POST(req: Request) {
       { headers: NO_STORE },
     );
   }
-  if (intent.status !== 'pending') {
+  // v0.5.2 — scheduled-payment broadcast. If a payment intent was
+  // previously signed (status='signed'), the user is now returning to
+  // broadcast on-chain via the client-executed path. Same tx_hash
+  // recording as a fresh transfer, minus the pending→signed transition
+  // (which already happened when the schedule was authorized).
+  const isPaymentBroadcast =
+    clientExecuted &&
+    intent.kind === 'payment' &&
+    intent.status === 'signed';
+  if (intent.status !== 'pending' && !isPaymentBroadcast) {
     return NextResponse.json(
       { ok: false, reason: `intent_${intent.status}` },
       { status: 409, headers: NO_STORE },
     );
   }
-  if (intent.ttl_at < Date.now()) {
+  // TTL applies only to unsigned intents. A scheduled payment can be
+  // broadcast well past the 60s pending TTL — the whole point of
+  // scheduling is a delayed execution window.
+  if (intent.status === 'pending' && intent.ttl_at < Date.now()) {
     try {
       updateIntentStatus({ intentId: intent.intent_id, status: 'expired' });
     } catch {
@@ -242,6 +255,106 @@ export async function POST(req: Request) {
     );
   }
 
+  // v0.5.2 — coordinate-payment SCHEDULE branch. The user signed the
+  // v2 canonical bytes via `wallet.signMessage`; we verify the
+  // signature, persist it, mark pending→signed, and return the
+  // schedule shape (no engine call, no tx yet). When execute_at
+  // arrives the scheduler-tick fires a payment_due notification and
+  // the user returns to broadcast — that second call comes through
+  // the isPaymentBroadcast branch below.
+  if (
+    !clientExecuted &&
+    intent.kind === 'payment' &&
+    typeof signature === 'string' &&
+    typeof intent.execute_at === 'number'
+  ) {
+    let sigOk = false;
+    try {
+      const msgBytes = new TextEncoder().encode(intent.canonical);
+      const sigBytes = bs58.decode(signature);
+      const pubkey = bs58.decode(intent.wallet_address);
+      if (sigBytes.length === 64 && pubkey.length === 32) {
+        sigOk = nacl.sign.detached.verify(msgBytes, sigBytes, pubkey);
+      }
+    } catch {
+      sigOk = false;
+    }
+    if (!sigOk) {
+      try {
+        updateIntentStatus({ intentId: intent.intent_id, status: 'expired' });
+      } catch {
+        /* already terminal — fine */
+      }
+      recordAudit({
+        eventType: 'capability.intent.failed',
+        actor: actorFromWallet(session.wallet),
+        subject: intent.intent_id,
+        outcome: 'denied',
+        req,
+      });
+      return NextResponse.json(
+        { ok: false, reason: 'signature_invalid' },
+        { status: 400, headers: NO_STORE },
+      );
+    }
+
+    // Cap check applied at schedule time so we refuse a payment that
+    // would push tomorrow's spend past the cap. Re-evaluated at
+    // broadcast time via the isPaymentBroadcast branch — an aggressive
+    // cap lowering between schedule and broadcast still blocks.
+    const prefs = getCapabilityPreferences(intent.wallet_address);
+    const cap =
+      prefs.spend_caps[intent.kind] ?? DEFAULT_SPEND_CAPS_USD[intent.kind];
+    if (cap === 0) {
+      return NextResponse.json(
+        { ok: false, reason: 'capability_capped_zero', cap_key: intent.kind },
+        { status: 402, headers: NO_STORE },
+      );
+    }
+    if (cap > 0 && (intent.amount_usd ?? 0) > cap) {
+      return NextResponse.json(
+        {
+          ok: false,
+          reason: 'spend_cap_reached',
+          cap,
+          used_today: 0,
+          pending_amount_usd: intent.amount_usd,
+        },
+        { status: 402, headers: NO_STORE },
+      );
+    }
+
+    try {
+      updateIntentStatus({ intentId: intent.intent_id, status: 'signed' });
+      recordIntentSignature({
+        intentId: intent.intent_id,
+        signature,
+      });
+    } catch {
+      return NextResponse.json(
+        { ok: false, reason: 'intent_transition_failed' },
+        { status: 409, headers: NO_STORE },
+      );
+    }
+    recordAudit({
+      eventType: 'capability.intent.signed',
+      actor: actorFromWallet(session.wallet),
+      subject: intent.intent_id,
+      outcome: 'ok',
+      req,
+    });
+    return NextResponse.json(
+      {
+        ok: true,
+        scheduled: true,
+        intent_id: intent.intent_id,
+        execute_at: intent.execute_at,
+        network: intent.network,
+      },
+      { headers: NO_STORE },
+    );
+  }
+
   // v0.5.0 client-executed path — Phantom already broadcast the SOL
   // transfer via `sendTransaction` and handed us the on-chain tx
   // signature. That signature IS the wallet's authorization proof
@@ -249,6 +362,12 @@ export async function POST(req: Request) {
   // canonical-bytes verify + engine forward entirely. Basic length
   // sanity was checked above; the audit trail preserves the tx_hash
   // so a follow-up job can cross-check RPC state.
+  //
+  // v0.5.2 — this branch now covers both:
+  //   (a) a fresh transfer (pending → signed → executed in one shot),
+  //   (b) a previously-scheduled payment being broadcast at
+  //       execute_at (signed → executed, skipping the pending→signed
+  //       hop which already happened at schedule time).
   if (clientExecuted && typeof txHashFromClient === 'string') {
     const prefs = getCapabilityPreferences(intent.wallet_address);
     const cap =
@@ -277,7 +396,13 @@ export async function POST(req: Request) {
       );
     }
     try {
-      updateIntentStatus({ intentId: intent.intent_id, status: 'signed' });
+      // Fresh transfer / freshly-authorized intent: hop through
+      // pending → signed first. A scheduled payment that's ALREADY
+      // 'signed' skips the intermediate hop; going pending→signed
+      // on a signed row would be an illegal transition.
+      if (intent.status === 'pending') {
+        updateIntentStatus({ intentId: intent.intent_id, status: 'signed' });
+      }
       updateIntentStatus({
         intentId: intent.intent_id,
         status: 'executed',

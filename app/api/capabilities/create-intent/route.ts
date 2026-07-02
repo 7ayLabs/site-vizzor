@@ -66,7 +66,26 @@ interface CreateIntentBody {
    * chat-delete guard can look up active intents.
    */
   conversation_id?: unknown;
+  /**
+   * v0.5.2 — coordinate-payment fields. Required when
+   * `capability === 'payment'`, refused for transfer.
+   *
+   * execute_at: unix ms of when the payment is scheduled to fire.
+   *             Must be at least 60s in the future (short enough for
+   *             quick UX testing, long enough that a clock skew of a
+   *             few seconds doesn't cause instant firing).
+   * recurrence: 'once' | 'weekly' | 'monthly'. v0.5.2 accepts only
+   *             'once' server-side; the field is here so the client
+   *             DSL can start emitting the others without another
+   *             engine contract change.
+   */
+  execute_at?: unknown;
+  recurrence?: unknown;
 }
+
+const MIN_SCHEDULE_LEAD_MS = 60_000;
+const MAX_SCHEDULE_LEAD_MS = 365 * 24 * 60 * 60_000;
+const RECURRENCE_ALLOWED: ReadonlySet<'once'> = new Set(['once']);
 
 export async function POST(req: Request) {
   if ((req.headers.get('content-type') ?? '').split(';')[0]?.trim() !==
@@ -167,7 +186,52 @@ export async function POST(req: Request) {
       ? Number(amount) * priceUsd
       : null;
 
+  // v0.5.2 — coordinate-payment scheduling fields. Required for the
+  // payment kind, refused for transfer (the canonical bytes for
+  // transfer don't include them; accepting them would let a caller
+  // stuff junk into a transfer signature).
+  let executeAt: number | null = null;
+  let recurrence: 'once' | 'weekly' | 'monthly' | null = null;
   const nowMs = Date.now();
+  if (capId === 'payment') {
+    if (
+      typeof body.execute_at !== 'number' ||
+      !Number.isFinite(body.execute_at) ||
+      body.execute_at < nowMs + MIN_SCHEDULE_LEAD_MS ||
+      body.execute_at > nowMs + MAX_SCHEDULE_LEAD_MS
+    ) {
+      return NextResponse.json(
+        { ok: false, reason: 'invalid_execute_at' },
+        { status: 400, headers: NO_STORE },
+      );
+    }
+    executeAt = body.execute_at;
+    // Recurrence is optional; default to 'once' when not passed.
+    if (body.recurrence !== undefined) {
+      if (
+        typeof body.recurrence !== 'string' ||
+        !RECURRENCE_ALLOWED.has(body.recurrence as 'once')
+      ) {
+        return NextResponse.json(
+          { ok: false, reason: 'invalid_recurrence' },
+          { status: 400, headers: NO_STORE },
+        );
+      }
+      recurrence = body.recurrence as 'once';
+    } else {
+      recurrence = 'once';
+    }
+  } else if (body.execute_at !== undefined || body.recurrence !== undefined) {
+    // Transfer + scheduling fields = malformed request. Refuse rather
+    // than silently drop the fields so the client cannot end up with
+    // a signed intent whose canonical bytes don't reflect what it
+    // thought it was authorizing.
+    return NextResponse.json(
+      { ok: false, reason: 'invalid_body' },
+      { status: 400, headers: NO_STORE },
+    );
+  }
+
   const intentId = `itn_${randomUUID().replace(/-/g, '')}`;
   const nonce = `n_${randomUUID().replace(/-/g, '')}`;
   const intent: PendingIntent = {
@@ -184,6 +248,8 @@ export async function POST(req: Request) {
     ...(typeof amountUsd === 'number'
       ? { network_fee: '0.000005' } // best-effort SOL rent estimate
       : {}),
+    ...(executeAt !== null ? { execute_at: executeAt } : {}),
+    ...(recurrence !== null ? { recurrence } : {}),
   };
   const canonical = buildCanonicalIntent(intent);
 
@@ -219,6 +285,8 @@ export async function POST(req: Request) {
       issuedAt: nowMs,
       ttlAt: nowMs + TTL_MS,
       conversationId,
+      executeAt,
+      recurrence,
     });
   } catch {
     return NextResponse.json(
