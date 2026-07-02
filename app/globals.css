@@ -1030,11 +1030,49 @@
     to   { opacity: 1; }
   }
   .vz-tour-callout-in {
-    animation: vz-tour-callout-in 220ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+    animation: vz-tour-callout-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
     transform-origin: center;
   }
   @keyframes vz-tour-callout-in {
-    from { opacity: 0; transform: translateY(6px); }
+    from { opacity: 0; transform: translateY(6px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0)   scale(1);    }
+  }
+
+  /* v0.5.5 — spotlight aperture morph. Modern browsers accept CSS
+     transitions on the SVG geometry attributes; each stop's rect
+     smoothly resizes/moves to the next target instead of blinking.
+     Matched curve + duration to the callout position transition
+     below so the aperture and the card move as a coordinated pair. */
+  .vz-tour-spotlight-rect {
+    transition:
+      x 320ms cubic-bezier(0.4, 0.2, 0.2, 1),
+      y 320ms cubic-bezier(0.4, 0.2, 0.2, 1),
+      width 320ms cubic-bezier(0.4, 0.2, 0.2, 1),
+      height 320ms cubic-bezier(0.4, 0.2, 0.2, 1);
+  }
+
+  /* v0.5.5 — the callout re-slides between step positions rather
+     than teleporting. Applied to the fixed positioner; the entrance
+     keyframe still fires the first time the callout mounts. */
+  .vz-tour-callout {
+    transition:
+      top 320ms cubic-bezier(0.4, 0.2, 0.2, 1),
+      left 320ms cubic-bezier(0.4, 0.2, 0.2, 1),
+      width 220ms ease-out;
+    box-shadow:
+      0 20px 60px -20px color-mix(in oklab, var(--fg) 32%, transparent),
+      0 0 0 1px color-mix(in oklab, var(--fg) 4%, transparent);
+  }
+
+  /* v0.5.5 — content cross-fade. Applied inside SpotlightTour via a
+     ref that toggles the class on every stepIndex change so the
+     title / body / progress smoothly cross-fade rather than snapping
+     to the new copy. */
+  .vz-tour-content-in {
+    animation: vz-tour-content-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  }
+  @keyframes vz-tour-content-in {
+    from { opacity: 0; transform: translateY(3px); }
     to   { opacity: 1; transform: translateY(0);    }
   }
 }
