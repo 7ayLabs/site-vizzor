@@ -50,7 +50,8 @@ export type IntentKind = CapId;
 /**
  * Server-issued pending intent. Emitted by the engine as an SSE
  * `intent_required` event after a capability tool call. All fields
- * except `network_fee` are required — fee is best-effort at issue time.
+ * except `network_fee` and the payment-only slice are required —
+ * `execute_at` / `recurrence` are present only for the payment kind.
  */
 export interface PendingIntent {
   intent_id: string;
@@ -64,6 +65,21 @@ export interface PendingIntent {
   nonce: string;
   ttl_at: number; // unix ms
   issued_at: number; // unix ms
+  /**
+   * v0.5.2 — coordinate-payment scheduling window. Present ONLY when
+   * `kind === 'payment'` — transfer intents execute immediately and
+   * always leave this field undefined. Unix ms of when the payment
+   * should fire (the site emits a `payment_due` notification at that
+   * moment, then the user re-signs to broadcast on-chain).
+   */
+  execute_at?: number;
+  /**
+   * v0.5.2 — recurrence pattern. Only 'once' ships in this cut; the
+   * field exists so weekly/monthly can land without another engine
+   * contract change. Undefined for transfers and for payments the
+   * user didn't explicitly repeat.
+   */
+  recurrence?: 'once' | 'weekly' | 'monthly';
 }
 
 /** After the user signs, we ship the signed authorization to the engine. */
@@ -89,8 +105,14 @@ export interface ExecutedIntent {
  * The exact keys the canonical form covers. Anything the engine adds
  * later that isn't in this list is REFUSED to sign — that's the
  * "unknown field → refuse" security invariant from the plan.
+ *
+ * v0.5.2: the canonical shape is versioned by prefix (`vizzor.intent.v1`
+ * for transfer, `vizzor.intent.v2` for payment) so the payment-only
+ * fields never bleed into a transfer signature and vice versa. That
+ * versioning lets the engine walk both prefixes for a transitional
+ * period without ambiguity.
  */
-const CANONICAL_KEYS = [
+const CANONICAL_KEYS_V1 = [
   'amount',
   'from_addr',
   'intent_id',
@@ -103,19 +125,56 @@ const CANONICAL_KEYS = [
   'ttl_at',
 ] as const;
 
-type CanonicalKey = (typeof CANONICAL_KEYS)[number];
+const CANONICAL_KEYS_V2 = [
+  'amount',
+  'execute_at',
+  'from_addr',
+  'intent_id',
+  'issued_at',
+  'kind',
+  'network',
+  'nonce',
+  'recurrence',
+  'symbol',
+  'to_addr',
+  'ttl_at',
+] as const;
+
+type CanonicalKeyV1 = (typeof CANONICAL_KEYS_V1)[number];
+type CanonicalKeyV2 = (typeof CANONICAL_KEYS_V2)[number];
 
 /**
  * Produce the byte-identical string that gets signed by the wallet.
  * Server and client MUST produce the same bytes given the same input.
  *
- * Format: `vizzor.intent.v1\n<sorted-json>`
+ * Format:
+ *   transfer → `vizzor.intent.v1\n<sorted-json>`
+ *   payment  → `vizzor.intent.v2\n<sorted-json>` (adds execute_at + recurrence)
  * The prefix is a domain-separator so a signature over an intent can
  * never be replayed as a signature over a different Vizzor message
- * shape (SIWS nonce, share-token, etc.).
+ * shape (SIWS nonce, share-token, or the other intent version).
  */
 export function buildCanonicalIntent(intent: PendingIntent): string {
-  const obj: Record<CanonicalKey, string | number> = {
+  if (intent.kind === 'payment') {
+    const obj: Record<CanonicalKeyV2, string | number> = {
+      amount: intent.amount,
+      execute_at: intent.execute_at ?? 0,
+      from_addr: intent.from_addr,
+      intent_id: intent.intent_id,
+      issued_at: intent.issued_at,
+      kind: intent.kind,
+      network: intent.network,
+      nonce: intent.nonce,
+      recurrence: intent.recurrence ?? 'once',
+      symbol: intent.symbol,
+      to_addr: intent.to_addr,
+      ttl_at: intent.ttl_at,
+    };
+    const sorted: Record<string, string | number> = {};
+    for (const k of CANONICAL_KEYS_V2) sorted[k] = obj[k];
+    return `vizzor.intent.v2\n${JSON.stringify(sorted)}`;
+  }
+  const obj: Record<CanonicalKeyV1, string | number> = {
     amount: intent.amount,
     from_addr: intent.from_addr,
     intent_id: intent.intent_id,
@@ -131,7 +190,7 @@ export function buildCanonicalIntent(intent: PendingIntent): string {
   // order for string keys, so an already-sorted object serializes
   // canonically. No native BigInt, no floats, no whitespace.
   const sorted: Record<string, string | number> = {};
-  for (const k of CANONICAL_KEYS) sorted[k] = obj[k];
+  for (const k of CANONICAL_KEYS_V1) sorted[k] = obj[k];
   return `vizzor.intent.v1\n${JSON.stringify(sorted)}`;
 }
 
@@ -196,7 +255,11 @@ const REQUIRED_FIELDS = [
   'issued_at',
 ] as const;
 
-const OPTIONAL_FIELDS = ['network_fee'] as const;
+// v0.5.2 — `execute_at` + `recurrence` are optional at the parser
+// level but required at the modal level for the payment kind. That
+// split lets a legacy engine that pre-dates scheduling still emit
+// transfer intents without the parser refusing them.
+const OPTIONAL_FIELDS = ['network_fee', 'execute_at', 'recurrence'] as const;
 
 const ALLOWED_FIELDS = new Set<string>([
   ...REQUIRED_FIELDS,
@@ -208,6 +271,11 @@ const ADDR_RE = /^[a-zA-Z0-9_-]{16,128}$/;
 const SYMBOL_RE = /^[A-Z0-9]{1,16}$/;
 const NONCE_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const RECURRENCE_VALUES: ReadonlySet<'once' | 'weekly' | 'monthly'> = new Set([
+  'once',
+  'weekly',
+  'monthly',
+]);
 
 /**
  * Safe parser. Returns null (never throws) if the payload is malformed
@@ -237,6 +305,8 @@ export function parsePendingIntent(raw: unknown): PendingIntent | null {
   const ttl_at = obj.ttl_at;
   const issued_at = obj.issued_at;
   const network_fee = obj.network_fee;
+  const execute_at = obj.execute_at;
+  const recurrence = obj.recurrence;
 
   if (typeof intent_id !== 'string' || !ID_RE.test(intent_id)) return null;
   if (!isCapId(kind)) return null;
@@ -261,6 +331,29 @@ export function parsePendingIntent(raw: unknown): PendingIntent | null {
       return null;
     }
   }
+  // v0.5.2 — payment-only fields. Present only for `kind === 'payment'`;
+  // if a transfer intent carries them we refuse to sign (the canonical
+  // bytes for a transfer don't include these, so the signature would
+  // be over data the user isn't seeing).
+  if (execute_at !== undefined) {
+    if (
+      kind !== 'payment' ||
+      typeof execute_at !== 'number' ||
+      !Number.isFinite(execute_at) ||
+      execute_at <= 0
+    ) {
+      return null;
+    }
+  }
+  if (recurrence !== undefined) {
+    if (
+      kind !== 'payment' ||
+      typeof recurrence !== 'string' ||
+      !RECURRENCE_VALUES.has(recurrence as 'once' | 'weekly' | 'monthly')
+    ) {
+      return null;
+    }
+  }
 
   return {
     intent_id,
@@ -274,6 +367,10 @@ export function parsePendingIntent(raw: unknown): PendingIntent | null {
     ttl_at,
     issued_at,
     ...(network_fee !== undefined ? { network_fee } : {}),
+    ...(execute_at !== undefined ? { execute_at: execute_at as number } : {}),
+    ...(recurrence !== undefined
+      ? { recurrence: recurrence as 'once' | 'weekly' | 'monthly' }
+      : {}),
   };
 }
 
