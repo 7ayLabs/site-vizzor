@@ -31,11 +31,12 @@ import { useAppShell } from '@/components/app/app-shell-provider';
 import { useTour } from './tour-provider';
 import { hasCompletedTour } from '@/lib/onboarding/tour-storage';
 
-// v0.5.16 — dropped from 1200ms to 500ms after the OnboardingStepper
-// (connect → siws → trial-intro) was retired. The only thing left to
-// wait for now is the wallet-adapter modal's exit animation; 500ms is
-// enough for that on both Phantom and Solflare.
-const START_DELAY_MS = 500;
+// v0.5.20 — pulled forward to 120ms. The welcome step doesn't anchor
+// on any DOM element (it's a centered card), so it doesn't need to
+// wait for the predict shell to fully paint. Just enough delay for
+// the wallet-adapter modal's fade-out to start so the tour doesn't
+// visually collide with it.
+const START_DELAY_MS = 120;
 const PREDICT_RE = /^\/(?:[a-z]{2}\/)?app\/predict(?:\/|$)/;
 const IS_DEV = process.env.NODE_ENV !== 'production';
 
@@ -84,13 +85,14 @@ export function TourAutoStarter() {
     firedRef.current = true;
     const timerId = window.setTimeout(() => {
       if (!PREDICT_RE.test(pathname)) {
-        // Route to /app/predict first, then open the tour after the
-        // navigation resolves. Casting through never bypasses
-        // typedRoutes; the target is well-formed.
+        // Route to /app/predict first, then open the tour on the
+        // next tick. Welcome is a centered card with no anchor
+        // requirement, so we don't need to wait for the shell's
+        // data-tour-id nodes to mount — the composer/topics/etc.
+        // steps that DO need those anchors come after Next, giving
+        // the shell plenty of time to hydrate before then.
         router.push('/app/predict' as never);
-        // Open on the next tick so the predict shell has a chance
-        // to mount its data-tour-id anchors.
-        window.setTimeout(() => open(), 250);
+        window.setTimeout(() => open(), 60);
       } else {
         open();
       }
