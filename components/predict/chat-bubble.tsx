@@ -26,10 +26,20 @@
  * parts, same join semantics.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from 'react';
 import type { useChat } from '@ai-sdk/react';
 import { Check, ChevronDown, ChevronUp, Copy, Pencil, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { findWalletRanges } from '@/lib/utils/wallet-detect';
 import { useReducedMotionSafe } from '@/lib/motion';
 import { CoinIcon } from '@/components/ui/coin-icon';
 import {
@@ -150,6 +160,53 @@ function formatLines(text: string): readonly FormattedLine[] {
     }
     return { kind: 'text', content: line };
   });
+}
+
+/**
+ * v0.5.1 — wrap a piece of user-bubble prose so any Solana wallet
+ * address inside it renders as a green mono chip. Runs BEFORE the
+ * coin-icon pass — wallets are non-overlapping with ticker tokens
+ * (32-44 base58 chars vs. 3-6 letter tickers) so the two passes
+ * compose cleanly. Returns a fragment; falls back to the coin-icon
+ * pass unchanged when no wallets are present.
+ */
+function renderWithWalletChips(
+  text: string,
+  opts: { iconSize?: number; skipTickers?: ReadonlySet<string> } = {},
+): ReactNode {
+  if (!text) return text;
+  const ranges = findWalletRanges(text);
+  if (ranges.length === 0) {
+    return renderTextWithInlineCoinIcons(text, opts);
+  }
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  ranges.forEach((r, i) => {
+    if (r.start > cursor) {
+      nodes.push(
+        <Fragment key={`prose-${cursor}`}>
+          {renderTextWithInlineCoinIcons(text.slice(cursor, r.start), opts)}
+        </Fragment>,
+      );
+    }
+    nodes.push(
+      <span
+        key={`wallet-${i}-${r.start}`}
+        className="mono tabular font-medium text-[var(--up)] break-all"
+      >
+        {r.addr}
+      </span>,
+    );
+    cursor = r.end;
+  });
+  if (cursor < text.length) {
+    nodes.push(
+      <Fragment key={`prose-tail`}>
+        {renderTextWithInlineCoinIcons(text.slice(cursor), opts)}
+      </Fragment>,
+    );
+  }
+  return <>{nodes}</>;
 }
 
 function formatTimestamp(ts: number | undefined): string {
@@ -366,7 +423,7 @@ function UserBubble({
         )}
         {hasRemaining && (
           <span className="text-[14px] leading-relaxed whitespace-pre-wrap break-words text-[var(--fg)]">
-            {renderTextWithInlineCoinIcons(
+            {renderWithWalletChips(
               leadingChips.length > 0
                 ? remainingText.replace(/^\s+/, ' ')
                 : remainingText,

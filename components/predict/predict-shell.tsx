@@ -52,14 +52,38 @@ import {
   type InlineTickerChipEntry,
 } from '@/components/predict/inline-ticker-chip';
 import { DirectoryPicker } from '@/components/predict/directory-picker';
+import { CapabilityTray } from '@/components/predict/capability-tray';
+import { IntentChatCard } from '@/components/predict/intent-chat-card';
+import { CapabilityActionModal } from '@/components/predict/capability-action-modal';
+import { useCapabilities } from '@/lib/capabilities/use-capabilities';
+import { useNotifications } from '@/lib/notifications/use-notifications';
+import { useAlertTriggerWatch } from '@/lib/notifications/use-alert-trigger-watch';
+import {
+  ALL_CAP_IDS,
+  parsePendingIntent,
+  type CapId,
+  type PendingIntent,
+} from '@/lib/capabilities/intent';
+import { parseTradePlan, type TradePlan } from '@/lib/trade/trade-plan';
+import { parseTradePlansFromProse } from '@/lib/trade/parse-plan-from-prose';
+import { TradePlanCard } from '@/components/predict/trade-plan-card';
+import {
+  buildCommandTemplate,
+  COMMAND_KEYWORD,
+  parseCommand,
+  type ParsedCommand,
+  stripCommand,
+} from '@/lib/capabilities/command-syntax';
 import { CoinIcon } from '@/components/ui/coin-icon';
 import { Link } from '@/i18n/navigation';
 import { WalletAuthButton } from '@/components/auth/wallet-auth-button';
 import { useRouter } from '@/i18n/navigation';
 import { useLocale } from 'next-intl';
 import { cn } from '@/lib/utils';
+import { isWalletAddressToken } from '@/lib/utils/wallet-detect';
 import {
   useConversations,
+  WorkflowsBlockingDeleteError,
   type ConversationSummary,
 } from './use-conversations';
 import { Check, Wallet, ArrowUpRight, Boxes } from 'lucide-react';
@@ -236,6 +260,314 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
   const composerLocked =
     !signedIn || (!!quota?.exhausted && !quota?.subscribed);
 
+  // Agent-payment capability preferences. Signed-in wallets fetch the
+  // enabled set + spend caps once and cache for 15s; unauthenticated
+  // sessions skip the request and land on the safe default (tray
+  // locked). The tray only becomes tappable when a wallet has
+  // explicitly enabled a capability in settings AND accepted the
+  // current TOS version — enforced server-side too, this is just the
+  // UI mirror so a locked icon reads correctly.
+  const capabilities = useCapabilities({ enabled: signedIn });
+  // v0.5.2 — notifications feed. `counts` powers the Alerts/Workflows
+  // badges on this shell's own LeftRail so the predict surface (which
+  // suppresses ProductSidebar in favor of its 3-column layout) still
+  // shows the same unread numbers a user sees on /app/workflows or
+  // /app/account. `markAllRead` clears the Alerts bucket the moment
+  // the user opens the alerts drawer.
+  const {
+    counts: notifCounts,
+    markAllRead: markAllNotifRead,
+    refresh: refreshNotifications,
+  } = useNotifications({ enabled: signedIn });
+  useAlertTriggerWatch({
+    enabled: signedIn,
+    wallet: auth?.wallet,
+    onNewTrigger: () => {
+      void refreshNotifications();
+    },
+  });
+  // Tier gate uses ONLY the quota API — that's the same source that
+  // powers the sidebar badge (Elite / Pro / Trial), so the tray can
+  // never disagree with the badge the user is looking at. We
+  // deliberately ignore `capabilities.tierLocked` here because that
+  // response ships a `tier_locked: true` fallback while its SWR
+  // fetches; using it would flash "locked" on modal-open for a
+  // half-second before revalidation, which is what surfaced as the
+  // "Upgrade to Pro" bug for Elite wallets. Server-side, /api/
+  // capabilities/enabled + /api/execute-intent still refuse free
+  // tier — this is UI-side only.
+  const tierLocked = !signedIn || quota?.tier === 'free';
+  // Currently-armed capabilities — flipped on when the action modal
+  // produces a pending intent for that capability, so the tray icon
+  // shows the breathing pulse until the intent is signed / rejected.
+  // Session-only by design (reload does NOT carry armed state).
+  const [armedCapabilities, setArmedCapabilities] = useState<Set<CapId>>(
+    () => new Set<CapId>(),
+  );
+  // The enable-step modal is only shown when a wallet clicks a
+  // capability icon that isn't enabled yet (or is tier-locked). If
+  // the capability is already enabled the shell skips the modal
+  // entirely and inserts the /transfer command template into the
+  // composer — the draft lives inline in the textarea, not a form.
+  const [openActionCap, setOpenActionCap] = useState<CapId | null>(null);
+  // Which capability's create-intent POST is currently pending, if
+  // any. Prevents double-submit and drives a subtle "settling…"
+  // hint under the composer while the network call is inflight.
+  const [commandInFlight, setCommandInFlight] = useState<CapId | null>(null);
+  const [commandError, setCommandError] = useState<string | null>(null);
+  // Refs used by the capability click handlers below. Populated by
+  // effects further down so the callbacks stay stable — no
+  // dependency on `capabilities.enabledSet` means the tray click
+  // handler is created once and never invalidates the memoized
+  // Composer subtree on capability revalidation.
+  const capabilitiesStateRef = useRef<{
+    tierLocked: boolean;
+    enabledSet: ReadonlySet<CapId>;
+  }>({ tierLocked: true, enabledSet: new Set() });
+  const insertCommandTemplateRef = useRef<(cap: CapId) => void>(() => {});
+  const removeCommandTemplateRef = useRef<(cap: CapId) => void>(() => {});
+  const hasCapabilityCommandRef = useRef<(cap: CapId) => boolean>(
+    () => false,
+  );
+  const openCapabilityAction = useCallback((cap: CapId) => {
+    setCommandError(null);
+    const cbState = capabilitiesStateRef.current;
+    if (cbState.tierLocked || !cbState.enabledSet.has(cap)) {
+      setOpenActionCap(cap);
+      return;
+    }
+    // Toggle: a second click on an already-drafted capability clears
+    // its command line from the textbox instead of appending another
+    // one. Prevents "send 0.1 SOL → send 0.1 SOL → " stacking that a
+    // repeated click used to produce.
+    if (hasCapabilityCommandRef.current(cap)) {
+      removeCommandTemplateRef.current(cap);
+    } else {
+      insertCommandTemplateRef.current(cap);
+    }
+  }, []);
+  const onCapabilityEnabled = useCallback((cap: CapId) => {
+    setOpenActionCap(null);
+    insertCommandTemplateRef.current(cap);
+  }, []);
+
+  // v0.5.2 — user-confirmation bridge from the TradePlanCard's
+  // Send-winnings row. Mints a pending intent (same code path the
+  // composer's `send 0.1 SOL → <addr>` syntax uses) and surfaces
+  // the IntentChatCard so the wallet prompt is the actual "sign to
+  // confirm" moment. The engine correctly refuses to move funds
+  // itself — this is how the user completes that same action with
+  // an explicit signature.
+  const onProceedsSend = useCallback(
+    async (opts: {
+      toAddr: string;
+      amount: string;
+      symbol: string;
+    }): Promise<void> => {
+      setCommandError(null);
+      try {
+        const res = await fetch('/api/capabilities/create-intent', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            capability: 'transfer',
+            network: 'sol',
+            to_addr: opts.toAddr,
+            symbol: opts.symbol,
+            amount: opts.amount,
+            conversation_id: activeConversationId ?? null,
+          }),
+        });
+        const data = (await res.json()) as
+          | { ok: true; intent: PendingIntent }
+          | { ok: false; reason?: string; detail?: string };
+        if (!res.ok || data.ok === false) {
+          const reason =
+            data.ok === false ? (data.reason ?? 'errorGeneric') : 'errorGeneric';
+          const detail = data.ok === false ? data.detail : undefined;
+          setCommandError(detail ? `${reason}::${detail}` : reason);
+          throw new Error(reason);
+        }
+        setArmedCapabilities((prev) => {
+          const next = new Set(prev);
+          next.add('transfer');
+          return next;
+        });
+        setPendingIntent(data.intent);
+      } catch (e) {
+        // Rethrow so the ProceedsSend row can surface the error
+        // inline while the shell also holds it in commandError for
+        // the CommandStatus strip.
+        throw e;
+      }
+    },
+    [activeConversationId],
+  );
+  // Ref-backed remover so the callback stays stable (Composer memo)
+  // while still seeing the latest `input` / `pendingIntent`. Body
+  // wired below in a useEffect that mirrors the current shell state.
+  const removeTokenPillRef = useRef<(sym: string) => void>(() => {});
+  const onRemoveTokenPill = useCallback((sym: string) => {
+    removeTokenPillRef.current(sym);
+  }, []);
+  // Keep the capability-state ref current so the stable click
+  // handler above reads the latest tier + enabled-set at click time
+  // without re-mounting the Composer subtree on every SWR poll.
+  useEffect(() => {
+    capabilitiesStateRef.current = {
+      tierLocked,
+      enabledSet: capabilities.enabledSet,
+    };
+  }, [tierLocked, capabilities.enabledSet]);
+  // Same pattern for the template inserter — the latest `input`
+  // determines whether we replace it or append on a new line. The
+  // remover + drafted-detector share the same effect so all three
+  // read a consistent snapshot of `input`.
+  useEffect(() => {
+    insertCommandTemplateRef.current = (cap: CapId) => {
+      // The carousel-picked ticker drives the symbol in the template
+      // (`send 0.1 BTC → ` when BTC is picked). Falls back to SOL
+      // only when the tray somehow fires with no pick — the shell
+      // otherwise hides the tray in that state.
+      const symbol = tokenPills[0]?.toUpperCase();
+      const template = buildCommandTemplate(cap, symbol);
+      const prev = input.trim();
+      const nextInput = prev.length > 0 ? `${prev}\n${template}` : template;
+      setInput(nextInput);
+      requestAnimationFrame(() => {
+        const el = inputRef.current;
+        if (!el) return;
+        el.focus();
+        // Caret at the very end of the inserted template (right after
+        // the arrow + trailing space) so the user's next keystroke
+        // starts the recipient address. No selection highlight —
+        // cursor lands as a normal blinking caret, and arrow keys
+        // navigate freely from there.
+        const caretPos = nextInput.length;
+        el.setSelectionRange(caretPos, caretPos);
+        // Nudge the browser to scroll the caret into view when the
+        // textarea already carried prior lines above the fold.
+        el.scrollTop = el.scrollHeight;
+      });
+    };
+    // Detect: does `input` currently contain a command line for
+    // this capability? Matches the keyword when it's at start-of-
+    // string or preceded by whitespace, so incidental words like
+    // "recommend" or "topping up my $auto reserves" don't false-
+    // positive. Amount digit isn't required — partial commands
+    // (just `send ` with nothing after) should still count as
+    // "drafted" so a second click clears them.
+    hasCapabilityCommandRef.current = (cap: CapId) => {
+      const kw = COMMAND_KEYWORD[cap];
+      const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`(?:^|\\s)${escaped}\\b`, 'i').test(input);
+    };
+    // Strip the command LINE for this capability from the current
+    // input. Handles three shapes:
+    //   1. Full match at start of a line: `send 0.1 SOL → 5oQ...`
+    //   2. Partial template: `send 0.1 SOL → `
+    //   3. Bare keyword: `send` (before the user typed anything)
+    // The regex kills the whole segment from the keyword through
+    // end-of-line, then collapses the resulting double newlines so
+    // the residue reads cleanly.
+    removeCommandTemplateRef.current = (cap: CapId) => {
+      const kw = COMMAND_KEYWORD[cap];
+      const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const stripLineRe = new RegExp(
+        `(?:^|\\n)[ \\t]*${escaped}\\b[^\\n]*`,
+        'gi',
+      );
+      const nextInput = input
+        .replace(stripLineRe, '')
+        .replace(/\n{2,}/g, '\n')
+        .replace(/^\n+/, '')
+        .replace(/\n+$/, '');
+      setInput(nextInput);
+      requestAnimationFrame(() => {
+        const el = inputRef.current;
+        if (!el) return;
+        el.focus();
+        const caretPos = nextInput.length;
+        el.setSelectionRange(caretPos, caretPos);
+      });
+    };
+  }, [input, tokenPills]);
+  // Latest-input mirror + latest-pending-intent mirror populated by
+  // the effect below. Refs let the removal cascade read them at
+  // click time without a hard lexical dependency (pendingIntent is
+  // declared further down inside the useChat block).
+  const inputRef2 = useRef(input);
+  const pendingIntentRef = useRef<PendingIntent | null>(null);
+  useEffect(() => {
+    inputRef2.current = input;
+  }, [input]);
+  // Cascade cleanup when a carousel pill is removed:
+  //   1. drop it from `tokenPills`
+  //   2. strip EVERY command in the input that referenced that
+  //      symbol (users can insert multiple templates back-to-back)
+  //   3. also nuke any partial/orphan templates for the same symbol
+  //      even when the recipient isn't filled in yet
+  //   4. clear the matching entries from `armedCapabilities`
+  //   5. dismiss the pending intent modal if it was for that symbol
+  // Rationale: the tray is gated on carousel picks, so removing the
+  // gate should also revoke every downstream capability action for
+  // that specific token — no orphaned "send 0.1 BTC → …" left in
+  // the composer when BTC is no longer selected.
+  useEffect(() => {
+    removeTokenPillRef.current = (sym: string) => {
+      const upper = sym.toUpperCase();
+      setTokenPills((prev) => prev.filter((s) => s.toUpperCase() !== upper));
+      let currentInput = inputRef2.current;
+      const removedCaps = new Set<CapId>();
+      // Loop: strip fully-formed commands until none match the symbol.
+      // Bounded by a max iteration count to defend against a broken
+      // parser regressing into an infinite match — belt-and-suspenders.
+      for (let i = 0; i < 8; i++) {
+        const parsed = parseCommand(currentInput);
+        if (!parsed || parsed.symbol !== upper) break;
+        currentInput = stripCommand(currentInput, parsed);
+        removedCaps.add(parsed.capability);
+      }
+      // Also strip partial templates (`send 0.1 BTC → `) that the
+      // user inserted but never finished — parseCommand rejects
+      // those because the recipient is missing. Regex-scan for the
+      // shell of a command carrying the removed symbol and delete
+      // the whole line/segment.
+      const PARTIAL_RE = new RegExp(
+        `\\b(send|pay)\\s+\\d+(?:\\.\\d+)?\\s+${upper}\\s+(?:→|to)\\s*[^\\n]*`,
+        'gi',
+      );
+      currentInput = currentInput
+        .replace(PARTIAL_RE, (match) => {
+          const kw = match.match(/^(send|pay)/i)?.[1]?.toLowerCase();
+          if (kw === 'send') removedCaps.add('transfer');
+          if (kw === 'pay') removedCaps.add('payment');
+          return '';
+        })
+        .replace(/\n{2,}/g, '\n')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim();
+      if (currentInput !== inputRef2.current) setInput(currentInput);
+      if (removedCaps.size > 0) {
+        setArmedCapabilities((prev) => {
+          const next = new Set(prev);
+          for (const c of removedCaps) next.delete(c);
+          return next;
+        });
+      }
+      const pi = pendingIntentRef.current;
+      if (pi && pi.symbol === upper) {
+        setPendingIntent(null);
+      }
+      // v0.5.1 — also clear a buffered (not-yet-visible) intent if
+      // it targeted the ticker the user just removed. Prevents a
+      // "surprise" sign card from mounting after the stream ends
+      // for a workflow the user has already dismissed.
+      setBufferedIntent((prev) => (prev && prev.symbol === upper ? null : prev));
+    };
+  }, []);
+
   const {
     conversations,
     createConversation,
@@ -271,12 +603,87 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
     [locale],
   );
 
+  // v0.5.0 — pending agent-payment intent surfaced from the engine.
+  // When the /api/predict transform sees an `intent_required` SSE
+  // event, it persists the row + re-emits a `data-intent-required`
+  // stream chunk. The onData callback below catches it and drops
+  // the parsed intent into state, which mounts the confirmation
+  // modal. There is at most one pending intent per conversation
+  // turn at a time — the modal is blocking until the user signs or
+  // dismisses.
+  const [pendingIntent, setPendingIntent] = useState<PendingIntent | null>(
+    null,
+  );
+  // v0.5.1 — sequenced-reveal buffer. When the user submits a workflow
+  // prompt (predict + send in the same turn), we mint the intent
+  // immediately but hold it here until the assistant's prediction
+  // response finishes streaming. That way the sign card doesn't
+  // steal focus from an incomplete answer — Vizzor talks first, THEN
+  // asks for a signature. Cleared on submit; promoted to
+  // pendingIntent via the streaming-end effect below.
+  const [bufferedIntent, setBufferedIntent] = useState<PendingIntent | null>(
+    null,
+  );
+  // v0.5.2 Phase 1 — trade plans emitted by the engine land here.
+  // Keyed by plan_id so the same turn can carry more than one (rare
+  // but possible: "plan for SOL AND ETH"). Rendered in-thread as
+  // TradePlanCards. Cleared per-conversation on chat switch.
+  const [tradePlans, setTradePlans] = useState<Map<string, TradePlan>>(
+    () => new Map(),
+  );
+  // Mirror latest pendingIntent onto the ref so the removal cascade
+  // above can read it without a lexical dependency on the state.
+  useEffect(() => {
+    pendingIntentRef.current = pendingIntent;
+  }, [pendingIntent]);
+
   const { messages, sendMessage, status, error, setMessages, stop } = useChat({
     transport,
     onFinish: () => {
       void mutateQuota();
     },
+    onData: (part) => {
+      // Data-part chunks arrive with `type: 'data-<name>'`. We
+      // handle two kinds today: intent-required (v0.5.0 signing
+      // handshake) and trade-plan (v0.5.2 phase-1 structured trade
+      // plans). Anything else is ignored safely.
+      if (part.type === 'data-intent-required') {
+        const intent = parsePendingIntent(part.data);
+        if (intent) setPendingIntent(intent);
+        return;
+      }
+      if (part.type === 'data-trade-plan') {
+        const plan = parseTradePlan(part.data);
+        if (plan) {
+          setTradePlans((prev) => {
+            const next = new Map(prev);
+            next.set(plan.plan_id, plan);
+            return next;
+          });
+        }
+      }
+    },
   });
+
+  // Derived: ordered array of trade plans for render + the cluster
+  // label the Jupiter deep-link uses to gate the [OPEN JUPITER] link.
+  // Ordering by issued_at so newer plans appear below older ones —
+  // matches the natural reading order of the thread above.
+  const tradePlansArr = useMemo(
+    () =>
+      Array.from(tradePlans.values()).sort(
+        (a, b) => a.issued_at - b.issued_at,
+      ),
+    [tradePlans],
+  );
+  const tradePlanNetwork: 'mainnet-beta' | 'devnet' | 'testnet' = useMemo(() => {
+    const net = paymentNetwork();
+    return net === 'mainnet'
+      ? 'mainnet-beta'
+      : net === 'testnet'
+        ? 'testnet'
+        : 'devnet';
+  }, []);
 
   // ---------- ticker symbol maps ----------
   // Built AFTER useChat so we can scan `messages` for arbitrary coin
@@ -462,37 +869,295 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
         if (!el) return;
         el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
       });
+      // v0.5.1 sequenced-reveal — the assistant just finished
+      // streaming, so promote any buffered intent to the visible
+      // `pendingIntent` slot. This is the moment Vizzor is "done
+      // talking" and the sign card becomes the natural next beat.
+      if (bufferedIntent) {
+        setPendingIntent(bufferedIntent);
+        setBufferedIntent(null);
+      }
+      // v0.5.2 Phase 1 (fallback) — scan the just-finished assistant
+      // message for trade-plan prose. Runs ONLY when the engine did
+      // NOT emit a structured `event: trade_plan` this turn (identified
+      // by absence of any plan whose issued_at is newer than the
+      // previous streaming-end tick). Cards synthesized this way have
+      // plan_ids prefixed with `plan_prose_` so they dedupe stably
+      // across re-renders and get replaced the moment the engine PR
+      // ships and starts emitting authoritative plans.
+      const lastAsst = [...messages].reverse().find((m) => m.role === 'assistant');
+      if (lastAsst) {
+        const text = lastAsst.parts
+          .filter((p) => p.type === 'text')
+          .map((p) => ('text' in p ? p.text : ''))
+          .join('');
+        const alreadyHasEngineEmit = Array.from(tradePlans.values()).some(
+          (pl) => !pl.plan_id.startsWith('plan_prose_'),
+        );
+        if (!alreadyHasEngineEmit) {
+          const synthesized = parseTradePlansFromProse({
+            text,
+            messageId: lastAsst.id,
+            issuedAt: Date.now(),
+            fallbackSymbol: tokenPills[0]?.toUpperCase() ?? null,
+          });
+          if (synthesized.length > 0) {
+            setTradePlans((prev) => {
+              const next = new Map(prev);
+              // Drop any prior prose-synthesized plans for this
+              // message (re-run parse in case the message was edited).
+              for (const key of next.keys()) {
+                if (key.startsWith(`plan_prose_${lastAsst.id}_`)) {
+                  next.delete(key);
+                }
+              }
+              for (const plan of synthesized) next.set(plan.plan_id, plan);
+              return next;
+            });
+          }
+        }
+      }
     }
     prevStreamingRef.current = isStreaming;
-  }, [isStreaming]);
+  }, [isStreaming, bufferedIntent, messages, tradePlans, tokenPills]);
   const isErrored = status === 'error';
 
   const submitPrompt = useCallback(
     (text: string): void => {
       const trimmed = text.trim();
       if (!trimmed || isStreaming || composerLocked) return;
-      // Mint a conversation row before sending so the very first
-      // user message lands inside a persisted thread. The new id is
-      // reflected in `activeConversationId` immediately; the
-      // persistence effect below picks it up on the next render.
+
+      // v0.5.1 — the composer routes by action. A prompt like
+      // `predict SOL 4h. send 0.05 SOL to <addr>` mints the transfer
+      // intent AND fires /predict with the FULL prompt so the
+      // engine's LLM can read the workflow syntax and reference it in
+      // its response ("your queued 0.05 SOL transfer to <addr>…
+      // executes in one signature"). A bare `send 0.1 SOL to <addr>`
+      // with no other prose skips /predict entirely — the user asked
+      // for a transaction, not a prediction, so we mint + open the
+      // sign modal without spending an engine turn.
+      //
+      // Parsing walks the prompt in a loop so multiple commands in a
+      // single turn (e.g. `send 0.05 SOL to A. pay 0.02 USDC to B`)
+      // all mint intents. Only the first shows a card in this MVP;
+      // the rest queue as metadata for the engine to narrate when
+      // /predict does fire. Multi-card UI is a follow-up.
+      const parsedCommands: ParsedCommand[] = [];
+      let commandResidue = trimmed;
+      {
+        let scan = trimmed;
+        // Cap the loop so a pathological regex can't run away.
+        for (let i = 0; i < 8; i += 1) {
+          const p = parseCommand(scan);
+          if (!p) break;
+          parsedCommands.push(p);
+          const next = stripCommand(scan, p);
+          if (next === scan) break;
+          scan = next;
+          if (next.length === 0) break;
+        }
+        commandResidue = scan;
+      }
+      // Residue = everything left after stripping every parsed
+      // command. If it's empty (or just punctuation), the prompt was
+      // pure action → skip /predict. If it has any real prose we fire
+      // /predict with the FULL trimmed body so the engine can narrate
+      // both the analysis AND the queued action.
+      const RESIDUE_PROSE_RE = /[A-Za-z0-9$]/;
+      const hasResiduePrompt =
+        RESIDUE_PROSE_RE.test(commandResidue) && commandResidue.length >= 2;
+
+      if (parsedCommands.length > 0) {
+        if (commandInFlight) return; // debounce double-submit
+        setCommandInFlight(parsedCommands[0]!.capability);
+        setCommandError(null);
+        void (async () => {
+          try {
+            // Ensure a conversation exists BEFORE minting so we can
+            // link the intents to it (workflows page groups by
+            // conversation_id).
+            let convId = activeConversationId;
+            if (signedIn && !convId) {
+              const conv = await createConversation(trimmed);
+              if (conv) {
+                convId = conv.id;
+                setActiveConversationId(conv.id);
+              }
+            }
+
+            // Mint every parsed intent in parallel.
+            const mintResponses = await Promise.all(
+              parsedCommands.map((p) =>
+                fetch('/api/capabilities/create-intent', {
+                  method: 'POST',
+                  credentials: 'same-origin',
+                  headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify({
+                    capability: p.capability,
+                    network: 'sol',
+                    to_addr: p.toAddr,
+                    symbol: p.symbol,
+                    amount: p.amount,
+                    conversation_id: convId ?? null,
+                  }),
+                }).then(async (res) => ({
+                  res,
+                  data: (await res.json()) as
+                    | { ok: true; intent: PendingIntent }
+                    | { ok: false; reason?: string; detail?: string },
+                })),
+              ),
+            );
+
+            const firstFailure = mintResponses.find(
+              (r) => !r.res.ok || r.data.ok === false,
+            );
+            if (firstFailure) {
+              const reason =
+                firstFailure.data.ok === false
+                  ? (firstFailure.data.reason ?? 'errorGeneric')
+                  : 'errorGeneric';
+              const detail =
+                firstFailure.data.ok === false
+                  ? firstFailure.data.detail
+                  : undefined;
+              setCommandError(detail ? `${reason}::${detail}` : reason);
+              return;
+            }
+
+            const intents: PendingIntent[] = mintResponses
+              .map((r) => (r.data.ok === true ? r.data.intent : null))
+              .filter((i): i is PendingIntent => i !== null);
+
+            // Arm every capability that got minted so the tray icons
+            // stay accented until the intents settle.
+            setArmedCapabilities((prev) => {
+              const next = new Set(prev);
+              for (const p of parsedCommands) next.add(p.capability);
+              return next;
+            });
+            // v0.5.1 — sequenced-reveal. If the composer ALSO fires
+            // /predict this turn (workflow prompt like `predict SOL
+            // 4h. send 0.1 SOL to X`), the intent goes into the
+            // buffer and only surfaces once the assistant response
+            // finishes streaming. If /predict isn't fired (bare
+            // `send 0.1 SOL to X` with no other prose), the intent
+            // surfaces immediately.
+            if (intents[0] && hasResiduePrompt) {
+              setBufferedIntent(intents[0]);
+            } else {
+              setPendingIntent(intents[0] ?? null);
+            }
+
+            if (hasResiduePrompt) {
+              // Fire /predict with the FULL prompt (commands
+              // included) so the engine's LLM can read the workflow
+              // syntax and reference it in its response.
+              // queued_intents metadata is attached so the engine can
+              // inject "the user has queued N workflows" into its
+              // system prompt.
+              const queuedIntentsBody = intents.map((i) => ({
+                intent_id: i.intent_id,
+                kind: i.kind,
+                symbol: i.symbol,
+                amount: i.amount,
+                to_addr: i.to_addr,
+              }));
+              const armed = Array.from(
+                new Set([
+                  ...armedCapabilities,
+                  ...parsedCommands.map((p) => p.capability),
+                ]),
+              ).filter((c) => ALL_CAP_IDS.includes(c));
+
+              // Best-effort wallet-balance grounding for the LLM.
+              const walletContext = await fetchWalletContext();
+
+              sendMessage(
+                { text: trimmed },
+                {
+                  body: {
+                    capabilities: armed,
+                    queued_intents: queuedIntentsBody,
+                    ...(walletContext ? { wallet_context: walletContext } : {}),
+                  },
+                },
+              );
+            } else {
+              // Pure-action path: no engine call. Push a synthetic
+              // user turn so the composer clears + the conversation
+              // shows the request that triggered the intent, without
+              // opening a stream we'd only close.
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id:
+                    globalThis.crypto?.randomUUID?.() ??
+                    `usr_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+                  role: 'user' as const,
+                  parts: [{ type: 'text' as const, text: trimmed }],
+                },
+              ]);
+            }
+
+            setInput('');
+            setTokenPills([]);
+            setDrawerOpen(false);
+          } catch (e) {
+            setCommandError('errorNetwork');
+            // eslint-disable-next-line no-console
+            console.warn('[capability.command] co-fire failed', e);
+          } finally {
+            setCommandInFlight(null);
+          }
+        })();
+        return;
+      }
+
+      // Regular prediction path — no capability command present.
       if (signedIn && !activeConversationId) {
         void (async () => {
           const conv = await createConversation(trimmed);
           if (conv) setActiveConversationId(conv.id);
         })();
       }
-      sendMessage({ text: trimmed });
+      // Armed capabilities ride in the per-request body so the
+      // server can intersect them with the wallet's enabled set
+      // before forwarding to the engine. Empty array is the default
+      // shape — /api/predict treats it as "predict-only, no on-chain
+      // side effects", the pre-v0.5.0 behavior.
+      const armed = [...armedCapabilities].filter((c) =>
+        ALL_CAP_IDS.includes(c),
+      );
+      // v0.5.1 — fire wallet-balance fetch alongside the send so the
+      // engine has grounding context whether or not the user drafted
+      // a workflow command. Best-effort — never blocks the submit.
+      const balanceReady = fetchWalletContext();
+      void balanceReady.then((walletContext) => {
+        const extra: Record<string, unknown> = {};
+        if (armed.length > 0) extra.capabilities = armed;
+        if (walletContext) extra.wallet_context = walletContext;
+        sendMessage(
+          { text: trimmed },
+          Object.keys(extra).length > 0 ? { body: extra } : undefined,
+        );
+      });
       setInput('');
       setTokenPills([]);
+      setArmedCapabilities(new Set());
       setDrawerOpen(false);
     },
     [
       isStreaming,
       composerLocked,
       sendMessage,
+      setMessages,
       signedIn,
       activeConversationId,
+      setActiveConversationId,
       createConversation,
+      armedCapabilities,
+      commandInFlight,
     ],
   );
 
@@ -538,23 +1203,69 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
       }));
       persistedRef.current = new Set(restored.map((m) => m.id));
       setMessages(restored);
+      // v0.5.2 — trade plans are ephemeral per session (they arrive
+      // via SSE data-parts on the live stream, not persisted with
+      // the conversation history). Reset when switching so a plan
+      // from a previous chat doesn't linger on the newly-loaded one.
+      setTradePlans(new Map());
       setDrawerOpen(false);
     },
     [loadConversation, setMessages],
   );
 
-  const onDeleteConversation = useCallback(
-    async (id: string): Promise<void> => {
-      const ok = await deleteConversation(id);
-      if (!ok) return;
+  // v0.5.1 — chat-delete guard state. When `deleteConversation` throws
+  // `WorkflowsBlockingDeleteError` the confirm dialog opens with the
+  // exact count + kinds so the user knows what's at stake. Approving
+  // re-runs the delete with `{ force: true }`.
+  const [pendingDelete, setPendingDelete] = useState<{
+    id: string;
+    count: number;
+    kinds: string[];
+  } | null>(null);
+
+  const finalizeDelete = useCallback(
+    (id: string) => {
       if (id === activeConversationId) {
         setMessages([]);
         setActiveConversationId(null);
         persistedRef.current = new Set();
       }
     },
-    [deleteConversation, activeConversationId, setMessages],
+    [activeConversationId, setMessages],
   );
+
+  const onDeleteConversation = useCallback(
+    async (id: string): Promise<void> => {
+      try {
+        const ok = await deleteConversation(id);
+        if (!ok) return;
+        finalizeDelete(id);
+      } catch (e) {
+        if (e instanceof WorkflowsBlockingDeleteError) {
+          setPendingDelete({ id, count: e.count, kinds: e.kinds });
+          return;
+        }
+        throw e;
+      }
+    },
+    [deleteConversation, finalizeDelete],
+  );
+
+  const confirmForceDelete = useCallback(async () => {
+    if (!pendingDelete) return;
+    const { id } = pendingDelete;
+    setPendingDelete(null);
+    try {
+      const ok = await deleteConversation(id, { force: true });
+      if (!ok) return;
+      finalizeDelete(id);
+    } catch {
+      /* if the force delete still fails, do nothing — the dialog is
+       * already closed and re-opening it wouldn't tell the user
+       * anything actionable */
+    }
+  }, [deleteConversation, finalizeDelete, pendingDelete]);
+  const cancelForceDelete = useCallback(() => setPendingDelete(null), []);
 
   /**
    * Persist new user + assistant messages exactly once each.
@@ -594,9 +1305,9 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
     bumpRecency,
   ]);
 
-  const onOpenReceipts = useCallback(() => {
+  const onOpenWorkflows = useCallback(() => {
     // typedRoutes doesn't yet know about hashes — cast through never.
-    router.push('/app/account#payments' as never);
+    router.push('/app/workflows' as never);
     setDrawerOpen(false);
   }, [router]);
 
@@ -615,7 +1326,13 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
     // sheet so users stay in the chat surface.
     setAlertsOpen(true);
     setDrawerOpen(false);
-  }, []);
+    // v0.5.2 — opening the drawer is the user's "I've seen these"
+    // signal. Clear the alerts bucket in the notifications ledger so
+    // the badge drops to 0 without waiting for the 30s poll.
+    if (signedIn && notifCounts.alerts > 0) {
+      void markAllNotifRead('alerts');
+    }
+  }, [signedIn, notifCounts.alerts, markAllNotifRead]);
 
   const onOpenSettings = useCallback(() => {
     setSettingsOpen(true);
@@ -661,6 +1378,120 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
     }
     return null;
   }, [messages]);
+
+  /**
+   * v0.5.2 — auto-narrate an intent's terminal status.
+   *
+   * When the IntentChatCard flips to executed / failed / rejected /
+   * expired, this callback appends a synthetic Vizzor assistant turn
+   * summarizing the outcome (with the tx hash + explorer link when
+   * applicable). Two reasons this lives here, not in the card:
+   *   1. `setMessages` is a useChat handle owned by this shell.
+   *   2. The receipt needs to survive after the transient card
+   *      unmounts, so it belongs in the conversation log, not the
+   *      card's own state.
+   *
+   * Fire-and-forget POSTs the same event to `/api/notifications/emit`
+   * so the sidebar badge on Workflows updates without a page
+   * refresh. Failures are silent — a missed notification never
+   * blocks the chat log.
+   */
+  const tNotify = useTranslations('predict.capability.notify');
+  const onIntentFinalStatus = useCallback(
+    (event: {
+      intent_id: string;
+      kind: CapId;
+      symbol: string;
+      amount: string;
+      status: 'executed' | 'failed' | 'rejected' | 'expired';
+      tx_hash?: string;
+      explorer_url?: string;
+      error?: string;
+    }) => {
+      // 1. Emit an assistant message narrating the outcome.
+      const shortId = event.intent_id.length > 12
+        ? `${event.intent_id.slice(0, 6)}…${event.intent_id.slice(-4)}`
+        : event.intent_id;
+      const shortTx = event.tx_hash
+        ? event.tx_hash.length > 12
+          ? `${event.tx_hash.slice(0, 6)}…${event.tx_hash.slice(-4)}`
+          : event.tx_hash
+        : null;
+
+      let text: string;
+      if (event.status === 'executed') {
+        text = shortTx
+          ? tNotify('executedWithTx', {
+              amount: event.amount,
+              symbol: event.symbol,
+              tx: shortTx,
+            })
+          : tNotify('executed', {
+              amount: event.amount,
+              symbol: event.symbol,
+            });
+      } else if (event.status === 'failed') {
+        text = tNotify('failed', {
+          amount: event.amount,
+          symbol: event.symbol,
+          reason: event.error ?? '',
+        });
+      } else if (event.status === 'rejected') {
+        text = tNotify('rejected', {
+          amount: event.amount,
+          symbol: event.symbol,
+        });
+      } else {
+        text = tNotify('expired', {
+          amount: event.amount,
+          symbol: event.symbol,
+        });
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id:
+            globalThis.crypto?.randomUUID?.() ??
+            `sys_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+          role: 'assistant' as const,
+          parts: [{ type: 'text' as const, text }],
+        },
+      ]);
+
+      // 2. Fire-and-forget notification emit. The backend fills in
+      //    the wallet from the SIWS session; the client only supplies
+      //    the outcome payload. Failure is silent by design.
+      const level =
+        event.status === 'executed'
+          ? 'success'
+          : event.status === 'expired'
+            ? 'warn'
+            : 'error';
+      void fetch('/api/notifications/emit', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          kind:
+            event.status === 'executed'
+              ? 'workflow_executed'
+              : 'workflow_failed',
+          ref_id: event.intent_id,
+          level,
+          symbol: event.symbol,
+          amount: event.amount,
+          tx_hash: event.tx_hash ?? null,
+          explorer_url: event.explorer_url ?? null,
+          error: event.error ?? null,
+          short_id: shortId,
+        }),
+      }).catch(() => {
+        /* silent — notifications are best-effort */
+      });
+    },
+    [setMessages, tNotify],
+  );
 
   /**
    * Pull the user message back into the composer + drop both it and
@@ -796,7 +1627,7 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
           onDeleteConversation={(id) => void onDeleteConversation(id)}
           onNewChat={onNewChat}
           onOpenAlerts={onOpenAlerts}
-          onOpenReceipts={onOpenReceipts}
+          onOpenWorkflows={onOpenWorkflows}
           onOpenDirectory={onOpenDirectory}
           onOpenSettings={onOpenSettings}
           signedIn={signedIn}
@@ -804,6 +1635,8 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
           quota={quota}
           collapsed={sidebarCollapsed}
           onToggleCollapse={toggleSidebar}
+          alertsBadge={notifCounts.alerts}
+          workflowsBadge={notifCounts.workflows}
           className="hidden lg:flex"
         />
 
@@ -933,6 +1766,57 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
                     </div>
                   );
                 })}
+                {/* v0.5.0 — pending capability intent as an in-thread
+                    Vizzor response. Lives at the tail of the message
+                    stream instead of a floating modal so the flow reads
+                    conversationally: user typed the send command → Vizzor
+                    replied with the intent to review + Sign/Reject
+                    actions. Reject dismisses; Sign fires the wallet
+                    prompt and settles via /api/execute-intent. */}
+                {/* v0.5.2 Phase 1 — engine-emitted trade plans render
+                    ABOVE the intent card. Reading order matches the
+                    workflow: (1) Vizzor writes a trade plan, (2) user
+                    arms alerts on each level, (3) if the plan has a
+                    proceeds_to address, the user hits Sign & send
+                    which mints an intent — the sign card mounts
+                    below. */}
+                {tradePlansArr.map((plan) => (
+                  <TradePlanCard
+                    key={plan.plan_id}
+                    plan={plan}
+                    network={tradePlanNetwork}
+                    onProceedsSend={onProceedsSend}
+                  />
+                ))}
+                {pendingIntent && (
+                  <IntentChatCard
+                    intent={pendingIntent}
+                    onDismiss={() => {
+                      if (pendingIntent) {
+                        setArmedCapabilities((prev) => {
+                          const next = new Set(prev);
+                          next.delete(pendingIntent.kind);
+                          return next;
+                        });
+                      }
+                      setPendingIntent(null);
+                    }}
+                    onExecuted={(result) => {
+                      setArmedCapabilities((prev) => {
+                        const next = new Set(prev);
+                        if (
+                          pendingIntent &&
+                          pendingIntent.intent_id === result.intent_id
+                        ) {
+                          next.delete(pendingIntent.kind);
+                        }
+                        return next;
+                      });
+                      void capabilities.refresh();
+                    }}
+                    onFinalStatus={onIntentFinalStatus}
+                  />
+                )}
                 {isErrored && error && (
                   // Degraded banner — the engine returned an error
                   // mid-turn. Surfaces the parsed message and a retry
@@ -1031,30 +1915,73 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
               ) : composerLocked ? (
                 <ExhaustedBanner onReset={onInlineReset} quota={quota} />
               ) : (
-                <Composer
-                  inputRef={inputRef}
-                  value={input}
-                  onChange={onComposerInputChange}
-                  knownTickerSet={knownTickerSet}
-                  onSubmit={onSubmit}
-                  onStop={stop}
-                  isStreaming={isStreaming}
-                  placeholder={t('shell.composer.placeholder')}
-                  sendLabel={t('send')}
-                  stopLabel={t('shell.composer.stop')}
-                  hintLabel={t('shell.composer.kbdHint')}
-                  signedIn={signedIn}
-                  tokenPills={tokenPills}
-                  onRemovePill={(sym) =>
-                    setTokenPills((prev) => prev.filter((s) => s !== sym))
-                  }
-                />
+                <>
+                  <Composer
+                    inputRef={inputRef}
+                    value={input}
+                    onChange={onComposerInputChange}
+                    knownTickerSet={knownTickerSet}
+                    onSubmit={onSubmit}
+                    onStop={stop}
+                    isStreaming={isStreaming}
+                    placeholder={t('shell.composer.placeholder')}
+                    sendLabel={t('send')}
+                    stopLabel={t('shell.composer.stop')}
+                    hintLabel={t('shell.composer.kbdHint')}
+                    signedIn={signedIn}
+                    tokenPills={tokenPills}
+                    onRemovePill={(sym) => onRemoveTokenPill(sym)}
+                    armedCapabilities={armedCapabilities}
+                    enabledCapabilities={capabilities.enabledSet}
+                    tierLocked={tierLocked}
+                    currentCapabilityAction={openActionCap}
+                    onOpenCapabilityAction={openCapabilityAction}
+                  />
+                  {/* Inline capability feedback — surfaces the
+                      /transfer command status right below the
+                      composer instead of a toast. Mounts only when
+                      there's something to say so the row doesn't
+                      steal focus. */}
+                  <CommandStatus
+                    inFlight={commandInFlight}
+                    error={commandError}
+                    onDismiss={() => setCommandError(null)}
+                  />
+                </>
               )}
             </div>
           </div>
         </section>
 
       </div>
+
+      {/* v0.5.0 — agent-payment ENABLE modal. Opens only when the
+          clicked capability isn't yet enabled (or the wallet is on
+          the free tier). Draft happens inline in the composer via
+          the /transfer command syntax, so we never render a form
+          here anymore. On successful enable we jump straight to
+          inserting the command template into the textbox. */}
+      <CapabilityActionModal
+        capability={openActionCap}
+        tierLocked={tierLocked}
+        onDismiss={() => setOpenActionCap(null)}
+        onEnabled={onCapabilityEnabled}
+      />
+
+      {/* v0.5.1 — chat-delete guard. Only mounts when the user tried
+          to delete a conversation that still carries active
+          (pending/signed) capability intents. Approving fires a
+          second DELETE with ?force=1. */}
+      <DeleteWorkflowsGuard
+        pending={pendingDelete}
+        onConfirm={() => void confirmForceDelete()}
+        onCancel={cancelForceDelete}
+      />
+
+      {/* v0.5.0 — the in-thread IntentChatCard renders inside the
+          message stream (see the `pendingIntent` slot after the
+          messages loop above), not here as a floating modal. This
+          slot is intentionally empty to make that move explicit. */}
 
       {drawerOpen && (
         <MobileDrawer
@@ -1067,12 +1994,14 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
           onDeleteConversation={(id) => void onDeleteConversation(id)}
           onNewChat={onNewChat}
           onOpenAlerts={onOpenAlerts}
-          onOpenReceipts={onOpenReceipts}
+          onOpenWorkflows={onOpenWorkflows}
           onOpenDirectory={onOpenDirectory}
           onOpenSettings={onOpenSettings}
           signedIn={signedIn}
           wallet={auth?.wallet}
           quota={quota}
+          alertsBadge={notifCounts.alerts}
+          workflowsBadge={notifCounts.workflows}
         />
       )}
 
@@ -1090,6 +2019,45 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
   );
 }
 
+
+/**
+ * v0.5.1 — fetch the connected wallet's balance snapshot for the
+ * engine's LLM grounding. Best-effort: any failure (401, timeout,
+ * RPC blip) resolves to null and the caller forwards a plain
+ * predict request without balance context. Never throws.
+ */
+async function fetchWalletContext(): Promise<unknown | null> {
+  try {
+    const controller = new AbortController();
+    // 3s hard cap — the LLM grounding is nice-to-have and blocking
+    // the send on a slow RPC would degrade the core prediction UX.
+    const timer = setTimeout(() => controller.abort(), 3_000);
+    const res = await fetch('/api/wallet/balance', {
+      credentials: 'same-origin',
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      ok: boolean;
+      wallet?: string;
+      network?: string;
+      as_of?: number;
+      sol?: number | null;
+      spl?: unknown;
+    };
+    if (!data.ok || !data.wallet || !data.network || !data.as_of) return null;
+    return {
+      wallet: data.wallet,
+      network: data.network,
+      as_of: data.as_of,
+      sol: typeof data.sol === 'number' ? data.sol : null,
+      spl: Array.isArray(data.spl) ? data.spl : [],
+    };
+  } catch {
+    return null;
+  }
+}
 
 /* ─────────────────────────── Wallet gate ─────────────────────────── */
 
@@ -1191,7 +2159,7 @@ interface LeftRailProps {
   onDeleteConversation: (id: string) => void;
   onNewChat: () => void;
   onOpenAlerts: () => void;
-  onOpenReceipts: () => void;
+  onOpenWorkflows: () => void;
   onOpenDirectory: () => void;
   onOpenSettings: () => void;
   signedIn: boolean;
@@ -1203,6 +2171,11 @@ interface LeftRailProps {
    *  already owns brand + close affordances — suppress the local
    *  brand/toggle row so the chrome doesn't double up. */
   embedded?: boolean;
+  /** v0.5.2 — unread notification counts sourced from the shell's
+   *  useNotifications() hook. Passed as plain numbers so the rail
+   *  doesn't have to import the hook itself. */
+  alertsBadge?: number;
+  workflowsBadge?: number;
   className?: string;
 }
 
@@ -1215,7 +2188,7 @@ function LeftRail({
   onDeleteConversation,
   onNewChat,
   onOpenAlerts,
-  onOpenReceipts,
+  onOpenWorkflows,
   onOpenDirectory,
   onOpenSettings,
   signedIn,
@@ -1224,6 +2197,8 @@ function LeftRail({
   collapsed = false,
   onToggleCollapse,
   embedded = false,
+  alertsBadge,
+  workflowsBadge,
   className,
 }: LeftRailProps) {
   const t = useTranslations('predict');
@@ -1347,6 +2322,7 @@ function LeftRail({
             label={t('shell.nav.alerts')}
             onClick={onOpenAlerts}
             collapsed={collapsed}
+            badgeCount={alertsBadge}
           />
           {/* Directory — Skills / Connectors / Plugins. Mounted here so
               the entry stays reachable from inside the predict surface
@@ -1361,9 +2337,10 @@ function LeftRail({
           />
           <NavButton
             icon={<IconReceipts size={collapsed ? 20 : 17} />}
-            label={t('shell.nav.receipts')}
-            onClick={onOpenReceipts}
+            label={t('shell.nav.workflows')}
+            onClick={onOpenWorkflows}
             collapsed={collapsed}
+            badgeCount={workflowsBadge}
           />
         </nav>
 
@@ -1507,6 +2484,7 @@ function NavButton({
   active,
   onClick,
   collapsed = false,
+  badgeCount,
 }: {
   icon: ReactNode;
   label: string;
@@ -1514,6 +2492,13 @@ function NavButton({
   active?: boolean;
   onClick?: () => void;
   collapsed?: boolean;
+  /**
+   * v0.5.2 — mirrors the ProductSidebar NavButton badge shape. Powers
+   * the unread pill next to Alerts / Workflows entries in the predict
+   * shell's LeftRail. Renders as a compact numeric pill in the
+   * expanded rail and a small accent dot in the collapsed gutter.
+   */
+  badgeCount?: number;
 }) {
   // Common label/icon colour state — keep the icon and the text in
   // lock-step so the hover and active treatments read as a single
@@ -1525,22 +2510,32 @@ function NavButton({
   const iconTone = active
     ? 'text-[var(--fg)]'
     : 'text-[var(--fg-3)] group-hover:text-[var(--fg)]';
+  const hasBadge = typeof badgeCount === 'number' && badgeCount > 0;
 
   if (collapsed) {
     return (
       <button
         type="button"
         onClick={onClick}
-        aria-label={label}
+        aria-label={hasBadge ? `${label} (${badgeCount})` : label}
         aria-current={active ? 'page' : undefined}
         title={label}
         className={cn(
-          'group inline-flex items-center justify-center',
+          'group relative inline-flex items-center justify-center',
           'h-11 w-11 rounded-lg transition-colors',
           tonal,
         )}
       >
         <span className={cn('transition-colors', iconTone)}>{icon}</span>
+        {hasBadge && (
+          <span
+            aria-hidden
+            className={cn(
+              'absolute top-1.5 right-1.5',
+              'h-2 w-2 rounded-full bg-[var(--accent)]',
+            )}
+          />
+        )}
       </button>
     );
   }
@@ -1549,6 +2544,7 @@ function NavButton({
       type="button"
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
+      aria-label={hasBadge ? `${label} (${badgeCount})` : undefined}
       className={cn(
         'group w-full flex items-center gap-2.5 text-left',
         'h-9 px-3 rounded-lg',
@@ -1561,7 +2557,19 @@ function NavButton({
         {icon}
       </span>
       <span className="flex-1 truncate">{label}</span>
-      {meta && (
+      {hasBadge ? (
+        <span
+          aria-hidden
+          className={cn(
+            'shrink-0 mono tabular text-[9.5px] font-semibold',
+            'inline-flex items-center justify-center',
+            'h-[16px] min-w-[16px] px-1 rounded-full',
+            'bg-[var(--accent)] text-[var(--bg)]',
+          )}
+        >
+          {badgeCount! > 99 ? '99+' : badgeCount}
+        </span>
+      ) : meta ? (
         <span
           className={cn(
             'mono tabular text-[10px] uppercase tracking-[0.14em] transition-colors',
@@ -1570,7 +2578,7 @@ function NavButton({
         >
           {meta}
         </span>
-      )}
+      ) : null}
     </button>
   );
 }
@@ -1997,12 +3005,14 @@ function MobileDrawer({
   onDeleteConversation,
   onNewChat,
   onOpenAlerts,
-  onOpenReceipts,
+  onOpenWorkflows,
   onOpenDirectory,
   onOpenSettings,
   signedIn,
   wallet,
   quota,
+  alertsBadge,
+  workflowsBadge,
 }: {
   onClose: () => void;
   search: string;
@@ -2013,12 +3023,14 @@ function MobileDrawer({
   onDeleteConversation: (id: string) => void;
   onNewChat: () => void;
   onOpenAlerts: () => void;
-  onOpenReceipts: () => void;
+  onOpenWorkflows: () => void;
   onOpenDirectory: () => void;
   onOpenSettings: () => void;
   signedIn: boolean;
   wallet: string | undefined;
   quota?: QuotaState;
+  alertsBadge?: number;
+  workflowsBadge?: number;
 }) {
   const t = useTranslations('predict');
 
@@ -2046,7 +3058,11 @@ function MobileDrawer({
       <div
         className={cn(
           'relative flex flex-col w-[min(320px,86vw)] h-full',
-          'bg-[var(--surface)] backdrop-blur-2xl',
+          // Match the desktop LeftRail: black `--bg` page background
+          // instead of the lifted `--surface` card. Standardized so
+          // both this drawer AND MobileAppNav read as an extension
+          // of the desktop rail color, not a floating lighter panel.
+          'bg-[var(--bg)]',
           'motion-safe:animate-[vt-drawer-in_200ms_ease-out]',
         )}
       >
@@ -2104,13 +3120,15 @@ function MobileDrawer({
             onDeleteConversation={onDeleteConversation}
             onNewChat={onNewChat}
             onOpenAlerts={onOpenAlerts}
-            onOpenReceipts={onOpenReceipts}
+            onOpenWorkflows={onOpenWorkflows}
             onOpenDirectory={onOpenDirectory}
             onOpenSettings={onOpenSettings}
             signedIn={signedIn}
             wallet={wallet}
             quota={quota}
             embedded
+            alertsBadge={alertsBadge}
+            workflowsBadge={workflowsBadge}
             className="flex h-full border-0 bg-transparent shadow-none backdrop-blur-none"
           />
         </div>
@@ -2204,6 +3222,68 @@ function ComposerPill({
   );
 }
 
+/* ─────────────────────── CommandStatus (inline) ─────────────────────── */
+
+/**
+ * Small strip below the composer that shows the capability command
+ * lifecycle: "settling…" while /api/capabilities/create-intent is
+ * inflight, and a translated error label when the server refuses
+ * the draft (bad recipient, capability not enabled, etc.). Idle
+ * state renders nothing so the composer chrome stays clean.
+ */
+function CommandStatus({
+  inFlight,
+  error,
+  onDismiss,
+}: {
+  inFlight: CapId | null;
+  error: string | null;
+  onDismiss: () => void;
+}) {
+  const t = useTranslations('predict.capability.intent');
+  if (!inFlight && !error) return null;
+  if (inFlight) {
+    return (
+      <div
+        role="status"
+        className="mt-2 mx-auto max-w-[860px] px-3 sm:px-6 text-[11.5px] text-[var(--fg-3)] mono"
+      >
+        {t('creating')} · /{inFlight}
+      </div>
+    );
+  }
+  const [rawReason, detail] = (error ?? '').split('::');
+  const reason = rawReason ?? error ?? '';
+  const label = t.has(`reasons.${reason}` as never)
+    ? t(`reasons.${reason}` as never)
+    : reason || t('errorGeneric');
+  return (
+    <div
+      role="alert"
+      className="mt-2 mx-auto max-w-[860px] px-3 sm:px-6"
+    >
+      <div className="rounded-lg border border-[var(--border)] bg-[color-mix(in_oklab,var(--down)_10%,transparent)] px-3 py-2 text-[11.5px] text-[var(--down)] flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div>{label}</div>
+          {detail && (
+            <div className="mt-1 mono text-[10.5px] opacity-70 break-all">
+              {detail}
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss"
+          className="shrink-0 text-[var(--fg-3)] hover:text-[var(--fg)] px-1"
+        >
+          ×
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ─────────────────────────── Composer ─────────────────────────── */
 
 function Composer({
@@ -2221,6 +3301,11 @@ function Composer({
   tokenPills,
   onRemovePill,
   knownTickerSet,
+  armedCapabilities,
+  enabledCapabilities,
+  tierLocked,
+  currentCapabilityAction,
+  onOpenCapabilityAction,
 }: {
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   value: string;
@@ -2245,6 +3330,19 @@ function Composer({
     symbols: ReadonlySet<string>;
     aliasToSymbol: ReadonlyMap<string, string>;
   };
+  /** v0.5.0 agent-payment capabilities. See CapabilityTray for the
+   *  full state machine + visibility rules. */
+  armedCapabilities: ReadonlySet<CapId>;
+  enabledCapabilities: ReadonlySet<CapId>;
+  /** Free tier / no wallet — tray renders locked regardless of the
+   *  enabled set. */
+  tierLocked: boolean;
+  /** Which action modal is open (parent-side state); the tray uses
+   *  it to paint the corresponding icon in its accent hue on click,
+   *  so feedback is instant instead of waiting on the intent draft. */
+  currentCapabilityAction: CapId | null;
+  /** Click on a tray icon → open its action modal (parent renders it). */
+  onOpenCapabilityAction: (cap: CapId) => void;
 }) {
   // The palette opens whenever the input starts with `/` and a space
   // hasn't been typed yet (i.e. the user is still naming the command).
@@ -2305,11 +3403,49 @@ function Composer({
     type Segment =
       | { kind: 'text'; content: string }
       | { kind: 'active'; content: string; symbol: string }
-      | { kind: 'pill'; content: string; symbol: string };
+      | { kind: 'pill'; content: string; symbol: string }
+      // v0.5.0 — placeholders inserted by the capability tray. Render
+      // in muted color so the user reads them as a hint, not committed
+      // prose. Matched by an `<angle-bracketed>` pattern anywhere in
+      // the input.
+      | { kind: 'placeholder'; content: string }
+      // v0.5.0 — the send/pay/flow/auto keyword prefix when it sits at
+      // word-boundary. Tinted with the capability accent so the
+      // command reads structurally without a slash prefix.
+      | { kind: 'command'; content: string; cap: CapId }
+      // v0.5.1 — a Solana wallet address (base58, 32-44 chars). Tinted
+      // green + mono tabular so the user can visually verify the
+      // recipient without reading every character. Detected at token
+      // granularity BEFORE the command-range flatten so an address
+      // inside `send 0.1 SOL → <addr>` still styles.
+      | { kind: 'wallet'; content: string };
+    const COMMAND_KW: Record<string, CapId> = {
+      send: 'transfer',
+      pay: 'payment',
+    };
+    // Precompute which characters of `value` fall inside a command
+    // line. Ticker symbols inside a command are rendered as plain
+    // text (not pills) so their visual width matches the underlying
+    // character metrics — otherwise the caret can't reach past the
+    // pill's inflated padding + icon width.
+    const COMMAND_RANGE_RE =
+      /\b(?:send|pay)\s+\d+(?:\.\d+)?\s+[A-Z0-9]{1,16}(?:\s+(?:→|to)\s*[^\n]*)?/gi;
+    const commandRanges: Array<{ start: number; end: number }> = [];
+    for (const m of value.matchAll(COMMAND_RANGE_RE)) {
+      if (typeof m.index === 'number') {
+        commandRanges.push({ start: m.index, end: m.index + m[0].length });
+      }
+    }
+    const inCommand = (pos: number): boolean =>
+      commandRanges.some((r) => pos >= r.start && pos < r.end);
+
     const tokens = value.split(/(\s+)/);
     const out: Segment[] = [];
+    let cursor = 0; // running char position into `value`
     for (let i = 0; i < tokens.length; i++) {
       const tok = tokens[i] ?? '';
+      const tokStart = cursor;
+      cursor += tok.length;
       if (tok.length === 0) continue;
       if (/^\s+$/.test(tok)) {
         // Collapse a whitespace run that follows a confirmed pill
@@ -2322,6 +3458,42 @@ function Composer({
           out.push({ kind: 'text', content: ' ' });
           continue;
         }
+        out.push({ kind: 'text', content: tok });
+        continue;
+      }
+      // Angle-bracketed placeholder — always muted.
+      if (/^<[a-zA-Z_-]{2,32}>$/.test(tok)) {
+        out.push({ kind: 'placeholder', content: tok });
+        continue;
+      }
+      // Capability command keyword — must be at the very start of
+      // the token (case-insensitive) and match one of the four verbs.
+      const lowerTok = tok.toLowerCase();
+      const commandCap = COMMAND_KW[lowerTok];
+      if (commandCap && (out.length === 0 || out[out.length - 1]?.kind === 'text')) {
+        // Only tint the first occurrence per prompt so noise words
+        // ("send it") don't accidentally color mid-sentence text.
+        const alreadyTinted = out.some((s) => s.kind === 'command');
+        if (!alreadyTinted) {
+          out.push({ kind: 'command', content: tok, cap: commandCap });
+          continue;
+        }
+      }
+      // v0.5.1 — Solana wallet address. Detected at token level so
+      // the styled span replaces exactly the underlying characters
+      // (no padding, no pill chrome) → caret metrics stay aligned.
+      // Checked BEFORE the command-range flatten so an address
+      // pasted after `send 0.1 SOL → ` still gets the green tint.
+      if (isWalletAddressToken(tok)) {
+        out.push({ kind: 'wallet', content: tok });
+        continue;
+      }
+      // v0.5.0 — never pill-style a symbol that sits inside a command
+      // line. Rendering it as a wide pill would break caret metrics
+      // (textarea has plain "SOL", overlay would render a padded
+      // icon+chip → the → arrow visually drifts past where the caret
+      // can reach). Command lines stay flat text throughout.
+      if (inCommand(tokStart)) {
         out.push({ kind: 'text', content: tok });
         continue;
       }
@@ -2376,13 +3548,46 @@ function Composer({
     const seen = new Set<string>();
     const list: string[] = [];
     for (const seg of overlaySegments) {
-      if (seg.kind === 'text') continue;
+      // Only ticker-bearing segments contribute — placeholder + command
+      // tokens (v0.5.0 additions) don't map to a coin symbol.
+      if (seg.kind !== 'active' && seg.kind !== 'pill') continue;
       if (seen.has(seg.symbol)) continue;
       seen.add(seg.symbol);
       list.push(seg.symbol);
     }
     return list;
   }, [overlaySegments]);
+
+  // Only carousel-picked tickers gate the capability tray — typed
+  // pills in the prompt (`$BTC`) don't unlock actions. Rationale:
+  // a carousel pick is an explicit "I want to act on this token"
+  // signal, whereas typed tickers are just context for prediction.
+  // The list is ordered as the user picked them so the first entry
+  // is what the command template seeds into the textbox.
+  const activeTickerSymbols = useMemo(() => {
+    const seen = new Set<string>();
+    const list: string[] = [];
+    for (const sym of tokenPills) {
+      const upper = sym.toUpperCase();
+      if (seen.has(upper)) continue;
+      seen.add(upper);
+      list.push(upper);
+    }
+    return list;
+  }, [tokenPills]);
+  // Which capabilities have a command currently drafted in the
+  // textbox — even a partial one like `send 0.1 BTC → ` (no
+  // recipient yet). Feeds the tray icon coloring so the $ turns
+  // green the moment the template lands, not only after the intent
+  // is signed. Keyword must be preceded by whitespace or
+  // start-of-string AND followed by an amount, so noise words
+  // ("send it back") don't false-match.
+  const draftingCapabilities = useMemo(() => {
+    const set = new Set<CapId>();
+    if (/(?:^|\s)send\s+\d/i.test(value)) set.add('transfer');
+    if (/(?:^|\s)pay\s+\d/i.test(value)) set.add('payment');
+    return set;
+  }, [value]);
 
   return (
     <form
@@ -2469,6 +3674,53 @@ function Composer({
             if (seg.kind === 'text') {
               return <span key={i}>{seg.content}</span>;
             }
+            if (seg.kind === 'placeholder') {
+              // Muted-color hint for angle-bracketed placeholders
+              // like `<recipient>` — kept for backward compat with
+              // any legacy prompts + user prose that uses them.
+              return (
+                <span
+                  key={i}
+                  className="text-[var(--fg-3)] opacity-60"
+                >
+                  {seg.content}
+                </span>
+              );
+            }
+            if (seg.kind === 'command') {
+              // Command keyword (send / flow / pay / auto). Tinted
+              // in the capability's accent hue so the prompt reads
+              // structurally without a slash prefix. `--cap-{id}`
+              // lookup is inlined so the token can pull the hue at
+              // render time.
+              const varName = `--cap-${seg.cap}`;
+              return (
+                <span
+                  key={i}
+                  className="font-semibold"
+                  style={{ color: `var(${varName})` }}
+                >
+                  {seg.content}
+                </span>
+              );
+            }
+            if (seg.kind === 'wallet') {
+              // v0.5.1 — a detected Solana wallet address. Tinted
+              // `--up` (same green as the SOL coin icon) + mono
+              // tabular so the base58 characters align vertically
+              // and the user can eyeball a match against the wallet
+              // they meant to type. No background, no border — width
+              // stays 1:1 with the underlying textarea character
+              // metrics so the caret rides on top cleanly.
+              return (
+                <span
+                  key={i}
+                  className="mono tabular font-medium text-[var(--up)]"
+                >
+                  {seg.content}
+                </span>
+              );
+            }
             // Icon rides absolutely-positioned OUTSIDE the pill span
             // (16px to the left, over the preceding whitespace). It
             // doesn't contribute to the pill's flow width, so the
@@ -2553,6 +3805,26 @@ function Composer({
           )}
         />
       </div>
+
+      {/* v0.5.0 — Agent-payment capabilities. The tray only mounts
+          when a ticker is active (carousel selection or typed pill).
+          When mounted, four icons appear right of the textarea; each
+          can be armed to signal "run this capability on submit".
+          Free tier / unenabled caps render locked (visible but
+          non-interactive) so the affordance is discoverable. */}
+      <CapabilityTray
+        activeSymbols={activeTickerSymbols}
+        armed={armedCapabilities}
+        // `drafting` catches the "typing a command right now" state
+        // so the tray icon paints its accent as soon as the template
+        // lands in the textbox — not only after the intent settles.
+        drafting={draftingCapabilities}
+        enabled={enabledCapabilities}
+        tierLocked={tierLocked}
+        disabled={isStreaming}
+        currentAction={currentCapabilityAction}
+        onOpenAction={onOpenCapabilityAction}
+      />
 
       {isStreaming ? (
         // Stop button — replaces send while the engine is streaming so
@@ -4482,4 +5754,95 @@ function parseErrorMessage(error: Error): string {
     // fallthrough
   }
   return error.message.slice(0, 200);
+}
+
+/**
+ * v0.5.1 — modal that mounts only when a chat-delete tripped the
+ * active-workflow guard. Shares the same minimalist dialog
+ * vocabulary as the CapabilityActionModal (rounded-xl, hairline
+ * border, monospace uppercase CTAs) so the two consent surfaces
+ * feel like one system. Not extracted into its own file because the
+ * shell is the only caller and inlining keeps the state ref close
+ * to the pendingDelete state above.
+ */
+function DeleteWorkflowsGuard({
+  pending,
+  onConfirm,
+  onCancel,
+}: {
+  pending: { id: string; count: number; kinds: string[] } | null;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const t = useTranslations('predict.workflows.deleteGuard');
+  useEffect(() => {
+    if (!pending) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [pending, onCancel]);
+  if (!pending) return null;
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      className={cn(
+        'fixed inset-0 z-[80] flex items-center justify-center p-4',
+        'bg-[color-mix(in_oklab,var(--bg)_60%,transparent)]',
+        'backdrop-blur-[3px]',
+      )}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
+    >
+      <div
+        className={cn(
+          'vz-intent-pop',
+          'w-full max-w-sm rounded-xl',
+          'border border-[var(--border)]',
+          'bg-[var(--surface)]',
+        )}
+      >
+        <div className="px-4 pt-4 pb-2">
+          <h2 className="text-[12.5px] font-semibold text-[var(--fg)] leading-none">
+            {t('title')}
+          </h2>
+        </div>
+        <div className="px-4 pt-1 pb-4">
+          <p className="text-[11.5px] leading-relaxed text-[var(--fg-2)]">
+            {t('body', { count: pending.count })}
+          </p>
+          <div className="mt-4 flex items-center justify-end gap-1">
+            <button
+              type="button"
+              onClick={onCancel}
+              className={cn(
+                'inline-flex items-center justify-center h-7 px-2',
+                'text-[10.5px] mono tabular uppercase tracking-[0.16em]',
+                'text-[var(--fg-3)] hover:text-[var(--fg)] bg-transparent',
+                'transition-colors duration-150',
+              )}
+            >
+              {t('cancel')}
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              className={cn(
+                'inline-flex items-center justify-center rounded-md h-7 px-3',
+                'text-[10.5px] font-semibold mono tabular uppercase tracking-[0.16em]',
+                'bg-[var(--down)] text-[var(--bg)]',
+                'hover:opacity-90 active:scale-95',
+                'transition-[opacity,transform] duration-150',
+              )}
+            >
+              {t('confirm')}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
