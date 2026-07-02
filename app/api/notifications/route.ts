@@ -26,6 +26,7 @@ import { NextResponse } from 'next/server';
 import { getActiveSession } from '@/lib/payment/auth-session';
 import { enforceWalletRateLimit } from '@/lib/payment/rate-limit';
 import {
+  firePendingPaymentNotifications,
   getUnreadNotificationCounts,
   listNotificationsForWallet,
   markAllNotificationsRead,
@@ -62,6 +63,19 @@ export async function GET(req: Request) {
     Number.isFinite(limitParam) && limitParam > 0 && limitParam <= 200
       ? Math.floor(limitParam)
       : 50;
+
+  // v0.5.2 — scheduler tick. Fires payment_due notifications for any
+  // signed payment intents whose execute_at window has arrived, then
+  // reads the ledger. Running it before the count read guarantees the
+  // sidebar badge reflects a just-scheduled payment within the same
+  // poll cycle. Errors are swallowed — a scheduler failure must never
+  // break the notifications read path.
+  try {
+    firePendingPaymentNotifications(session.wallet);
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn('[notifications] scheduler tick failed', e);
+  }
 
   const counts = getUnreadNotificationCounts(session.wallet);
   const items = listNotificationsForWallet(session.wallet, limit);

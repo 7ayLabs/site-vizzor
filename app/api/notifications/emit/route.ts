@@ -36,6 +36,7 @@ const KNOWN_KINDS: ReadonlySet<NotificationKind> = new Set([
   'workflow_failed',
   'alert_triggered',
   'alert_resolved',
+  'payment_due',
 ]);
 
 const KNOWN_LEVELS: ReadonlySet<NotificationLevel> = new Set([
@@ -92,6 +93,8 @@ function composeBody(
       return `Alert triggered on ${parts.symbol}`;
     case 'alert_resolved':
       return `Alert resolved on ${parts.symbol}`;
+    case 'payment_due':
+      return `Scheduled payment ready: ${parts.amount ?? ''} ${parts.symbol}`.trim();
     default:
       return `${kind} · ${parts.symbol}`;
   }

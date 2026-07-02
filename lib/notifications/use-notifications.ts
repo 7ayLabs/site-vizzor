@@ -25,7 +25,8 @@ export interface NotificationItem {
     | 'workflow_executed'
     | 'workflow_failed'
     | 'alert_triggered'
-    | 'alert_resolved';
+    | 'alert_resolved'
+    | 'payment_due';
   ref_id: string | null;
   level: 'info' | 'success' | 'warn' | 'error';
   body: string;
