@@ -27,6 +27,7 @@
  */
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -62,7 +63,38 @@ export function MobileAppNav() {
   const tMobile = useTranslations('app.mobileNav');
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  /**
+   * v0.5.22 — closing-phase flag. When the user taps the X (or the
+   * backdrop / Esc / a nav link), we flip `closing=true`, which
+   * swaps the drawer's slide-in keyframe for slide-out and fades
+   * the backdrop. After 180ms (matching the keyframe duration) the
+   * drawer + backdrop unmount cleanly. Without this the drawer
+   * used to snap out with no transition.
+   */
+  const [closing, setClosing] = useState(false);
   const drawerRef = useRef<HTMLDivElement | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
+
+  const requestClose = useCallback(() => {
+    if (!open || closing) return;
+    setClosing(true);
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+    }
+    closeTimerRef.current = window.setTimeout(() => {
+      setOpen(false);
+      setClosing(false);
+      closeTimerRef.current = null;
+    }, 180);
+  }, [open, closing]);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current);
+      }
+    };
+  }, []);
 
   // Identity + recent chats — pulled the same way ProductSidebar does
   // so the mobile drawer is data-identical to the desktop rail.
@@ -82,7 +114,7 @@ export function MobileAppNav() {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') requestClose();
     };
     document.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
@@ -91,12 +123,18 @@ export function MobileAppNav() {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [open]);
+  }, [open, requestClose]);
 
   // Close the drawer on route change — no navigation event API in App
-  // Router, so we watch the pathname and snap shut when it changes.
+  // Router, so we watch the pathname and animate shut when it changes.
+  // requestClose plays the slide-out; the destination page fills the
+  // majority of the viewport underneath while the 180ms exit runs.
   useEffect(() => {
-    setOpen(false);
+    requestClose();
+    // requestClose is intentionally omitted from deps — we want this
+    // to fire only on pathname change, not every time the callback
+    // reference updates (which would cause a spurious close on mount).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
   // v0.5.21 — the guided tour opens the drawer as part of its mobile
@@ -104,12 +142,13 @@ export function MobileAppNav() {
   // the Alertas / Transacciones / Identity items inside. On finish
   // (or skip), the SpotlightTour dispatches `vizzor-tour-finished`;
   // we listen here and snap the drawer shut so the user isn't left
-  // staring at an open drawer after the walkthrough completes.
+  // staring at an open drawer after the walkthrough completes. Uses
+  // requestClose so the exit still animates smoothly.
   useEffect(() => {
-    const onFinished = () => setOpen(false);
+    const onFinished = () => requestClose();
     window.addEventListener('vizzor-tour-finished', onFinished);
     return () => window.removeEventListener('vizzor-tour-finished', onFinished);
-  }, []);
+  }, [requestClose]);
 
   // Predict owns its own mobile nav. Bailing here keeps the layout free
   // of a duplicate topbar on /app/predict.
@@ -185,14 +224,22 @@ export function MobileAppNav() {
       </header>
 
       {/* Drawer + backdrop. Mounted at document root via z-50 so the
-          fixed overlay sits above any sticky chrome on the page. */}
+          fixed overlay sits above any sticky chrome on the page. The
+          `closing` phase keeps everything mounted for 180ms so the
+          slide-out + backdrop-fade keyframes play cleanly instead of
+          the drawer snapping out. */}
       {open && (
         <div className="lg:hidden fixed inset-0 z-50">
           <button
             type="button"
             aria-label={tMobile('closeMenu')}
-            onClick={() => setOpen(false)}
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={requestClose}
+            className={cn(
+              'absolute inset-0 bg-black/50 backdrop-blur-sm',
+              closing
+                ? 'motion-safe:animate-[mn-fade-out_180ms_ease-in_forwards]'
+                : 'motion-safe:animate-[mn-fade-in_180ms_ease-out]',
+            )}
           />
           <div
             id="mobile-app-drawer"
@@ -210,13 +257,27 @@ export function MobileAppNav() {
               // the desktop rail; the standard now is: same --bg on
               // mobile as on desktop.
               'bg-[var(--bg)]',
-              'motion-safe:animate-[mn-slide-in_180ms_ease-out]',
+              closing
+                ? 'motion-safe:animate-[mn-slide-out_180ms_ease-in_forwards]'
+                : 'motion-safe:animate-[mn-slide-in_180ms_ease-out]',
             )}
           >
             <style>{`
               @keyframes mn-slide-in {
                 from { transform: translateX(-100%); }
                 to   { transform: translateX(0); }
+              }
+              @keyframes mn-slide-out {
+                from { transform: translateX(0); }
+                to   { transform: translateX(-100%); }
+              }
+              @keyframes mn-fade-in {
+                from { opacity: 0; }
+                to   { opacity: 1; }
+              }
+              @keyframes mn-fade-out {
+                from { opacity: 1; }
+                to   { opacity: 0; }
               }
             `}</style>
 
@@ -227,7 +288,7 @@ export function MobileAppNav() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
               <Link
                 href="/app/predict"
-                onClick={() => setOpen(false)}
+                onClick={requestClose}
                 aria-label={tMobile('home')}
                 className="inline-flex items-center gap-2.5 text-[16px] font-semibold tracking-tight text-[var(--fg)] leading-none hover:opacity-80 transition-opacity"
               >
@@ -251,7 +312,7 @@ export function MobileAppNav() {
               </Link>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={requestClose}
                 aria-label={tMobile('closeMenu')}
                 className="inline-flex h-9 w-9 items-center justify-center text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)] rounded-lg transition-colors"
               >

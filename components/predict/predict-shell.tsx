@@ -228,17 +228,9 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((v) => !v);
   }, []);
-  // v0.5.21 — the guided tour opens this drawer during its mobile
-  // flow (the `mobile-menu` step requires the user to tap the
-  // hamburger before the sidebar-nav steps can spotlight anchors
-  // inside the drawer). On tour finish or skip, the SpotlightTour
-  // dispatches `vizzor-tour-finished`; snap the drawer shut so the
-  // user isn't left staring at an open panel.
-  useEffect(() => {
-    const onFinished = () => setDrawerOpen(false);
-    window.addEventListener('vizzor-tour-finished', onFinished);
-    return () => window.removeEventListener('vizzor-tour-finished', onFinished);
-  }, []);
+  // Note: the `vizzor-tour-finished` listener that used to live here
+  // was moved into MobileDrawer (v0.5.22) so the close plays the
+  // slide-out keyframe instead of snapping the drawer unmounted.
   const threadRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -3112,13 +3104,51 @@ function MobileDrawer({
 }) {
   const t = useTranslations('predict');
 
+  /**
+   * v0.5.22 — closing-phase flag. Any in-drawer close gesture (X,
+   * backdrop tap, Esc, tour-finished event) flips `closing=true`,
+   * which swaps the enter keyframe for exit and fades the backdrop.
+   * After 180ms we call the parent's `onClose` to unmount.
+   */
+  const [closing, setClosing] = useState(false);
+  const closeTimerRef = useRef<number | null>(null);
+  const requestClose = useCallback(() => {
+    if (closing) return;
+    setClosing(true);
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+    }
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null;
+      onClose();
+    }, 180);
+  }, [closing, onClose]);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') requestClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [requestClose]);
+
+  // v0.5.22 — SpotlightTour dispatches `vizzor-tour-finished` on
+  // finish or skip. Listen here (rather than in the parent) so the
+  // close plays the slide-out keyframe instead of the parent
+  // snapping the mount off.
+  useEffect(() => {
+    const onFinished = () => requestClose();
+    window.addEventListener('vizzor-tour-finished', onFinished);
+    return () => window.removeEventListener('vizzor-tour-finished', onFinished);
+  }, [requestClose]);
 
   return (
     <div
@@ -3130,8 +3160,13 @@ function MobileDrawer({
       <button
         type="button"
         aria-label={t('shell.collapseSidebar')}
-        onClick={onClose}
-        className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+        onClick={requestClose}
+        className={cn(
+          'absolute inset-0 bg-black/55 backdrop-blur-sm',
+          closing
+            ? 'motion-safe:animate-[vt-drawer-fade-out_180ms_ease-in_forwards]'
+            : 'motion-safe:animate-[vt-drawer-fade-in_180ms_ease-out]',
+        )}
       />
       <div
         className={cn(
@@ -3141,13 +3176,27 @@ function MobileDrawer({
           // both this drawer AND MobileAppNav read as an extension
           // of the desktop rail color, not a floating lighter panel.
           'bg-[var(--bg)]',
-          'motion-safe:animate-[vt-drawer-in_200ms_ease-out]',
+          closing
+            ? 'motion-safe:animate-[vt-drawer-out_180ms_ease-in_forwards]'
+            : 'motion-safe:animate-[vt-drawer-in_200ms_ease-out]',
         )}
       >
         <style>{`
           @keyframes vt-drawer-in {
             from { transform: translate3d(-100%, 0, 0); }
             to   { transform: translate3d(0, 0, 0); }
+          }
+          @keyframes vt-drawer-out {
+            from { transform: translate3d(0, 0, 0); }
+            to   { transform: translate3d(-100%, 0, 0); }
+          }
+          @keyframes vt-drawer-fade-in {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+          }
+          @keyframes vt-drawer-fade-out {
+            from { opacity: 1; }
+            to   { opacity: 0; }
           }
         `}</style>
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
@@ -3176,7 +3225,7 @@ function MobileDrawer({
           </Link>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             aria-label={t('shell.collapseSidebar')}
             className="inline-flex h-9 w-9 items-center justify-center text-[var(--fg-3)] hover:text-[var(--fg)] hover:bg-[var(--surface-2)] rounded-lg transition-colors"
           >
