@@ -1074,6 +1074,43 @@
     from { opacity: 0; transform: translateY(3px); }
     to   { opacity: 1; transform: translateY(0);    }
   }
+
+  /* v0.5.8 — pulsing highlight ring around the spotlight cutout so
+     the target reads as "focused" instead of just dim. Same 320ms
+     morph transition as the cutout so ring + hole stay locked. */
+  .vz-tour-spotlight-ring {
+    animation: vz-tour-spotlight-ring 1.6s ease-in-out infinite;
+  }
+  @keyframes vz-tour-spotlight-ring {
+    0%, 100% { opacity: 0.55; stroke-width: 1.5; }
+    50%      { opacity: 1;    stroke-width: 3;   }
+  }
+
+  /* v0.5.8 — horizontal swipe pointer. Slides across the width of
+     the spotlight so the user notices the target is a scrollable
+     strip (carousel step). `--swipe-distance` is set inline to the
+     spotlight's width minus a bit of padding so the pointer travels
+     the correct distance regardless of target size. */
+  .vz-tour-swipe-hint {
+    animation: vz-tour-swipe 2200ms cubic-bezier(0.4, 0.1, 0.4, 1) infinite;
+  }
+  @keyframes vz-tour-swipe {
+    0%   { transform: translateX(12px);                       opacity: 0;   }
+    15%  { transform: translateX(12px);                       opacity: 0.9; }
+    85%  { transform: translateX(var(--swipe-distance, 200px)); opacity: 0.9; }
+    100% { transform: translateX(var(--swipe-distance, 200px)); opacity: 0;   }
+  }
+
+  /* v0.5.8 — "Tap to continue" hint pulsing text on requires-click
+     steps. Quieter than the spotlight ring — the eye should go to
+     the target first, not the hint. */
+  .vz-tap-hint {
+    animation: vz-tap-hint 1.8s ease-in-out infinite;
+  }
+  @keyframes vz-tap-hint {
+    0%, 100% { opacity: 0.5; }
+    50%      { opacity: 1;   }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

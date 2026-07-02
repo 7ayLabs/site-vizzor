@@ -232,6 +232,36 @@ export function SpotlightTour() {
     return () => cancelAnimationFrame(raf);
   }, [isOpen, clampedIndex]);
 
+  // v0.5.8 — `requiresClick` steps: advance the tour only when the
+  // user actually clicks the target element. This is the gate for
+  // the mobile-menu step so we can't skip past a closed drawer.
+  // The SVG backdrop is pointer-events: none, so clicks reach the
+  // target normally + fire its own onClick handler (which opens
+  // the drawer) alongside our listener (which advances the tour).
+  useEffect(() => {
+    if (!isOpen || !step?.requiresClick || !step.targetSelector) return;
+    const el = document.querySelector<HTMLElement>(step.targetSelector);
+    if (!el) return;
+    // A tick to make sure a synthetic click that fired to open the
+    // tour doesn't accidentally auto-advance the requires-click step.
+    let armed = false;
+    const armId = window.setTimeout(() => {
+      armed = true;
+    }, 100);
+    const onClick = () => {
+      if (!armed) return;
+      // Small delay so the drawer has time to expand before we
+      // advance and try to spotlight the next target (which lives
+      // inside the drawer).
+      window.setTimeout(() => next(), 300);
+    };
+    el.addEventListener('click', onClick);
+    return () => {
+      window.clearTimeout(armId);
+      el.removeEventListener('click', onClick);
+    };
+  }, [isOpen, step, next]);
+
   if (!isOpen || !mounted || !step) return null;
 
   const isFirst = clampedIndex === 0;
@@ -280,15 +310,23 @@ export function SpotlightTour() {
       aria-labelledby="vz-tour-title"
       className="fixed inset-0 z-[90] motion-safe:vz-spotlight-mask-in"
     >
-      {/* SVG spotlight backdrop. Animating the rect via CSS
-          transitions on x/y/width/height gives us a smooth aperture
-          morph between steps. */}
+      {/* SVG spotlight backdrop.
+          v0.5.8 pointer-events: none — clicks pass THROUGH the
+          backdrop to whatever's underneath (the target element).
+          That's the enabler for requiresClick steps: the user can
+          actually tap the hamburger to advance the tour. Skip /
+          next / prev clicks land on the callout which sits in a
+          separate stacking context with its own pointer events.
+          The mask cuts a transparent hole around the target so the
+          user sees what to click; the extra ring rect below adds
+          a visible pulsing border so the target reads as "focused"
+          rather than dim (user feedback on the Skills step). */}
       <svg
         aria-hidden
         width={viewport.w}
         height={viewport.h}
         className="fixed inset-0"
-        style={{ pointerEvents: 'auto' }}
+        style={{ pointerEvents: 'none' }}
       >
         <defs>
           <mask id="vz-tour-mask">
@@ -318,6 +356,45 @@ export function SpotlightTour() {
           fill="rgba(0, 0, 0, 0.68)"
           mask="url(#vz-tour-mask)"
         />
+        {/* Pulsing highlight ring around the cutout. Renders only
+            for anchored steps; centered welcome/done + fallbacks
+            get no ring (there's no target to point at). */}
+        {targetRect && !isCentered && (
+          <rect
+            className="vz-tour-spotlight-rect vz-tour-spotlight-ring"
+            x={spotlight.x}
+            y={spotlight.y}
+            width={spotlight.width}
+            height={spotlight.height}
+            rx={12}
+            fill="none"
+            stroke="var(--accent)"
+            strokeWidth={2}
+          />
+        )}
+        {/* Swipe-hint pointer — animates horizontally across the
+            spotlight to show the user the target is a scrollable
+            strip. Only mounted when the step opts in. */}
+        {targetRect && !isCentered && step.showSwipeHint && (
+          <g
+            className="vz-tour-swipe-hint"
+            transform={`translate(${spotlight.x}, ${spotlight.y + spotlight.height / 2})`}
+          >
+            <circle
+              cx={0}
+              cy={0}
+              r={12}
+              fill="color-mix(in oklab, var(--accent) 30%, transparent)"
+              stroke="var(--accent)"
+              strokeWidth={1.5}
+              style={
+                {
+                  ['--swipe-distance']: `${spotlight.width - 24}px`,
+                } as React.CSSProperties
+              }
+            />
+          </g>
+        )}
       </svg>
 
       {/* Callout card — flat, no glow, no accent stripe. Restraint
@@ -419,19 +496,38 @@ export function SpotlightTour() {
             >
               {t('previous')}
             </button>
-            <button
-              type="button"
-              onClick={onNextClick}
-              className={cn(
-                'inline-flex items-center justify-center h-7 px-3 rounded-md',
-                'mono tabular text-[10px] font-semibold uppercase tracking-[0.16em]',
-                'bg-[var(--fg)] text-[var(--bg)]',
-                'hover:opacity-90 active:scale-[0.98]',
-                'transition-[opacity,transform] duration-150',
-              )}
-            >
-              {isLast ? t('finish') : t('next')}
-            </button>
+            {step.requiresClick ? (
+              /* Require-click gate: no Next button. The tour only
+                 advances when the user actually clicks the target
+                 (see useEffect wiring above). A pulsing hint keeps
+                 the affordance readable. */
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1',
+                  'mono tabular text-[10px] uppercase tracking-[0.16em]',
+                  'text-[var(--fg-3)]',
+                  'motion-safe:vz-tap-hint',
+                )}
+              >
+                {t.has('tapToContinue' as never)
+                  ? (t as unknown as (k: string) => string)('tapToContinue')
+                  : 'Tap to continue'}
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={onNextClick}
+                className={cn(
+                  'inline-flex items-center justify-center h-7 px-3 rounded-md',
+                  'mono tabular text-[10px] font-semibold uppercase tracking-[0.16em]',
+                  'bg-[var(--fg)] text-[var(--bg)]',
+                  'hover:opacity-90 active:scale-[0.98]',
+                  'transition-[opacity,transform] duration-150',
+                )}
+              >
+                {isLast ? t('finish') : t('next')}
+              </button>
+            )}
           </div>
         </div>
       </div>

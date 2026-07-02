@@ -891,6 +891,7 @@
       "next": "Siguiente",
       "previous": "Atrás",
       "finish": "Listo",
+      "tapToContinue": "Toca para continuar",
       "stepIndicator": "Paso {index} de {total}",
       "steps": {
         "welcome": {
@@ -923,7 +924,7 @@
         },
         "mobileMenu": {
           "title": "Abre el menú 📱",
-          "body": "Toca el ícono ☰ arriba a la izquierda para abrir el drawer. Luego dale Siguiente — te muestro lo que hay adentro."
+          "body": "Toca el ícono ☰ arriba a la izquierda para continuar."
         },
         "done": {
           "title": "Listo ✨",

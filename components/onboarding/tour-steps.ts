@@ -39,6 +39,17 @@ export interface TourStep {
   /** Only surface this step on `< lg` viewports. Used for the
    *  hamburger trigger which is hidden on desktop. */
   mobileOnly?: boolean;
+  /** v0.5.8 — when true, the "Next" button is hidden and the tour
+   *  ONLY advances when the user actually clicks the target
+   *  element. Used for the mobile-menu step so the user has to
+   *  tap the hamburger to open the drawer before the tour
+   *  continues (otherwise the sidebar-nav steps that follow have
+   *  nothing to spotlight). */
+  requiresClick?: boolean;
+  /** v0.5.8 — when true, an animated pointer slides horizontally
+   *  across the spotlight so the user knows the target is a
+   *  scrollable strip. Set on the `carousel` step. */
+  showSwipeHint?: boolean;
   /** i18n key under `predict.tour.steps.<id>`. Both `.title` and
    *  `.body` are required at that key. */
   i18nKey: string;
@@ -74,6 +85,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
      */
     targetSelector: '[data-tour-id="topic-carousel"]',
     placement: 'top',
+    showSwipeHint: true,
     i18nKey: 'carousel',
   },
   /**
@@ -91,6 +103,12 @@ export const TOUR_STEPS: readonly TourStep[] = [
     targetSelector: '[data-tour-id="mobile-menu-trigger"]',
     placement: 'bottom',
     mobileOnly: true,
+    /**
+     * User has to actually tap the hamburger to advance — otherwise
+     * the sidebar steps that follow have no anchor to spotlight
+     * (LeftRail is only mounted inside the drawer once it's open).
+     */
+    requiresClick: true,
     i18nKey: 'mobileMenu',
   },
   {

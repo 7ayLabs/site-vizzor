@@ -780,6 +780,7 @@
       "next": "Suivant",
       "previous": "Retour",
       "finish": "C'est bon",
+      "tapToContinue": "Touche pour continuer",
       "stepIndicator": "Étape {index} sur {total}",
       "steps": {
         "welcome": {
@@ -812,7 +813,7 @@
         },
         "mobileMenu": {
           "title": "Ouvre le menu 📱",
-          "body": "Touche l'icône ☰ en haut à gauche pour ouvrir le drawer. Puis appuie sur Suivant — je te montre ce qu'il y a dedans."
+          "body": "Touche l'icône ☰ en haut à gauche pour continuer."
         },
         "done": {
           "title": "C'est parti ✨",
