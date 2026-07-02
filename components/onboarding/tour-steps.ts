@@ -68,9 +68,14 @@ export const TOUR_STEPS: readonly TourStep[] = [
   },
   {
     id: 'topics',
+    /**
+     * The + button lives INSIDE the composer on every viewport
+     * (desktop + mobile). No `mobileFallback` — the tour
+     * spotlights the real button on both, exactly the same way
+     * the composer-input step does.
+     */
     targetSelector: '[data-tour-id="composer-topics"]',
     placement: 'top',
-    mobileFallback: 'centered',
     i18nKey: 'topics',
   },
   {
