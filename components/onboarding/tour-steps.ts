@@ -66,27 +66,15 @@ export const TOUR_STEPS: readonly TourStep[] = [
     id: 'carousel',
     /**
      * Ticker + sector chip row above the composer. Tapping a chip
-     * activates a token, which is what unlocks the capability tray
-     * for the next step. Placing this before `tray` reads as a
-     * logical progression: pick a token → unlock the actions.
+     * activates a token; the carousel body copy already narrates
+     * "that's what unlocks the send/pay icons", so we no longer
+     * need a follow-up `tray` step (deleted v0.5.7 — the tray was
+     * always centered/absent for a first-time user without an
+     * armed ticker, and the copy was redundant with this step's).
      */
     targetSelector: '[data-tour-id="topic-carousel"]',
     placement: 'top',
     i18nKey: 'carousel',
-  },
-  {
-    id: 'tray',
-    /**
-     * CapabilityTray only mounts when the wallet has an active ticker
-     * (a first-time user won't). SpotlightTour treats a missing
-     * target as an implicit centered fallback, so the tour narrates
-     * the tray without needing the element on screen — same posture
-     * as `mobileFallback: 'centered'`.
-     */
-    targetSelector: '[data-tour-id="capability-tray"]',
-    placement: 'top',
-    mobileFallback: 'centered',
-    i18nKey: 'tray',
   },
   {
     id: 'nav-alerts',

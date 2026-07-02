@@ -894,48 +894,44 @@
       "stepIndicator": "Paso {index} de {total}",
       "steps": {
         "welcome": {
-          "title": "¡Hola! Bienvenido a Vizzor",
-          "body": "Sesenta segundos. Te muestro qué puede hacer tu wallet acá adentro para que no te quede nada escondido."
+          "title": "¡Ey! Bienvenido a Vizzor 👋",
+          "body": "Un minuto y te enseño todo lo que tu wallet puede hacer aquí. Sin misterios ✨"
         },
         "composer": {
-          "title": "Preguntá lo que sea",
-          "body": "Escribí cualquier pregunta cripto — predicciones, estado on-chain, contexto de mercado. Respondo y cito mis fuentes."
+          "title": "Pregúntame lo que sea 💬",
+          "body": "Escribe cualquier duda cripto — predice movimientos, menciona un ticker, redacta una consulta sobre estado on-chain, ETF flows o vibras de mercado. Contesto y cito mis fuentes."
         },
         "topics": {
-          "title": "Skills, connectors, integraciones",
-          "body": "Abrí esto para activar una Skill (un modo de razonamiento como Solana-native o Prediction-markets), enchufar un Connector (Discord, Telegram, Nostr, Farcaster…), o cablear una integración de un partner que le dé forma a mis respuestas."
+          "title": "Skills, connectors, integraciones 🧠",
+          "body": "Abre esto para activar una Skill (un modo de razonar como Solana-native o Prediction-markets), enchufar un Connector (Discord, Telegram, Nostr, Farcaster…) o cablear una integración de un partner que le dé forma a mis respuestas."
         },
         "carousel": {
-          "title": "Elegí un token",
-          "body": "Tocá cualquier chip para activar un token — BTC, SOL, o un tema como ETF flows. Eso es lo que desbloquea los íconos de send / pay del próximo paso."
-        },
-        "tray": {
-          "title": "Armá acciones on-chain",
-          "body": "Con un token activo, estos íconos te dejan armar una transferencia o programar un pago. Nada se firma sin que tu wallet lo apruebe explícitamente."
+          "title": "Elige un token 🎯",
+          "body": "Toca cualquier chip para activar un token — BTC, SOL, o un tema como ETF flows. Eso desbloquea los íconos de send / pay 💸"
         },
         "navAlerts": {
-          "title": "Alertas de precio",
-          "body": "Configurá objetivos acá. Se prende un badge apenas se dispara uno — desde cualquier página."
+          "title": "Alertas de precio 🔔",
+          "body": "Configura objetivos aquí. Se prende un badge apenas se dispara uno — desde cualquier página."
         },
         "navTransactions": {
-          "title": "Todas tus transacciones",
-          "body": "Cada transferencia o pago programado que armó tu wallet vive acá. Tocá una fila para ver el detalle completo."
+          "title": "Todas tus transacciones 📊",
+          "body": "Cada transferencia o pago programado que redactó tu wallet vive aquí. Toca una fila para ver el detalle completo."
         },
         "identity": {
-          "title": "Tu wallet, tu control",
-          "body": "Vizzor nunca toca fondos sin firma. Cerrá sesión cuando quieras — tu historial se queda con tu wallet."
+          "title": "Tu wallet, tu control 🔐",
+          "body": "Vizzor nunca toca fondos sin firma. Cierra sesión cuando quieras — tu historial se queda con tu wallet."
         },
         "mobileMenu": {
-          "title": "Todo lo demás vive acá",
-          "body": "Tocá el menú cuando quieras para llegar a Alertas, Transacciones, Directorio y tu identidad de wallet."
+          "title": "Todo lo demás está aquí 📱",
+          "body": "Toca el menú cuando quieras para llegar a Alertas, Transacciones, Directorio y tu identidad de wallet."
         },
         "mobileActions": {
-          "title": "Qué hay dentro del menú",
+          "title": "Qué hay dentro del menú 🎛️",
           "body": "Alertas te avisa cuando el precio pega tus objetivos. Transacciones es el log de recibos on-chain. Directorio tiene Skills, Connectors e integraciones. Tu identidad de wallet queda al pie — un toque para cerrar sesión."
         },
         "done": {
-          "title": "Listo",
-          "body": "Preguntá, armá una alerta, o programá un pago. Abrí Cmd+K → \"Ver tour\" para repetir esto cuando quieras."
+          "title": "Listo ✨",
+          "body": "Pregunta lo que quieras, arma una alerta, o programa un pago. Abre Cmd+K → \"Ver tour\" para repetir esto cuando quieras 🚀"
         }
       }
     },

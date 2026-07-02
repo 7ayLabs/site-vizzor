@@ -894,48 +894,44 @@
       "stepIndicator": "Step {index} of {total}",
       "steps": {
         "welcome": {
-          "title": "Hey — welcome to Vizzor",
-          "body": "Sixty-second tour. I'll walk you through what your wallet can do here so nothing feels hidden."
+          "title": "Hey — welcome to Vizzor 👋",
+          "body": "60-second tour. I'll show you what your wallet can do here so nothing stays hidden ✨"
         },
         "composer": {
-          "title": "Ask anything",
-          "body": "Type any crypto question — predictions, on-chain state, market color. I answer and cite my sources."
+          "title": "Ask literally anything 💬",
+          "body": "Drop any crypto question — predictions, on-chain state, market vibes, ETF flows, macro takes. I answer and cite my sources. No cap."
         },
         "topics": {
-          "title": "Skills, connectors, integrations",
-          "body": "Open this to activate a Skill (a reasoning mode like Solana-native or Prediction-markets), plug in a Connector (Discord, Telegram, Nostr, Farcaster…), or wire a third-party integration that shapes how I answer."
+          "title": "Skills, connectors, integrations 🧠",
+          "body": "Pop this open to activate a Skill (reasoning mode like Solana-native or Prediction-markets), plug in a Connector (Discord, Telegram, Nostr, Farcaster…), or wire a partner integration that shapes how I reply."
         },
         "carousel": {
-          "title": "Pick a token",
-          "body": "Tap any chip to activate a token — BTC, SOL, or a topic like ETF flows. That's what unlocks the send / pay icons for the next step."
-        },
-        "tray": {
-          "title": "Draft on-chain actions",
-          "body": "Once a token is active, these icons let you draft a transfer or schedule a payment. Nothing signs without your wallet approving it explicitly."
+          "title": "Pick a token 🎯",
+          "body": "Tap any chip — BTC, SOL, or a topic like ETF flows. That's what unlocks the send / pay icons 💸"
         },
         "navAlerts": {
-          "title": "Price alerts",
+          "title": "Price alerts 🔔",
           "body": "Set targets here. A badge lights up the moment one triggers — from any page you're on."
         },
         "navTransactions": {
-          "title": "Every transaction",
-          "body": "Every transfer or scheduled payment your wallet drafts lives here. Tap a row to see the full details."
+          "title": "Every transaction 📊",
+          "body": "Every transfer or scheduled payment your wallet drafts lives here. Tap a row for the full receipt."
         },
         "identity": {
-          "title": "Your wallet, your control",
-          "body": "Vizzor never touches funds without a signature. Sign out any time — your history stays with your wallet."
+          "title": "Your wallet, your control 🔐",
+          "body": "Vizzor never touches funds without a signature. Sign out whenever — your history stays with your wallet."
         },
         "mobileMenu": {
-          "title": "Everything else is in here",
+          "title": "Everything else lives here 📱",
           "body": "Tap the hamburger any time to reach Alerts, Transactions, Directory, and your wallet identity."
         },
         "mobileActions": {
-          "title": "What lives in the menu",
-          "body": "Alerts fire notifications when prices hit your targets. Transactions is your on-chain receipt log. Directory holds Skills, Connectors, and integrations. Your wallet identity sits at the bottom — one tap to sign out."
+          "title": "What's inside the menu 🎛️",
+          "body": "Alerts pings you when prices hit your targets. Transactions = your on-chain receipt log. Directory holds Skills, Connectors, and integrations. Your wallet identity is at the bottom — one tap to sign out."
         },
         "done": {
-          "title": "You're ready",
-          "body": "Ask anything, arm an alert, or draft a payment. Open Cmd+K → \"Show tour\" to replay this any time."
+          "title": "You're set ✨",
+          "body": "Ask anything, arm an alert, or draft a payment. Cmd+K → \"Show tour\" to replay this whenever 🚀"
         }
       }
     },
