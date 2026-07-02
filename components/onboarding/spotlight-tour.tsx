@@ -393,31 +393,86 @@ export function SpotlightTour() {
       aria-labelledby="vz-tour-title"
       className="fixed inset-0 z-[90] motion-safe:vz-spotlight-mask-in"
       /**
-       * v0.5.10 — pointer-events: none on the wrapper so clicks land
-       * on the element beneath (the hamburger for the mobile-menu
-       * step, etc.). The callout below sets pointer-events: auto so
-       * Skip / Back / Next / Escape stay interactive.
+       * v0.5.18 — wrapper reclaims `pointer-events: auto` so the tour
+       * behaves like a real modal: background elements underneath are
+       * inert while the callout is on-screen. The only exception is a
+       * step with `requiresClick`, where the wrapper flips back to
+       * `pointer-events: none` and dim is painted as four rectangles
+       * around the target so the specific action (e.g. tap the mobile
+       * hamburger) still lands. The callout below always keeps
+       * `pointer-events: auto`.
        */
-      style={{ pointerEvents: 'none' }}
+      style={{ pointerEvents: step?.requiresClick ? 'none' : 'auto' }}
+      onClick={(e) => {
+        // Swallow accidental clicks on the dim so they don't bubble
+        // to underlying elements even in the rare case a listener is
+        // registered on document / body. No-op for the callout since
+        // that child stops propagation via its own tree.
+        if (step?.requiresClick) return;
+        e.stopPropagation();
+      }}
     >
-      {/* SVG spotlight backdrop.
-          v0.5.8 pointer-events: none — clicks pass THROUGH the
-          backdrop to whatever's underneath (the target element).
-          That's the enabler for requiresClick steps: the user can
-          actually tap the hamburger to advance the tour. Skip /
-          next / prev clicks land on the callout which sits in a
-          separate stacking context with its own pointer events.
-          The mask cuts a transparent hole around the target so the
-          user sees what to click; the extra ring rect below adds
-          a visible pulsing border so the target reads as "focused"
-          rather than dim (user feedback on the Skills step). */}
-      {/* v0.5.17 — full-screen dim + viewport-wide box-shadow both
-          retired. The tour now leaves the page fully visible and
-          fully interactive: users can browse, click, and read the
-          rest of the app while the callout is on-screen. Only the
-          target gets a highlight ring so the eye still tracks the
-          step, and centered steps (welcome / done) just float the
-          callout with no backdrop at all. */}
+      {/* Dim backdrop.
+          - Non-requiresClick steps: one full-viewport dim, blocks
+            clicks by inheriting the wrapper's pointer-events.
+          - requiresClick steps: four dim strips around the target so
+            the target rect itself has no overlay and can receive the
+            tap that advances the tour. */}
+      {!step?.requiresClick && (
+        <div
+          aria-hidden
+          className="fixed inset-0 vz-spotlight-full-dim"
+        />
+      )}
+      {step?.requiresClick && targetRect && !isCentered && (
+        <>
+          {/* Top strip */}
+          <div
+            aria-hidden
+            className="fixed left-0 right-0 top-0 vz-spotlight-full-dim"
+            style={{
+              height: Math.max(0, spotlight.y),
+              pointerEvents: 'auto',
+            }}
+          />
+          {/* Bottom strip */}
+          <div
+            aria-hidden
+            className="fixed left-0 right-0 bottom-0 vz-spotlight-full-dim"
+            style={{
+              top: spotlight.y + spotlight.height,
+              pointerEvents: 'auto',
+            }}
+          />
+          {/* Left strip (between top + bottom, hugs the target) */}
+          <div
+            aria-hidden
+            className="fixed left-0 vz-spotlight-full-dim"
+            style={{
+              top: spotlight.y,
+              width: Math.max(0, spotlight.x),
+              height: spotlight.height,
+              pointerEvents: 'auto',
+            }}
+          />
+          {/* Right strip */}
+          <div
+            aria-hidden
+            className="fixed right-0 vz-spotlight-full-dim"
+            style={{
+              top: spotlight.y,
+              left: spotlight.x + spotlight.width,
+              height: spotlight.height,
+              pointerEvents: 'auto',
+            }}
+          />
+        </>
+      )}
+      {/* Highlight ring around the target. Purely decorative —
+          `pointer-events: none` so it never intercepts. Uses --accent
+          so it reads well on both light and dark themes. Rendered
+          above the dim layer so the ring sits on top of the dim
+          around it. */}
       {targetRect && !isCentered && (
         <div
           aria-hidden
@@ -428,14 +483,6 @@ export function SpotlightTour() {
             left: spotlight.x,
             width: spotlight.width,
             height: spotlight.height,
-            /**
-             * Highlight ring — no viewport dim. Uses --accent so the
-             * target stands out against both light and dark themes,
-             * with a soft outer glow so the ring reads as focused
-             * attention rather than a hard border. The transition
-             * on the rect's top/left/width/height (globals.css)
-             * still animates between steps.
-             */
             borderRadius: 8,
             boxShadow:
               '0 0 0 2px color-mix(in oklab, var(--accent) 85%, transparent), 0 0 0 6px color-mix(in oklab, var(--accent) 22%, transparent), 0 10px 32px -8px color-mix(in oklab, var(--accent) 45%, transparent)',
