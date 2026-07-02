@@ -267,6 +267,7 @@ export function ProductSidebar() {
           onClick={onOpenAlerts}
           collapsed={collapsed}
           badgeCount={alertsBadgeCount}
+          tourId="nav-alerts"
         />
         <NavLink
           href="/app/directory"
@@ -287,6 +288,7 @@ export function ProductSidebar() {
           active={/^\/app\/(?:transactions|workflows)(\/|$)/.test(pathname)}
           collapsed={collapsed}
           badgeCount={workflowBadgeCount}
+          tourId="nav-transactions"
         />
       </nav>
 
@@ -349,6 +351,7 @@ export function ProductSidebar() {
           richer version was upgraded in the previous pass; we render
           it here so both surfaces share the same dropdown. */}
       <div
+        data-tour-id="identity-row"
         className={cn(
           'shrink-0 border-t border-[var(--border)] flex items-center',
           collapsed
@@ -400,6 +403,7 @@ function NavButton({
   active = false,
   collapsed = false,
   badgeCount,
+  tourId,
 }: {
   icon: ReactNode;
   label: string;
@@ -408,6 +412,8 @@ function NavButton({
   collapsed?: boolean;
   /** v0.5.2 — mirrors NavLink's badgeCount for the Alerts entry. */
   badgeCount?: number;
+  /** v0.5.4 — stable id for the guided-tour spotlight. */
+  tourId?: string;
 }) {
   const tonal = active
     ? 'bg-[var(--surface-2)] text-[var(--fg)] font-medium'
@@ -418,6 +424,7 @@ function NavButton({
       <button
         type="button"
         onClick={onClick}
+        data-tour-id={tourId}
         aria-current={active ? 'page' : undefined}
         aria-label={hasBadge ? `${label} (${badgeCount})` : label}
         title={label}
@@ -455,6 +462,7 @@ function NavButton({
     <button
       type="button"
       onClick={onClick}
+      data-tour-id={tourId}
       aria-current={active ? 'page' : undefined}
       aria-label={hasBadge ? `${label} (${badgeCount})` : undefined}
       className={cn(
@@ -499,6 +507,7 @@ function NavLink({
   active,
   collapsed = false,
   badgeCount,
+  tourId,
 }: {
   href: string;
   icon: ReactNode;
@@ -512,6 +521,8 @@ function NavLink({
    * signature count.
    */
   badgeCount?: number;
+  /** v0.5.4 — stable id for the guided-tour spotlight. */
+  tourId?: string;
 }) {
   const tonal = active
     ? 'bg-[var(--surface-2)] text-[var(--fg)] font-medium'
@@ -521,6 +532,7 @@ function NavLink({
     return (
       <Link
         href={href as never}
+        data-tour-id={tourId}
         aria-current={active ? 'page' : undefined}
         aria-label={hasBadge ? `${label} (${badgeCount})` : label}
         title={label}
@@ -557,6 +569,7 @@ function NavLink({
   return (
     <Link
       href={href as never}
+      data-tour-id={tourId}
       aria-current={active ? 'page' : undefined}
       aria-label={hasBadge ? `${label} (${badgeCount})` : undefined}
       className={cn(

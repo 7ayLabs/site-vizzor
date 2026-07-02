@@ -2371,6 +2371,7 @@ function LeftRail({
             onClick={onOpenAlerts}
             collapsed={collapsed}
             badgeCount={alertsBadge}
+            tourId="nav-alerts"
           />
           {/* Directory — Skills / Connectors / Plugins. Mounted here so
               the entry stays reachable from inside the predict surface
@@ -2394,6 +2395,7 @@ function LeftRail({
             onClick={onOpenWorkflows}
             collapsed={collapsed}
             badgeCount={workflowsBadge}
+            tourId="nav-transactions"
           />
         </nav>
 
@@ -2480,6 +2482,7 @@ function LeftRail({
           alignment. The `-mx` bleed lets the hairline span the full
           sidebar width despite the aside's own p-4 padding. */}
       <div
+        data-tour-id="identity-row"
         className={cn(
           'shrink-0 border-t border-[var(--border)] flex items-center',
           collapsed
@@ -2538,6 +2541,7 @@ function NavButton({
   onClick,
   collapsed = false,
   badgeCount,
+  tourId,
 }: {
   icon: ReactNode;
   label: string;
@@ -2552,6 +2556,12 @@ function NavButton({
    * expanded rail and a small accent dot in the collapsed gutter.
    */
   badgeCount?: number;
+  /**
+   * v0.5.4 — stable id for the first-time-login guided tour to
+   * spotlight this specific rail entry. See
+   * `components/onboarding/tour-steps.ts` for the catalogue.
+   */
+  tourId?: string;
 }) {
   // Common label/icon colour state — keep the icon and the text in
   // lock-step so the hover and active treatments read as a single
@@ -2570,6 +2580,7 @@ function NavButton({
       <button
         type="button"
         onClick={onClick}
+        data-tour-id={tourId}
         aria-label={hasBadge ? `${label} (${badgeCount})` : label}
         aria-current={active ? 'page' : undefined}
         title={label}
@@ -2596,6 +2607,7 @@ function NavButton({
     <button
       type="button"
       onClick={onClick}
+      data-tour-id={tourId}
       aria-current={active ? 'page' : undefined}
       aria-label={hasBadge ? `${label} (${badgeCount})` : undefined}
       className={cn(
@@ -3683,8 +3695,11 @@ function Composer({
           effect on the next message without leaving the chat. The
           trigger sits to the left of the textarea so the action surface
           reads in left-to-right order: pick context (skill/connector),
-          type, send. */}
-      <DirectoryPicker signedIn={signedIn} disabled={isStreaming} />
+          type, send. `data-tour-id="composer-topics"` is the anchor
+          for the guided-tour step that introduces this affordance. */}
+      <span data-tour-id="composer-topics" className="inline-flex">
+        <DirectoryPicker signedIn={signedIn} disabled={isStreaming} />
+      </span>
 
       {/* Token pill row — sits between the Directory picker and the
           textarea so a typed prompt visually continues from the last
@@ -3813,6 +3828,7 @@ function Composer({
         </div>
         <textarea
           ref={inputRef}
+          data-tour-id="composer-input"
           value={value}
           onChange={(e) => onChange(e.target.value.slice(0, MAX_CHARS))}
           onKeyDown={(e) => {

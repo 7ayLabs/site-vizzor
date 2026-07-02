@@ -116,6 +116,7 @@ export function CapabilityTray({
   return (
     <div
       key={trayKey}
+      data-tour-id="capability-tray"
       className={cn(
         'flex flex-wrap items-center gap-1 self-end mb-px',
         'transition-opacity duration-150',
