@@ -182,6 +182,81 @@ describe('helpers', () => {
   });
 });
 
+describe('buildCanonicalIntent — v2 payment canonical', () => {
+  it('uses vizzor.intent.v2 prefix for payment intents', () => {
+    const intent = makeIntent({
+      kind: 'payment',
+      execute_at: 1_700_003_600_000,
+      recurrence: 'once',
+    });
+    const canonical = buildCanonicalIntent(intent);
+    expect(canonical.startsWith('vizzor.intent.v2\n')).toBe(true);
+    expect(canonical).toContain('"execute_at":1700003600000');
+    expect(canonical).toContain('"recurrence":"once"');
+  });
+
+  it('keeps vizzor.intent.v1 prefix for transfer intents', () => {
+    const intent = makeIntent({ kind: 'transfer' });
+    const canonical = buildCanonicalIntent(intent);
+    expect(canonical.startsWith('vizzor.intent.v1\n')).toBe(true);
+    expect(canonical).not.toContain('execute_at');
+    expect(canonical).not.toContain('recurrence');
+  });
+
+  it('sorts payment canonical keys lexicographically', () => {
+    const intent = makeIntent({
+      kind: 'payment',
+      execute_at: 1_700_003_600_000,
+      recurrence: 'once',
+    });
+    const canonical = buildCanonicalIntent(intent);
+    const jsonStart = canonical.indexOf('\n') + 1;
+    const json = canonical.slice(jsonStart);
+    const parsed = JSON.parse(json);
+    const keys = Object.keys(parsed);
+    const sorted = [...keys].sort();
+    expect(keys).toEqual(sorted);
+  });
+
+  it('parsePendingIntent refuses transfer intents that carry execute_at', () => {
+    const raw = {
+      intent_id: 'itn_test_0123456789abcdef',
+      kind: 'transfer',
+      network: 'sol',
+      from_addr: 'AbCdEfGhIjKlMnOpQrStUvWxYzAbCdEfGhIjKlMn',
+      to_addr: 'ZyXwVuTsRqPoNmLkJiHgFeDcBaZyXwVuTsRqPoNm',
+      symbol: 'SOL',
+      amount: '0.05',
+      nonce: 'nonce_9876543210fedcba',
+      ttl_at: 1_700_000_060_000,
+      issued_at: 1_700_000_000_000,
+      execute_at: 1_700_003_600_000,
+    };
+    expect(parsePendingIntent(raw)).toBeNull();
+  });
+
+  it('parsePendingIntent accepts payment intents with execute_at + recurrence', () => {
+    const raw = {
+      intent_id: 'itn_test_0123456789abcdef',
+      kind: 'payment',
+      network: 'sol',
+      from_addr: 'AbCdEfGhIjKlMnOpQrStUvWxYzAbCdEfGhIjKlMn',
+      to_addr: 'ZyXwVuTsRqPoNmLkJiHgFeDcBaZyXwVuTsRqPoNm',
+      symbol: 'SOL',
+      amount: '0.05',
+      nonce: 'nonce_9876543210fedcba',
+      ttl_at: 1_700_000_060_000,
+      issued_at: 1_700_000_000_000,
+      execute_at: 1_700_003_600_000,
+      recurrence: 'once',
+    };
+    const parsed = parsePendingIntent(raw);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.execute_at).toBe(1_700_003_600_000);
+    expect(parsed?.recurrence).toBe('once');
+  });
+});
+
 describe('buildIntentPrimingMessages — trust-model pin', () => {
   it('returns an empty array when no intents are queued', () => {
     expect(buildIntentPrimingMessages([])).toEqual([]);
