@@ -3,11 +3,10 @@
 /**
  * TourProvider — first-time-login guided tour state + controls.
  *
- * Pattern mirrors OnboardingControlsProvider
- * (`components/app/onboarding-context.tsx`): a ref-based opener the
- * SpotlightTour registers on mount, exposed to any consumer that
- * needs to trigger the tour (Cmd+K palette, the auto-starter, a
- * future "restart tutorial" button in settings).
+ * Uses a ref-based opener the SpotlightTour registers on mount,
+ * exposed to any consumer that needs to trigger the tour (Cmd+K
+ * palette, the auto-starter, a future "restart tutorial" button in
+ * settings).
  *
  * Keeping the state machine here — rather than inside SpotlightTour
  * — means the auto-starter can drive the tour without waiting for

@@ -8,8 +8,8 @@
  *   1. `signedIn` transitions false → true (in-session, not a page-
  *      load where the user was already signed in).
  *   2. `hasCompletedTour()` returns false (no persistent flag).
- *   3. Wait `START_DELAY_MS` so the OnboardingStepper's `trial-intro`
- *      step has a chance to land + auto-dismiss without racing.
+ *   3. Wait `START_DELAY_MS` so the wallet-adapter close animation
+ *      finishes cleanly before the spotlight paints.
  *   4. If we're not on `/app/predict`, route there first — the tour
  *      steps spotlight elements that only exist on the predict shell.
  *   5. Call `useTour().open()`.
@@ -31,7 +31,11 @@ import { useAppShell } from '@/components/app/app-shell-provider';
 import { useTour } from './tour-provider';
 import { hasCompletedTour } from '@/lib/onboarding/tour-storage';
 
-const START_DELAY_MS = 1200;
+// v0.5.16 — dropped from 1200ms to 500ms after the OnboardingStepper
+// (connect → siws → trial-intro) was retired. The only thing left to
+// wait for now is the wallet-adapter modal's exit animation; 500ms is
+// enough for that on both Phantom and Solflare.
+const START_DELAY_MS = 500;
 const PREDICT_RE = /^\/(?:[a-z]{2}\/)?app\/predict(?:\/|$)/;
 const IS_DEV = process.env.NODE_ENV !== 'production';
 
