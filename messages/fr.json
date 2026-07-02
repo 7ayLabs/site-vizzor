@@ -668,7 +668,7 @@
         "alerts": "Alertes",
         "library": "Reçus",
         "libraryHint": "/precisions",
-        "receipts": "Reçus",
+        "workflows": "Flux",
         "tools": "Outils",
         "toolsHint": "/help",
         "directory": "Annuaire"
@@ -760,6 +760,67 @@
           "noResults": "Aucun résultat.",
           "cta": "Ouvrir l’annuaire pour épingler"
         }
+      }
+    },
+    "capability": {
+      "notify": {
+        "executed": "✅ Ton transfert de {amount} {symbol} est on-chain — réglé.",
+        "executedWithTx": "✅ Ton transfert de {amount} {symbol} est on-chain — réglé. Tx `{tx}`.",
+        "failed": "❌ Ton transfert de {amount} {symbol} n'a pas été réglé. {reason}",
+        "rejected": "Tu as rejeté le transfert de {amount} {symbol}. Rien n'a été envoyé.",
+        "expired": "⌛ Le transfert de {amount} {symbol} a expiré avant signature. Recommence pour réessayer."
+      }
+    },
+    "tradePlan": {
+      "label": "Plan de trade",
+      "title": "Échelle",
+      "long": "Long",
+      "short": "Short",
+      "confidence": "Confiance",
+      "close": "clôturer",
+      "levels": {
+        "entry": "Entrée",
+        "tp1": "TP1",
+        "tp2": "TP2",
+        "sl": "Stop"
+      },
+      "setAlert": "Armer",
+      "arming": "Armement…",
+      "armed": "Armé",
+      "retry": "Réessayer",
+      "openJupiter": "Jupiter",
+      "armAll": "Armer tous",
+      "proceedsTo": "Gains vers",
+      "footerHint": "Armer les alertes déclenche des notifications quand le prix croise chaque niveau.",
+      "sendWinningsTitle": "Envoyer les gains — signez pour confirmer",
+      "sendWinningsAmount": "Montant",
+      "signAndSend": "Signer et envoyer",
+      "preparing": "Préparation…"
+    },
+    "workflows": {
+      "meta": {
+        "title": "Flux · Vizzor",
+        "description": "Chaque intent de capacité que ton wallet a rédigé, groupé par conversation."
+      },
+      "eyebrow": "Flux",
+      "title": "Tes flux",
+      "body": "Chaque intent de capacité que ton wallet a rédigé, groupé par la conversation qui l'a créé. Supprimer un chat n'annule pas les flux signés — ils s'exécutent quand même ici.",
+      "empty": "Aucun flux pour l'instant. Écris un prompt avec `send` ou `pay` pour en rédiger un.",
+      "unlinked": "Intents non liés",
+      "unauthenticated": "Connecte ton wallet pour voir les flux que tu as rédigés.",
+      "activeBadge": "{count, plural, one {# actif} other {# actifs}}",
+      "status": {
+        "pending": "En attente",
+        "signed": "Signé",
+        "executed": "Exécuté",
+        "failed": "Échoué",
+        "expired": "Expiré"
+      },
+      "deleteGuard": {
+        "title": "Le chat a des flux actifs",
+        "body": "Ce chat a {count, plural, one {# flux actif} other {# flux actifs}}. Le supprimer efface l'historique ; les flux signés s'exécuteront quand même on-chain.",
+        "confirm": "Supprimer quand même",
+        "cancel": "Garder le chat"
       }
     },
     "settings": {
