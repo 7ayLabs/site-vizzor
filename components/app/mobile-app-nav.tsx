@@ -99,6 +99,18 @@ export function MobileAppNav() {
     setOpen(false);
   }, [pathname]);
 
+  // v0.5.21 — the guided tour opens the drawer as part of its mobile
+  // flow (see `mobile-menu` step in tour-steps.ts) so it can spotlight
+  // the Alertas / Transacciones / Identity items inside. On finish
+  // (or skip), the SpotlightTour dispatches `vizzor-tour-finished`;
+  // we listen here and snap the drawer shut so the user isn't left
+  // staring at an open drawer after the walkthrough completes.
+  useEffect(() => {
+    const onFinished = () => setOpen(false);
+    window.addEventListener('vizzor-tour-finished', onFinished);
+    return () => window.removeEventListener('vizzor-tour-finished', onFinished);
+  }, []);
+
   // Predict owns its own mobile nav. Bailing here keeps the layout free
   // of a duplicate topbar on /app/predict.
   if (SUPPRESS_RE.test(pathname)) return null;

@@ -228,6 +228,17 @@ export function PredictShell({ initialConversation }: PredictShellProps = {}) {
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((v) => !v);
   }, []);
+  // v0.5.21 — the guided tour opens this drawer during its mobile
+  // flow (the `mobile-menu` step requires the user to tap the
+  // hamburger before the sidebar-nav steps can spotlight anchors
+  // inside the drawer). On tour finish or skip, the SpotlightTour
+  // dispatches `vizzor-tour-finished`; snap the drawer shut so the
+  // user isn't left staring at an open panel.
+  useEffect(() => {
+    const onFinished = () => setDrawerOpen(false);
+    window.addEventListener('vizzor-tour-finished', onFinished);
+    return () => window.removeEventListener('vizzor-tour-finished', onFinished);
+  }, []);
   const threadRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 

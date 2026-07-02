@@ -121,27 +121,25 @@ export const TOUR_STEPS: readonly TourStep[] = [
     targetSelector: '[data-tour-id="nav-alerts"]',
     placement: 'right',
     /**
-     * mobileFallback: the anchor lives inside the mobile drawer
-     * (LeftRail is remounted there on /app/predict). If the user
-     * hasn't opened the drawer yet when they hit Next, we render
-     * a centered callout so the tour keeps moving instead of
-     * stalling on a missing target.
+     * v0.5.21 — dropped `mobileFallback: 'centered'`. The mobile-
+     * menu step above forces the drawer open (requiresClick), so
+     * by the time we land here the DrawerLink with the matching
+     * `data-tour-id` anchor is mounted and visible. Falling back
+     * to centered mode was suppressing the spotlight cutout on
+     * mobile, leaving the drawer items uniformly dim.
      */
-    mobileFallback: 'centered',
     i18nKey: 'navAlerts',
   },
   {
     id: 'nav-transactions',
     targetSelector: '[data-tour-id="nav-transactions"]',
     placement: 'right',
-    mobileFallback: 'centered',
     i18nKey: 'navTransactions',
   },
   {
     id: 'identity',
     targetSelector: '[data-tour-id="identity-row"]',
     placement: 'right',
-    mobileFallback: 'centered',
     i18nKey: 'identity',
   },
   {

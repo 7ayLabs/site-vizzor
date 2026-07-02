@@ -236,6 +236,13 @@ export function SpotlightTour() {
   const onFinish = useCallback(() => {
     markTourCompleted();
     close();
+    // v0.5.21 — broadcast finish so peer surfaces can react. The
+    // mobile drawer listens for this and closes itself, since the
+    // tour leaves the drawer open after walking the user through
+    // the nav items inside it.
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('vizzor-tour-finished'));
+    }
   }, [close]);
 
   const onNextClick = useCallback(() => {
