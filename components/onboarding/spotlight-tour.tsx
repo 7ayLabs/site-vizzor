@@ -232,6 +232,50 @@ export function SpotlightTour() {
     return () => cancelAnimationFrame(raf);
   }, [isOpen, clampedIndex]);
 
+  // v0.5.10 — `showSwipeHint` steps: animate a horizontal scroll on
+  // the target's scrollable child so the user notices the target is
+  // a scrollable strip (the topic carousel). Way more explicit than
+  // an abstract pointer sliding across the spotlight — the user sees
+  // the ETH / GRAM / SOL chips actually move in the strip.
+  useEffect(() => {
+    if (!isOpen || !step?.showSwipeHint || !step.targetSelector) return;
+    const el = document.querySelector<HTMLElement>(step.targetSelector);
+    if (!el) return;
+    // The scrollable child. Falls back to the target itself when the
+    // target IS the scroll container.
+    const scroller =
+      el.querySelector<HTMLElement>('[data-tour-scroll], ul, .overflow-x-auto') ??
+      el;
+    if (
+      !scroller ||
+      scroller.scrollWidth <= scroller.clientWidth + 4
+    ) {
+      return;
+    }
+    const savedScroll = scroller.scrollLeft;
+    const targetScroll = Math.min(
+      scroller.scrollWidth - scroller.clientWidth,
+      savedScroll + Math.max(120, scroller.clientWidth * 0.4),
+    );
+    let cancelled = false;
+    const runOnce = () => {
+      if (cancelled) return;
+      scroller.scrollTo({ left: targetScroll, behavior: 'smooth' });
+      window.setTimeout(() => {
+        if (cancelled) return;
+        scroller.scrollTo({ left: savedScroll, behavior: 'smooth' });
+      }, 1400);
+    };
+    const first = window.setTimeout(runOnce, 400);
+    const loop = window.setInterval(runOnce, 3600);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(first);
+      window.clearInterval(loop);
+      scroller.scrollTo({ left: savedScroll, behavior: 'auto' });
+    };
+  }, [isOpen, step]);
+
   // v0.5.8 — `requiresClick` steps: advance the tour only when the
   // user actually clicks the target element. This is the gate for
   // the mobile-menu step so we can't skip past a closed drawer.
@@ -309,6 +353,13 @@ export function SpotlightTour() {
       aria-modal="true"
       aria-labelledby="vz-tour-title"
       className="fixed inset-0 z-[90] motion-safe:vz-spotlight-mask-in"
+      /**
+       * v0.5.10 — pointer-events: none on the wrapper so clicks land
+       * on the element beneath (the hamburger for the mobile-menu
+       * step, etc.). The callout below sets pointer-events: auto so
+       * Skip / Back / Next / Escape stay interactive.
+       */
+      style={{ pointerEvents: 'none' }}
     >
       {/* SVG spotlight backdrop.
           v0.5.8 pointer-events: none — clicks pass THROUGH the
@@ -375,27 +426,10 @@ export function SpotlightTour() {
             strokeWidth={1.5}
           />
         )}
-        {/* Swipe-hint pointer — a small circle that slides across
-            the width of the spotlight. Positioned via cx/cy SVG
-            attributes; animation is a CSS `transform: translateX`.
-            Same theme-agnostic white as the outline so it's visible
-            on the dark backdrop regardless of light/dark mode. */}
-        {targetRect && !isCentered && step.showSwipeHint && (
-          <circle
-            className="vz-tour-swipe-hint"
-            cx={spotlight.x + 14}
-            cy={spotlight.y + spotlight.height / 2}
-            r={7}
-            fill="rgba(255, 255, 255, 0.22)"
-            stroke="rgba(255, 255, 255, 0.55)"
-            strokeWidth={1.2}
-            style={
-              {
-                ['--swipe-distance']: `${Math.max(0, spotlight.width - 28)}px`,
-              } as React.CSSProperties
-            }
-          />
-        )}
+        {/* v0.5.10 — SVG swipe pointer removed. The `showSwipeHint`
+            flag now drives a real horizontal scroll on the carousel
+            itself (see useEffect below), which is more explicit than
+            an abstract circle sliding across the spotlight. */}
       </svg>
 
       {/* Callout card — flat, no glow, no accent stripe. Restraint
@@ -411,6 +445,9 @@ export function SpotlightTour() {
           maxWidth: viewport.w - CALLOUT_MARGIN * 2,
           maxHeight: viewport.h - CALLOUT_MARGIN * 2,
           overflowY: 'auto',
+          // v0.5.10 — buttons + text inside the callout stay clickable
+          // even though the wrapper is pointer-events: none.
+          pointerEvents: 'auto',
         }}
         className={cn(
           'vz-tour-callout',
@@ -472,12 +509,9 @@ export function SpotlightTour() {
               />
             ))}
           </div>
-          <div className="mt-1 flex items-center justify-between">
+          <div className="mt-1 flex items-center">
             <span className="mono tabular text-[9px] uppercase tracking-[0.22em] text-[var(--fg-3)]">
               {progressPct.toFixed(0)}%
-            </span>
-            <span className="mono tabular text-[9.5px] uppercase tracking-[0.24em] text-[var(--fg-3)]">
-              {step.id}
             </span>
           </div>
 

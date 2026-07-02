@@ -1081,22 +1081,11 @@
      Kept these anchor comments so the git history is easy to
      follow if the ring ever needs to come back. */
 
-  /* v0.5.9 — swipe pointer for the carousel step. Slides
-     horizontally across the width of the spotlight so the user
-     notices the target is a scrollable strip. `--swipe-distance`
-     is set inline (spotlight width minus padding) so the pointer
-     travels the correct distance for any target size. Minimalist
-     visuals: fg-toned circle, no accent shine, subtle fade at
-     both ends. */
-  .vz-tour-swipe-hint {
-    animation: vz-tour-swipe 2400ms cubic-bezier(0.4, 0.1, 0.4, 1) infinite;
-  }
-  @keyframes vz-tour-swipe {
-    0%   { transform: translateX(0);                             opacity: 0;   }
-    15%  { transform: translateX(0);                             opacity: 0.7; }
-    85%  { transform: translateX(var(--swipe-distance, 200px));  opacity: 0.7; }
-    100% { transform: translateX(var(--swipe-distance, 200px));  opacity: 0;   }
-  }
+  /* v0.5.10 — swipe hint CSS removed. The carousel step now
+     animates the real scrollable child via
+     `scrollTo({ behavior: 'smooth' })` in SpotlightTour, which
+     reads clearer than an abstract circle sliding across the
+     spotlight overlay. */
 
   /* v0.5.8 — "Tap to continue" hint pulsing text on requires-click
      steps. Quieter than the spotlight ring — the eye should go to
