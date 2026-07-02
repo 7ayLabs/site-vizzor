@@ -894,24 +894,24 @@
       "stepIndicator": "Step {index} of {total}",
       "steps": {
         "welcome": {
-          "title": "Hey — welcome to Vizzor 👋",
-          "body": "60-second tour. I'll show you what your wallet can do here so nothing stays hidden ✨"
+          "title": "Welcome to Vizzor 🚀",
+          "body": "60 seconds. I'll show you how your wallet fires on-chain actions here. No friction."
         },
         "composer": {
-          "title": "Ask literally anything 💬",
-          "body": "Drop any crypto question — predictions, on-chain state, market vibes, ETF flows, macro takes. I answer and cite my sources. No cap."
+          "title": "Ask anything 💬",
+          "body": "Drop any crypto question — predict a move, mention a ticker, or query market state."
         },
         "topics": {
-          "title": "Skills, connectors, integrations 🧠",
-          "body": "Pop this open to activate a Skill (reasoning mode like Solana-native or Prediction-markets), plug in a Connector (Discord, Telegram, Nostr, Farcaster…), or wire a partner integration that shapes how I reply."
+          "title": "Skills & Connectors 🧠",
+          "body": "Activate a reasoning mode or plug in an external source to sharpen my replies."
         },
         "carousel": {
-          "title": "Pick a token 🎯",
-          "body": "Tap any chip — BTC, SOL, or a topic like ETF flows. That's what unlocks the send / pay icons 💸"
+          "title": "Focus on a token 🎯",
+          "body": "Tap a chip to focus on a token or topic. Each one carries live context — price, delta, momentum."
         },
         "navAlerts": {
-          "title": "Price alerts 🔔",
-          "body": "Set targets here. A badge lights up the moment one triggers — from any page you're on."
+          "title": "Alerts panel 🔔",
+          "body": "Every alert you've armed lives here — price, volume, on-chain events."
         },
         "navTransactions": {
           "title": "Every transaction 📊",
@@ -922,12 +922,8 @@
           "body": "Vizzor never touches funds without a signature. Sign out whenever — your history stays with your wallet."
         },
         "mobileMenu": {
-          "title": "Everything else lives here 📱",
-          "body": "Tap the hamburger any time to reach Alerts, Transactions, Directory, and your wallet identity."
-        },
-        "mobileActions": {
-          "title": "What's inside the menu 🎛️",
-          "body": "Alerts pings you when prices hit your targets. Transactions = your on-chain receipt log. Directory holds Skills, Connectors, and integrations. Your wallet identity is at the bottom — one tap to sign out."
+          "title": "Open the menu 📱",
+          "body": "Tap the ☰ icon at the top-left to open the drawer. Then hit Next — I'll walk you through what's inside."
         },
         "done": {
           "title": "You're set ✨",

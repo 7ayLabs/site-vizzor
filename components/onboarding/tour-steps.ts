@@ -76,27 +76,16 @@ export const TOUR_STEPS: readonly TourStep[] = [
     placement: 'top',
     i18nKey: 'carousel',
   },
-  {
-    id: 'nav-alerts',
-    targetSelector: '[data-tour-id="nav-alerts"]',
-    placement: 'right',
-    desktopOnly: true,
-    i18nKey: 'navAlerts',
-  },
-  {
-    id: 'nav-transactions',
-    targetSelector: '[data-tour-id="nav-transactions"]',
-    placement: 'right',
-    desktopOnly: true,
-    i18nKey: 'navTransactions',
-  },
-  {
-    id: 'identity',
-    targetSelector: '[data-tour-id="identity-row"]',
-    placement: 'right',
-    desktopOnly: true,
-    i18nKey: 'identity',
-  },
+  /**
+   * v0.5.8 — the `mobile-menu` step sits BEFORE the sidebar steps
+   * on mobile. It's an explicit instruction to open the drawer;
+   * once the user taps ☰, the same `data-tour-id` anchors that
+   * live on the desktop LeftRail are exposed INSIDE the drawer
+   * (predict-shell mounts LeftRail as the drawer body), so the
+   * subsequent nav-alerts / nav-transactions / identity steps
+   * point at the same elements with the same text as desktop.
+   * That's the "iOS oriented, same text" ask from user testing.
+   */
   {
     id: 'mobile-menu',
     targetSelector: '[data-tour-id="mobile-menu-trigger"]',
@@ -105,15 +94,32 @@ export const TOUR_STEPS: readonly TourStep[] = [
     i18nKey: 'mobileMenu',
   },
   {
-    id: 'mobile-actions',
+    id: 'nav-alerts',
+    targetSelector: '[data-tour-id="nav-alerts"]',
+    placement: 'right',
     /**
-     * Second mobile-only step, unanchored. After the previous step
-     * points at the hamburger, this one narrates what lives inside:
-     * Alerts, Transactions, Identity. Rendered centered so the user
-     * can absorb the summary before opening the drawer themselves.
+     * mobileFallback: the anchor lives inside the mobile drawer
+     * (LeftRail is remounted there on /app/predict). If the user
+     * hasn't opened the drawer yet when they hit Next, we render
+     * a centered callout so the tour keeps moving instead of
+     * stalling on a missing target.
      */
-    mobileOnly: true,
-    i18nKey: 'mobileActions',
+    mobileFallback: 'centered',
+    i18nKey: 'navAlerts',
+  },
+  {
+    id: 'nav-transactions',
+    targetSelector: '[data-tour-id="nav-transactions"]',
+    placement: 'right',
+    mobileFallback: 'centered',
+    i18nKey: 'navTransactions',
+  },
+  {
+    id: 'identity',
+    targetSelector: '[data-tour-id="identity-row"]',
+    placement: 'right',
+    mobileFallback: 'centered',
+    i18nKey: 'identity',
   },
   {
     id: 'done',

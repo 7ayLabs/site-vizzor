@@ -894,24 +894,24 @@
       "stepIndicator": "Paso {index} de {total}",
       "steps": {
         "welcome": {
-          "title": "¡Ey! Bienvenido a Vizzor 👋",
-          "body": "Un minuto y te enseño todo lo que tu wallet puede hacer aquí. Sin misterios ✨"
+          "title": "Bienvenido a Vizzor 🚀",
+          "body": "60 segundos. Te enseño cómo tu wallet dispara acciones on-chain aquí. Sin friction."
         },
         "composer": {
-          "title": "Pregúntame lo que sea 💬",
-          "body": "Escribe cualquier duda cripto — predice movimientos, menciona un ticker, redacta una consulta sobre estado on-chain, ETF flows o vibras de mercado. Contesto y cito mis fuentes."
+          "title": "Pregunta lo que quieras 💬",
+          "body": "Escribe cualquier consulta cripto — predice movimientos, menciona un ticker, o pregunta sobre estado de mercado."
         },
         "topics": {
-          "title": "Skills, connectors, integraciones 🧠",
-          "body": "Abre esto para activar una Skill (un modo de razonar como Solana-native o Prediction-markets), enchufar un Connector (Discord, Telegram, Nostr, Farcaster…) o cablear una integración de un partner que le dé forma a mis respuestas."
+          "title": "Skills y Connectors 🧠",
+          "body": "Activa un modo de razonamiento o enchufa una fuente externa para afinar mis respuestas."
         },
         "carousel": {
-          "title": "Elige un token 🎯",
-          "body": "Toca cualquier chip para activar un token — BTC, SOL, o un tema como ETF flows. Eso desbloquea los íconos de send / pay 💸"
+          "title": "Enfoca en un token 🎯",
+          "body": "Toca un chip para enfocar en un token o tema. Cada uno carga contexto en vivo — precio, delta, momentum."
         },
         "navAlerts": {
-          "title": "Alertas de precio 🔔",
-          "body": "Configura objetivos aquí. Se prende un badge apenas se dispara uno — desde cualquier página."
+          "title": "Panel de alertas 🔔",
+          "body": "Todas las alertas que has armado viven aquí — precio, volumen, eventos on-chain."
         },
         "navTransactions": {
           "title": "Todas tus transacciones 📊",
@@ -922,12 +922,8 @@
           "body": "Vizzor nunca toca fondos sin firma. Cierra sesión cuando quieras — tu historial se queda con tu wallet."
         },
         "mobileMenu": {
-          "title": "Todo lo demás está aquí 📱",
-          "body": "Toca el menú cuando quieras para llegar a Alertas, Transacciones, Directorio y tu identidad de wallet."
-        },
-        "mobileActions": {
-          "title": "Qué hay dentro del menú 🎛️",
-          "body": "Alertas te avisa cuando el precio pega tus objetivos. Transacciones es el log de recibos on-chain. Directorio tiene Skills, Connectors e integraciones. Tu identidad de wallet queda al pie — un toque para cerrar sesión."
+          "title": "Abre el menú 📱",
+          "body": "Toca el ícono ☰ arriba a la izquierda para abrir el drawer. Luego dale Siguiente — te muestro lo que hay adentro."
         },
         "done": {
           "title": "Listo ✨",

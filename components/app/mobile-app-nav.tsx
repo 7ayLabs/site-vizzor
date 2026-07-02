@@ -275,6 +275,7 @@ export function MobileAppNav() {
                 icon={<IconBell size={17} />}
                 label={t('shell.nav.alerts')}
                 active={onAlertsActive}
+                tourId="nav-alerts"
               />
               <DrawerLink
                 href="/app/directory"
@@ -287,6 +288,7 @@ export function MobileAppNav() {
                 icon={<ArrowLeftRight size={17} strokeWidth={1.7} />}
                 label={t('shell.nav.transactions')}
                 active={onTransactionsActive}
+                tourId="nav-transactions"
               />
             </nav>
 
@@ -345,7 +347,10 @@ export function MobileAppNav() {
                 on the row, which routes to /app/account. Uses -mx-4
                 to bleed the border-top to the drawer edges the same
                 way predict-shell's LeftRail does. */}
-            <div className="mt-auto px-4 py-3 border-t border-[var(--border)]">
+            <div
+              data-tour-id="identity-row"
+              className="mt-auto px-4 py-3 border-t border-[var(--border)]"
+            >
               <Link
                 href="/app/account"
                 className="flex items-center gap-2.5 rounded-md px-2 py-2 hover:bg-[var(--surface-2)] transition-colors"
@@ -386,15 +391,19 @@ function DrawerLink({
   icon,
   label,
   active,
+  tourId,
 }: {
   href: string;
   icon: ReactNode;
   label: string;
   active: boolean;
+  /** v0.5.8 — guided tour spotlight anchor. */
+  tourId?: string;
 }) {
   return (
     <Link
       href={href as never}
+      data-tour-id={tourId}
       aria-current={active ? 'page' : undefined}
       className={cn(
         'group w-full flex items-center gap-2.5 text-left',
