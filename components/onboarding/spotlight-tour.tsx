@@ -411,26 +411,13 @@ export function SpotlightTour() {
           user sees what to click; the extra ring rect below adds
           a visible pulsing border so the target reads as "focused"
           rather than dim (user feedback on the Skills step). */}
-      {/* v0.5.11 — dim backdrop layer. Full-screen fixed div at the
-          same z-index as the spotlight hole, but rendered UNDER it
-          (earlier in the source order). Pointer-transparent so
-          clicks pass through to the page beneath. */}
-      {(!targetRect || isCentered) && (
-        <div
-          aria-hidden
-          className="fixed inset-0 vz-spotlight-full-dim"
-          style={{ pointerEvents: 'none' }}
-        />
-      )}
-      {/* Spotlight cutout using the box-shadow trick — a transparent
-          rounded rect at the target's position with a massive
-          rgba-black shadow. The shadow spreads across the entire
-          viewport, dimming everything except the rect itself. This
-          replaces the SVG <mask> approach because certain
-          browser/theme combos silently dropped the mask's cutout
-          rect, leaving the whole page uniformly dim (Skills step
-          screenshot). box-shadow is universally supported and
-          animates smoothly via CSS transitions. */}
+      {/* v0.5.17 — full-screen dim + viewport-wide box-shadow both
+          retired. The tour now leaves the page fully visible and
+          fully interactive: users can browse, click, and read the
+          rest of the app while the callout is on-screen. Only the
+          target gets a highlight ring so the eye still tracks the
+          step, and centered steps (welcome / done) just float the
+          callout with no backdrop at all. */}
       {targetRect && !isCentered && (
         <div
           aria-hidden
@@ -442,18 +429,17 @@ export function SpotlightTour() {
             width: spotlight.width,
             height: spotlight.height,
             /**
-             * v0.5.12 — tighter + calmer per user feedback.
-             * borderRadius 12 → 8 (less rounded, reads as a system
-             * spotlight rather than a soft chip). Outline 1.5px →
-             * 1px @ 0.22 opacity (was 0.32) so the boundary is
-             * present but not shouting. Padding was already dropped
-             * from 10 → 6 above so the cutout hugs the target
-             * without empty gutters around it.
+             * Highlight ring — no viewport dim. Uses --accent so the
+             * target stands out against both light and dark themes,
+             * with a soft outer glow so the ring reads as focused
+             * attention rather than a hard border. The transition
+             * on the rect's top/left/width/height (globals.css)
+             * still animates between steps.
              */
             borderRadius: 8,
-            boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.68)',
-            outline: '1px solid rgba(255, 255, 255, 0.22)',
-            outlineOffset: 0,
+            boxShadow:
+              '0 0 0 2px color-mix(in oklab, var(--accent) 85%, transparent), 0 0 0 6px color-mix(in oklab, var(--accent) 22%, transparent), 0 10px 32px -8px color-mix(in oklab, var(--accent) 45%, transparent)',
+            outline: 'none',
             pointerEvents: 'none',
           }}
         />
@@ -481,6 +467,12 @@ export function SpotlightTour() {
           'rounded-xl',
           'bg-[var(--surface)]',
           'border border-[var(--border)]',
+          // v0.5.17 — depth shadow now that the viewport dim is gone.
+          // Without a backdrop, the callout would otherwise blend into
+          // whatever content sits behind it. A soft ambient shadow
+          // reads as "system dialog floating above the page" without
+          // the vibecoded glow feel.
+          'shadow-[0_20px_48px_-16px_rgba(0,0,0,0.35),0_2px_8px_-2px_rgba(0,0,0,0.2)]',
           'focus:outline-none',
           'motion-safe:vz-tour-callout-in',
         )}
