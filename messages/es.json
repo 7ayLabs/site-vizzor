@@ -896,7 +896,7 @@
       "steps": {
         "welcome": {
           "title": "Bienvenido a Vizzor 🚀",
-          "body": "60 segundos. Te enseño cómo tu wallet dispara acciones on-chain aquí. Sin friction."
+          "body": "Te muestro cómo tu wallet dispara acciones on-chain aquí. Directo al punto."
         },
         "composer": {
           "title": "Pregunta lo que quieras 💬",
@@ -904,7 +904,7 @@
         },
         "topics": {
           "title": "Skills y Connectors 🧠",
-          "body": "Activa un modo de razonamiento o enchufa una fuente externa para afinar mis respuestas."
+          "body": "Activa un modo de razonamiento o conecta una fuente externa para mejorar mis respuestas."
         },
         "carousel": {
           "title": "Enfoca en un token 🎯",
