@@ -41,9 +41,11 @@ import {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
+import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CoinIcon } from '@/components/ui/coin-icon';
 import { useTour } from './tour-provider';
 import { stepsFor, type TourStep } from './tour-steps';
 import { markTourCompleted } from '@/lib/onboarding/tour-storage';
@@ -436,35 +438,59 @@ export function SpotlightTour() {
         )}
       >
         <div ref={contentRef} className="vz-tour-content-in p-5">
-          {/* Header row — title on the left, close (X) on the right.
-              Matches the reference designs: no mono step-indicator,
-              just the copy and the dismiss affordance. */}
-          <div className="flex items-start justify-between gap-3">
-            <h2
-              id="vz-tour-title"
-              className="text-[16px] font-semibold tracking-tight text-[var(--fg)] leading-tight break-words"
-            >
-              {stepTitle}
-            </h2>
-            <button
-              type="button"
-              onClick={onFinish}
-              aria-label={t('skip')}
-              className={cn(
-                'shrink-0 inline-flex items-center justify-center h-7 w-7 -mt-1 -mr-1 rounded-full',
-                'text-[var(--fg-3)] hover:text-[var(--fg)]',
-                'hover:bg-[color-mix(in_oklab,var(--fg)_6%,transparent)]',
-                'transition-colors',
-              )}
-            >
-              <X size={16} strokeWidth={2} aria-hidden />
-            </button>
-          </div>
+          {/* X close — top-right, absolute so it stays anchored even
+              on the welcome step where the header content is
+              centered instead of left-aligned. */}
+          <button
+            type="button"
+            onClick={onFinish}
+            aria-label={t('skip')}
+            className={cn(
+              'absolute top-3 right-3 z-[1]',
+              'inline-flex items-center justify-center h-7 w-7 rounded-full',
+              'text-[var(--fg-3)] hover:text-[var(--fg)]',
+              'hover:bg-[color-mix(in_oklab,var(--fg)_6%,transparent)]',
+              'transition-colors',
+            )}
+          >
+            <X size={16} strokeWidth={2} aria-hidden />
+          </button>
 
-          {/* Body copy — regular weight, comfortable reading size. */}
-          <p className="mt-2 text-[13.5px] leading-relaxed text-[var(--fg-2)] break-words">
-            {stepBody}
-          </p>
+          {step.id === 'welcome' ? (
+            /* Welcome layout — center-aligned hero with overlapping
+               icon row on top, then title + body. Matches the
+               reference (image 127): "Welcome to Zipmex!" +
+               ETH/BTC/… icons stack. Ours uses Vizzor + the four
+               native chain / topic chips (BTC, ETH, SOL, GRAM). */
+            <div className="flex flex-col items-center text-center">
+              <WelcomeIconRow />
+              <h2
+                id="vz-tour-title"
+                className="mt-4 text-[18px] font-semibold tracking-tight text-[var(--fg)] leading-tight break-words"
+              >
+                {stepTitle}
+              </h2>
+              <p className="mt-2 max-w-[42ch] text-[13.5px] leading-relaxed text-[var(--fg-2)] break-words">
+                {stepBody}
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Header row — title on the left, X sits absolute in
+                  the top-right (rendered above). */}
+              <div className="flex items-start pr-9">
+                <h2
+                  id="vz-tour-title"
+                  className="text-[16px] font-semibold tracking-tight text-[var(--fg)] leading-tight break-words"
+                >
+                  {stepTitle}
+                </h2>
+              </div>
+              <p className="mt-2 text-[13.5px] leading-relaxed text-[var(--fg-2)] break-words">
+                {stepBody}
+              </p>
+            </>
+          )}
 
           {/* Footer row — page-indicator dots on the left, primary
               action on the right. Structure mirrors the reference
@@ -489,16 +515,20 @@ export function SpotlightTour() {
                   ←
                 </button>
               )}
+              {/* Page-indicator dots — all the same size to match the
+                  reference (image 126). Active dot: solid `--fg`.
+                  Inactive dots: faded (`--fg` 18%). No shape change
+                  between states, just color. */}
               <div className="flex items-center gap-1.5">
                 {Array.from({ length: total }).map((_, i) => (
                   <span
                     key={i}
                     aria-hidden
                     className={cn(
-                      'h-1.5 rounded-full transition-all duration-300',
+                      'h-1.5 w-1.5 rounded-full transition-colors duration-300',
                       i === clampedIndex
-                        ? 'w-4 bg-[var(--fg)]'
-                        : 'w-1.5 bg-[color-mix(in_oklab,var(--fg)_18%,transparent)]',
+                        ? 'bg-[var(--fg)]'
+                        : 'bg-[color-mix(in_oklab,var(--fg)_18%,transparent)]',
                     )}
                   />
                 ))}
@@ -738,4 +768,63 @@ function clamp(v: number, lo: number, hi: number): number {
   if (v < lo) return lo;
   if (v > hi) return hi;
   return v;
+}
+
+/**
+ * WelcomeIconRow — horizontal row of overlapping icons on the tour
+ * welcome step. Matches the reference (image 127) where a stack of
+ * partner-logo circles sits above the "Welcome to …" title.
+ *
+ * Composition: Vizzor mark on the left, then BTC, ETH, SOL, GRAM
+ * — the four native chain / topic pills the wallet works with in
+ * this cut. Each icon sits inside a white ring so overlapping
+ * neighbors read as separate coins rather than blending.
+ */
+function WelcomeIconRow() {
+  const icons: Array<{ key: string; content: React.ReactNode }> = [
+    {
+      key: 'vizzor',
+      content: (
+        <span
+          aria-hidden
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--fg)]"
+        >
+          <Image
+            src="/brand/vizzor_icon.png"
+            alt=""
+            width={30}
+            height={30}
+            className="hidden dark:block h-5 w-auto"
+          />
+          <Image
+            src="/brand/vizzor_darkicon.png"
+            alt=""
+            width={30}
+            height={30}
+            className="block dark:hidden h-5 w-auto"
+            style={{ filter: 'invert(1)' }}
+          />
+        </span>
+      ),
+    },
+    { key: 'btc', content: <CoinIcon symbol="BTC" size={32} /> },
+    { key: 'eth', content: <CoinIcon symbol="ETH" size={32} /> },
+    { key: 'sol', content: <CoinIcon symbol="SOL" size={32} /> },
+    { key: 'gram', content: <CoinIcon symbol="GRAM" size={32} /> },
+  ];
+  return (
+    <div aria-hidden className="flex items-center -space-x-2">
+      {icons.map((icon) => (
+        <span
+          key={icon.key}
+          className={cn(
+            'inline-flex h-8 w-8 items-center justify-center rounded-full',
+            'ring-2 ring-[var(--surface)] bg-[var(--surface)]',
+          )}
+        >
+          {icon.content}
+        </span>
+      ))}
+    </div>
+  );
 }
