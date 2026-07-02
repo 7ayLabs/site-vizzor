@@ -894,28 +894,24 @@
       "stepIndicator": "Step {index} of {total}",
       "steps": {
         "welcome": {
-          "title": "Welcome to Vizzor",
-          "body": "One-minute tour. I'll point out what your wallet can do here so you know where every action lives."
+          "title": "Hey — welcome to Vizzor",
+          "body": "Sixty-second tour. I'll walk you through what your wallet can do here so nothing feels hidden."
         },
         "composer": {
           "title": "Ask anything",
-          "body": "Type any crypto question here — predictions, on-chain state, market color. I answer and cite my sources."
+          "body": "Type any crypto question — predictions, on-chain state, market color. I answer and cite my sources."
         },
         "topics": {
-          "title": "Focus the answer",
-          "body": "Add a token or a skill from here to scope my reply. Great for narrowing a broad question."
-        },
-        "carousel": {
-          "title": "Pick a token",
-          "body": "Click a chip to activate a ticker. In-chat actions like send and pay unlock the moment a token is armed."
+          "title": "Skills, connectors, integrations",
+          "body": "Open this to activate a Skill (a reasoning mode like Solana-native or Prediction-markets), plug in a Connector (Discord, Telegram, Nostr, Farcaster…), or wire a third-party integration that shapes how I answer."
         },
         "tray": {
           "title": "Draft on-chain actions",
-          "body": "When a token is active, use these to draft a transfer or schedule a payment. Nothing signs without your wallet's approval."
+          "body": "Once a token is active, these icons let you draft a transfer or schedule a payment. Nothing signs without your wallet approving it explicitly."
         },
         "navAlerts": {
           "title": "Price alerts",
-          "body": "Set targets here. You'll get a badge the moment one triggers — on any page you're on."
+          "body": "Set targets here. A badge lights up the moment one triggers — from any page you're on."
         },
         "navTransactions": {
           "title": "Every transaction",
@@ -925,9 +921,17 @@
           "title": "Your wallet, your control",
           "body": "Vizzor never touches funds without a signature. Sign out any time — your history stays with your wallet."
         },
+        "mobileMenu": {
+          "title": "Everything else is in here",
+          "body": "Tap the hamburger any time to reach Alerts, Transactions, Directory, and your wallet identity."
+        },
+        "mobileActions": {
+          "title": "What lives in the menu",
+          "body": "Alerts fire notifications when prices hit your targets. Transactions is your on-chain receipt log. Directory holds Skills, Connectors, and integrations. Your wallet identity sits at the bottom — one tap to sign out."
+        },
         "done": {
           "title": "You're ready",
-          "body": "Ask anything, arm an alert, or draft a payment. Open Cmd+K to re-run this tour any time."
+          "body": "Ask anything, arm an alert, or draft a payment. Open Cmd+K → \"Show tour\" to replay this any time."
         }
       }
     },

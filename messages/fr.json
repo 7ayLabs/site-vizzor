@@ -784,27 +784,23 @@
       "steps": {
         "welcome": {
           "title": "Bienvenue sur Vizzor",
-          "body": "Tour d'une minute. Je te montre ce que ton wallet peut faire ici, pour que tu saches où vit chaque action."
+          "body": "Soixante secondes. Je te montre ce que ton wallet peut faire ici pour que rien ne reste caché."
         },
         "composer": {
           "title": "Demande n'importe quoi",
           "body": "Tape n'importe quelle question crypto — prédictions, état on-chain, contexte marché. Je réponds et je cite mes sources."
         },
         "topics": {
-          "title": "Cible la réponse",
-          "body": "Ajoute un token ou une skill depuis ici pour cadrer ma réponse. Idéal pour préciser une question large."
-        },
-        "carousel": {
-          "title": "Choisis un token",
-          "body": "Touche un chip pour activer un ticker. Les actions en chat comme send et pay se débloquent dès qu'un token est armé."
+          "title": "Skills, connecteurs, intégrations",
+          "body": "Ouvre ceci pour activer une Skill (un mode de raisonnement comme Solana-native ou Prediction-markets), brancher un Connecteur (Discord, Telegram, Nostr, Farcaster…), ou câbler une intégration tierce qui module mes réponses."
         },
         "tray": {
           "title": "Prépare des actions on-chain",
-          "body": "Quand un token est actif, utilise ces icônes pour préparer un transfert ou programmer un paiement. Rien ne se signe sans ton approbation dans le wallet."
+          "body": "Avec un token actif, ces icônes te laissent préparer un transfert ou programmer un paiement. Rien ne se signe sans une approbation explicite dans ton wallet."
         },
         "navAlerts": {
           "title": "Alertes de prix",
-          "body": "Définis des objectifs ici. Tu verras un badge dès qu'une se déclenche — depuis n'importe quelle page."
+          "body": "Définis des objectifs ici. Un badge s'allume dès qu'une se déclenche — depuis n'importe quelle page."
         },
         "navTransactions": {
           "title": "Toutes tes transactions",
@@ -812,11 +808,19 @@
         },
         "identity": {
           "title": "Ton wallet, ton contrôle",
-          "body": "Vizzor ne touche jamais aux fonds sans signature. Tu peux te déconnecter quand tu veux — ton historique reste avec ton wallet."
+          "body": "Vizzor ne touche jamais aux fonds sans signature. Déconnecte-toi quand tu veux — ton historique reste avec ton wallet."
+        },
+        "mobileMenu": {
+          "title": "Tout le reste est ici",
+          "body": "Touche le hamburger quand tu veux pour atteindre Alertes, Transactions, Annuaire, et ton identité de wallet."
+        },
+        "mobileActions": {
+          "title": "Ce qui vit dans le menu",
+          "body": "Alertes te ping quand les prix atteignent tes objectifs. Transactions est ton log de reçus on-chain. Annuaire contient Skills, Connecteurs et intégrations. Ton identité de wallet reste en bas — un tap pour te déconnecter."
         },
         "done": {
           "title": "Prêt",
-          "body": "Demande n'importe quoi, arme une alerte, ou prépare un paiement. Ouvre Cmd+K pour relancer ce tour quand tu veux."
+          "body": "Demande n'importe quoi, arme une alerte, ou prépare un paiement. Ouvre Cmd+K → \"Voir le tour\" pour relancer ceci quand tu veux."
         }
       }
     },
