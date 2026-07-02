@@ -784,27 +784,31 @@ function WelcomeIconRow() {
   const icons: Array<{ key: string; content: React.ReactNode }> = [
     {
       key: 'vizzor',
+      /**
+       * Transparent Vizzor mark — no background pill, no color
+       * filter. `vizzor_icon.png` (white glyph on transparent) for
+       * dark theme; `vizzor_darkicon.png` (dark glyph on
+       * transparent) for light theme. Matches how the CoinIcon
+       * pieces render — the outer `ring-2 ring-[var(--surface)]`
+       * wrapper adds the separator ring, not the icon itself.
+       */
       content: (
-        <span
-          aria-hidden
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--fg)]"
-        >
+        <>
           <Image
             src="/brand/vizzor_icon.png"
             alt=""
-            width={30}
-            height={30}
-            className="hidden dark:block h-5 w-auto"
+            width={32}
+            height={32}
+            className="hidden dark:block h-6 w-auto"
           />
           <Image
             src="/brand/vizzor_darkicon.png"
             alt=""
-            width={30}
-            height={30}
-            className="block dark:hidden h-5 w-auto"
-            style={{ filter: 'invert(1)' }}
+            width={32}
+            height={32}
+            className="block dark:hidden h-6 w-auto"
           />
-        </span>
+        </>
       ),
     },
     { key: 'btc', content: <CoinIcon symbol="BTC" size={32} /> },
