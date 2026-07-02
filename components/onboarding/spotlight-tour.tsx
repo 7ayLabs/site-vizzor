@@ -413,12 +413,16 @@ export function SpotlightTour() {
       }}
     >
       {/* Dim backdrop.
-          - Non-requiresClick steps: one full-viewport dim, blocks
-            clicks by inheriting the wrapper's pointer-events.
-          - requiresClick steps: four dim strips around the target so
-            the target rect itself has no overlay and can receive the
-            tap that advances the tour. */}
-      {!step?.requiresClick && (
+          - Centered steps (welcome / done): a full-viewport dim.
+          - Regular steps with a target: use the box-shadow trick
+            on the spotlight rect below — the shadow spreads dim
+            across the whole viewport EXCEPT the target rect, so the
+            target stays fully lit like a stage spotlight. No full-
+            screen dim div is needed on this path.
+          - requiresClick steps: four dim strips around the target
+            so the target rect itself has no overlay and can receive
+            the tap that advances the tour (mobile hamburger, etc.). */}
+      {(!targetRect || isCentered) && !step?.requiresClick && (
         <div
           aria-hidden
           className="fixed inset-0 vz-spotlight-full-dim"
@@ -468,12 +472,15 @@ export function SpotlightTour() {
           />
         </>
       )}
-      {/* Highlight ring around the target. Purely decorative —
-          `pointer-events: none` so it never intercepts. v0.5.19 —
-          the accent-colored double-halo + soft glow read as
-          "vibecoded shiny" against the dim backdrop; replaced with
-          a single hairline stroke so the focus reads as a minimal
-          system spotlight, not a promo highlight. */}
+      {/* Spotlight rect on the target.
+          - For non-requiresClick steps: uses the box-shadow trick
+            (`0 0 0 9999px rgba(0,0,0,0.68)`) so the target rect stays
+            un-dimmed while the rest of the viewport is dimmed. Reads
+            as a stage spotlight illuminating the element.
+          - For requiresClick steps: no shadow (the four strips above
+            already provide the dim), just the hairline outline.
+          Purely decorative — `pointer-events: none` — the wrapper
+          catches background clicks. */}
       {targetRect && !isCentered && (
         <div
           aria-hidden
@@ -485,7 +492,9 @@ export function SpotlightTour() {
             width: spotlight.width,
             height: spotlight.height,
             borderRadius: 8,
-            boxShadow: 'none',
+            boxShadow: step?.requiresClick
+              ? 'none'
+              : '0 0 0 9999px rgba(0, 0, 0, 0.68)',
             outline: '1px solid rgba(255, 255, 255, 0.22)',
             outlineOffset: 0,
             pointerEvents: 'none',
