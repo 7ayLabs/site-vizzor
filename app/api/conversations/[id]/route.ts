@@ -19,6 +19,7 @@
 import { NextResponse } from 'next/server';
 import { getActiveSession } from '@/lib/payment/auth-session';
 import {
+  countActiveIntentsForConversation,
   deleteConversationForWallet,
   getConversationForWallet,
   listMessagesForConversation,
@@ -101,7 +102,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(_req: Request, ctx: Ctx) {
+export async function DELETE(req: Request, ctx: Ctx) {
   const session = await getActiveSession();
   if (!session) {
     return NextResponse.json(
@@ -110,6 +111,41 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     );
   }
   const { id } = await ctx.params;
+
+  // v0.5.1 — chat-delete guard. If the conversation has any active
+  // capability intents (pending or signed) we return 409 unless the
+  // client asserts `?force=1`. Deleting the conversation record does
+  // NOT drop the intent — capability_audit has a NULLABLE
+  // conversation_id and no ON DELETE cascade — so a signed transfer
+  // still executes on the engine. The guard is about giving the user
+  // an explicit "yes, I know" moment before losing chat history for
+  // a workflow that still has money on the line.
+  const url = new URL(req.url);
+  const force = url.searchParams.get('force') === '1';
+  if (!force) {
+    try {
+      const { count, kinds } = countActiveIntentsForConversation(
+        session.wallet,
+        id,
+      );
+      if (count > 0) {
+        return NextResponse.json(
+          {
+            ok: false,
+            reason: 'active_workflows',
+            count,
+            kinds,
+          },
+          { status: 409 },
+        );
+      }
+    } catch {
+      /* if the audit read fails, fall through to normal delete —
+       * the guard is UX polish, not a security control. Refusing
+       * deletion because of an infra blip would be worse. */
+    }
+  }
+
   const deleted = deleteConversationForWallet(id, session.wallet);
   if (!deleted) {
     return NextResponse.json(
