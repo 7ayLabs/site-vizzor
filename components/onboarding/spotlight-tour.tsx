@@ -155,28 +155,67 @@ export function SpotlightTour() {
       setTargetRect(null);
       return;
     }
-    const compute = () => {
+    /**
+     * v0.5.14 — rAF-based tracker so the spotlight follows the target
+     * through any layout change (drawer slide-in, orientation change,
+     * lazy-mounted rails, virtualized list scroll). Previous
+     * one-shot compute() missed the mobile-drawer opening because
+     * the drawer's 200ms slide-in wasn't finished when we measured,
+     * and no scroll/resize event fired to trigger a recompute — so
+     * the cutout got stuck at the pre-animation coords and never
+     * appeared around "Alertas".
+     *
+     * The rAF loop rechecks up to 60fps for the first 3 seconds
+     * after step change, then throttles to every 250ms so the spot
+     * still tracks slow layout shifts (SWR-driven remounts, badge
+     * counter growth) without burning CPU forever.
+     */
+    let rafId = 0;
+    let cancelled = false;
+    const startMs = performance.now();
+    const lastRectRef: { r: DOMRect | null } = { r: null };
+    const compute = (now: number) => {
+      if (cancelled) return;
       const el = findVisibleTarget(step.targetSelector!);
       if (!el) {
-        setTargetRect(null);
-        return;
+        if (lastRectRef.r !== null) {
+          lastRectRef.r = null;
+          setTargetRect(null);
+        }
+      } else {
+        const r = el.getBoundingClientRect();
+        const prev = lastRectRef.r;
+        if (
+          !prev ||
+          prev.top !== r.top ||
+          prev.left !== r.left ||
+          prev.width !== r.width ||
+          prev.height !== r.height
+        ) {
+          lastRectRef.r = r;
+          setTargetRect({
+            top: r.top,
+            left: r.left,
+            width: r.width,
+            height: r.height,
+          });
+        }
       }
-      const r = el.getBoundingClientRect();
-      setTargetRect({
-        top: r.top,
-        left: r.left,
-        width: r.width,
-        height: r.height,
-      });
+      const elapsed = now - startMs;
+      if (elapsed < 3000) {
+        rafId = window.requestAnimationFrame(compute);
+      } else {
+        rafId = window.setTimeout(
+          () => compute(performance.now()),
+          250,
+        ) as unknown as number;
+      }
     };
-    compute();
-    const retryId = window.setTimeout(compute, 100);
-    window.addEventListener('scroll', compute, true);
-    window.addEventListener('resize', compute);
+    rafId = window.requestAnimationFrame(compute);
     return () => {
-      window.clearTimeout(retryId);
-      window.removeEventListener('scroll', compute, true);
-      window.removeEventListener('resize', compute);
+      cancelled = true;
+      window.cancelAnimationFrame(rafId);
+      window.clearTimeout(rafId);
     };
   }, [isOpen, step, isMobile]);
 
