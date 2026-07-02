@@ -57,7 +57,7 @@ const CALLOUT_MARGIN = 16;
  * a visual gap so the callout never appears to touch the target.
  */
 const CALLOUT_TARGET_GAP = 20;
-const SPOTLIGHT_PADDING = 8;
+const SPOTLIGHT_PADDING = 10;
 const MOBILE_BREAKPOINT = 1024; // Match Tailwind's `lg` — sidebar
 // entries only exist above this width in every /app/* surface.
 
@@ -356,10 +356,12 @@ export function SpotlightTour() {
           fill="rgba(0, 0, 0, 0.68)"
           mask="url(#vz-tour-mask)"
         />
-        {/* Subtle static outline around the cutout — no pulse, no
-            accent color. Just a hairline delineation so the target
-            reads as bounded without any "shine". User feedback:
-            the accent-colored pulsing ring was too shiny. */}
+        {/* Outline around the cutout. Uses a viewport-relative white
+            (not `var(--fg)`) so it stays visible against the dark
+            backdrop in BOTH light and dark themes — the earlier
+            `var(--fg) 22%` was dark-on-dark in light mode and the
+            outline effectively disappeared. Still subtle: 30% white
+            at 1.5px reads as "here's the boundary" without shine. */}
         {targetRect && !isCentered && (
           <rect
             className="vz-tour-spotlight-rect"
@@ -369,25 +371,23 @@ export function SpotlightTour() {
             height={spotlight.height}
             rx={12}
             fill="none"
-            stroke="color-mix(in oklab, var(--fg) 22%, transparent)"
-            strokeWidth={1}
+            stroke="rgba(255, 255, 255, 0.3)"
+            strokeWidth={1.5}
           />
         )}
         {/* Swipe-hint pointer — a small circle that slides across
             the width of the spotlight. Positioned via cx/cy SVG
-            attributes (which the browser respects); animation is a
-            CSS `transform: translateX(...)` on the circle itself.
-            Using a <g> wrapper with a `transform` attribute was
-            incorrect — the CSS transform on the group overwrote
-            the SVG position and dumped the pointer at (0,0). */}
+            attributes; animation is a CSS `transform: translateX`.
+            Same theme-agnostic white as the outline so it's visible
+            on the dark backdrop regardless of light/dark mode. */}
         {targetRect && !isCentered && step.showSwipeHint && (
           <circle
             className="vz-tour-swipe-hint"
             cx={spotlight.x + 14}
             cy={spotlight.y + spotlight.height / 2}
             r={7}
-            fill="color-mix(in oklab, var(--fg) 25%, transparent)"
-            stroke="color-mix(in oklab, var(--fg) 55%, transparent)"
+            fill="rgba(255, 255, 255, 0.22)"
+            stroke="rgba(255, 255, 255, 0.55)"
             strokeWidth={1.2}
             style={
               {
