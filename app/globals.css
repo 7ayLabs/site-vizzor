@@ -985,6 +985,37 @@
     40%  { transform: scale(1.24); }
     100% { transform: scale(1);    }
   }
+
+  /* v0.5.3 — /app/transactions row entrance. Staggered rise so a
+     long list settles in without popping. Delay is set inline on
+     each row (Math.min(idx * 30, 240)ms) so short lists animate
+     tight, long lists cap at 240ms total to avoid a slow reveal. */
+  .vz-tx-row-in {
+    animation: vz-tx-row-in 240ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+    transform-origin: top left;
+  }
+  @keyframes vz-tx-row-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0);    }
+  }
+
+  /* v0.5.3 — details sheet + backdrop entrance. Right-side sheet
+     slides in from the edge; backdrop fades to build the depth
+     without a heavy dim. */
+  .vz-tx-sheet-in {
+    animation: vz-tx-sheet-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  }
+  @keyframes vz-tx-sheet-in {
+    from { opacity: 0; transform: translateX(24px); }
+    to   { opacity: 1; transform: translateX(0);    }
+  }
+  .vz-fade-in {
+    animation: vz-fade-in 220ms ease-out both;
+  }
+  @keyframes vz-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
