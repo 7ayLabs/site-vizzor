@@ -1075,30 +1075,27 @@
     to   { opacity: 1; transform: translateY(0);    }
   }
 
-  /* v0.5.8 — pulsing highlight ring around the spotlight cutout so
-     the target reads as "focused" instead of just dim. Same 320ms
-     morph transition as the cutout so ring + hole stay locked. */
-  .vz-tour-spotlight-ring {
-    animation: vz-tour-spotlight-ring 1.6s ease-in-out infinite;
-  }
-  @keyframes vz-tour-spotlight-ring {
-    0%, 100% { opacity: 0.55; stroke-width: 1.5; }
-    50%      { opacity: 1;    stroke-width: 3;   }
-  }
+  /* v0.5.9 — the pulsing "shiny" ring was removed per user
+     feedback; the spotlight cutout + a hairline static outline
+     (drawn inline on the <rect>) is enough to bound the target.
+     Kept these anchor comments so the git history is easy to
+     follow if the ring ever needs to come back. */
 
-  /* v0.5.8 — horizontal swipe pointer. Slides across the width of
-     the spotlight so the user notices the target is a scrollable
-     strip (carousel step). `--swipe-distance` is set inline to the
-     spotlight's width minus a bit of padding so the pointer travels
-     the correct distance regardless of target size. */
+  /* v0.5.9 — swipe pointer for the carousel step. Slides
+     horizontally across the width of the spotlight so the user
+     notices the target is a scrollable strip. `--swipe-distance`
+     is set inline (spotlight width minus padding) so the pointer
+     travels the correct distance for any target size. Minimalist
+     visuals: fg-toned circle, no accent shine, subtle fade at
+     both ends. */
   .vz-tour-swipe-hint {
-    animation: vz-tour-swipe 2200ms cubic-bezier(0.4, 0.1, 0.4, 1) infinite;
+    animation: vz-tour-swipe 2400ms cubic-bezier(0.4, 0.1, 0.4, 1) infinite;
   }
   @keyframes vz-tour-swipe {
-    0%   { transform: translateX(12px);                       opacity: 0;   }
-    15%  { transform: translateX(12px);                       opacity: 0.9; }
-    85%  { transform: translateX(var(--swipe-distance, 200px)); opacity: 0.9; }
-    100% { transform: translateX(var(--swipe-distance, 200px)); opacity: 0;   }
+    0%   { transform: translateX(0);                             opacity: 0;   }
+    15%  { transform: translateX(0);                             opacity: 0.7; }
+    85%  { transform: translateX(var(--swipe-distance, 200px));  opacity: 0.7; }
+    100% { transform: translateX(var(--swipe-distance, 200px));  opacity: 0;   }
   }
 
   /* v0.5.8 — "Tap to continue" hint pulsing text on requires-click

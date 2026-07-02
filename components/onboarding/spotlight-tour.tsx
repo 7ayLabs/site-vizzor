@@ -356,44 +356,45 @@ export function SpotlightTour() {
           fill="rgba(0, 0, 0, 0.68)"
           mask="url(#vz-tour-mask)"
         />
-        {/* Pulsing highlight ring around the cutout. Renders only
-            for anchored steps; centered welcome/done + fallbacks
-            get no ring (there's no target to point at). */}
+        {/* Subtle static outline around the cutout — no pulse, no
+            accent color. Just a hairline delineation so the target
+            reads as bounded without any "shine". User feedback:
+            the accent-colored pulsing ring was too shiny. */}
         {targetRect && !isCentered && (
           <rect
-            className="vz-tour-spotlight-rect vz-tour-spotlight-ring"
+            className="vz-tour-spotlight-rect"
             x={spotlight.x}
             y={spotlight.y}
             width={spotlight.width}
             height={spotlight.height}
             rx={12}
             fill="none"
-            stroke="var(--accent)"
-            strokeWidth={2}
+            stroke="color-mix(in oklab, var(--fg) 22%, transparent)"
+            strokeWidth={1}
           />
         )}
-        {/* Swipe-hint pointer — animates horizontally across the
-            spotlight to show the user the target is a scrollable
-            strip. Only mounted when the step opts in. */}
+        {/* Swipe-hint pointer — a small circle that slides across
+            the width of the spotlight. Positioned via cx/cy SVG
+            attributes (which the browser respects); animation is a
+            CSS `transform: translateX(...)` on the circle itself.
+            Using a <g> wrapper with a `transform` attribute was
+            incorrect — the CSS transform on the group overwrote
+            the SVG position and dumped the pointer at (0,0). */}
         {targetRect && !isCentered && step.showSwipeHint && (
-          <g
+          <circle
             className="vz-tour-swipe-hint"
-            transform={`translate(${spotlight.x}, ${spotlight.y + spotlight.height / 2})`}
-          >
-            <circle
-              cx={0}
-              cy={0}
-              r={12}
-              fill="color-mix(in oklab, var(--accent) 30%, transparent)"
-              stroke="var(--accent)"
-              strokeWidth={1.5}
-              style={
-                {
-                  ['--swipe-distance']: `${spotlight.width - 24}px`,
-                } as React.CSSProperties
-              }
-            />
-          </g>
+            cx={spotlight.x + 14}
+            cy={spotlight.y + spotlight.height / 2}
+            r={7}
+            fill="color-mix(in oklab, var(--fg) 25%, transparent)"
+            stroke="color-mix(in oklab, var(--fg) 55%, transparent)"
+            strokeWidth={1.2}
+            style={
+              {
+                ['--swipe-distance']: `${Math.max(0, spotlight.width - 28)}px`,
+              } as React.CSSProperties
+            }
+          />
         )}
       </svg>
 
