@@ -70,6 +70,11 @@ function isLocalhostOrigin(req: Request): boolean {
  */
 const BUILTIN_STAGING_ORIGINS: readonly string[] = [
   'https://test.vizzor.ai',
+  // Staging twin of app.vizzor.ai — same dev-sign recovery treatment
+  // as the marketing staging so QA can hit the wallet-auth silent
+  // path from either surface. Mirrors DEFAULT_APP_HOSTS in
+  // middleware.ts.
+  'https://testapp.vizzor.ai',
 ];
 
 /**

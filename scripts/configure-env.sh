@@ -26,7 +26,9 @@
 #     - SOLANA_RPC_URL_DEVNET=https://api.devnet.solana.com
 #     - NEXT_PUBLIC_SOLANA_RPC_URL_DEVNET=https://api.devnet.solana.com
 #     - VIZZOR_SOLANA_TREASURY_DEVNET=__OPERATOR_REQUIRED__
-#     - VIZZOR_EXTRA_ORIGINS=https://test.vizzor.ai
+#     - VIZZOR_EXTRA_ORIGINS=https://test.vizzor.ai,https://testapp.vizzor.ai
+#     - APP_HOSTS=testapp.vizzor.ai
+#     - NEXT_PUBLIC_APP_URL=https://testapp.vizzor.ai   <- CTAs point to staging app
 #
 # Backs up the existing files to /opt/7aylabs/.env.bak.<ts> before
 # overwriting, so a misconfigured prior state isn't lost.
@@ -151,7 +153,22 @@ NEXT_PUBLIC_TG_BOT_USERNAME=vizzorai_test_bot
 
 # ── Rate-limit + origin defense ─────────────────────────────────
 VIZZOR_RATE_LIMIT_SALT=$rate_salt
-VIZZOR_EXTRA_ORIGINS=https://test.vizzor.ai
+# Staging accepts requests from BOTH staging hosts: the marketing
+# staging (test.vizzor.ai) and the product staging (testapp.vizzor.ai).
+# The product host is host-rewritten to /app/* by middleware via
+# APP_HOSTS below.
+VIZZOR_EXTRA_ORIGINS=https://test.vizzor.ai,https://testapp.vizzor.ai
+
+# ── Host rewriting — treat testapp.vizzor.ai as app.vizzor.ai's twin ─
+# Middleware reads this comma-separated list; every host in it gets
+# `/` rewritten to `/app/*` (see components/app/app-shell-rail.tsx +
+# app/[locale]/app/layout.tsx for the paired shell suppression).
+APP_HOSTS=testapp.vizzor.ai
+
+# ── Product-URL override — CTAs on marketing staging (test.vizzor.ai) ─
+# resolve "Open app" to testapp instead of prod app.vizzor.ai so the
+# test env stays fully sealed off from prod state.
+NEXT_PUBLIC_APP_URL=https://testapp.vizzor.ai
 
 # ── Free-tier predict quota ─────────────────────────────────────
 NEXT_PUBLIC_FREE_PREDICTIONS=3

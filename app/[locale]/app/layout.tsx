@@ -18,7 +18,13 @@ import { SpotlightTour } from '@/components/onboarding/spotlight-tour';
  * double-rail layout the user flagged on `app.vizzor.ai`. Keep this list
  * aligned with `APP_HOSTS` in `middleware.ts`.
  */
-const APP_ONLY_HOSTS = new Set<string>(['app.vizzor.ai']);
+const APP_ONLY_HOSTS = new Set<string>([
+  'app.vizzor.ai',
+  // Staging twin — same product-only chrome behavior as prod so QA
+  // demos read identically. Aligned with `DEFAULT_APP_HOSTS` in
+  // `middleware.ts` (host-rewrite must match the shell suppression).
+  'testapp.vizzor.ai',
+]);
 
 /**
  * App shell layout — wraps every `/app/*` surface (Chat, Whales, Flow,
